@@ -1,0 +1,34 @@
+{
+    "name": "desar/generator",
+    "type": "library",
+    "license": "MIT",
+    "minimum-stability": "dev",
+    "version": "1.0.25",
+    "require": {
+        "orchestra/testbench": "^7.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "Desar\\Generator\\": "src/"
+        },
+        "files": [
+            "src/Helpers/app.php"
+        ]
+    },
+    "authors": [
+        {
+            "name": "Homero Raul",
+            "email": "h.raulvc@gmail.com"
+        }
+    ],
+    "bin": [
+        "builder"
+    ],
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Desar\\Generator\\Providers\\GeneratorServiceProvider"
+            ]
+        }
+    }
+}
