@@ -2,8 +2,6 @@
 
 <?php
 
-require __DIR__ . '/vendor/autoload.php';
-
 $application = new Symfony\Component\Console\Application();
 
 /** Inicio comandos de la aplicación */

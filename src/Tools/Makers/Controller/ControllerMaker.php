@@ -25,7 +25,7 @@ class ControllerMaker extends MakerTool
 
 	}
 
-	protected function create()
+	public function create()
 	{
 
 		$controllerFile = $this->controllerPath . '/' . $this->controllerFilename;

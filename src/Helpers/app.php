@@ -15,9 +15,8 @@ if(!function_exists('root_path')) {
 
         }
 
-        return realpath($ruta); // Dentro del paquete
+        return realpath($ruta); 
 
-        //return realpath($ruta . '/../../..'); //
 
 	}
 
@@ -33,7 +32,7 @@ if(!function_exists('app_dir_name')) {
 
         $composerJson = json_decode(file_get_contents($rootPath . '/composer.json'), true);
 
-        $packageType = $composerJson['type'];
+        $packageType = (isset($composerJson['type'])) ? $composerJson['type'] : 'library';
 
         return ($packageType == 'library') ? 'src' : 'app';
 

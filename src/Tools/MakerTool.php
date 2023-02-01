@@ -304,59 +304,59 @@ class MakerTool
 		protected function setTemplatesPaths()
 		{
 
-			$this->controllerTemplatePath = get_path(app_dir_name() . '/Tools/Makers/Controller/Templates');
+			$this->controllerTemplatePath = realpath(__DIR__ . '/Makers/Controller/Templates');
 
-			$this->eventsTemplatePath = get_path(app_dir_name() . '/Tools/Makers/Events/Templates');
+			$this->eventsTemplatePath = realpath(__DIR__ . '/Makers/Events/Templates');
 
-			$this->excelTemplatePath = get_path(app_dir_name() . '/Tools/Makers/Excel/Templates');
+			$this->excelTemplatePath = realpath(__DIR__ . '/Makers/Excel/Templates');
 
-			$this->exportTemplatePath = get_path(app_dir_name() . '/Tools/Makers/Export/Templates');
+			$this->exportTemplatePath = realpath(__DIR__ . '/Makers/Export/Templates');
 
-			$this->filtersTemplatePath = get_path(app_dir_name() . '/Tools/Makers/Filters/Templates');
+			$this->filtersTemplatePath = realpath(__DIR__ . '/Makers/Filters/Templates');
 
-			$this->migrationTemplatePath = get_path(app_dir_name() . '/Tools/Makers/Migration/Templates');
+			$this->migrationTemplatePath = realpath(__DIR__ . '/Makers/Migration/Templates');
 
-			$this->factoryTemplatePath = get_path(app_dir_name() . '/Tools/Makers/Factory/Templates');
+			$this->factoryTemplatePath = realpath(__DIR__ . '/Makers/Factory/Templates');
 
-			$this->modelTemplatePath = get_path(app_dir_name() . '/Tools/Makers/Model/Templates');
+			$this->modelTemplatePath = realpath(__DIR__ . '/Makers/Model/Templates');
 
-			$this->modelTraitsTemplatePath = get_path(app_dir_name() . '/Tools/Makers/ModelTraits/Templates');
+			$this->modelTraitsTemplatePath = realpath(__DIR__ . '/Makers/ModelTraits/Templates');
 
-			$this->notificationTemplatePath = get_path(app_dir_name() . '/Tools/Makers/Notification/Templates');
+			$this->notificationTemplatePath = realpath(__DIR__ . '/Makers/Notification/Templates');
 
-			$this->policyTemplatePath = get_path(app_dir_name() . '/Tools/Makers/Policy/Templates');
+			$this->policyTemplatePath = realpath(__DIR__ . '/Makers/Policy/Templates');
 
-			$this->requestsTemplatePath = get_path(app_dir_name() . '/Tools/Makers/Requests/Templates');
+			$this->requestsTemplatePath = realpath(__DIR__ . '/Makers/Requests/Templates');
 
-			$this->resourceTemplatePath = get_path(app_dir_name() . '/Tools/Makers/Resource/Templates');
+			$this->resourceTemplatePath = realpath(__DIR__ . '/Makers/Resource/Templates');
 
-			$this->routeTemplatePath = get_path(app_dir_name() . '/Tools/Makers/Route/Templates');
+			$this->routeTemplatePath = realpath(__DIR__ . '/Makers/Route/Templates');
 
-			$this->testTemplatePath = get_path(app_dir_name() . '/Tools/Makers/Test/Templates');
+			$this->testTemplatePath = realpath(__DIR__ . '/Makers/Test/Templates');
 
-			$this->registerTemplatePath = get_path(app_dir_name() . '/Tools/Makers/Register/Templates');
+			$this->registerTemplatePath = realpath(__DIR__ . '/Makers/Register/Templates');
 
 			///////////////////////////////////////////////////////////////////////////////////////////////////
 
-			$this->adminRouteTemplatePath = get_path(app_dir_name() . '/Tools/Makers/AdminRoute/Templates');
+			$this->adminRouteTemplatePath = realpath(__DIR__ . '/Makers/AdminRoute/Templates');
 
-			$this->adminViewTemplatePath = get_path(app_dir_name() . '/Tools/Makers/AdminView/Templates');
+			$this->adminViewTemplatePath = realpath(__DIR__ . '/Makers/AdminView/Templates');
 
-			$this->createFormTemplatePath = get_path(app_dir_name() . '/Tools/Makers/CreateForm/Templates');
+			$this->createFormTemplatePath = realpath(__DIR__ . '/Makers/CreateForm/Templates');
 
-			$this->createViewTemplatePath = get_path(app_dir_name() . '/Tools/Makers/CreateView/Templates');
+			$this->createViewTemplatePath = realpath(__DIR__ . '/Makers/CreateView/Templates');
 
-			$this->crudTemplatePath = get_path(app_dir_name() . '/Tools/Makers/Crud/Templates');
+			$this->crudTemplatePath = realpath(__DIR__ . '/Makers/Crud/Templates');
 
-			$this->editFormTemplatePath = get_path(app_dir_name() . '/Tools/Makers/EditForm/Templates');
+			$this->editFormTemplatePath = realpath(__DIR__ . '/Makers/EditForm/Templates');
 
-			$this->editViewTemplatePath = get_path(app_dir_name() . '/Tools/Makers/EditView/Templates');
+			$this->editViewTemplatePath = realpath(__DIR__ . '/Makers/EditView/Templates');
 
-			$this->filterFormTemplatePath = get_path(app_dir_name() . '/Tools/Makers/FilterForm/Templates');
+			$this->filterFormTemplatePath = realpath(__DIR__ . '/Makers/FilterForm/Templates');
 
-			$this->jsModelTemplatePath = get_path(app_dir_name() . '/Tools/Makers/JsModel/Templates');	
+			$this->jsModelTemplatePath = realpath(__DIR__ . '/Makers/JsModel/Templates');	
 
-			$this->showViewTemplatePath = get_path(app_dir_name() . '/Tools/Makers/ShowView/Templates');	
+			$this->showViewTemplatePath = realpath(__DIR__ . '/Makers/ShowView/Templates');	
 
 		}
 
@@ -396,6 +396,8 @@ class MakerTool
         	$content = str_replace("dotModelName", $this->dotModelName, $content);
 
         	$content = str_replace("ModelName", $this->ModelName, $content);
+
+        	$content = str_replace("Namespace\\", $this->namespace, $content);
 
         	// AL FINAL EL NOMBRE DE MODELO. (ESTE PUEDE QUE NO SE NECESITE)
 
