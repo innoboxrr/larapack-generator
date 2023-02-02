@@ -1,0 +1,37 @@
+<?php
+
+namespace App\Exports;
+
+use App\Classes\Search\SearchBuilder;
+use Illuminate\Contracts\View\View;
+use Maatwebsite\Excel\Concerns\FromView;
+
+class PluralPascalCaseModelNameExports implements FromView
+{
+
+    protected $request;
+
+    public function __construct($request) 
+    {
+
+        $this->request = $request;
+
+    }
+
+    public function view(): View
+    {
+        return view('excel.snake_case_model_name', [
+            'plural_snake_case_model_name' => $this->getQuery()
+        ]);
+    }
+
+    public function getQuery()
+    {   
+
+        $builder = new SearchBuilder('PascalCaseModelName', $this->request);
+
+        return $builder->get();
+
+    }
+
+}

@@ -1,0 +1,33 @@
+<?php
+
+namespace App\Http\Requests\PascalCaseModelName;
+
+use App\Models\PascalCaseModelName;
+use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
+
+class ShowRequest extends FormRequest
+{
+
+    public function authorize()
+    {
+
+        $camelCaseModelName = PascalCaseModelName::findOrFail($this->snake_case_model_name_id);
+
+        return $this->user()->can('view', $camelCaseModelName);
+
+    }
+
+    public function rules()
+    {
+        return [
+            'load_relations' => [
+                'nullable',
+                'array',
+                Rule::in((new PascalCaseModelName)->loadable_relations)
+            ],
+            'snake_case_model_name_id' => 'required|numeric'
+        ];
+    }
+    
+}

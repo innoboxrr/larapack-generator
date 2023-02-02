@@ -1,0 +1,27 @@
+<?php
+
+namespace App\Http\Requests\PascalCaseModelName;
+
+use App\Models\PascalCaseModelName;
+use Illuminate\Foundation\Http\FormRequest;
+
+class RestoreRequest extends FormRequest
+{
+
+    public function authorize()
+    {
+        
+        $camelCaseModelName = PascalCaseModelName::withTrashed()->findOrFail($this->snake_case_model_name_id);
+        
+        return $this->user()->can('restore', $camelCaseModelName);
+
+    }
+
+    public function rules()
+    {
+        return [
+            'snake_case_model_name_id' => 'required|numeric'
+        ];
+    }
+    
+}

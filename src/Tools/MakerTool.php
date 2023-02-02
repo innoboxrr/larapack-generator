@@ -45,40 +45,6 @@ class MakerTool
 
 	// PATHS
 
-		protected $apiRoutepath;
-
-		protected $controllerPath;
-
-		protected $modelPath;
-
-		protected $modelTraitsPath;
-
-		protected $eventsPath;
-
-		protected $excelPath;
-
-		protected $notificationPath;
-
-		protected $exportPath;
-
-		protected $filtersPath;
-
-		protected $requestPath;
-
-		protected $resourcePath;
-
-		protected $policyPath;
-
-		protected $migrationPath;
-
-		protected $factoryPath;
-
-		protected $testPath;
-
-		protected $registerPath;
-
-		///////////////////////////////////////////////////////////////////////////////////////////////////
-
 		protected $adminRoutePath;
 
 		protected $adminViewPath;
@@ -111,40 +77,6 @@ class MakerTool
 
 	// TEMPLATE PATHS
 
-		protected $controllerTemplatePath;
-
-		protected $eventsTemplatePath;
-
-		protected $excelTemplatePath;
-
-		protected $exportTemplatePath;
-
-		protected $filtersTemplatePath;
-
-		protected $migrationTemplatePath;
-
-		protected $factoryTemplatePath;
-
-		protected $modelTemplatePath;
-
-		protected $modelTraitsTemplatePath;
-
-		protected $notificationTemplatePath;
-
-		protected $policyTemplatePath;
-
-		protected $requestsTemplatePath;
-
-		protected $resourceTemplatePath;
-
-		protected $routeTemplatePath;
-
-		protected $testTemplatePath;
-
-		protected $registerTemplatePath;
-
-		///////////////////////////////////////////////////////////////////////////////////////////////////
-
 		protected $adminRouteTemplatePath;
 
 		protected $adminViewTemplatePath;
@@ -165,32 +97,27 @@ class MakerTool
 
 		protected $showViewTemplatePath;
 
-	/*
-	 * $ModelName: 
-	 *  - Debe corresponder con el nombre del modelo que se está creando
-	 *  - Debe estar escrito en PascalCase
-	 */
+		/**
+		 * 	@var $ModelName: 
+		 *  	- Debe corresponder con el nombre del modelo que se está creando
+		 *   	- Debe estar escrito en PascalCase
+		 **/
+		protected function init(string $ModelName)
+		{
 
-	public function __construct(string $ModelName)
-	{
+			$this->inflector = new Inflector(new NoopWordInflector(), new NoopWordInflector());
 
-		$this->inflector = new Inflector(new NoopWordInflector(), new NoopWordInflector());
+			$this->namespace = get_namespace();
 
-		$this->namespace = get_namespace();
+			$this->setModelNames($ModelName);
 
-		$this->setModelName($ModelName);
+			return $this;
 
-		$this->setDirPaths();
-
-		$this->setFilePaths();
-
-		$this->setTemplatesPaths();
-
-	}
+		}
 
 	// MODEL NAME
 
-		protected function setModelName($ModelName)
+		private function setModelNames($ModelName)
 		{
 
 			$this->ModelName = $ModelName;
@@ -219,157 +146,16 @@ class MakerTool
 
 		}
 
-	// DIR PATHS
+	// REEMPLAZAR NOMBRES
 
-		protected function setDirPaths() 
-		{
-
-			$this->apiRoutepath = get_path('routes/api/models');
-
-			$this->controllerPath = get_path(app_dir_name() . '/Http/Controllers');
-
-			$this->modelPath = get_path(app_dir_name() . '/Models');
-
-			$this->modelTraitsPath = get_path(app_dir_name() . '/Models/Traits');
-
-			$this->eventsPath = get_path(app_dir_name() . '/Http/Events');
-
-			$this->excelPath = get_path('resources/views/excel');
-
-			$this->notificationPath = get_path(app_dir_name() . '/Notifications');
-
-			$this->exportPath = get_path(app_dir_name() . '/Exports');
-
-			$this->filtersPath = get_path(app_dir_name() . '/Models/Filters');
-
-			$this->requestPath = get_path(app_dir_name() . '/Http/Requests');
-
-			$this->resourcePath = get_path(app_dir_name() . '/Http/Resources/Models');
-
-			$this->policyPath = get_path(app_dir_name() . '/Policies');
-
-			$this->migrationPath = get_path('database/migrations');
-
-			$this->factoryPath = get_path('database/factories');
-
-			$this->testPath = get_path('tests/Feature/Models');
-
-			$this->registerPath = get_path('storage/registers');
-
-			///////////////////////////////////////////////////////////////////////////////////////////////////
-
-			$this->adminRoutePath = get_path('resources/vue/router/routes/admin/routes/group');
-
-			$this->adminViewPath = get_path('resources/vue/views/admin'); 
-
-			$this->modelFormPath = get_path('resources/vue/elements/forms/models'); 
-			                                                                      
-			$this->createFormPath = get_path('resources/vue/elements/forms/models'); 
-
-			$this->createViewPath = get_path('resources/vue/views/admin'); 
-
-			$this->crudPath = get_path('resources/vue/elements/cruds');
-
-			$this->editFormPath = get_path('resources/vue/elements/forms/models'); 
-
-			$this->editViewPath = get_path('resources/vue/views/admin'); 
-
-			$this->filterFormPath = get_path('resources/vue/elements/forms/filters');
-
-			$this->jsModelPath = get_path('resources/assets/js/models');
-
-			$this->showViewPath = get_path('resources/vue/views/admin'); 	
-
-			// PENDIENTE: Se debe crear algo que permita publicarlos en el proyecto en cuestión
-			//				Solo para el front end
-
-		}
-
-
-	// FILE PATHS
-
-		protected function setFilePaths()
-		{
-
-			$this->apiRouteModelFile = get_path('routes/api/models.php');
-
-			$this->eventServiceProviderFile = get_path(app_dir_name() . '/Providers/EventServiceProvider.php');
-
-			$this->authServiceProviderFile = get_path(app_dir_name() . '/Providers/AuthServiceProvider.php');
-
-		}
-
-	// TEMPLATE PATHS
-
-		protected function setTemplatesPaths()
-		{
-
-			$this->controllerTemplatePath = realpath(__DIR__ . '/Makers/Controller/Templates');
-
-			$this->eventsTemplatePath = realpath(__DIR__ . '/Makers/Events/Templates');
-
-			$this->excelTemplatePath = realpath(__DIR__ . '/Makers/Excel/Templates');
-
-			$this->exportTemplatePath = realpath(__DIR__ . '/Makers/Export/Templates');
-
-			$this->filtersTemplatePath = realpath(__DIR__ . '/Makers/Filters/Templates');
-
-			$this->migrationTemplatePath = realpath(__DIR__ . '/Makers/Migration/Templates');
-
-			$this->factoryTemplatePath = realpath(__DIR__ . '/Makers/Factory/Templates');
-
-			$this->modelTemplatePath = realpath(__DIR__ . '/Makers/Model/Templates');
-
-			$this->modelTraitsTemplatePath = realpath(__DIR__ . '/Makers/ModelTraits/Templates');
-
-			$this->notificationTemplatePath = realpath(__DIR__ . '/Makers/Notification/Templates');
-
-			$this->policyTemplatePath = realpath(__DIR__ . '/Makers/Policy/Templates');
-
-			$this->requestsTemplatePath = realpath(__DIR__ . '/Makers/Requests/Templates');
-
-			$this->resourceTemplatePath = realpath(__DIR__ . '/Makers/Resource/Templates');
-
-			$this->routeTemplatePath = realpath(__DIR__ . '/Makers/Route/Templates');
-
-			$this->testTemplatePath = realpath(__DIR__ . '/Makers/Test/Templates');
-
-			$this->registerTemplatePath = realpath(__DIR__ . '/Makers/Register/Templates');
-
-			///////////////////////////////////////////////////////////////////////////////////////////////////
-
-			$this->adminRouteTemplatePath = realpath(__DIR__ . '/Makers/AdminRoute/Templates');
-
-			$this->adminViewTemplatePath = realpath(__DIR__ . '/Makers/AdminView/Templates');
-
-			$this->createFormTemplatePath = realpath(__DIR__ . '/Makers/CreateForm/Templates');
-
-			$this->createViewTemplatePath = realpath(__DIR__ . '/Makers/CreateView/Templates');
-
-			$this->crudTemplatePath = realpath(__DIR__ . '/Makers/Crud/Templates');
-
-			$this->editFormTemplatePath = realpath(__DIR__ . '/Makers/EditForm/Templates');
-
-			$this->editViewTemplatePath = realpath(__DIR__ . '/Makers/EditView/Templates');
-
-			$this->filterFormTemplatePath = realpath(__DIR__ . '/Makers/FilterForm/Templates');
-
-			$this->jsModelTemplatePath = realpath(__DIR__ . '/Makers/JsModel/Templates');	
-
-			$this->showViewTemplatePath = realpath(__DIR__ . '/Makers/ShowView/Templates');	
-
-		}
-
-	// Operación para reemplazar la información de muestra
-
-		protected function replaceData($file)
+		private function replaceData($file)
 		{
 
 			$content = file_get_contents($file);
 
 			// EL ORDEN DE REEMPLAZO SI IMPORTA
 
-			// PRIMERO LOS PLUARALES
+			// PLURALES
 			 
 			$content = str_replace("pluralModelName", $this->pluralModelName, $content);
 
@@ -383,7 +169,7 @@ class MakerTool
 
         	$content = str_replace("pluralDotModelName", $this->pluralDotModelName, $content);
 
-        	// EN SEGUNDO LUGAR LOS SINGULARES
+        	// SINGULARES
 
         	$content = str_replace("snake_case_model_name", $this->snake_case_model_name, $content);
 
@@ -397,12 +183,187 @@ class MakerTool
 
         	$content = str_replace("ModelName", $this->ModelName, $content);
 
-        	$content = str_replace("Namespace\\", $this->namespace, $content);
+        	// NAMESPACE
 
-        	// AL FINAL EL NOMBRE DE MODELO. (ESTE PUEDE QUE NO SE NECESITE)
+        	$content = str_replace("Namespace\\", $this->namespace, $content);
 
         	file_put_contents($file, $content);
 			
 		}
+
+// DIR PATHS
+
+
+	private function setAdminRoutePath()
+	{
+
+		$this->adminRoutePath = get_path('resources/vue/router/routes/admin/routes/group');
+
+	}
+
+	private function setAdminViewPath()
+	{
+
+		$this->adminViewPath = get_path('resources/vue/views/admin'); 
+
+	}
+
+	private function setModelFormPath()
+	{
+
+		$this->modelFormPath = get_path('resources/vue/elements/forms/models'); 
+
+	}
+
+	private function setCreateFormPath()
+	{
+
+		$this->createFormPath = get_path('resources/vue/elements/forms/models'); 
+
+	}
+
+	private function setCreateViewPath()
+	{
+
+		$this->createViewPath = get_path('resources/vue/views/admin'); 
+
+	}
+
+	private function setCrudPath()
+	{
+
+		$this->crudPath = get_path('resources/vue/elements/cruds');
+
+	}
+
+	private function setEditFormPath()
+	{
+
+		$this->editFormPath = get_path('resources/vue/elements/forms/models'); 
+
+	}
+
+	private function setEditViewPath()
+	{
+
+		$this->editViewPath = get_path('resources/vue/views/admin'); 
+
+	}
+
+	private function setFilterFormPath()
+	{
+
+		$this->filterFormPath = get_path('resources/vue/elements/forms/filters');
+
+	}
+
+	private function setJsModelPath()
+	{
+
+		$this->jsModelPath = get_path('resources/assets/js/models');
+
+	}
+
+	private function setShowViewPath()
+	{
+
+		$this->showViewPath = get_path('resources/vue/views/admin'); 	
+
+	}
+
+// FILE PATHS
+
+	private function setApiRouteModelFile()
+	{
+
+		$this->apiRouteModelFile = get_path('routes/api/models.php');
+
+	}
+
+	private function setEventServiceProviderFile()
+	{
+
+		$this->eventServiceProviderFile = get_path(app_dir_name() . '/Providers/EventServiceProvider.php');
+
+	}
+
+	private function setAuthServiceProviderFile()
+	{
+
+		$this->authServiceProviderFile = get_path(app_dir_name() . '/Providers/AuthServiceProvider.php');
+
+	}
+
+// TEMPLATE PATHS
+
+	private function setAdminRouteTemplatePath()
+	{
+
+		$this->adminRouteTemplatePath = get_path(app_dir_name() . '/Stubs/AdminRoute');
+
+	}
+
+	private function setAdminViewTemplatePath()
+	{
+
+		$this->adminViewTemplatePath = get_path(app_dir_name() . '/Stubs/AdminView');
+
+	}
+
+	private function setCreateFormTemplatePath()
+	{
+
+		$this->createFormTemplatePath = get_path(app_dir_name() . '/Stubs/CreateForm');
+
+	}
+
+	private function setCreateViewTemplatePath()
+	{
+
+		$this->createViewTemplatePath = get_path(app_dir_name() . '/Stubs/CreateView');
+
+	}
+
+	private function setCrudTemplatePath()
+	{
+
+		$this->crudTemplatePath = get_path(app_dir_name() . '/Stubs/Crud');
+
+	}
+
+	private function setEditFormTemplatePath()
+	{
+
+		$this->editFormTemplatePath = get_path(app_dir_name() . '/Stubs/EditForm');
+
+	}
+
+	private function setEditViewTemplatePath()
+	{
+
+		$this->editViewTemplatePath = get_path(app_dir_name() . '/Stubs/EditView');
+
+	}
+
+	private function setFilterFormTemplatePath()
+	{
+
+		$this->filterFormTemplatePath = get_path(app_dir_name() . '/Stubs/FilterForm');
+
+	}
+
+	private function setJsModelTemplatePath()
+	{
+
+		$this->jsModelTemplatePath = get_path(app_dir_name() . '/Stubs/JsModel');
+
+	}
+
+	private function setShowViewTemplatePath()
+	{
+
+		$this->showViewTemplatePath = get_path(app_dir_name() . '/Stubs/ShowView');
+
+	}
 
 }

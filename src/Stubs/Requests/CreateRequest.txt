@@ -1,0 +1,25 @@
+<?php
+
+namespace App\Http\Requests\PascalCaseModelName;
+
+use App\Models\PascalCaseModelName;
+use Illuminate\Foundation\Http\FormRequest;
+
+class CreateRequest extends FormRequest
+{
+
+    public function authorize()
+    {
+
+        return $this->user()->can('create', PascalCaseModelName::class);
+
+    }
+
+    public function rules()
+    {
+        return [
+            //
+        ];
+    }
+    
+}

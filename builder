@@ -5,8 +5,19 @@
 $application = new Symfony\Component\Console\Application();
 
 /** Inicio comandos de la aplicación */
-$application->add(new \Desar\Generator\Commands\MakeModelCommand());
-$application->add(new \Desar\Generator\Commands\MakeControllerCommand());
+
+$commandFiles = glob(__DIR__ . '/Desar/Generator/Commands/*Command.php');
+
+foreach ($commandFiles as $file) {
+
+    require_once $file;
+
+    $className = 'Desar\Generator\Commands\\' . basename($file, '.php');
+
+    $application->add(new $className());
+    
+}
+
 /** Fin comandos de la aplicación */
 
 $application->run();

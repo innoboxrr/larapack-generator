@@ -17,18 +17,18 @@ class MakeControllerCommand extends Command
 
         $this->setName('make:controller')
             ->setDescription('Create a new controller class')
-            ->addArgument('name', InputArgument::REQUIRED, 'The name of the controller class');
+            ->addArgument('name', InputArgument::REQUIRED, 'The name of the model class');
 
     }
 
     protected function execute(InputInterface $input, OutputInterface $output)
     {
 
-        $controllerName = $input->getArgument('name');
+        $modelName = $input->getArgument('name');
 
-        $maker = new ControllerMaker($controllerName);
+        $maker = new ControllerMaker();
 
-        $maker->create();
+        $maker->create($modelName);
 
         return 1;
 

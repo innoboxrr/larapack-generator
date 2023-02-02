@@ -1,0 +1,20 @@
+<table>
+    <thead>
+        <tr>
+            <th>id</th>
+
+            <th>created_at</th>
+            <th>updated_at</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach($plural_snake_case_model_name as $snake_case_model_name)
+            <tr>
+                <td>{{ $snake_case_model_name->id }}</td>
+
+                <td>{{ $snake_case_model_name->created_at }}</td>
+                <td>{{ $snake_case_model_name->updated_at }}</td>
+            </tr>
+        @endforeach
+    </tbody>
+</table>

@@ -6,25 +6,31 @@ use Illuminate\Support\ServiceProvider;
 
 class GeneratorServiceProvider extends ServiceProvider
 {
-    /**
-     * Register any application services.
-     *
-     * @return void
-     */
+    
     public function register()
     {
-        
-        //
+
+        $files = glob(__DIR__ . '/../Facades/*.php');
+
+        foreach ($files as $file) {
+
+            $class = basename($file, '.php');
+
+            $accesor = get_accessor($class);
+
+            $this->app->bind($accesor, function($app) use ($class) {
+
+                return new \Desar\Generator\Facades\{$class}();
+
+            });
+
+        }
 
     }
 
-    /**
-     * Bootstrap any application services.
-     *
-     * @return void
-     */
     public function boot()
     {
         //
     }
+
 }

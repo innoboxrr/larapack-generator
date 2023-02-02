@@ -1,0 +1,27 @@
+<?php
+
+namespace App\Http\Requests\PascalCaseModelName;
+
+use App\Models\PascalCaseModelName;
+use Illuminate\Foundation\Http\FormRequest;
+
+class DeleteRequest extends FormRequest
+{
+
+    public function authorize()
+    {
+        
+        $camelCaseModelName = PascalCaseModelName::findOrFail($this->snake_case_model_name_id);
+
+        return $this->user()->can('delete', $camelCaseModelName);
+
+    }
+
+    public function rules()
+    {
+        return [
+            'snake_case_model_name_id' => 'required|numeric'
+        ];
+    }
+    
+}

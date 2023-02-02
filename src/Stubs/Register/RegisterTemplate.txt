@@ -1,0 +1,61 @@
+## Add this line of code in your "policies" array in the AuthServiceProvider file
+
+	'App\Models\PascalCaseModelName' => 'App\Policies\PascalCaseModelNamePolicy',
+
+## Add this code in your "listen" array in EventServiceProvider
+	
+		// PascalCaseModelName model
+
+		    \App\Http\Events\PascalCaseModelName\Events\CreateEvent::class => [
+
+		        \App\Http\Events\PascalCaseModelName\Listeners\CreateEvent\LogOperation::class,
+
+		    ],  
+
+		    \App\Http\Events\PascalCaseModelName\Events\DeleteEvent::class => [
+
+		        \App\Http\Events\PascalCaseModelName\Listeners\DeleteEvent\LogOperation::class,
+
+		    ],
+
+		    \App\Http\Events\PascalCaseModelName\Events\ExportEvent::class => [
+
+		        \App\Http\Events\PascalCaseModelName\Listeners\ExportEvent\LogOperation::class,
+
+		        \App\Http\Events\PascalCaseModelName\Listeners\ExportEvent\SendNotification::class,
+
+		    ],
+
+		    \App\Http\Events\PascalCaseModelName\Events\ForceDeleteEvent::class => [
+
+		        \App\Http\Events\PascalCaseModelName\Listeners\ForceDeleteEvent\LogOperation::class,
+
+		    ],
+
+		    \App\Http\Events\PascalCaseModelName\Events\RestoreEvent::class => [
+
+		        \App\Http\Events\PascalCaseModelName\Listeners\RestoreEvent\LogOperation::class,
+
+		    ],
+
+		    \App\Http\Events\PascalCaseModelName\Events\UpdateEvent::class => [
+
+		        \App\Http\Events\PascalCaseModelName\Listeners\UpdateEvent\LogOperation::class,
+
+		    ], 
+
+## Add this line of code in your /api/models.php file to register the model routes
+
+Route::prefix('kebabcasemodelname')
+	->as('snake_case_model_name.')
+	->group(base_path('routes/api/models/snake_case_model_name.php'));
+
+## Add this line en vue rputer admin index.js group /resources/vue/router/routes/admin/routes/index.js
+	
+	// In the import section write:
+
+	import camelCaseModelNameRoutes from './group/snake_case_model_name'
+
+	// In the export section write
+
+	...camelCaseModelNameRoutes,

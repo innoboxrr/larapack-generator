@@ -22,8 +22,6 @@ if(!function_exists('root_path')) {
 
 }
 
-
-
 if(!function_exists('app_dir_name')) {
 
     function app_dir_name() {
@@ -81,6 +79,53 @@ if(!function_exists('get_namespace')) {
             }
 
         }
+
+    }
+
+}
+
+if(!function_exists('get_accessor')) {
+
+    function get_accessor($PascalCaseClass)
+    {
+
+        return pascal_case_to_kebab_case($PascalCaseClass);
+
+    }
+
+}
+
+if(!function_exists('pascal_case_to_kebab_case')) {
+
+    function pascal_case_to_kebab_case($string) {
+    
+        $kebabCase = "";
+        
+        $len = strlen($string);
+        
+        for ($i = 0; $i < $len; $i++) {
+        
+            $char = $string[$i];
+        
+            if (ctype_upper($char)) {
+        
+                if ($i > 0) {
+        
+                    $kebabCase .= "-";
+        
+                }
+        
+                $kebabCase .= strtolower($char);
+        
+            } else {
+        
+                $kebabCase .= $char;
+        
+            }
+        
+        }
+        
+        return $kebabCase;
 
     }
 

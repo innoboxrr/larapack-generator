@@ -1,0 +1,43 @@
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\SoftDeletes;
+use App\Traits\MetaOperations;
+use App\Models\Traits\Queries\PascalCaseModelNameQuery;
+use App\Models\Traits\Relations\PascalCaseModelNameRelations;
+use App\Models\Traits\Storage\PascalCaseModelNameStorage;
+use App\Models\Traits\Assignments\PascalCaseModelNameAssignment;
+use App\Models\Traits\Operations\PascalCaseModelNameOperations;
+use App\Models\Traits\Mutators\PascalCaseModelNameMutators;
+
+class PascalCaseModelName extends Model
+{
+
+    use HasFactory,
+        SoftDeletes,
+        MetaOperations,
+        PascalCaseModelNameQuery,
+        PascalCaseModelNameRelations,
+        PascalCaseModelNameStorage,
+        PascalCaseModelNameAssignment,
+        PascalCaseModelNameOperations,
+        PascalCaseModelNameMutators;
+        
+    protected $fillable = [];
+
+    protected $creatable = [];
+
+    protected $updatable = [];
+
+    protected $casts = [];
+
+    protected $protected_metas = [];
+
+    protected $editable_metas = [];
+
+    public $loadable_relations = [];
+
+}

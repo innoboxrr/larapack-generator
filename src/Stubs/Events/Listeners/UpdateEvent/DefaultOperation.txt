@@ -1,0 +1,24 @@
+<?php
+
+namespace Namespace\Http\Events\PascalCaseModelName\Listeners\UpdateEvent;
+
+use Namespace\Http\Events\PascalCaseModelName\Events\UpdateEvent;
+use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Queue\InteractsWithQueue;
+
+class DefaultOperation
+{
+    
+    public function __construct()
+    {
+        //
+    }
+
+    public function handle(UpdateEvent $event)
+    {
+
+        //
+
+    }
+
+}

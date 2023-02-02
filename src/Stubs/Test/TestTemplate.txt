@@ -1,0 +1,243 @@
+<?php
+
+namespace Tests\Feature\Models;
+
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Testing\WithFaker;
+use Tests\TestCase;
+
+class PascalCaseModelNameEndpointsTest extends TestCase
+{
+
+    public function test_snake_case_model_name_policies_endpoint()
+    {
+
+        $camelCaseModelName = \App\Models\PascalCaseModelName::factory()->create();
+        
+        $headers = [
+            'Authorization' => config('test.token'),
+            'Content-Type' => 'application/json',
+            'Accept' => 'application/json'
+        ];  
+
+        $payload = [
+            'id' => $camelCaseModelName->id
+        ];
+
+        $this->json('POST', '/api/kebabcasemodelname/policies', $payload, $headers)
+            ->assertStatus(200);
+
+    }
+
+    public function test_snake_case_model_name_policy_endpoint()
+    {
+        $headers = [
+            'Authorization' => config('test.token'),
+            'Content-Type' => 'application/json',
+            'Accept' => 'application/json'
+        ];  
+
+        $payload = [
+            'policy' => 'index'
+        ];
+
+        $this->json('POST', '/api/kebabcasemodelname/policy', $payload, $headers)
+            ->assertJsonStructure([
+                'index'
+            ])
+            ->assertStatus(200);
+
+    }
+
+    public function test_snake_case_model_name_index_auth_endpoint()
+    {
+
+        $headers = [
+            'Authorization' => config('test.token'),
+            'Content-Type' => 'application/json',
+            'Accept' => 'application/json'
+        ];  
+
+        $payload = [
+            'managed' => true
+        ];
+
+        $this->json('POST', '/api/kebabcasemodelname/index', $payload, $headers)
+            ->assertStatus(200);
+
+    }
+
+    public function test_snake_case_model_name_index_guest_endpoint()
+    {
+
+        $headers = [
+            'Content-Type' => 'application/json',
+            'Accept' => 'application/json'
+        ];  
+
+        $payload = [
+            'managed' => true
+        ];
+
+        $this->json('POST', '/api/kebabcasemodelname/index', $payload, $headers)
+            ->assertStatus(401);
+            
+    }
+    
+    public function test_snake_case_model_name_show_auth_endpoint()
+    {
+
+        $camelCaseModelName = \App\Models\PascalCaseModelName::latest()->first();
+
+        $headers = [
+            'Authorization' => config('test.token'),
+            'Content-Type' => 'application/json',
+            'Accept' => 'application/json'
+        ];  
+
+        $payload = [
+            'snake_case_model_name_id' => $camelCaseModelName->id
+        ];
+
+        $this->json('POST', '/api/kebabcasemodelname/show', $payload, $headers)
+            ->assertStatus(200);
+            
+    }
+
+    public function test_snake_case_model_name_show_guest_endpoint()
+    {
+
+        $camelCaseModelName = \App\Models\PascalCaseModelName::latest()->first();
+
+        $headers = [
+            'Content-Type' => 'application/json',
+            'Accept' => 'application/json'
+        ];  
+
+        $payload = [
+            'snake_case_model_name_id' => $camelCaseModelName->id
+        ];
+
+        $this->json('POST', '/api/kebabcasemodelname/show', $payload, $headers)
+            ->assertStatus(401);
+            
+    }
+
+    public function test_snake_case_model_name_create_endpoint()
+    {
+
+        $user = \App\Models\User::first();
+
+        $headers = [
+            'Authorization' => config('test.token'),
+            'Content-Type' => 'application/json',
+            'Accept' => 'application/json'
+        ];  
+
+        $payload = \App\Models\PascalCaseModelName::factory()->make()->getAttributes();
+
+        $this->json('POST', '/api/kebabcasemodelname/create', $payload, $headers)
+            ->assertStatus(201);
+            
+    }
+
+    public function test_snake_case_model_name_update_endpoint()
+    {
+
+        $camelCaseModelName = \App\Models\PascalCaseModelName::factory()->create();
+
+        $headers = [
+            'Authorization' => config('test.token'),
+            'Content-Type' => 'application/json',
+            'Accept' => 'application/json'
+        ];  
+
+        $payload = [
+            ...\App\Models\PascalCaseModelName::factory()->make()->getAttributes(),
+            'snake_case_model_name_id' => $camelCaseModelName->id
+        ];
+
+        $this->json('PUT', '/api/kebabcasemodelname/update', $payload, $headers)
+            ->assertStatus(200);
+            
+    }
+
+    public function test_snake_case_model_name_delete_endpoint()
+    {
+
+        $camelCaseModelName = \App\Models\PascalCaseModelName::latest()->first();
+
+        $headers = [
+            'Authorization' => config('test.token'),
+            'Content-Type' => 'application/json',
+            'Accept' => 'application/json'
+        ];  
+
+        $payload = [
+            'snake_case_model_name_id' => $camelCaseModelName->id
+        ];
+
+        $this->json('DELETE', '/api/kebabcasemodelname/delete', $payload, $headers)
+            ->assertStatus(200);
+            
+    }
+
+    public function test_snake_case_model_name_restore_endpoint()
+    {
+
+        $camelCaseModelName = \App\Models\PascalCaseModelName::first();
+
+        $headers = [
+            'Authorization' => config('test.token'),
+            'Content-Type' => 'application/json',
+            'Accept' => 'application/json'
+        ];  
+
+        $payload = [
+            'snake_case_model_name_id' => $camelCaseModelName->id
+        ];
+
+        $this->json('POST', '/api/kebabcasemodelname/restore', $payload, $headers)
+            ->assertStatus(200);
+            
+    }
+
+    public function test_snake_case_model_name_force_delete_endpoint()
+    {
+
+        $camelCaseModelName = \App\Models\PascalCaseModelName::latest()->first();
+
+        $headers = [
+            'Authorization' => config('test.token'),
+            'Content-Type' => 'application/json',
+            'Accept' => 'application/json'
+        ];  
+
+        $payload = [
+            'snake_case_model_name_id' => $camelCaseModelName->id
+        ];
+
+        $this->json('DELETE', '/api/kebabcasemodelname/force-delete', $payload, $headers)
+            ->assertStatus(403);
+            
+    }
+
+    public function test_snake_case_model_name_export_endpoint()
+    {   
+
+        $headers = [
+            'Authorization' => config('test.token'),
+            'Content-Type' => 'application/json',
+            'Accept' => 'application/json'
+        ];  
+
+        $payload = [
+            //
+        ];
+
+        $this->json('POST', '/api/kebabcasemodelname/export', $payload, $headers)
+            ->assertStatus(200);
+            
+    }
+
+}
