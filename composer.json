@@ -3,7 +3,7 @@
     "type": "library",
     "license": "MIT",
     "minimum-stability": "dev",
-    "version": "1.0.34",
+    "version": "1.0.35",
     "require": {
         "orchestra/testbench": "^7.0"
     },
