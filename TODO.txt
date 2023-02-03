@@ -1,0 +1,7 @@
+Emplear o requerir SearchSurge en lugar de SearchBuilder
+Crear e incluir el paquete de MetaOperations
+Corregir el Namespace y añadir una instrucción para el namespáce de Database, (Factory)
+Corregir el Namespace para Tests
+Añadir en el trait del modelo user el método isAdmin() y definir su lógica, este se ocupa en el policy
+Registrar los policies en un serviceprovider desde el paquete AuthServiceProvider
+También crear el service provider para el registro de las rutas RouteServiceProvider
