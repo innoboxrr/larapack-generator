@@ -30,6 +30,8 @@ class MakeModelCommand extends Command
 
         $maker->create($modelName);
 
+        $output->writeln('Model added');
+
         return 1;
 
     }

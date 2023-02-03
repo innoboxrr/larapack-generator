@@ -30,6 +30,8 @@ class MakeEventsCommand extends Command
 
         $maker->create($modelName);
 
+        $output->writeln('Events added');
+
         return 1;
 
     }

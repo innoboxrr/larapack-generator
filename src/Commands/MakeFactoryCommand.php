@@ -30,6 +30,8 @@ class MakeFactoryCommand extends Command
 
         $maker->create($modelName);
 
+        $output->writeln('Factory added');
+
         return 1;
 
     }

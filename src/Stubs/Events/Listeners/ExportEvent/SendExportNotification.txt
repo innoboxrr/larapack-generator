@@ -7,7 +7,7 @@ use Namespace\Http\Events\PascalCaseModelName\Events\ExportEvent;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Queue\InteractsWithQueue;
 
-class SendNotification
+class SendExportNotification
 {
 
     public function __construct()
@@ -18,7 +18,9 @@ class SendNotification
     public function handle(ExportEvent $event)
     {
 
-        $event->request->user()->notify((new ExportNotification($event->request))->locale($event->locale));
+        $event->request
+            ->user()
+            ->notify((new ExportNotification($event->request))->locale($event->locale));
 
     }
 

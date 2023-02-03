@@ -30,6 +30,8 @@ class MakeExportNotificationCommand extends Command
 
         $maker->create($modelName);
 
+        $output->writeln('Export Notification added');
+
         return 1;
 
     }

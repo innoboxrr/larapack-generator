@@ -20,7 +20,11 @@ class GeneratorServiceProvider extends ServiceProvider
 
             $this->app->bind($accesor, function($app) use ($class) {
 
-                return new \Desar\Generator\Facades\{$class}();
+                $className = '\Desar\Generator\Facades\\' . $class;
+    
+                $class = new ReflectionClass($className);
+                
+                return $class->newInstance();
 
             });
 

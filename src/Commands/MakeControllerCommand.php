@@ -30,6 +30,8 @@ class MakeControllerCommand extends Command
 
         $maker->create($modelName);
 
+        $output->writeln('Controller added');
+
         return 1;
 
     }

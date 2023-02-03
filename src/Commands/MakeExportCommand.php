@@ -30,6 +30,8 @@ class MakeExportCommand extends Command
 
         $maker->create($modelName);
 
+        $output->writeln('Export added');
+
         return 1;
 
     }

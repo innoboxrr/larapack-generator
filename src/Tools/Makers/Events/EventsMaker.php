@@ -89,7 +89,7 @@ class EventsMaker extends MakerTool
 
 		$path = $this->mainEventsPath . '/' . 'Listeners';
 
-		if (!file_exists($listenersPath)) mkdir($listenersPath, 0777, true);
+		if (!file_exists($path)) mkdir($path, 0777, true);
 
 		$this->modelListenersPath = $path;
 

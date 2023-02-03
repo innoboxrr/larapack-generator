@@ -22,20 +22,54 @@ class ControllerMaker extends MakerTool
 	}
 
 	private function setControllerTemplatePath()
-		{
+	{
 
-			$this->controllerTemplatePath = stubs_path('Controller');
+		$this->controllerTemplatePath = stubs_path('Controller');
 
-			return $this;
+		return $this;
+
+	}
+
+	private function checkControllerClass()
+	{
+
+		if(app_dir_name() == 'src') {
+
+			$controllerFile = $this->controllerPath . '/' . 'Controller.php';
+
+			if(!file_exists($controllerFile)) {
+
+				$templateFile = $this->controllerTemplatePath . '/Controller.txt';
+
+				if(copy($templateFile, $controllerFile)) {
+
+					$this->replaceData($controllerFile);
+
+				} else {
+
+					throw new MakerException;
+
+				}
+
+			} else {
+
+				return false;
+
+			}
+
+			return true;
 
 		}
+
+	}
 
 	public function create(string $ModelName)
 	{
 
 		$this->init($ModelName)
 			->setControllerPath()
-			->setControllerTemplatePath();
+			->setControllerTemplatePath()
+			->checkControllerClass();
 
 		$controllerFile = $this->controllerPath . '/' . $this->PascalCaseModelName . 'Controller.php';
 

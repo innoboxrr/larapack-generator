@@ -17,7 +17,9 @@ class ExportNotificationMaker extends MakerTool
 	private function setExportNotificationPath()
 	{
 
-		$this->exportNotificationPath = get_path(app_dir_name() . '/ExportNotifications');
+		$this->exportNotificationPath = get_path(app_dir_name() . '/Notifications');
+
+		return $this;
 
 	}
 
@@ -26,6 +28,8 @@ class ExportNotificationMaker extends MakerTool
 
 		$this->exportNotificationTemplatePath = stubs_path('ExportNotification');
 
+		return $this;
+
 	}
 
 	protected function setModelExportNotificationPath()
@@ -33,9 +37,11 @@ class ExportNotificationMaker extends MakerTool
 
 		$path = $this->exportNotificationPath . '/' . $this->PascalCaseModelName;
 
-		if (!file_exists($exportNotificationPath)) mkdir($exportNotificationPath, 0777, true);
+		if (!file_exists($path)) mkdir($path, 0777, true);
 
 		$this->modelExportNotificationPath = $path;
+
+		return $this;
 
 	}
 

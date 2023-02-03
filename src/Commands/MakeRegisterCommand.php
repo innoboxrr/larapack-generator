@@ -30,6 +30,8 @@ class MakeRegisterCommand extends Command
 
         $maker->create($modelName);
 
+        $output->writeln('Register added');
+
         return 1;
 
     }

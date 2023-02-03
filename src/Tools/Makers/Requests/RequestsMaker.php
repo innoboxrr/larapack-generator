@@ -41,6 +41,8 @@ class RequestsMaker extends MakerTool
 
 		$this->requestsTemplatePath = stubs_path('Requests');
 
+		return $this;
+
 	}
 
 	protected function setMainRequestsPath()

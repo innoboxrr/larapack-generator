@@ -30,6 +30,8 @@ class MakeExcelCommand extends Command
 
         $maker->create($modelName);
 
+        $output->writeln('Excel added');
+
         return 1;
 
     }

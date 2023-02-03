@@ -30,6 +30,8 @@ class MakeMigrationCommand extends Command
 
         $maker->create($modelName);
 
+        $output->writeln('Migration added');
+
         return 1;
 
     }

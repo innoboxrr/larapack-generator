@@ -30,6 +30,8 @@ class MakeTestCommand extends Command
 
         $maker->create($modelName);
 
+        $output->writeln('Test added');
+
         return 1;
 
     }

@@ -30,6 +30,8 @@ class MakeModelTraitsCommand extends Command
 
         $maker->create($modelName);
 
+        $output->writeln('Model Traits added');
+
         return 1;
 
     }

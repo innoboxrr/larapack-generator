@@ -30,6 +30,8 @@ class MakePolicyCommand extends Command
 
         $maker->create($modelName);
 
+        $output->writeln('Policy added');
+
         return 1;
 
     }

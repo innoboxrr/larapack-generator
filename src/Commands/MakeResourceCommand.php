@@ -30,6 +30,8 @@ class MakeResourceCommand extends Command
 
         $maker->create($modelName);
 
+        $output->writeln('Resource added');
+
         return 1;
 
     }

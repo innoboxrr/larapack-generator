@@ -30,6 +30,8 @@ class MakeFiltersCommand extends Command
 
         $maker->create($modelName);
 
+        $output->writeln('Filters added');
+
         return 1;
 
     }

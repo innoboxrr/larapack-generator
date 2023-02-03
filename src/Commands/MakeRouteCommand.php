@@ -30,6 +30,8 @@ class MakeRouteCommand extends Command
 
         $maker->create($modelName);
 
+        $output->writeln('Route added');
+
         return 1;
 
     }

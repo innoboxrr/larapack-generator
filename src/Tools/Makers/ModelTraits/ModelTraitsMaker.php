@@ -45,34 +45,31 @@ class ModelTraitsMaker extends MakerTool
 	protected function setTraitsPath()
 	{
 
-		$this->assignmentsPath = $this->modelTraitsPath . 'Assignments';
+		$this->assignmentsPath = $this->modelTraitsPath . '/Assignments';
 
 		if (!file_exists($this->assignmentsPath)) mkdir($this->assignmentsPath, 0777, true);
 
 
-		$this->mutatorsPath = $this->modelTraitsPath . 'Mutators';
+		$this->mutatorsPath = $this->modelTraitsPath . '/Mutators';
 
 		if (!file_exists($this->mutatorsPath)) mkdir($this->mutatorsPath, 0777, true);
 
 		
-		$this->operationsPath = $this->modelTraitsPath . 'Operations';
+		$this->operationsPath = $this->modelTraitsPath . '/Operations';
 
 		if (!file_exists($this->operationsPath)) mkdir($this->operationsPath, 0777, true);
 
 		
-		$this->queriesPath = $this->modelTraitsPath . 'Queries';
-
-		if (!file_exists($this->queriesPath)) mkdir($this->queriesPath, 0777, true);
-
-		
-		$this->relationsPath = $this->modelTraitsPath . 'Relations';
+		$this->relationsPath = $this->modelTraitsPath . '/Relations';
 
 		if (!file_exists($this->relationsPath)) mkdir($this->relationsPath, 0777, true);
 
 
-		$this->storagePath = $this->modelTraitsPath . 'Storage';
+		$this->storagePath = $this->modelTraitsPath . '/Storage';
 
 		if (!file_exists($this->storagePath)) mkdir($this->storagePath, 0777, true);
+
+		return $this;
 
 	}
 

@@ -17,12 +17,16 @@ class ExportMaker extends MakerTool
 
 		$this->exportPath = get_path(app_dir_name() . '/Exports');
 
+		return $this;
+
 	}
 
 	private function setExportTemplatePath()
 	{
 
 		$this->exportTemplatePath = stubs_path('Export');
+
+		return $this;
 
 	}
 

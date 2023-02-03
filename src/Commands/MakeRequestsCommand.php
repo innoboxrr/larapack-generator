@@ -30,6 +30,8 @@ class MakeRequestsCommand extends Command
 
         $maker->create($modelName);
 
+        $output->writeln('Requests added');
+
         return 1;
 
     }

@@ -30,7 +30,7 @@ class ExcelMaker extends MakerTool
 
 	}
 
-	public function create(string $modelName)
+	public function create(string $ModelName)
 	{
 
 		$this->init($ModelName)
