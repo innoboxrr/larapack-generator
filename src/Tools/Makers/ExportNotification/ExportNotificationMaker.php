@@ -5,7 +5,7 @@ namespace Desar\Generator\Tools\Makers\ExportNotification;
 use Desar\Generator\Tools\MakerTool;
 use Desar\Generator\Exceptions\MakerException;
 
-class ExportNotificationGenerator extends MakerTool
+class ExportNotificationMaker extends MakerTool
 {
 
 	protected $exportNotificationPath;
@@ -24,7 +24,7 @@ class ExportNotificationGenerator extends MakerTool
 	private function setExportNotificationTemplatePath()
 	{
 
-		$this->exportNotificationTemplatePath = get_path(app_dir_name() . '/Stubs/ExportNotification');
+		$this->exportNotificationTemplatePath = stubs_path('ExportNotification');
 
 	}
 

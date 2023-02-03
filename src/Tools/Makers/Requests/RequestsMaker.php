@@ -5,7 +5,7 @@ namespace Desar\Generator\Tools\Makers\Requests;
 use Desar\Generator\Tools\MakerTool;
 use Desar\Generator\Exceptions\MakerException;
 
-class RequestsGenerator extends MakerTool
+class RequestsMaker extends MakerTool
 {
 
 	protected $requestPath;
@@ -39,7 +39,7 @@ class RequestsGenerator extends MakerTool
 	private function setRequestsTemplatePath()
 	{
 
-		$this->requestsTemplatePath = get_path(app_dir_name() . '/Stubs/Requests');
+		$this->requestsTemplatePath = stubs_path('Requests');
 
 	}
 

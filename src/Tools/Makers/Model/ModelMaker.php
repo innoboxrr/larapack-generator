@@ -5,7 +5,7 @@ namespace Desar\Generator\Tools\Makers\Model;
 use Desar\Generator\Tools\MakerTool;
 use Desar\Generator\Exceptions\MakerException;
 
-class ModelGenerator extends MakerTool
+class ModelMaker extends MakerTool
 {
 
 	protected $modelPath;
@@ -17,16 +17,16 @@ class ModelGenerator extends MakerTool
 
 		$this->modelPath = get_path(app_dir_name() . '/Models');
 
-		rfeturn $this;
+		return $this;
 
 	}
 
 	private function setModelTemplatePath()
 	{
 
-		$this->modelTemplatePath = get_path(app_dir_name() . '/Stubs/Model');
+		$this->modelTemplatePath = stubs_path('Model');
 
-		rfeturn $this;
+		return $this;
 
 	}
 

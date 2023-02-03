@@ -5,7 +5,7 @@ namespace Desar\Generator\Tools\Makers\Test;
 use Desar\Generator\Tools\MakerTool;
 use Desar\Generator\Exceptions\MakerException;
 
-class TestGenerator extends MakerTool
+class TestMaker extends MakerTool
 {
 
 	protected $testPath;
@@ -24,7 +24,7 @@ class TestGenerator extends MakerTool
 	private function setTestTemplatePath()
 	{
 
-		$this->testTemplatePath = get_path(app_dir_name() . '/Stubs/Test');
+		$this->testTemplatePath = stubs_path('Test');
 
 		return $this;
 

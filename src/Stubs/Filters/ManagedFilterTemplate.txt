@@ -1,8 +1,8 @@
 <?php
 
-namespace App\Models\Filters\PascalCaseModelName;
+namespace Namespace\Models\Filters\PascalCaseModelName;
 
-use App\Classes\Search\Utils\Managed;
+use Namespace\Classes\Search\Utils\Managed;
 
 class ManagedFilter extends Managed
 {

@@ -5,7 +5,7 @@ namespace Desar\Generator\Tools\Makers\Policy;
 use Desar\Generator\Tools\MakerTool;
 use Desar\Generator\Exceptions\MakerException;
 
-class PolicyGenerator extends MakerTool
+class PolicyMaker extends MakerTool
 {
 
 	protected $policyPath;
@@ -24,7 +24,7 @@ class PolicyGenerator extends MakerTool
 	private function setPolicyTemplatePath()
 	{
 
-		$this->policyTemplatePath = get_path(app_dir_name() . '/Stubs/Policy');
+		$this->policyTemplatePath = stubs_path('Policy');
 
 		return $this;
 

@@ -1,10 +1,10 @@
 <?php
 
-namespace App\Models\Filters\PascalCaseModelName;
+namespace Namespace\Models\Filters\PascalCaseModelName;
 
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
-use App\Classes\Search\Utils\Order;
+use Namespace\Classes\Search\Utils\Order;
 
 class EagerLoadingFilter
 {

@@ -38,6 +38,18 @@ if(!function_exists('app_dir_name')) {
 
 }
 
+if(!function_exists('stubs_path')) {
+
+    function stubs_path($path) {
+
+        $path = root_path() . '/vendor/desar/generator/src/Stubs/' . $path;
+
+        return $path;
+
+    }
+
+}
+
 if(!function_exists('get_path')) {
 
     function get_path($path) {

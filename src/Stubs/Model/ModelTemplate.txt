@@ -1,17 +1,17 @@
 <?php
 
-namespace App\Models;
+namespace Namespace\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\SoftDeletes;
-use App\Traits\MetaOperations;
-use App\Models\Traits\Queries\PascalCaseModelNameQuery;
-use App\Models\Traits\Relations\PascalCaseModelNameRelations;
-use App\Models\Traits\Storage\PascalCaseModelNameStorage;
-use App\Models\Traits\Assignments\PascalCaseModelNameAssignment;
-use App\Models\Traits\Operations\PascalCaseModelNameOperations;
-use App\Models\Traits\Mutators\PascalCaseModelNameMutators;
+use Namespace\Traits\MetaOperations;
+use Namespace\Models\Traits\Queries\PascalCaseModelNameQuery;
+use Namespace\Models\Traits\Relations\PascalCaseModelNameRelations;
+use Namespace\Models\Traits\Storage\PascalCaseModelNameStorage;
+use Namespace\Models\Traits\Assignments\PascalCaseModelNameAssignment;
+use Namespace\Models\Traits\Operations\PascalCaseModelNameOperations;
+use Namespace\Models\Traits\Mutators\PascalCaseModelNameMutators;
 
 class PascalCaseModelName extends Model
 {

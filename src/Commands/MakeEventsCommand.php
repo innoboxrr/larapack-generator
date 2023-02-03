@@ -7,7 +7,7 @@ use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
-use Desar\Generator\Tools\Makers\Controller\EventsMaker;
+use Desar\Generator\Tools\Makers\Events\EventsMaker;
 
 class MakeEventsCommand extends Command
 {

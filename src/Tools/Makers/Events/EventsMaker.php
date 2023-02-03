@@ -52,7 +52,7 @@ class EventsMaker extends MakerTool
 	private function setEventsTemplatePath()
 	{
 
-		$this->eventsTemplatePath = get_path(app_dir_name() . '/Stubs/Events');
+		$this->eventsTemplatePath = stubs_path('Events');
 
 		return $this;
 

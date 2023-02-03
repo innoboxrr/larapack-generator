@@ -24,7 +24,7 @@ class ControllerMaker extends MakerTool
 	private function setControllerTemplatePath()
 		{
 
-			$this->controllerTemplatePath = get_path(app_dir_name() . '/Stubs/Controller');
+			$this->controllerTemplatePath = stubs_path('Controller');
 
 			return $this;
 

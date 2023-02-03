@@ -5,7 +5,7 @@ namespace Desar\Generator\Tools\Makers\Register;
 use Desar\Generator\Tools\MakerTool;
 use Desar\Generator\Exceptions\MakerException;
 
-class RegisterGenerator extends MakerTool
+class RegisterMaker extends MakerTool
 {
 
 	protected $registerPath;
@@ -24,7 +24,7 @@ class RegisterGenerator extends MakerTool
 	private function setRegisterTemplatePath()
 	{
 
-		$this->registerTemplatePath = get_path(app_dir_name() . '/Stubs/Register');
+		$this->registerTemplatePath = stubs_path('Register');
 
 		return $this;
 

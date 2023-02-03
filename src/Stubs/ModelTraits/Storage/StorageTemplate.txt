@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Models\Traits\Storage;
+namespace Namespace\Models\Traits\Storage;
 
 trait PascalCaseModelNameStorage
 {

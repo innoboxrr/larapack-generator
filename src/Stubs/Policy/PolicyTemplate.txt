@@ -1,9 +1,9 @@
 <?php
 
-namespace App\Policies;
+namespace Namespace\Policies;
 
-use App\Models\User;
-use App\Models\PascalCaseModelName;
+use Namespace\Models\User;
+use Namespace\Models\PascalCaseModelName;
 use Illuminate\Auth\Access\HandlesAuthorization;
 
 class PascalCaseModelNamePolicy

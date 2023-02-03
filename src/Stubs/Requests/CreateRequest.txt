@@ -1,8 +1,8 @@
 <?php
 
-namespace App\Http\Requests\PascalCaseModelName;
+namespace Namespace\Http\Requests\PascalCaseModelName;
 
-use App\Models\PascalCaseModelName;
+use Namespace\Models\PascalCaseModelName;
 use Illuminate\Foundation\Http\FormRequest;
 
 class CreateRequest extends FormRequest

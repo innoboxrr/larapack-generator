@@ -6,7 +6,7 @@ namespace Database\Factories;
  * Docs: https://fakerphp.github.io/ 
  */
 
-use App\Models\PascalCaseModelName;
+use Namespace\Models\PascalCaseModelName;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 class PascalCaseModelNameFactory extends Factory

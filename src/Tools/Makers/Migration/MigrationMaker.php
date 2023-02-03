@@ -6,7 +6,7 @@ use Desar\Generator\Tools\MakerTool;
 use Illuminate\Support\Facades\Schema;
 use Desar\Generator\Exceptions\MakerException;
 
-class MigrationGenerator extends MakerTool
+class MigrationMaker extends MakerTool
 {
 
 	protected $migrationPath;
@@ -25,7 +25,7 @@ class MigrationGenerator extends MakerTool
 	private function setMigrationTemplatePath()
 	{
 
-		$this->migrationTemplatePath = get_path(app_dir_name() . '/Stubs/Migration');
+		$this->migrationTemplatePath = stubs_path('Migration');
 
 		return $this;
 

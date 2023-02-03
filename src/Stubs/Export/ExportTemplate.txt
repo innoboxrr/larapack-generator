@@ -1,8 +1,8 @@
 <?php
 
-namespace App\Exports;
+namespace Namespace\Exports;
 
-use App\Classes\Search\SearchBuilder;
+use Namespace\Classes\Search\SearchBuilder;
 use Illuminate\Contracts\View\View;
 use Maatwebsite\Excel\Concerns\FromView;
 

@@ -5,7 +5,7 @@ namespace Desar\Generator\Tools\Makers\Export;
 use Desar\Generator\Tools\MakerTool;
 use Desar\Generator\Exceptions\MakerException;
 
-class ExportGenerator extends MakerTool
+class ExportMaker extends MakerTool
 {
 
 	protected $exportPath;
@@ -22,7 +22,7 @@ class ExportGenerator extends MakerTool
 	private function setExportTemplatePath()
 	{
 
-		$this->exportTemplatePath = get_path(app_dir_name() . '/Stubs/Export');
+		$this->exportTemplatePath = stubs_path('Export');
 
 	}
 

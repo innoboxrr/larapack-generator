@@ -5,7 +5,7 @@ namespace Desar\Generator\Tools\Makers\Factory;
 use Desar\Generator\Tools\MakerTool;
 use Desar\Generator\Exceptions\MakerException;
 
-class FactoryGenerator extends MakerTool
+class FactoryMaker extends MakerTool
 {
 
 	protected $factoryPath;
@@ -24,7 +24,7 @@ class FactoryGenerator extends MakerTool
 	private function setFactoryTemplatePath()
 	{
 
-		$this->factoryTemplatePath = get_path(app_dir_name() . '/Stubs/Factory');
+		$this->factoryTemplatePath = stubs_path('Factory');
 
 		return $this;
 

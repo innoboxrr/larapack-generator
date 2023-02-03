@@ -5,7 +5,7 @@ namespace Desar\Generator\Tools\Makers\Resource;
 use Desar\Generator\Tools\MakerTool;
 use Desar\Generator\Exceptions\MakerException;
 
-class ResourceGenerator extends MakerTool
+class ResourceMaker extends MakerTool
 {
 
 	protected $resourcePath;
@@ -24,7 +24,7 @@ class ResourceGenerator extends MakerTool
 	private function setResourceTemplatePath()
 	{
 
-		$this->resourceTemplatePath = get_path(app_dir_name() . '/Stubs/Resource');
+		$this->resourceTemplatePath = stubs_path('Resource');
 
 		return $this;
 

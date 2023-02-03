@@ -1,9 +1,9 @@
 <?php
 
-namespace App\Notifications\PascalCaseModelName;
+namespace Namespace\Notifications\PascalCaseModelName;
 
 use Maatwebsite\Excel\Facades\Excel;
-use App\Exports\PluralPascalCaseModelNameExports;
+use Namespace\Exports\PluralPascalCaseModelNameExports;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;

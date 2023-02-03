@@ -148,7 +148,7 @@ class MakerTool
 
 	// REEMPLAZAR NOMBRES
 
-		private function replaceData($file)
+		protected function replaceData($file)
 		{
 
 			$content = file_get_contents($file);
@@ -299,70 +299,70 @@ class MakerTool
 	private function setAdminRouteTemplatePath()
 	{
 
-		$this->adminRouteTemplatePath = get_path(app_dir_name() . '/Stubs/AdminRoute');
+		$this->adminRouteTemplatePath = stubs_path('AdminRoute');
 
 	}
 
 	private function setAdminViewTemplatePath()
 	{
 
-		$this->adminViewTemplatePath = get_path(app_dir_name() . '/Stubs/AdminView');
+		$this->adminViewTemplatePath = stubs_path('AdminView');
 
 	}
 
 	private function setCreateFormTemplatePath()
 	{
 
-		$this->createFormTemplatePath = get_path(app_dir_name() . '/Stubs/CreateForm');
+		$this->createFormTemplatePath = stubs_path('CreateForm');
 
 	}
 
 	private function setCreateViewTemplatePath()
 	{
 
-		$this->createViewTemplatePath = get_path(app_dir_name() . '/Stubs/CreateView');
+		$this->createViewTemplatePath = stubs_path('CreateView');
 
 	}
 
 	private function setCrudTemplatePath()
 	{
 
-		$this->crudTemplatePath = get_path(app_dir_name() . '/Stubs/Crud');
+		$this->crudTemplatePath = stubs_path('Crud');
 
 	}
 
 	private function setEditFormTemplatePath()
 	{
 
-		$this->editFormTemplatePath = get_path(app_dir_name() . '/Stubs/EditForm');
+		$this->editFormTemplatePath = stubs_path('EditForm');
 
 	}
 
 	private function setEditViewTemplatePath()
 	{
 
-		$this->editViewTemplatePath = get_path(app_dir_name() . '/Stubs/EditView');
+		$this->editViewTemplatePath = stubs_path('EditView');
 
 	}
 
 	private function setFilterFormTemplatePath()
 	{
 
-		$this->filterFormTemplatePath = get_path(app_dir_name() . '/Stubs/FilterForm');
+		$this->filterFormTemplatePath = stubs_path('FilterForm');
 
 	}
 
 	private function setJsModelTemplatePath()
 	{
 
-		$this->jsModelTemplatePath = get_path(app_dir_name() . '/Stubs/JsModel');
+		$this->jsModelTemplatePath = stubs_path('JsModel');
 
 	}
 
 	private function setShowViewTemplatePath()
 	{
 
-		$this->showViewTemplatePath = get_path(app_dir_name() . '/Stubs/ShowView');
+		$this->showViewTemplatePath = stubs_path('ShowView');
 
 	}
 

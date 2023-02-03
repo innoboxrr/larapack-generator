@@ -5,7 +5,7 @@ namespace Desar\Generator\Tools\Makers\Filters;
 use Desar\Generator\Tools\MakerTool;
 use Desar\Generator\Exceptions\MakerException;
 
-class FiltersGenerator extends MakerTool
+class FiltersMaker extends MakerTool
 {
 
 	protected $filtersPath;
@@ -34,7 +34,7 @@ class FiltersGenerator extends MakerTool
 	private function setFiltersTemplatePath()
 	{
 
-		$this->filtersTemplatePath = get_path(app_dir_name() . '/Stubs/Filters');
+		$this->filtersTemplatePath = stubs_path('Filters');
 
 		return $this;
 

@@ -5,7 +5,7 @@ namespace Desar\Generator\Tools\Makers\Excel;
 use Desar\Generator\Tools\MakerTool;
 use Desar\Generator\Exceptions\MakerException;
 
-class ExcelGenerator extends MakerTool
+class ExcelMaker extends MakerTool
 {
 
 	protected $excelPath;
@@ -24,7 +24,7 @@ class ExcelGenerator extends MakerTool
 	private function setExcelTemplatePath()
 	{
 
-		$this->excelTemplatePath = get_path(app_dir_name() . '/Stubs/Excel');
+		$this->excelTemplatePath = stubs_path('Excel');
 
 		return $this;
 

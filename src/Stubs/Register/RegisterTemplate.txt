@@ -1,48 +1,6 @@
 ## Add this line of code in your "policies" array in the AuthServiceProvider file
 
-	'App\Models\PascalCaseModelName' => 'App\Policies\PascalCaseModelNamePolicy',
-
-## Add this code in your "listen" array in EventServiceProvider
-	
-		// PascalCaseModelName model
-
-		    \App\Http\Events\PascalCaseModelName\Events\CreateEvent::class => [
-
-		        \App\Http\Events\PascalCaseModelName\Listeners\CreateEvent\LogOperation::class,
-
-		    ],  
-
-		    \App\Http\Events\PascalCaseModelName\Events\DeleteEvent::class => [
-
-		        \App\Http\Events\PascalCaseModelName\Listeners\DeleteEvent\LogOperation::class,
-
-		    ],
-
-		    \App\Http\Events\PascalCaseModelName\Events\ExportEvent::class => [
-
-		        \App\Http\Events\PascalCaseModelName\Listeners\ExportEvent\LogOperation::class,
-
-		        \App\Http\Events\PascalCaseModelName\Listeners\ExportEvent\SendNotification::class,
-
-		    ],
-
-		    \App\Http\Events\PascalCaseModelName\Events\ForceDeleteEvent::class => [
-
-		        \App\Http\Events\PascalCaseModelName\Listeners\ForceDeleteEvent\LogOperation::class,
-
-		    ],
-
-		    \App\Http\Events\PascalCaseModelName\Events\RestoreEvent::class => [
-
-		        \App\Http\Events\PascalCaseModelName\Listeners\RestoreEvent\LogOperation::class,
-
-		    ],
-
-		    \App\Http\Events\PascalCaseModelName\Events\UpdateEvent::class => [
-
-		        \App\Http\Events\PascalCaseModelName\Listeners\UpdateEvent\LogOperation::class,
-
-		    ], 
+	'Namespace\Models\PascalCaseModelName' => 'Namespace\Policies\PascalCaseModelNamePolicy',
 
 ## Add this line of code in your /api/models.php file to register the model routes
 

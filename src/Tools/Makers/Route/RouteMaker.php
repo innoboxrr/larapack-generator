@@ -5,7 +5,7 @@ namespace Desar\Generator\Tools\Makers\Route;
 use Desar\Generator\Tools\MakerTool;
 use Desar\Generator\Exceptions\MakerException;
 
-class RouteGenerator extends MakerTool
+class RouteMaker extends MakerTool
 {
 
 	protected $apiRoutepath;
@@ -24,7 +24,7 @@ class RouteGenerator extends MakerTool
 	private function setRouteTemplatePath()
 	{
 
-		$this->routeTemplatePath = get_path(app_dir_name() . '/Stubs/Route');
+		$this->routeTemplatePath = stubs_path('Route');
 
 		return $this;
 

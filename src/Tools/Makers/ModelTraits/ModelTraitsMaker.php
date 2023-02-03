@@ -5,7 +5,7 @@ namespace Desar\Generator\Tools\Makers\ModelTraits;
 use Desar\Generator\Tools\MakerTool;
 use Desar\Generator\Exceptions\MakerException;
 
-class ModelTraitsGenerator extends MakerTool
+class ModelTraitsMaker extends MakerTool
 {
 
 	protected $modelTraitsPath;
@@ -36,7 +36,7 @@ class ModelTraitsGenerator extends MakerTool
 	private function setModelTraitsTemplatePath()
 	{
 
-		$this->modelTraitsTemplatePath = get_path(app_dir_name() . '/Stubs/ModelTraits');
+		$this->modelTraitsTemplatePath = stubs_path('ModelTraits');
 
 		return $this;
 
