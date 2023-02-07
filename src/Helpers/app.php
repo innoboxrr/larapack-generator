@@ -96,6 +96,40 @@ if(!function_exists('get_namespace')) {
 
 }
 
+if(!function_exists('get_dot_namespace')) {
+
+    function get_dot_namespace()
+    {
+
+        $namespace = get_namespace();
+
+        $dotNamespace = str_replace('\\', '.', $namespace);
+        
+        $dotNamespace = strtolower($dotNamespace);
+
+        return $dotNamespace;
+
+    }
+
+}
+
+if(!function_exists('get_kebab_namespace')) {
+
+    function get_kebab_namespace()
+    {
+
+        $namespace = get_namespace();
+
+        $dotNamespace = str_replace('\\', '-', $namespace);
+        
+        $dotNamespace = strtolower($dotNamespace);
+
+        return $dotNamespace;
+
+    }
+
+}
+
 if(!function_exists('get_accessor')) {
 
     function get_accessor($PascalCaseClass)

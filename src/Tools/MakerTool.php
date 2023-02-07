@@ -17,6 +17,14 @@ class MakerTool
 	
 		protected $namespace;
 
+		protected $dotNamespace;
+
+		protected $kebabNamespace;
+
+		protected $lowerNamespace;
+
+		protected $slashLowerNamespace;
+
 	// MODEL NAME
 
 		protected $ModelName;
@@ -109,6 +117,14 @@ class MakerTool
 
 			$this->namespace = get_namespace();
 
+			$this->dotNamespace = get_dot_namespace();
+
+			$this->kebabNamespace = get_kebab_namespace();
+
+			$this->lowerNamespace = mb_strtolower($this->namespace);
+
+			$this->slashLowerNamespace = str_replace('\\', '/', $this->lowerNamespace);
+
 			$this->setModelNames($ModelName);
 
 			return $this;
@@ -187,9 +203,46 @@ class MakerTool
 
         	$content = str_replace("Namespace\\", $this->namespace, $content);
 
+        	$content = str_replace("dotNamespace", $this->dotNamespace, $content);
+
+        	$content = str_replace("kebabNamespace", $this->kebabNamespace, $content);
+
+        	$content = str_replace("lowerNamespace", $this->lowerNamespace, $content);
+
+        	$content = str_replace("slashLowerNamespace", $this->slashLowerNamespace, $content);
+
         	file_put_contents($file, $content);
 			
 		}
+
+		public function addProvidersToComposerJson(array $providers) {
+
+			if(app_dir_name() == 'src') {
+
+				$composerJsonPath = root_path() . '/composer.json';
+
+			    $composerJsonData = json_decode(file_get_contents($composerJsonPath), true);
+
+			    if (!isset($composerJsonData['extra']['laravel']['providers'])) {
+
+			        $composerJsonData['extra']['laravel']['providers'] = [];
+
+			    }
+
+			    $composerJsonData['extra']['laravel']['providers'] = array_merge(
+			        $composerJsonData['extra']['laravel']['providers'],
+			        $providers
+			    );
+
+			    file_put_contents(
+			    	$composerJsonPath, 
+			    	json_encode($composerJsonData, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)
+			    );
+
+			}
+
+		}
+
 
 // DIR PATHS
 

@@ -3,7 +3,7 @@
     "type": "library",
     "license": "MIT",
     "minimum-stability": "dev",
-    "version": "1.0.61",
+    "version": "1.0.72",
     "require": {
         "orchestra/testbench": "^7.0"
     },
@@ -24,6 +24,14 @@
     "bin": [
         "builder"
     ],
+    "scripts": {
+        "post-install-cmd": [
+            "cp vendor/desar/generator/builder.example builder"
+        ],
+        "post-update-cmd": [
+            "cp vendor/desar/generator/builder.example builder"
+        ]
+    },
     "extra": {
         "laravel": {
             "providers": [
