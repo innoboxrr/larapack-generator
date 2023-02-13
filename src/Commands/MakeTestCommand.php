@@ -7,7 +7,7 @@ use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
-use Desar\Generator\Tools\Makers\Test\TestMaker;
+use Desar\Generator\Tools\Test\TestTool;
 
 class MakeTestCommand extends Command
 {
@@ -26,11 +26,9 @@ class MakeTestCommand extends Command
 
         $modelName = $input->getArgument('name');
 
-        $maker = new TestMaker();
+        $maker = new TestTool();
 
         $maker->create($modelName);
-
-        $output->writeln('Test added');
 
         return 1;
 

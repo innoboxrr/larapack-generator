@@ -7,7 +7,7 @@ use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
-use Desar\Generator\Tools\Makers\Factory\FactoryMaker;
+use Desar\Generator\Tools\Factory\FactoryTool;
 
 class MakeFactoryCommand extends Command
 {
@@ -26,11 +26,9 @@ class MakeFactoryCommand extends Command
 
         $modelName = $input->getArgument('name');
 
-        $maker = new FactoryMaker();
+        $maker = new FactoryTool();
 
         $maker->create($modelName);
-
-        $output->writeln('Factory added');
 
         return 1;
 

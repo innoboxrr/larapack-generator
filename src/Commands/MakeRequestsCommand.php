@@ -7,7 +7,7 @@ use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
-use Desar\Generator\Tools\Makers\Requests\RequestsMaker;
+use Desar\Generator\Tools\Requests\RequestsTool;
 
 class MakeRequestsCommand extends Command
 {
@@ -26,11 +26,9 @@ class MakeRequestsCommand extends Command
 
         $modelName = $input->getArgument('name');
 
-        $maker = new RequestsMaker();
+        $maker = new RequestsTool();
 
         $maker->create($modelName);
-
-        $output->writeln('Requests added');
 
         return 1;
 

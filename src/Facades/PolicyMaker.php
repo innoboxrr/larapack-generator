@@ -4,12 +4,12 @@ namespace LaravelersAcademy\LaravelPackage\Facades;
 
 use Illuminate\Support\Facades\Facade;
 
-class PolicyMaker extends Facade
+class PolicyTool extends Facade
 {
     
     protected static function getFacadeAccessor()
     {
-        return 'policy-maker';
+        return 'policy-tool';
     }
 
 }

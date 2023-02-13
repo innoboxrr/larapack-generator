@@ -4,12 +4,12 @@ namespace LaravelersAcademy\LaravelPackage\Facades;
 
 use Illuminate\Support\Facades\Facade;
 
-class ExcelMaker extends Facade
+class ExcelTool extends Facade
 {
     
     protected static function getFacadeAccessor()
     {
-        return 'excel-maker';
+        return 'excel-tool';
     }
 
 }

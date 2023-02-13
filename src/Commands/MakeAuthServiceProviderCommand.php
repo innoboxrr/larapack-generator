@@ -7,7 +7,7 @@ use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
-use Desar\Generator\Tools\Makers\Providers\AuthServiceProviderMaker;
+use Desar\Generator\Tools\Providers\AuthServiceProviderTool;
 
 class MakeAuthServiceProviderCommand extends Command
 {
@@ -23,11 +23,9 @@ class MakeAuthServiceProviderCommand extends Command
     protected function execute(InputInterface $input, OutputInterface $output)
     {
 
-        $maker = new AuthServiceProviderMaker();
+        $maker = new AuthServiceProviderTool();
 
         $maker->create();
-
-        $output->writeln('AuthServiceProvider added');
 
         return 1;
 

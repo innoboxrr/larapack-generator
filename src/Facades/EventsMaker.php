@@ -4,12 +4,12 @@ namespace LaravelersAcademy\LaravelPackage\Facades;
 
 use Illuminate\Support\Facades\Facade;
 
-class EventsMaker extends Facade
+class EventsTool extends Facade
 {
     
     protected static function getFacadeAccessor()
     {
-        return 'events-maker';
+        return 'events-tool';
     }
 
 }

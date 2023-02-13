@@ -7,7 +7,7 @@ use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
-use Desar\Generator\Tools\Makers\ModelTraits\ModelTraitsMaker;
+use Desar\Generator\Tools\ModelTraits\ModelTraitsTool;
 
 class MakeModelTraitsCommand extends Command
 {
@@ -26,11 +26,9 @@ class MakeModelTraitsCommand extends Command
 
         $modelName = $input->getArgument('name');
 
-        $maker = new ModelTraitsMaker();
+        $maker = new ModelTraitsTool();
 
         $maker->create($modelName);
-
-        $output->writeln('Model Traits added');
 
         return 1;
 

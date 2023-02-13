@@ -7,7 +7,7 @@ use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
-use Desar\Generator\Tools\Makers\Resource\ResourceMaker;
+use Desar\Generator\Tools\Resource\ResourceTool;
 
 class MakeResourceCommand extends Command
 {
@@ -26,11 +26,9 @@ class MakeResourceCommand extends Command
 
         $modelName = $input->getArgument('name');
 
-        $maker = new ResourceMaker();
+        $maker = new ResourceTool();
 
         $maker->create($modelName);
-
-        $output->writeln('Resource added');
 
         return 1;
 

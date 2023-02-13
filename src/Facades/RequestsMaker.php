@@ -4,12 +4,12 @@ namespace LaravelersAcademy\LaravelPackage\Facades;
 
 use Illuminate\Support\Facades\Facade;
 
-class RequestsMaker extends Facade
+class RequestsTool extends Facade
 {
     
     protected static function getFacadeAccessor()
     {
-        return 'requests-maker';
+        return 'requests-tool';
     }
 
 }

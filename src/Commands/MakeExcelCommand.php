@@ -7,7 +7,7 @@ use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
-use Desar\Generator\Tools\Makers\Excel\ExcelMaker;
+use Desar\Generator\Tools\Excel\ExcelTool;
 
 class MakeExcelCommand extends Command
 {
@@ -26,11 +26,9 @@ class MakeExcelCommand extends Command
 
         $modelName = $input->getArgument('name');
 
-        $maker = new ExcelMaker();
+        $maker = new ExcelTool();
 
         $maker->create($modelName);
-
-        $output->writeln('Excel added');
 
         return 1;
 

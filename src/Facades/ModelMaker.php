@@ -4,12 +4,12 @@ namespace LaravelersAcademy\LaravelPackage\Facades;
 
 use Illuminate\Support\Facades\Facade;
 
-class ModelMaker extends Facade
+class ModelTool extends Facade
 {
     
     protected static function getFacadeAccessor()
     {
-        return 'model-maker';
+        return 'model-tool';
     }
 
 }

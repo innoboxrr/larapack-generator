@@ -4,12 +4,12 @@ namespace LaravelersAcademy\LaravelPackage\Facades;
 
 use Illuminate\Support\Facades\Facade;
 
-class RouteMaker extends Facade
+class RouteTool extends Facade
 {
     
     protected static function getFacadeAccessor()
     {
-        return 'route-maker';
+        return 'route-tool';
     }
 
 }

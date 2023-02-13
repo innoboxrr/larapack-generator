@@ -7,7 +7,7 @@ use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
-use Desar\Generator\Tools\Makers\Providers\RouteServiceProviderMaker;
+use Desar\Generator\Tools\Providers\RouteServiceProviderTool;
 
 class MakeRouteServiceProviderCommand extends Command
 {
@@ -23,11 +23,9 @@ class MakeRouteServiceProviderCommand extends Command
     protected function execute(InputInterface $input, OutputInterface $output)
     {
 
-        $maker = new RouteServiceProviderMaker();
+        $maker = new RouteServiceProviderTool();
 
         $maker->create();
-
-        $output->writeln('RouteServiceProvider added');
 
         return 1;
 

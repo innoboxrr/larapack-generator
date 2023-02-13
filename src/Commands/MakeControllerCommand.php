@@ -7,7 +7,7 @@ use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
-use Desar\Generator\Tools\Makers\Controller\ControllerMaker;
+use Desar\Generator\Tools\Controller\ControllerTool;
 
 class MakeControllerCommand extends Command
 {
@@ -26,11 +26,9 @@ class MakeControllerCommand extends Command
 
         $modelName = $input->getArgument('name');
 
-        $maker = new ControllerMaker();
+        $maker = new ControllerTool();
 
         $maker->create($modelName);
-
-        $output->writeln('Controller added');
 
         return 1;
 

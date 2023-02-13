@@ -7,7 +7,7 @@ use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
-use Desar\Generator\Tools\Makers\ExportNotification\ExportNotificationMaker;
+use Desar\Generator\Tools\ExportNotification\ExportNotificationTool;
 
 class MakeExportNotificationCommand extends Command
 {
@@ -26,11 +26,9 @@ class MakeExportNotificationCommand extends Command
 
         $modelName = $input->getArgument('name');
 
-        $maker = new ExportNotificationMaker();
+        $maker = new ExportNotificationTool();
 
         $maker->create($modelName);
-
-        $output->writeln('Export Notification added');
 
         return 1;
 

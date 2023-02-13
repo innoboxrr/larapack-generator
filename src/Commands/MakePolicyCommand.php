@@ -7,7 +7,7 @@ use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
-use Desar\Generator\Tools\Makers\Policy\PolicyMaker;
+use Desar\Generator\Tools\Policy\PolicyTool;
 
 class MakePolicyCommand extends Command
 {
@@ -26,11 +26,9 @@ class MakePolicyCommand extends Command
 
         $modelName = $input->getArgument('name');
 
-        $maker = new PolicyMaker();
+        $maker = new PolicyTool();
 
         $maker->create($modelName);
-
-        $output->writeln('Policy added');
 
         return 1;
 

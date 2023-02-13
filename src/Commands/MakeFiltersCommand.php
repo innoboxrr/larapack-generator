@@ -7,7 +7,7 @@ use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
-use Desar\Generator\Tools\Makers\Filters\FiltersMaker;
+use Desar\Generator\Tools\Filters\FiltersTool;
 
 class MakeFiltersCommand extends Command
 {
@@ -26,11 +26,9 @@ class MakeFiltersCommand extends Command
 
         $modelName = $input->getArgument('name');
 
-        $maker = new FiltersMaker();
+        $maker = new FiltersTool();
 
         $maker->create($modelName);
-
-        $output->writeln('Filters added');
 
         return 1;
 

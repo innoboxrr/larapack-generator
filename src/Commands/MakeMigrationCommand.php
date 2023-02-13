@@ -7,7 +7,7 @@ use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
-use Desar\Generator\Tools\Makers\Migration\MigrationMaker;
+use Desar\Generator\Tools\Migration\MigrationTool;
 
 class MakeMigrationCommand extends Command
 {
@@ -26,11 +26,9 @@ class MakeMigrationCommand extends Command
 
         $modelName = $input->getArgument('name');
 
-        $maker = new MigrationMaker();
+        $maker = new MigrationTool();
 
         $maker->create($modelName);
-
-        $output->writeln('Migration added');
 
         return 1;
 

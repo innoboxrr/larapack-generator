@@ -7,7 +7,7 @@ use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
-use Desar\Generator\Tools\Makers\Export\ExportMaker;
+use Desar\Generator\Tools\Export\ExportTool;
 
 class MakeExportCommand extends Command
 {
@@ -26,11 +26,9 @@ class MakeExportCommand extends Command
 
         $modelName = $input->getArgument('name');
 
-        $maker = new ExportMaker();
+        $maker = new ExportTool();
 
         $maker->create($modelName);
-
-        $output->writeln('Export added');
 
         return 1;
 

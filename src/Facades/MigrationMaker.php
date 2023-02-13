@@ -4,12 +4,12 @@ namespace LaravelersAcademy\LaravelPackage\Facades;
 
 use Illuminate\Support\Facades\Facade;
 
-class MigrationMaker extends Facade
+class MigrationTool extends Facade
 {
     
     protected static function getFacadeAccessor()
     {
-        return 'migration-maker';
+        return 'migration-tool';
     }
 
 }

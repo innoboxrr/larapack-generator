@@ -7,7 +7,7 @@ use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
-use Desar\Generator\Tools\Makers\Events\EventsMaker;
+use Desar\Generator\Tools\Events\EventsTool;
 
 class MakeEventsCommand extends Command
 {
@@ -26,11 +26,9 @@ class MakeEventsCommand extends Command
 
         $modelName = $input->getArgument('name');
 
-        $maker = new EventsMaker();
+        $maker = new EventsTool();
 
         $maker->create($modelName);
-
-        $output->writeln('Events added');
 
         return 1;
 

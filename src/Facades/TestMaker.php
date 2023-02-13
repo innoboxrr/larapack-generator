@@ -4,12 +4,12 @@ namespace LaravelersAcademy\LaravelPackage\Facades;
 
 use Illuminate\Support\Facades\Facade;
 
-class TestMaker extends Facade
+class TestTool extends Facade
 {
     
     protected static function getFacadeAccessor()
     {
-        return 'test-maker';
+        return 'test-tool';
     }
 
 }

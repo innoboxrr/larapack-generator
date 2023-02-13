@@ -7,7 +7,7 @@ use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
-use Desar\Generator\Tools\Makers\Register\RegisterMaker;
+use Desar\Generator\Tools\Register\RegisterTool;
 
 class MakeRegisterCommand extends Command
 {
@@ -26,11 +26,9 @@ class MakeRegisterCommand extends Command
 
         $modelName = $input->getArgument('name');
 
-        $maker = new RegisterMaker();
+        $maker = new RegisterTool();
 
         $maker->create($modelName);
-
-        $output->writeln('Register added');
 
         return 1;
 

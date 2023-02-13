@@ -46,7 +46,7 @@ class MakeFullModelCommand extends Command
 
         foreach($this->commands as $command) {
 
-            $className = '\Desar\Generator\Tools\Makers\\' . $command . '\\' . $command . 'Maker';
+            $className = '\Desar\Generator\Tools\\' . $command . '\\' . $command . 'Tool';
     
             $class = new \ReflectionClass($className);
 

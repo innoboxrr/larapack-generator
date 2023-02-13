@@ -7,7 +7,7 @@ use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
-use Desar\Generator\Tools\Makers\Route\RouteMaker;
+use Desar\Generator\Tools\Route\RouteTool;
 
 class MakeRouteCommand extends Command
 {
@@ -26,11 +26,9 @@ class MakeRouteCommand extends Command
 
         $modelName = $input->getArgument('name');
 
-        $maker = new RouteMaker();
+        $maker = new RouteTool();
 
         $maker->create($modelName);
-
-        $output->writeln('Route added');
 
         return 1;
 
