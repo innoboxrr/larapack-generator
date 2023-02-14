@@ -5,11 +5,14 @@
     "minimum-stability": "dev",
     "version": "1.0.86",
     "require": {
-        "orchestra/testbench": "^7.0",
+        "php": "^8.0",
+        "fakerphp/faker": "^1.21",
+        "laravel/framework": "^9.50.2",
         "innoboxrr/search-surge": "dev-master",
         "staudenmeir/belongs-to-through": "^2.5",
         "staudenmeir/eloquent-has-many-deep": "^1.7",
-        "maatwebsite/excel": "3.1.x-dev"
+        "maatwebsite/excel": "3.1.x-dev",
+        "innoboxrr/traits": "dev-master"
     },
     "autoload": {
         "psr-4": {
