@@ -1,6 +1,6 @@
 <?php
 
-namespace Database\Factories;
+namespace Namespace\Database\Factories;
 
 /*
  * Docs: https://fakerphp.github.io/ 
@@ -11,6 +11,8 @@ use Illuminate\Database\Eloquent\Factories\Factory;
 
 class PascalCaseModelNameFactory extends Factory
 {
+
+    protected $model = PascalCaseModelName::class;
 
     public function definition()
     {

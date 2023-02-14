@@ -35,7 +35,8 @@ class FactoryTool extends Tool
 
 		$this->init($ModelName)
 			->setFactoryPath()
-			->setFactoryTemplatePath();
+			->setFactoryTemplatePath()
+			->addDatabaseNamespaceToComposerJson();
 
 		$factoryFile = $this->factoryPath . '/' . $this->PascalCaseModelName . 'Factory.php';
 
@@ -60,6 +61,46 @@ class FactoryTool extends Tool
 		}
 
 		return true;
+
+	}
+
+	private function addDatabaseNamespaceToComposerJson()
+	{
+
+		if(app_dir_name() == 'src') {
+
+			$composerJsonPath = root_path() . '/composer.json';
+
+		    $composerJsonData = json_decode(file_get_contents($composerJsonPath), true);
+
+			$baseNamespace = array_keys($composerJsonData['autoload']['psr-4'])[0];
+
+			if (isset($composerJsonData['autoload']['psr-4'])) {
+
+			    $composerJsonData['autoload']['psr-4'][$baseNamespace . 'Database\\Factories\\'] = 'database/factories/';
+
+			} else {
+			    
+			    $composerJsonData['autoload'] = [
+			    
+			        'psr-4' => [
+			    
+			            $baseNamespace . 'Database\\Factories\\' => 'database/factories/',
+			    
+			        ],
+			    
+			    ];
+
+			}
+
+			file_put_contents(
+				$composerJsonPath, 
+				json_encode($composerJsonData, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)
+			);
+
+		}
+
+		return $this;
 
 	}
 

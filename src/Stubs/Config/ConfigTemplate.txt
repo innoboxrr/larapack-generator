@@ -1,0 +1,7 @@
+<?php
+
+return [
+
+	'excel_view' => 'namespaceWithoutSeparation::excel.',
+	
+];

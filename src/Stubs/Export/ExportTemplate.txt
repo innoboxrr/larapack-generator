@@ -20,9 +20,15 @@ class PluralPascalCaseModelNameExports implements FromView
 
     public function view(): View
     {
-        return view('namespaceWithoutSeparation::excel.snake_case_model_name', [
-            'plural_snake_case_model_name' => $this->getQuery()
-        ]);
+        return view(
+            config(
+                'namespaceWithoutSeparation.excel_view', 
+                'namespaceWithoutSeparation::excel.'
+            ) . 'snake_case_model_name', 
+            [
+                'plural_snake_case_model_name' => $this->getQuery()
+            ]
+        );
     }
 
     public function getQuery()
