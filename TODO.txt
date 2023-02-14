@@ -1,2 +1,2 @@
-PRIORIDAD:
- - Crear el paquete de meta-operations e instalarlo en el paquete
+# TODO
+ - En el stub de test, la generación de la ruta para paquete no es igual que para aplicación, debe ser diferente.

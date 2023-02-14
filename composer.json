@@ -3,11 +3,9 @@
     "type": "library",
     "license": "MIT",
     "minimum-stability": "dev",
-    "version": "1.0.86",
+    "version": "1.0.88",
     "require": {
-        "php": "^8.0",
-        "fakerphp/faker": "^1.21",
-        "laravel/framework": "^9",
+        "orchestra/testbench": "^7.0",
         "innoboxrr/search-surge": "dev-master",
         "staudenmeir/belongs-to-through": "^2.5",
         "staudenmeir/eloquent-has-many-deep": "^1.7",
