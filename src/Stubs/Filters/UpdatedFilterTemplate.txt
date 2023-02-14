@@ -4,8 +4,8 @@ namespace Namespace\Models\Filters\PascalCaseModelName;
 
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
-use Namespace\Classes\Search\Utils\Order;
-use Namespace\Classes\Search\Utils\UpdatedFilterQuery;
+use Innoboxrr\SearchSurge\Search\Utils\Order;
+use Innoboxrr\SearchSurge\Search\Utils\UpdatedFilterQuery;
 
 class UpdatedFilter
 {

@@ -2,7 +2,7 @@
 
 namespace Namespace\Models\Filters\PascalCaseModelName;
 
-use Namespace\Classes\Search\Utils\Managed;
+use Innoboxrr\SearchSurge\Search\Utils\Managed;
 
 class ManagedFilter extends Managed
 {

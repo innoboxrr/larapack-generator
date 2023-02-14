@@ -30,7 +30,7 @@ class ExportNotification extends Notification
     public function via($notifiable)
     {
         
-        return ['mail', 'database'];
+        return config('namespaceWithoutSeparation.notification_via', ['mail', 'database']);
 
     }
 
@@ -64,7 +64,7 @@ class ExportNotification extends Notification
     private function createExport()
     {
 
-        Excel::store(new PluralPascalCaseModelNameExports($this->request), $this->path, 's3');
+        Excel::store(new PluralPascalCaseModelNameExports($this->request), $this->path, config('namespaceWithoutSeparation.export_disk', 's3'));
 
     }
 
@@ -92,7 +92,7 @@ class ExportNotification extends Notification
     private function getActionButton()
     {
 
-        return 'Download';
+        return 'Descargar';
 
     }
 

@@ -3,5 +3,9 @@
 return [
 
 	'excel_view' => 'namespaceWithoutSeparation::excel.',
+
+	'notification_via' => ['mail', 'database'],
+
+	'export_disk' => 's3',
 	
 ];

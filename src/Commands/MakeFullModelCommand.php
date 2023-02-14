@@ -23,7 +23,6 @@ class MakeFullModelCommand extends Command
         'Model',
         'ModelTraits',
         'Policy',
-        'Register',
         'Requests',
         'Resource',
         'Route',

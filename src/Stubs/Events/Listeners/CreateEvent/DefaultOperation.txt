@@ -2,7 +2,6 @@
 
 namespace Namespace\Http\Events\PascalCaseModelName\Listeners\CreateEvent;
 
-use Namespace\Models\Log;
 use Namespace\Http\Events\PascalCaseModelName\Events\CreateEvent;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Queue\InteractsWithQueue;
