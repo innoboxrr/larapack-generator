@@ -2,7 +2,7 @@
 
 namespace Namespace\Exports;
 
-use Namespace\Classes\Search\SearchBuilder;
+use Innoboxrr\SearchSurge\Search\Builder;
 use Illuminate\Contracts\View\View;
 use Maatwebsite\Excel\Concerns\FromView;
 
@@ -34,7 +34,7 @@ class PluralPascalCaseModelNameExports implements FromView
     public function getQuery()
     {   
 
-        $builder = new SearchBuilder('PascalCaseModelName', $this->request);
+        $builder = new Builder('PascalCaseModelName', $this->request);
 
         return $builder->get();
 

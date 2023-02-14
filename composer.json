@@ -6,7 +6,10 @@
     "version": "1.0.86",
     "require": {
         "orchestra/testbench": "^7.0",
-        "innoboxrr/search-surge": "dev-master"
+        "innoboxrr/search-surge": "dev-master",
+        "staudenmeir/belongs-to-through": "^2.5",
+        "staudenmeir/eloquent-has-many-deep": "^1.7",
+        "maatwebsite/excel": "3.1.x-dev"
     },
     "autoload": {
         "psr-4": {

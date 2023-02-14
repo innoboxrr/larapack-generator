@@ -2,9 +2,9 @@
 
 namespace Namespace\Http\Controllers;
 
+use Innoboxrr\SearchSurge\Search\Builder;
 use Namespace\Models\PascalCaseModelName;
 use Namespace\Http\Resources\Models\PascalCaseModelNameResource;
-use Namespace\Classes\Search\SearchBuilder;
 use Namespace\Http\Requests\PascalCaseModelName\PoliciesRequest;
 use Namespace\Http\Requests\PascalCaseModelName\PolicyRequest;
 use Namespace\Http\Requests\PascalCaseModelName\IndexRequest;
@@ -69,7 +69,7 @@ class PascalCaseModelNameController extends Controller
     public function index(IndexRequest $request)
     {
 
-        $builder = new SearchBuilder('PascalCaseModelName', $request);
+        $builder = new Builder('PascalCaseModelName', $request);
 
         $query = $builder->get();
 

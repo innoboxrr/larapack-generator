@@ -2,7 +2,7 @@
 
 namespace Namespace\Policies;
 
-use Namespace\Models\User;
+use App\Models\User;
 use Namespace\Models\PascalCaseModelName;
 use Illuminate\Auth\Access\HandlesAuthorization;
 
