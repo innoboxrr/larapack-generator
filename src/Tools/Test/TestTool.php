@@ -152,7 +152,11 @@ class TestTool extends Tool
 
 		if(!file_exists($testFile)) {
 
-			$templateFile = $this->testTemplatePath . '/TestTemplate.txt';
+			$templateName = (app_dir_name() == 'src') ? 
+				'/TestPackageTemplate.txt' : 
+				'/TestProjectTemplate.txt';
+
+			$templateFile = $this->testTemplatePath . $templateName;
 
 			if(copy($templateFile, $testFile)) {
 

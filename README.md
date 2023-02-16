@@ -18,4 +18,7 @@ cp vendor/<vendor>/<package>/builder.example builder
      	return $this->id === 1;
      }
 
+# Importante
+ -  Para el empleo de este paquete en el desarrollo de paquetes, se espera que el directorio que contenga la lógica principal del paquete tenga el nombre "src", en caso de una aplicación de laravel, la carpeta predetemrinada es "app"
+
 
