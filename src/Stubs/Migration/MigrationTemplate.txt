@@ -29,4 +29,4 @@ return new class extends Migration
     {
         Schema::dropIfExists('plural_snake_case_model_name');
     }
-}
+};
