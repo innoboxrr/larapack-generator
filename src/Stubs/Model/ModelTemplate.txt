@@ -6,7 +6,6 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Innoboxrr\Traits\MetaOperations;
-use Namespace\Models\Traits\Queries\PascalCaseModelNameQuery;
 use Namespace\Models\Traits\Relations\PascalCaseModelNameRelations;
 use Namespace\Models\Traits\Storage\PascalCaseModelNameStorage;
 use Namespace\Models\Traits\Assignments\PascalCaseModelNameAssignment;
@@ -19,7 +18,6 @@ class PascalCaseModelName extends Model
     use HasFactory,
         SoftDeletes,
         MetaOperations,
-        PascalCaseModelNameQuery,
         PascalCaseModelNameRelations,
         PascalCaseModelNameStorage,
         PascalCaseModelNameAssignment,
