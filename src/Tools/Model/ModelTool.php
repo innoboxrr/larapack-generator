@@ -1,9 +1,9 @@
 <?php
 
-namespace Desar\Generator\Tools\Model;
+namespace Hrauvc\LarapackGenerator\Tools\Model;
 
-use Desar\Generator\Tools\Tool;
-use Desar\Generator\Exceptions\MakerException;
+use Hrauvc\LarapackGenerator\Tools\Tool;
+use Hrauvc\LarapackGenerator\Exceptions\MakerException;
 
 class ModelTool extends Tool
 {

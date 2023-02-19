@@ -1,9 +1,9 @@
 <?php
 
-namespace Desar\Generator\Tools\Requests;
+namespace Hrauvc\LarapackGenerator\Tools\Requests;
 
-use Desar\Generator\Tools\Tool;
-use Desar\Generator\Exceptions\MakerException;
+use Hrauvc\LarapackGenerator\Tools\Tool;
+use Hrauvc\LarapackGenerator\Exceptions\MakerException;
 
 class RequestsTool extends Tool
 {

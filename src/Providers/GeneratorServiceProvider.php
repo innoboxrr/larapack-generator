@@ -1,6 +1,6 @@
 <?php
 
-namespace Desar\Generator\Providers;
+namespace Hrauvc\LarapackGenerator\Providers;
 
 use Illuminate\Support\ServiceProvider;
 
@@ -20,7 +20,7 @@ class GeneratorServiceProvider extends ServiceProvider
 
             $this->app->bind($accesor, function($app) use ($class) {
 
-                $className = '\Desar\Generator\Facades\\' . $class;
+                $className = '\Hrauvc\LarapackGenerator\Facades\\' . $class;
     
                 $class = new ReflectionClass($className);
                 

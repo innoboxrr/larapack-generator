@@ -1,6 +1,6 @@
 <?php
 
-namespace Desar\Generator\Commands;
+namespace Hrauvc\LarapackGenerator\Commands;
 
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
@@ -31,7 +31,7 @@ class MakeProvidersCommand extends Command
 
         foreach($this->commands as $command) {
 
-            $className = '\Desar\Generator\Tools\Providers\\' . $command . 'ServiceProviderTool';
+            $className = '\Hrauvc\LarapackGenerator\Tools\Providers\\' . $command . 'ServiceProviderTool';
     
             $class = new \ReflectionClass($className);
 

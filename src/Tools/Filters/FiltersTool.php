@@ -1,9 +1,9 @@
 <?php
 
-namespace Desar\Generator\Tools\Filters;
+namespace Hrauvc\LarapackGenerator\Tools\Filters;
 
-use Desar\Generator\Tools\Tool;
-use Desar\Generator\Exceptions\MakerException;
+use Hrauvc\LarapackGenerator\Tools\Tool;
+use Hrauvc\LarapackGenerator\Exceptions\MakerException;
 
 class FiltersTool extends Tool
 {

@@ -16,7 +16,7 @@
     },
     "autoload": {
         "psr-4": {
-            "Desar\\Generator\\": "src/"
+            "Hrauvc\\LarapackGenerator\\": "src/"
         },
         "files": [
             "src/Helpers/app.php"
@@ -34,7 +34,7 @@
     "extra": {
         "laravel": {
             "providers": [
-                "Desar\\Generator\\Providers\\GeneratorServiceProvider"
+                "Hrauvc\\LarapackGenerator\\Providers\\GeneratorServiceProvider"
             ]
         }
     }

@@ -1,9 +1,9 @@
 <?php
 
-namespace Desar\Generator\Tools\Policy;
+namespace Hrauvc\LarapackGenerator\Tools\Policy;
 
-use Desar\Generator\Tools\Tool;
-use Desar\Generator\Exceptions\MakerException;
+use Hrauvc\LarapackGenerator\Tools\Tool;
+use Hrauvc\LarapackGenerator\Exceptions\MakerException;
 
 class PolicyTool extends Tool
 {

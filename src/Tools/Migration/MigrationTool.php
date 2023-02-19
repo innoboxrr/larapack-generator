@@ -1,10 +1,10 @@
 <?php
 
-namespace Desar\Generator\Tools\Migration;
+namespace Hrauvc\LarapackGenerator\Tools\Migration;
 
-use Desar\Generator\Tools\Tool;
+use Hrauvc\LarapackGenerator\Tools\Tool;
 use Illuminate\Support\Facades\Schema;
-use Desar\Generator\Exceptions\MakerException;
+use Hrauvc\LarapackGenerator\Exceptions\MakerException;
 
 class MigrationTool extends Tool
 {

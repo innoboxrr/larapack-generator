@@ -1,9 +1,9 @@
 <?php
 
-namespace Desar\Generator\Tools\Route;
+namespace Hrauvc\LarapackGenerator\Tools\Route;
 
-use Desar\Generator\Tools\Tool;
-use Desar\Generator\Exceptions\MakerException;
+use Hrauvc\LarapackGenerator\Tools\Tool;
+use Hrauvc\LarapackGenerator\Exceptions\MakerException;
 
 class RouteTool extends Tool
 {

@@ -1,9 +1,9 @@
 <?php
 
-namespace Desar\Generator\Tools\Events;
+namespace Hrauvc\LarapackGenerator\Tools\Events;
 
-use Desar\Generator\Tools\Tool;
-use Desar\Generator\Exceptions\MakerException;
+use Hrauvc\LarapackGenerator\Tools\Tool;
+use Hrauvc\LarapackGenerator\Exceptions\MakerException;
 
 class EventsTool extends Tool
 {

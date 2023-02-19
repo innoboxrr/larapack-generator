@@ -1,6 +1,6 @@
 <?php
 
-namespace Desar\Generator\Commands;
+namespace Hrauvc\LarapackGenerator\Commands;
 
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
@@ -45,7 +45,7 @@ class MakeFullModelCommand extends Command
 
         foreach($this->commands as $command) {
 
-            $className = '\Desar\Generator\Tools\\' . $command . '\\' . $command . 'Tool';
+            $className = '\Hrauvc\LarapackGenerator\Tools\\' . $command . '\\' . $command . 'Tool';
     
             $class = new \ReflectionClass($className);
 

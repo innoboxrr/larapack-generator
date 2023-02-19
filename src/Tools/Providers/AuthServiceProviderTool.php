@@ -1,9 +1,9 @@
 <?php
 
-namespace Desar\Generator\Tools\Providers;
+namespace Hrauvc\LarapackGenerator\Tools\Providers;
 
-use Desar\Generator\Tools\Tool;
-use Desar\Generator\Exceptions\MakerException;
+use Hrauvc\LarapackGenerator\Tools\Tool;
+use Hrauvc\LarapackGenerator\Exceptions\MakerException;
 
 class AuthServiceProviderTool extends Tool
 {
