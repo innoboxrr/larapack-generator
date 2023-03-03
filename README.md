@@ -13,10 +13,13 @@ cp vendor/<vendor>/<package>/builder.example builder
 
  - Ejecute el comando: **composer require innoboxrr/larapack-generator**
  - Verifique que el modelo App\Models\User, tiene el método isAdmin(), el cual en caso de no tener un sistema basado en roles debe retornar false, o en su defecto realizar una validación como:
-     public function isAdmin()
-     {
-     	return $this->id === 1;
-     }
+
+```php 
+public function isAdmin()
+{
+	return $this->id === 1;
+}
+```
 
 # Importante
  -  Para el empleo de este paquete en el desarrollo de paquetes, se espera que el directorio que contenga la lógica principal del paquete tenga el nombre "src", en caso de una aplicación de laravel, la carpeta predetemrinada es "app"

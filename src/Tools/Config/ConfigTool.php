@@ -1,9 +1,9 @@
 <?php
 
-namespace Hrauvc\LarapackGenerator\Tools\Config;
+namespace Innoboxrr\LarapackGenerator\Tools\Config;
 
-use Hrauvc\LarapackGenerator\Tools\Tool;
-use Hrauvc\LarapackGenerator\Exceptions\MakerException;
+use Innoboxrr\LarapackGenerator\Tools\Tool;
+use Innoboxrr\LarapackGenerator\Exceptions\MakerException;
 
 class ConfigTool extends Tool
 {

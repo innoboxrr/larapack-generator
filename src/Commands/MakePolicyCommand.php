@@ -1,13 +1,13 @@
 <?php
 
-namespace Hrauvc\LarapackGenerator\Commands;
+namespace Innoboxrr\LarapackGenerator\Commands;
 
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
-use Hrauvc\LarapackGenerator\Tools\Policy\PolicyTool;
+use Innoboxrr\LarapackGenerator\Tools\Policy\PolicyTool;
 
 class MakePolicyCommand extends Command
 {

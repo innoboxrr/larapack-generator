@@ -1,6 +1,6 @@
 <?php
 
-namespace Hrauvc\LarapackGenerator\Commands;
+namespace Innoboxrr\LarapackGenerator\Commands;
 
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
@@ -31,7 +31,7 @@ class MakeProvidersCommand extends Command
 
         foreach($this->commands as $command) {
 
-            $className = '\Hrauvc\LarapackGenerator\Tools\Providers\\' . $command . 'ServiceProviderTool';
+            $className = '\Innoboxrr\LarapackGenerator\Tools\Providers\\' . $command . 'ServiceProviderTool';
     
             $class = new \ReflectionClass($className);
 

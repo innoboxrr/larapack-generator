@@ -1,6 +1,6 @@
 <?php
 
-namespace Hrauvc\LarapackGenerator\Exceptions;
+namespace Innoboxrr\LarapackGenerator\Exceptions;
 
 use Exception;
 

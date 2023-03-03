@@ -1,6 +1,6 @@
 <?php
 
-namespace Hrauvc\LarapackGenerator\Commands;
+namespace Innoboxrr\LarapackGenerator\Commands;
 
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
@@ -45,7 +45,7 @@ class MakeFullModelCommand extends Command
 
         foreach($this->commands as $command) {
 
-            $className = '\Hrauvc\LarapackGenerator\Tools\\' . $command . '\\' . $command . 'Tool';
+            $className = '\Innoboxrr\LarapackGenerator\Tools\\' . $command . '\\' . $command . 'Tool';
     
             $class = new \ReflectionClass($className);
 

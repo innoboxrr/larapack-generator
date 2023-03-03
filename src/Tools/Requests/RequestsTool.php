@@ -1,9 +1,9 @@
 <?php
 
-namespace Hrauvc\LarapackGenerator\Tools\Requests;
+namespace Innoboxrr\LarapackGenerator\Tools\Requests;
 
-use Hrauvc\LarapackGenerator\Tools\Tool;
-use Hrauvc\LarapackGenerator\Exceptions\MakerException;
+use Innoboxrr\LarapackGenerator\Tools\Tool;
+use Innoboxrr\LarapackGenerator\Exceptions\MakerException;
 
 class RequestsTool extends Tool
 {

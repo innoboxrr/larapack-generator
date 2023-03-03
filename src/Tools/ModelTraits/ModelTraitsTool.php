@@ -1,9 +1,9 @@
 <?php
 
-namespace Hrauvc\LarapackGenerator\Tools\ModelTraits;
+namespace Innoboxrr\LarapackGenerator\Tools\ModelTraits;
 
-use Hrauvc\LarapackGenerator\Tools\Tool;
-use Hrauvc\LarapackGenerator\Exceptions\MakerException;
+use Innoboxrr\LarapackGenerator\Tools\Tool;
+use Innoboxrr\LarapackGenerator\Exceptions\MakerException;
 
 class ModelTraitsTool extends Tool
 {

@@ -1,9 +1,9 @@
 <?php
 
-namespace Hrauvc\LarapackGenerator\Tools\ExportNotification;
+namespace Innoboxrr\LarapackGenerator\Tools\ExportNotification;
 
-use Hrauvc\LarapackGenerator\Tools\Tool;
-use Hrauvc\LarapackGenerator\Exceptions\MakerException;
+use Innoboxrr\LarapackGenerator\Tools\Tool;
+use Innoboxrr\LarapackGenerator\Exceptions\MakerException;
 
 class ExportNotificationTool extends Tool
 {

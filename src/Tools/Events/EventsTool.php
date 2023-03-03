@@ -1,9 +1,9 @@
 <?php
 
-namespace Hrauvc\LarapackGenerator\Tools\Events;
+namespace Innoboxrr\LarapackGenerator\Tools\Events;
 
-use Hrauvc\LarapackGenerator\Tools\Tool;
-use Hrauvc\LarapackGenerator\Exceptions\MakerException;
+use Innoboxrr\LarapackGenerator\Tools\Tool;
+use Innoboxrr\LarapackGenerator\Exceptions\MakerException;
 
 class EventsTool extends Tool
 {

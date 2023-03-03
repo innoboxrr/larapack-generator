@@ -1,9 +1,8 @@
 {
-    "name": "hrauvc/larapack-generator",
+    "name": "innoboxrr/larapack-generator",
     "type": "library",
     "license": "MIT",
-    "minimum-stability": "dev",
-    "version": "1.0.88",
+    "minimum-stability": "stable",
     "require": {
         "innoboxrr/search-surge": "dev-master",
         "staudenmeir/belongs-to-through": "^2.5",
@@ -16,7 +15,7 @@
     },
     "autoload": {
         "psr-4": {
-            "Hrauvc\\LarapackGenerator\\": "src/"
+            "Innoboxrr\\LarapackGenerator\\": "src/"
         },
         "files": [
             "src/Helpers/app.php"
@@ -34,7 +33,7 @@
     "extra": {
         "laravel": {
             "providers": [
-                "Hrauvc\\LarapackGenerator\\Providers\\GeneratorServiceProvider"
+                "Innoboxrr\\LarapackGenerator\\Providers\\GeneratorServiceProvider"
             ]
         }
     }

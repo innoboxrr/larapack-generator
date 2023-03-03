@@ -1,10 +1,10 @@
 <?php
 
-namespace Hrauvc\LarapackGenerator\Tools\Migration;
+namespace Innoboxrr\LarapackGenerator\Tools\Migration;
 
-use Hrauvc\LarapackGenerator\Tools\Tool;
+use Innoboxrr\LarapackGenerator\Tools\Tool;
 use Illuminate\Support\Facades\Schema;
-use Hrauvc\LarapackGenerator\Exceptions\MakerException;
+use Innoboxrr\LarapackGenerator\Exceptions\MakerException;
 
 class MigrationTool extends Tool
 {

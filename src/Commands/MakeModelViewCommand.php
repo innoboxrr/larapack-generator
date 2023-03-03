@@ -7,25 +7,28 @@ use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
-use Innoboxrr\LarapackGenerator\Tools\Providers\AuthServiceProviderTool;
+use Innoboxrr\LarapackGenerator\Tools\Model\ModelViewTool;
 
-class MakeAuthServiceProviderCommand extends Command
+class MakeModelViewCommand extends Command
 {
     
     protected function configure()
     {
 
-        $this->setName('make:auth-service-provider')
-            ->setDescription('Create an auth service provider for the package');
+        $this->setName('make:model-vue')
+            ->setDescription('Crea la sección de administración de vue para el paquete laravel-setup')
+            ->addArgument('name', InputArgument::REQUIRED, 'The name of the model class');
 
     }
 
     protected function execute(InputInterface $input, OutputInterface $output)
     {
 
-        $maker = new AuthServiceProviderTool();
+        $modelName = $input->getArgument('name');
 
-        $maker->create();
+        $maker = new ModelViewTool();
+
+        $maker->create($modelName);
 
         return 1;
 

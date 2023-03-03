@@ -1,6 +1,6 @@
 <?php
 
-namespace Hrauvc\LarapackGenerator\Tools;
+namespace Innoboxrr\LarapackGenerator\Tools;
 
 // Docs: https://www.doctrine-project.org/projects/doctrine-inflector/en/2.0/index.html
 use Doctrine\Inflector\Inflector; 

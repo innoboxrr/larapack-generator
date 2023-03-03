@@ -10,7 +10,7 @@ $commandFiles = glob(__DIR__ . '/src/Commands/*Command.php');
 
 foreach ($commandFiles as $file) {
 
-    $className = '\Hrauvc\LarapackGenerator\Commands\\' . basename($file, '.php');
+    $className = '\Innoboxrr\LarapackGenerator\Commands\\' . basename($file, '.php');
     
     $class = new ReflectionClass($className);
 
