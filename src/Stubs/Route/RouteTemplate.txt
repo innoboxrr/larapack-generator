@@ -2,16 +2,16 @@
 
 use Illuminate\Support\Facades\Route;
 
-Route::post('policies', 'PascalCaseModelNameController@policies')
+Route::get('policies', 'PascalCaseModelNameController@policies')
 	->name('policies');
 
-Route::post('policy', 'PascalCaseModelNameController@policy')
+Route::get('policy', 'PascalCaseModelNameController@policy')
 	->name('policy');
 
-Route::post('index', 'PascalCaseModelNameController@index')
+Route::get('index', 'PascalCaseModelNameController@index')
 	->name('index');
 
-Route::post('show', 'PascalCaseModelNameController@show')
+Route::get('show', 'PascalCaseModelNameController@show')
 	->name('show');
 
 Route::post('create', 'PascalCaseModelNameController@create')
