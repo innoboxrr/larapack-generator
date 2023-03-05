@@ -34,7 +34,8 @@ class MakeFullModelCommand extends Command
 
         $this->setName('make:full-model')
             ->setDescription('Create a completo model enviroment')
-            ->addArgument('name', InputArgument::REQUIRED, 'The name of the model class');
+            ->addArgument('name', InputArgument::REQUIRED, 'The name of the model class')
+            ->addOption('view', 'v', InputOption::VALUE_NONE, 'Include ModelView in commands');
 
     }
 
@@ -43,7 +44,18 @@ class MakeFullModelCommand extends Command
 
         $modelName = $input->getArgument('name');
 
-        foreach($this->commands as $command) {
+        // Verificar si la opción --view está presente y agregar ModelView al array de commands
+        $includeModelView = $input->getOption('view');
+
+        $commands = $this->commands;
+
+        if ($includeModelView) {
+
+            $commands[] = 'ModelView';
+
+        }
+
+        foreach($commands as $command) {
 
             $className = '\Innoboxrr\LarapackGenerator\Tools\\' . $command . '\\' . $command . 'Tool';
     
