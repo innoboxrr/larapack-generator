@@ -56,7 +56,7 @@ class ModelViewTool extends Tool
 		}
 
 		// Crear
-		public function createModelViewModelJS(string $ModelName)
+		public function createModelViewModelJS()
 		{
 
 			$this->setModelViewModelJsPath()
@@ -107,7 +107,7 @@ class ModelViewTool extends Tool
 		}
 
 		// Crear
-		public function createModelViewRouteJS(string $ModelName)
+		public function createModelViewRouteJS()
 		{
 
 			$this->setModelViewRouteJsPath()
@@ -158,7 +158,7 @@ class ModelViewTool extends Tool
 		}
 
 		// Crear
-		public function createModelViewCreateForm(string $ModelName)
+		public function createModelViewCreateForm()
 		{
 
 			$this->setModelViewCreateFormPath()
@@ -209,7 +209,7 @@ class ModelViewTool extends Tool
 		}
 
 		// Crear
-		public function createModelViewEditForm(string $ModelName)
+		public function createModelViewEditForm()
 		{
 
 			$this->setModelViewEditFormPath()
@@ -260,7 +260,7 @@ class ModelViewTool extends Tool
 		}
 
 		// Crear
-		public function createModelViewFilterForm(string $ModelName)
+		public function createModelViewFilterForm()
 		{
 
 			$this->setModelViewFilterFormPath()
@@ -311,7 +311,7 @@ class ModelViewTool extends Tool
 		}
 
 		// Crear
-		public function createModelViewAdminView(string $ModelName)
+		public function createModelViewAdminView()
 		{
 
 			$this->setModelViewAdminViewPath()
@@ -362,7 +362,7 @@ class ModelViewTool extends Tool
 		}
 
 		// Crear
-		public function createModelViewCreateView(string $ModelName)
+		public function createModelViewCreateView()
 		{
 
 			$this->setModelViewCreateViewPath()
@@ -413,7 +413,7 @@ class ModelViewTool extends Tool
 		}
 
 		// Crear
-		public function createModelViewEditView(string $ModelName)
+		public function createModelViewEditView()
 		{
 
 			$this->setModelViewEditViewPath()
@@ -464,7 +464,7 @@ class ModelViewTool extends Tool
 		}
 
 		// Crear
-		public function createModelViewShowView(string $ModelName)
+		public function createModelViewShowView()
 		{
 
 			$this->setModelViewShowViewPath()
@@ -515,7 +515,7 @@ class ModelViewTool extends Tool
 		}
 
 		// Crear
-		public function createModelViewDataTable(string $ModelName)
+		public function createModelViewDataTable()
 		{
 
 			$this->setModelViewDataTablePath()
