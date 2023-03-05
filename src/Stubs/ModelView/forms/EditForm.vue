@@ -25,7 +25,7 @@
 
 <script>
 
-    import * as models from '@models/kebabcasemodelname/model.js'
+    import * as model from '@models/kebabcasemodelname/model.js'
     import JSValidator from 'innoboxrr-js-validator'
     import {
         TextInputComponent,
