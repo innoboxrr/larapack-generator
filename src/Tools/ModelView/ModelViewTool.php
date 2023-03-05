@@ -1,6 +1,6 @@
 <?php
 
-namespace Innoboxrr\LarapackGenerator\Tools\Model;
+namespace Innoboxrr\LarapackGenerator\Tools\ModelView;
 
 use Innoboxrr\LarapackGenerator\Tools\Tool;
 use Innoboxrr\LarapackGenerator\Exceptions\MakerException;
