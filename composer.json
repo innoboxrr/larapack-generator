@@ -7,7 +7,7 @@
         "innoboxrr/search-surge": "^1.0",
         "staudenmeir/belongs-to-through": "^2.5",
         "staudenmeir/eloquent-has-many-deep": "^1.7",
-        "maatwebsite/excel": "3.1.x-dev",
+        "maatwebsite/excel": "^3.1",
         "innoboxrr/traits": "^1.0"
     },
     "require-dev": {
