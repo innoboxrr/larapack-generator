@@ -56,7 +56,7 @@ class ModelViewTool extends Tool
 		}
 
 		// Crear
-		public function createModelViewCreateForm(string $ModelName)
+		public function createModelViewModelJS(string $ModelName)
 		{
 
 			$this->setModelViewModelJsPath()
@@ -107,7 +107,7 @@ class ModelViewTool extends Tool
 		}
 
 		// Crear
-		public function createModelViewCreateForm(string $ModelName)
+		public function createModelViewRouteJS(string $ModelName)
 		{
 
 			$this->setModelViewRouteJsPath()
@@ -553,8 +553,8 @@ class ModelViewTool extends Tool
 		if(app_dir_name() == 'app') {
 
 			$this->init($ModelName)
-				->createModelViewCreateForm()
-				->createModelViewCreateForm()
+				->createModelViewModelJS()
+				->createModelViewRouteJS()
 				->createModelViewCreateForm()
 				->createModelViewEditForm()
 				->createModelViewFilterForm()
