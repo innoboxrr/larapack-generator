@@ -42,9 +42,9 @@ if(!function_exists('stubs_path')) {
 
     function stubs_path($path) {
 
-        // Modificar esto de manera dinámica: hrauvc/larapack-generator        
+        // Modificar esto de manera dinámica: innoboxrr/larapack-generator        
 
-        $path = root_path() . '/vendor/hrauvc/larapack-generator/src/Stubs/' . $path;
+        $path = root_path() . '/vendor/innoboxrr/larapack-generator/src/Stubs/' . $path;
 
         return $path;
 
