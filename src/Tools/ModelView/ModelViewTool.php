@@ -39,7 +39,7 @@ class ModelViewTool extends Tool
 		private function setModelViewModelJsPath()
 		{
 
-			$this->modelViewModelJsPath = get_path('resources/vue/app/views/admin/models/' . $this->PascalCaseModelName);
+			$this->modelViewModelJsPath = get_path('resources/vue/app/views/admin/models/' . $this->kebabcasemodelname);
 
 			return $this;
 
@@ -90,7 +90,7 @@ class ModelViewTool extends Tool
 		private function setModelViewRouteJsPath()
 		{
 
-			$this->modelViewRouteJsPath = get_path('resources/vue/app/views/admin/models/' . $this->PascalCaseModelName);
+			$this->modelViewRouteJsPath = get_path('resources/vue/app/views/admin/models/' . $this->kebabcasemodelname);
 
 			return $this;
 
@@ -113,11 +113,11 @@ class ModelViewTool extends Tool
 			$this->setModelViewRouteJsPath()
 				->setModelViewTemplateRouteJsPath();
 
-			$modelFile = $this->modelViewRouteJsPath . '/route.js';
+			$modelFile = $this->modelViewRouteJsPath . '/routes.js';
 
 			if(!file_exists($modelFile)) {
 
-				$templateFile = $this->modelViewTemplateRouteJsPath . '/route.js';
+				$templateFile = $this->modelViewTemplateRouteJsPath . '/routes.js';
 
 				if(copy($templateFile, $modelFile)) {
 
@@ -141,7 +141,7 @@ class ModelViewTool extends Tool
 		private function setModelViewCreateFormPath()
 		{
 
-			$this->modelViewCreateFormPath = get_path('resources/vue/app/views/admin/models/' . $this->PascalCaseModelName . '/forms');
+			$this->modelViewCreateFormPath = get_path('resources/vue/app/views/admin/models/' . $this->kebabcasemodelname . '/forms');
 
 			return $this;
 
@@ -192,7 +192,7 @@ class ModelViewTool extends Tool
 		private function setModelViewEditFormPath()
 		{
 
-			$this->modelViewEditFormPath = get_path('resources/vue/app/views/admin/models/' . $this->PascalCaseModelName . '/forms');
+			$this->modelViewEditFormPath = get_path('resources/vue/app/views/admin/models/' . $this->kebabcasemodelname . '/forms');
 
 			return $this;
 
@@ -243,7 +243,7 @@ class ModelViewTool extends Tool
 		private function setModelViewFilterFormPath()
 		{
 
-			$this->modelViewFilterFormPath = get_path('resources/vue/app/views/admin/models/' . $this->PascalCaseModelName . '/forms');
+			$this->modelViewFilterFormPath = get_path('resources/vue/app/views/admin/models/' . $this->kebabcasemodelname . '/forms');
 
 			return $this;
 
@@ -294,7 +294,7 @@ class ModelViewTool extends Tool
 		private function setModelViewAdminViewPath()
 		{
 
-			$this->modelViewAdminViewPath = get_path('resources/vue/app/views/admin/models/' . $this->PascalCaseModelName . '/views');
+			$this->modelViewAdminViewPath = get_path('resources/vue/app/views/admin/models/' . $this->kebabcasemodelname . '/views');
 
 			return $this;
 
@@ -345,7 +345,7 @@ class ModelViewTool extends Tool
 		private function setModelViewCreateViewPath()
 		{
 
-			$this->modelViewCreateViewPath = get_path('resources/vue/app/views/admin/models/' . $this->PascalCaseModelName . '/views');
+			$this->modelViewCreateViewPath = get_path('resources/vue/app/views/admin/models/' . $this->kebabcasemodelname . '/views');
 
 			return $this;
 
@@ -396,7 +396,7 @@ class ModelViewTool extends Tool
 		private function setModelViewEditViewPath()
 		{
 
-			$this->modelViewEditViewPath = get_path('resources/vue/app/views/admin/models/' . $this->PascalCaseModelName . '/views');
+			$this->modelViewEditViewPath = get_path('resources/vue/app/views/admin/models/' . $this->kebabcasemodelname . '/views');
 
 			return $this;
 
@@ -447,7 +447,7 @@ class ModelViewTool extends Tool
 		private function setModelViewShowViewPath()
 		{
 
-			$this->modelViewShowViewPath = get_path('resources/vue/app/views/admin/models/' . $this->PascalCaseModelName . '/views');
+			$this->modelViewShowViewPath = get_path('resources/vue/app/views/admin/models/' . $this->kebabcasemodelname . '/views');
 
 			return $this;
 
@@ -498,7 +498,7 @@ class ModelViewTool extends Tool
 		private function setModelViewDataTablePath()
 		{
 
-			$this->modelViewDataTablePath = get_path('resources/vue/app/views/admin/models/' . $this->PascalCaseModelName . '/widgets');
+			$this->modelViewDataTablePath = get_path('resources/vue/app/views/admin/models/' . $this->kebabcasemodelname . '/widgets');
 
 			return $this;
 
