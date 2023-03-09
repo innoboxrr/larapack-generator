@@ -166,7 +166,7 @@ class ModelViewTool extends Tool
 			$this->setModelViewVuexJsPath()
 				->setModelViewTemplateVuexJsPath();
 
-			$modelFile = $this->modelViewVuexJsPath . '/' . $this->camelCaseModelName . '.js';
+			$modelFile = $this->modelViewVuexJsPath . '/' . $this->camelCaseModelName . 'Model.js';
 
 			if(!file_exists($modelFile)) {
 
