@@ -42,7 +42,7 @@
 
 <script>
 
-	import EditForm from '@models/kebabcasemodelname/forms/EditForm'
+	import EditForm from '@models/kebabcasemodelname/forms/EditForm.vue'
 
 	export default {
 

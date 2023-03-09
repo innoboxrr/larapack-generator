@@ -299,5 +299,8 @@ export {
 	dataTableHead,
 	dataTableSort,
 	exportModel,
+	getModel,
+	createModel,
+	updateModel,
 	deleteModel,
 };
