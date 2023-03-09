@@ -12,6 +12,7 @@ class ModelViewTool extends Tool
 
 	protected $modelViewModelJsPath;
 	protected $modelViewRouteJsPath;
+	protected $modelViewVuexJsPath;
 	protected $modelViewCreateFormPath;
 	protected $modelViewEditFormPath;
 	protected $modelViewFilterFormPath;
@@ -23,6 +24,7 @@ class ModelViewTool extends Tool
 	
 	protected $modelViewTemplateModelJsPath;
 	protected $modelViewTemplateRouteJsPath;
+	protected $modelViewTemplateVuexJsPath;
 	protected $modelViewTemplateCreateFormPath;
 	protected $modelViewTemplateEditFormPath;
 	protected $modelViewTemplateFilterFormPath;
@@ -118,6 +120,57 @@ class ModelViewTool extends Tool
 			if(!file_exists($modelFile)) {
 
 				$templateFile = $this->modelViewTemplateRouteJsPath . '/routes.js';
+
+				if(copy($templateFile, $modelFile)) {
+
+					$this->replaceData($modelFile);
+
+				} else {
+
+					throw new MakerException;
+
+				}
+
+			}
+
+			return $this;
+
+		}
+
+	# VuexJS
+
+		// Definir la ruta de la aplicación
+		private function setModelViewVuexJsPath()
+		{
+
+			$this->modelViewVuexJsPath = get_path('resources/vue/app/sections/admin/models/' . $this->kebabcasemodelname . '/vuex');
+
+			return $this;
+
+		}
+
+		// Definir la ruta de la plantilla
+		private function setModelViewTemplateVuexJsPath()
+		{
+
+			$this->modelViewTemplateVuexJsPath = stubs_path('ModelView');
+
+			return $this;
+
+		}
+
+		// Crear
+		public function createModelViewVuexJS()
+		{
+
+			$this->setModelViewVuexJsPath()
+				->setModelViewTemplateVuexJsPath();
+
+			$modelFile = $this->modelViewVuexJsPath . '/' . $this->camelCaseModelName . '.js';
+
+			if(!file_exists($modelFile)) {
+
+				$templateFile = $this->modelViewTemplateVuexJsPath . '/vuex.js';
 
 				if(copy($templateFile, $modelFile)) {
 
@@ -555,6 +608,7 @@ class ModelViewTool extends Tool
 			$this->init($ModelName)
 				->createModelViewModelJS()
 				->createModelViewRouteJS()
+				->createModelViewVuexJS()
 				->createModelViewCreateForm()
 				->createModelViewEditForm()
 				->createModelViewFilterForm()
