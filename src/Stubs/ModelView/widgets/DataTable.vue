@@ -29,7 +29,7 @@
 	
 	import DataTable from 'innoboxrr-vue-datatable'
 	import FilterForm from '@models/kebabcasemodelname/forms/FilterForm'
-	import * as model from '@models/kebabcasemodelname/model.js' 
+	import * as model from '@models/kebabcasemodelname' 
 
 	export default {
 
