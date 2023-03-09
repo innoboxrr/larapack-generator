@@ -293,6 +293,8 @@ const deleteModel = (data) => {
 // PENDIENTE: Crear los método, policy, policies, index, show, create, update, etc.
 
 export { 
+	setFilters,
+	getFilters,
 	crudActions,
 	dataTableHead,
 	dataTableSort,

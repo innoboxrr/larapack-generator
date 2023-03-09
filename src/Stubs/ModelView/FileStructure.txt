@@ -1,6 +1,5 @@
 /vue
 	/app
-		/components
 		/sections
 			/admin
 				/layouts
@@ -22,7 +21,7 @@
 						/vuex
 							index.js
 						/widgets
-							{Model}Crud.vue
+							DataTable.vue
 						index.js
 				/pages
 					/{page-name}

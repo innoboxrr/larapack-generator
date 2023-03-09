@@ -47,7 +47,7 @@
 
         	formId: {
         		type: String,
-        		default: 'createAdministrationAffiliateForm',
+        		default: 'createPascalCaseModelNameForm',
         	}
 
         },
