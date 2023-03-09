@@ -1,4 +1,4 @@
-const filters = {}
+let filters = {}
 
 const setFilters = (newFilters = {}) => {
 
@@ -20,7 +20,7 @@ const getFilters = () => {
 
 }
 
-const strings = {
+let strings = {
 	crudActions: {
 		create: {
 			name: 'Crear',
