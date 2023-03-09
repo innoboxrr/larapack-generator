@@ -4,7 +4,7 @@ export default [
 	{
 		path: 'kebabcasemodelname',
 		name: "AdminPluralPascalCaseModelName",
-		component: () => import (/* webpackChunkName: "AdminPluralPascalCaseModelName"*/ "./../AdminView.vue"),
+		component: () => import (/* webpackChunkName: "AdminPluralPascalCaseModelName"*/ "./../views/AdminView.vue"),
 		meta: {
 			title: 'Panel de administración',
 			middleware: [
@@ -15,7 +15,7 @@ export default [
 			{
 				path: 'create',
 				name: "AdminCreatePascalCaseModelName",
-				component: () => import (/* webpackChunkName: "CreatePascalCaseModelName"*/ "./../CreateView.vue"),
+				component: () => import (/* webpackChunkName: "CreatePascalCaseModelName"*/ "./../views/CreateView.vue"),
 				meta: {
 					title: 'Crear',
 					middleware: [
@@ -26,7 +26,7 @@ export default [
 			{
 				path: ':id/show',
 				name: "AdminShowPascalCaseModelName",
-				component: () => import (/* webpackChunkName: "ShowPascalCaseModelName"*/ "./../ShowView.vue"),
+				component: () => import (/* webpackChunkName: "ShowPascalCaseModelName"*/ "./../views/ShowView.vue"),
 				meta: {
 					title: undefined,
 					middleware: [
@@ -37,7 +37,7 @@ export default [
 			{
 				path: ':id/edit',
 				name: "AdminEditPascalCaseModelName",
-				component: () => import (/* webpackChunkName: "EditPascalCaseModelName"*/ "./../EditView.vue"),
+				component: () => import (/* webpackChunkName: "EditPascalCaseModelName"*/ "./../views/EditView.vue"),
 				meta: {
 					title: 'Editar',
 					middleware: [

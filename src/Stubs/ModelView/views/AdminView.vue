@@ -22,7 +22,7 @@
 
 <script>
 	
-	import DataTable from '@models/kebabcasemodelname/widgets/DataTable'
+	import DataTable from '@models/kebabcasemodelname/widgets/DataTable.vue'
 
 	export default {
 

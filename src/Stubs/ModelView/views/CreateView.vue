@@ -40,7 +40,7 @@
 
 <script>
 
-	import CreateForm from '@models/kebabcasemodelname/forms/CreateForm'
+	import CreateForm from '@models/kebabcasemodelname/forms/CreateForm.vue'
 
 	export default {
 

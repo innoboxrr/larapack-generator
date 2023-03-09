@@ -28,7 +28,7 @@
 <script>
 	
 	import DataTable from 'innoboxrr-vue-datatable'
-	import FilterForm from '@models/kebabcasemodelname/forms/FilterForm'
+	import FilterForm from '@models/kebabcasemodelname/forms/FilterForm.vue'
 	import * as model from '@models/kebabcasemodelname' 
 
 	export default {
