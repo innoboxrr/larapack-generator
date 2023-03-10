@@ -5,13 +5,6 @@ namespace Namespace\Models\Traits\Operations;
 trait PascalCaseModelNameOperations
 {
 
-    /*
-    protected static function newFactory()
-    {
-        return \Namespace\Database\Factories\PascalCaseModelNameFactory::new();
-    }
-    */
-
     public function buildPayload()
     {
 
