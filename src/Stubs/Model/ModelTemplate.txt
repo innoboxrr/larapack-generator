@@ -38,4 +38,11 @@ class PascalCaseModelName extends Model
 
     public $loadable_relations = [];
 
+    /*
+    protected static function newFactory()
+    {
+        return \Namespace\Database\Factories\PascalCaseModelNameFactory::new();
+    }
+    */
+
 }
