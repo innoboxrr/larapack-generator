@@ -22,6 +22,7 @@ class MakeFullModelCommand extends Command
         'Migration',
         'Model',
         'ModelTraits',
+        'Observer',
         'Policy',
         'Requests',
         'Resource',
@@ -58,10 +59,14 @@ class MakeFullModelCommand extends Command
         foreach($commands as $command) {
 
             $className = '\Innoboxrr\LarapackGenerator\Tools\\' . $command . '\\' . $command . 'Tool';
-    
-            $class = new \ReflectionClass($className);
 
-            ($class->newInstance())->create($modelName);
+            if (class_exists($className)) {
+
+                $class = new \ReflectionClass($className);
+
+                ($class->newInstance())->create($modelName);
+
+            }
 
         }
 
