@@ -1,0 +1,56 @@
+<?php
+ 
+namespace Namespace\Observers;
+ 
+use Namespace\Models\PascalCaseModelName;
+ 
+class PascalCaseModelNameObserver
+{
+
+    /**
+     * Handle events after all transactions are committed.
+     *
+     * @var bool
+     */
+    // public $afterCommit = true;
+
+    /**
+     * Handle the PascalCaseModelName "created" event.
+     */
+    public function created(PascalCaseModelName $camelCaseModelName): void
+    {
+        // ...
+    }
+ 
+    /**
+     * Handle the PascalCaseModelName "updated" event.
+     */
+    public function updated(PascalCaseModelName $camelCaseModelName): void
+    {
+        // ...
+    }
+ 
+    /**
+     * Handle the PascalCaseModelName "deleted" event.
+     */
+    public function deleted(PascalCaseModelName $camelCaseModelName): void
+    {
+        // ...
+    }
+ 
+    /**
+     * Handle the PascalCaseModelName "restored" event.
+     */
+    public function restored(PascalCaseModelName $camelCaseModelName): void
+    {
+        // ...
+    }
+ 
+    /**
+     * Handle the PascalCaseModelName "forceDeleted" event.
+     */
+    public function forceDeleted(PascalCaseModelName $camelCaseModelName): void
+    {
+        // ...
+    }
+}

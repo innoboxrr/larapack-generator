@@ -1,2 +1,1 @@
 # TODO
- - En el stub de test, la generación de la ruta para paquete no es igual que para aplicación, debe ser diferente.
