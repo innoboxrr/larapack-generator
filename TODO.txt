@@ -1,4 +1,6 @@
 # TODO
+ - Añadir los compandos para revertir la creación. Ej. php builder undone:{context} {MODEL}
+    - Puede ser que cada herramienta así como define el método `create` tenga el correspondiente para elimianr lo que se creó
  - Añadir un comando para crear los archivos informativos y de configuración del paquete como:
  	- .gitattributes
  	- .gitignore
