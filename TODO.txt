@@ -1,1 +1,6 @@
 # TODO
+ - Añadir un comando para crear los archivos informativos y de configuración del paquete como:
+ 	- .gitattributes
+ 	- .gitignore
+ 	- CHANGELOG.md
+ 	- README.md
