@@ -69,9 +69,9 @@ class PascalCaseModelNameController extends Controller
     public function index(IndexRequest $request)
     {
 
-        $builder = new Builder('PascalCaseModelName', $request);
+        $builder = new Builder();
 
-        $query = $builder->get();
+        $query = $builder->get('Namespace\PascalCaseModelName', $request);
 
         return PascalCaseModelNameResource::collection($query);
 

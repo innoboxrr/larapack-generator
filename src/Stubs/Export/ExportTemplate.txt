@@ -34,9 +34,9 @@ class PluralPascalCaseModelNameExports implements FromView
     public function getQuery()
     {   
 
-        $builder = new Builder('PascalCaseModelName', $this->request);
+        $builder = new Builder();
 
-        return $builder->get();
+        return $builder->get('Namespace\PascalCaseModelName', $this->request);
 
     }
 
