@@ -24,7 +24,7 @@ class PascalCaseModelNameEndpointsTest extends TestCase
             'id' => $camelCaseModelName->id
         ];
 
-        $this->json('POST', '/api/kebabcasemodelname/policies', $payload, $headers)
+        $this->json('GET', '/api/kebabcasemodelname/policies', $payload, $headers)
             ->assertStatus(200);
 
     }
@@ -41,7 +41,7 @@ class PascalCaseModelNameEndpointsTest extends TestCase
             'policy' => 'index'
         ];
 
-        $this->json('POST', '/api/kebabcasemodelname/policy', $payload, $headers)
+        $this->json('GET', '/api/kebabcasemodelname/policy', $payload, $headers)
             ->assertJsonStructure([
                 'index'
             ])
@@ -62,7 +62,7 @@ class PascalCaseModelNameEndpointsTest extends TestCase
             'managed' => true
         ];
 
-        $this->json('POST', '/api/kebabcasemodelname/index', $payload, $headers)
+        $this->json('GET', '/api/kebabcasemodelname/index', $payload, $headers)
             ->assertStatus(200);
 
     }
@@ -79,7 +79,7 @@ class PascalCaseModelNameEndpointsTest extends TestCase
             'managed' => true
         ];
 
-        $this->json('POST', '/api/kebabcasemodelname/index', $payload, $headers)
+        $this->json('GET', '/api/kebabcasemodelname/index', $payload, $headers)
             ->assertStatus(401);
             
     }
@@ -99,7 +99,7 @@ class PascalCaseModelNameEndpointsTest extends TestCase
             'snake_case_model_name_id' => $camelCaseModelName->id
         ];
 
-        $this->json('POST', '/api/kebabcasemodelname/show', $payload, $headers)
+        $this->json('GET', '/api/kebabcasemodelname/show', $payload, $headers)
             ->assertStatus(200);
             
     }
@@ -118,7 +118,7 @@ class PascalCaseModelNameEndpointsTest extends TestCase
             'snake_case_model_name_id' => $camelCaseModelName->id
         ];
 
-        $this->json('POST', '/api/kebabcasemodelname/show', $payload, $headers)
+        $this->json('GET', '/api/kebabcasemodelname/show', $payload, $headers)
             ->assertStatus(401);
             
     }
