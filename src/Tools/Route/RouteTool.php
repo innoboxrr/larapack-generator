@@ -63,7 +63,7 @@ class RouteTool extends Tool
 
 	}
 
-	public function create(string $ModelName)
+	public function remove(string $ModelName)
 	{
 
 		$this->init($ModelName)
