@@ -43,8 +43,8 @@ class RemoveFullModelCommand extends Command
     {
 
         $modelName = $input->getArgument('name');
-
-        foreach($commands as $command) {
+        
+        foreach($this->commands as $command) {
 
             $className = '\Innoboxrr\LarapackGenerator\Tools\\' . $command . '\\' . $command . 'Tool';
 
