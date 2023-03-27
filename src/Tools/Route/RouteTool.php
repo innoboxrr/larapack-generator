@@ -63,4 +63,16 @@ class RouteTool extends Tool
 
 	}
 
+	public function create(string $ModelName)
+	{
+
+		$this->init($ModelName)
+			->setApiRoutepath();
+
+		$path = $this->apiRoutepath . '/' . $this->snake_case_model_name . '.php';
+
+		return (file_exists($path)) ? $this->dropFile($path) : false;
+
+	}
+
 }

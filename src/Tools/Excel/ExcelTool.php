@@ -30,12 +30,19 @@ class ExcelTool extends Tool
 
 	}
 
-	public function create(string $ModelName)
+	private function setUp(string $ModelName)
 	{
 
 		$this->init($ModelName)
 			->setExcelPath()
 			->setExcelTemplatePath();
+
+	}
+
+	public function create(string $ModelName)
+	{
+
+		$this->setUp($ModelName);
 
 		$excelFile = $this->excelPath . '/' . $this->snake_case_model_name . '.blade.php';
 
@@ -61,6 +68,17 @@ class ExcelTool extends Tool
 
 		return true;
 
+	}
+
+	public function remove(string $ModelName)
+	{
+
+		$this->setUp($ModelName);
+
+		$path = $this->excelPath . '/' . $this->snake_case_model_name . '.blade.php';
+
+		return (file_exists($path)) ? $this->dropFile($path) : false;
+		
 	}
 
 }

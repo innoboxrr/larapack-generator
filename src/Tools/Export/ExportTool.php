@@ -30,12 +30,19 @@ class ExportTool extends Tool
 
 	}
 
-	public function create(string $ModelName)
+	private function setUp(string $ModelName)
 	{
 
 		$this->init($ModelName)
 			->setExportPath()
 			->setExportTemplatePath();
+
+	}
+
+	public function create(string $ModelName)
+	{
+
+		$this->setUp($ModelName);
 
 		$exportFile = $this->exportPath . '/' . $this->PluralPascalCaseModelName . 'Exports.php';
 
@@ -61,6 +68,17 @@ class ExportTool extends Tool
 
 		return true;
 
+	}
+
+	public function remove(string $ModelName)
+	{
+
+		$this->setUp($ModelName);
+
+		$exportFile = $this->exportPath . '/' . $this->PluralPascalCaseModelName . 'Exports.php';
+
+		return (file_exists($path)) ? $this->dropFile($path) : false;
+		
 	}
 
 }

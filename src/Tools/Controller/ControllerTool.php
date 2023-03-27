@@ -63,13 +63,20 @@ class ControllerTool extends Tool
 
 	}
 
-	public function create(string $ModelName)
+	private function setUp(string $ModelName)
 	{
 
 		$this->init($ModelName)
 			->setControllerPath()
 			->setControllerTemplatePath()
 			->checkControllerClass();
+
+	}
+
+	public function create(string $ModelName)
+	{
+
+		$this->setUp($ModelName);
 
 		$controllerFile = $this->controllerPath . '/' . $this->PascalCaseModelName . 'Controller.php';
 
@@ -94,6 +101,17 @@ class ControllerTool extends Tool
 		}
 
 		return true;
+
+	}
+
+	public function remove(string $ModelName)
+	{
+
+		$this->setUp($ModelName);
+
+		$path = $this->controllerPath . '/' . $this->PascalCaseModelName . 'Controller.php';
+
+		return (file_exists($path)) ? $this->dropFile($path) : false;
 
 	}
 

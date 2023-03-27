@@ -63,4 +63,16 @@ class ModelTool extends Tool
 
 	}
 
+	public function remove(string $ModelName)
+	{
+
+		$this->init($ModelName)
+			->setModelPath();
+
+		$path = $this->modelPath . '/' . $this->PascalCaseModelName . '.php';
+		
+		return (file_exists($path)) ? $this->dropFile($path) : false;
+
+	}
+
 }

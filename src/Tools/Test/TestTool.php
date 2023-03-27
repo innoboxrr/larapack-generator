@@ -178,5 +178,16 @@ class TestTool extends Tool
 		
 	}
 
+	public function remove(string $ModelName)
+	{
+
+		$this->init($ModelName)
+			->setTestPath();
+
+		$path = $this->testPath . '/' . $this->PascalCaseModelName . 'EndpointsTest.php';
+
+		return (file_exists($path)) ? $this->dropFile($path) : false;
+		
+	}
 
 }

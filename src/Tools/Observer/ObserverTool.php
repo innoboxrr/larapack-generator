@@ -30,10 +30,10 @@ class ObserverTool extends Tool
 
 	}
 
-	public function create(string $ObserverName)
+	public function create(string $ModelName)
 	{
 
-		$this->init($ObserverName)
+		$this->init($ModelName)
 			->setObserverPath()
 			->setObserverTemplatePath();
 
@@ -60,6 +60,18 @@ class ObserverTool extends Tool
 		}
 
 		return true;
+
+	}
+
+	public function remove(string $ModelName)
+	{
+
+		$this->init($ModelName)
+			->setObserverPath();
+
+		$path = $this->observerPath . '/' . $this->PascalCaseModelName . 'Observer.php';
+
+		return (file_exists($path)) ? $this->dropFile($path) : false;
 
 	}
 
