@@ -100,7 +100,7 @@ class FiltersTool extends Tool
 
 	}
 
-	public function remove()
+	public function remove(string $ModelName)
 	{	
 
 		$this->init($ModelName)

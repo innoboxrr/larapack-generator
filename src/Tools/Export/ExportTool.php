@@ -75,7 +75,7 @@ class ExportTool extends Tool
 
 		$this->setUp($ModelName);
 
-		$exportFile = $this->exportPath . '/' . $this->PluralPascalCaseModelName . 'Exports.php';
+		$path = $this->exportPath . '/' . $this->PluralPascalCaseModelName . 'Exports.php';
 
 		return (file_exists($path)) ? $this->dropFile($path) : false;
 		
