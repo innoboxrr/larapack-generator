@@ -255,7 +255,9 @@ class ModelTraitsTool extends Tool
 
 		$path = $this->modelTraitsPath . '/Assignments/' . $this->PascalCaseModelName . 'Assignment.php';
 
-		return (file_exists($path)) ? $this->dropFile($path) : false;
+		$res = (file_exists($path)) ? $this->dropFile($path) : false;
+
+		return $this;
 
 	}
 
@@ -264,7 +266,9 @@ class ModelTraitsTool extends Tool
 
 		$path = $this->modelTraitsPath . '/Mutators/' . $this->PascalCaseModelName . 'Mutators.php';
 
-		return (file_exists($path)) ? $this->dropFile($path) : false;
+		$res = (file_exists($path)) ? $this->dropFile($path) : false;
+
+		return $this;
 
 	}
 
@@ -273,7 +277,9 @@ class ModelTraitsTool extends Tool
 
 		$path = $this->modelTraitsPath . '/Operations/' . $this->PascalCaseModelName . 'Operations.php';
 
-		return (file_exists($path)) ? $this->dropFile($path) : false;
+		$res = (file_exists($path)) ? $this->dropFile($path) : false;
+
+		return $this;
 
 	}
 
@@ -282,7 +288,9 @@ class ModelTraitsTool extends Tool
 
 		$path = $this->modelTraitsPath . '/Relations/' . $this->PascalCaseModelName . 'Relations.php';
 
-		return (file_exists($path)) ? $this->dropFile($path) : false;
+		$res = (file_exists($path)) ? $this->dropFile($path) : false;
+
+		return $this;
 
 	}
 
@@ -291,7 +299,9 @@ class ModelTraitsTool extends Tool
 
 		$path = $this->modelTraitsPath . '/Storage/' . $this->PascalCaseModelName . 'Storage.php';
 
-		return (file_exists($path)) ? $this->dropFile($path) : false;
+		$res = (file_exists($path)) ? $this->dropFile($path) : false;
+
+		return $this;
 
 	}
 
