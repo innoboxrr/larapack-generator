@@ -63,4 +63,16 @@ class ResourceTool extends Tool
 
 	}
 
+	public function remove(string $ModelName)
+	{
+
+		$this->init($ModelName)
+			->setResourcePath();
+
+		$path = $this->resourcePath . '/' . $this->PascalCaseModelName . 'Resource.php';
+
+		return (file_exists($path)) ? $this->dropFile($path) : false;
+
+	}
+
 }

@@ -196,4 +196,36 @@ class Tool
 
 		}
 
+	// TOOLS
+	
+		protected function dropFile(string $file)
+		{
+
+			return unlink($file);
+
+		}
+
+		protected function dropDir(string $path)
+		{
+
+			$files = glob($path . '/{,.}[!.,!..]*',GLOB_MARK|GLOB_BRACE);
+			
+			foreach ($files as $file) {
+		
+				if (is_dir($file)) {
+		
+					$this->dropDir($file);
+		
+				} else {
+		
+					unlink($file);
+		
+				}
+		
+			}
+		
+			return rmdir($path);
+
+		}
+
 }

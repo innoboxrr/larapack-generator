@@ -110,7 +110,6 @@ class EventsTool extends Tool
 
 	}
 
-
 	private function createEvents()
 	{	
 
@@ -196,6 +195,18 @@ class EventsTool extends Tool
 		if (!file_exists($path)) mkdir($path, 0777, true);
 
 		return $path;
+
+	}
+
+	public function remove(string $ModelName)
+	{
+
+		$this->init($ModelName)
+			->setEventsPath();
+
+		$path = $this->eventsPath . '/' . $this->PascalCaseModelName;
+
+		return (file_exists($path)) ? $this->dropDir($path) : false;
 
 	}
 

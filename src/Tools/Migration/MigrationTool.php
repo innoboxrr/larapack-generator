@@ -31,6 +31,7 @@ class MigrationTool extends Tool
 
 	}
 
+
 	public function create(string $ModelName)
 	{
 
@@ -47,6 +48,43 @@ class MigrationTool extends Tool
 
 			if(copy($templateFile, $migrationFile)) {
 
+				$this->replaceData($migrationFile);
+
+			} else {
+
+				throw new MakerException;
+
+			}
+
+		} else {
+
+			return false;
+
+		}
+
+		return true;
+
+	}
+
+	public function remove(string $ModelName)
+	{
+
+		$this->init($ModelName)
+			->setMigrationPath()
+			->setMigrationTemplatePath();
+
+		$migrationFilename = date('Y_m_d_His') . '_drop_' . $this->plural_snake_case_model_name . '_table.php';
+
+		$migrationFile = $this->migrationPath . '/' . $migrationFilename;
+
+		// Solo proceder en caso de los archivos no existan
+		if(!file_exists($migrationFile)) {
+
+			$templateFile = $this->migrationTemplatePath . '/DropTemplate.txt';
+
+			if(copy($templateFile, $migrationFile)) {
+
+				// Remplace dummy data
 				$this->replaceData($migrationFile);
 
 			} else {

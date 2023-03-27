@@ -102,5 +102,17 @@ class RequestsTool extends Tool
 		}
 
 	}
+	
+	public function remove(string $ModelName)
+	{	
+
+		$this->init($ModelName)
+			->setRequestPath();
+
+		$path = $this->requestPath . '/' . $this->PascalCaseModelName;
+
+		return (file_exists($path)) ? $this->dropDir($path) : false;
+
+	}
 
 }

@@ -104,4 +104,16 @@ class FactoryTool extends Tool
 
 	}
 
+	public function remove(string $ModelName)
+	{
+
+		$this->init($ModelName)
+			->setFactoryPath();
+
+		$path = $this->factoryPath . '/' . $this->PascalCaseModelName . 'Factory.php';
+
+		return (file_exists($path)) ? $this->dropFile($path) : false;
+
+	}
+
 }

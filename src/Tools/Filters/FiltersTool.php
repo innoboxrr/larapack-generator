@@ -100,4 +100,16 @@ class FiltersTool extends Tool
 
 	}
 
+	public function remove()
+	{	
+
+		$this->init($ModelName)
+			->setFiltersPath();
+
+		$path = $this->filtersPath . '/' . $this->PascalCaseModelName;
+
+		return (file_exists($path)) ? $this->dropDir($path) : false;
+
+	}
+
 }

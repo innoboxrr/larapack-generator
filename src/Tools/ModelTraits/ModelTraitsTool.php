@@ -224,4 +224,75 @@ class ModelTraitsTool extends Tool
 
 	}
 
+	public function remove(string $ModelName)
+	{
+
+		$this->init($ModelName)
+			->setModelTraitsPath()
+			->setModelTraitsTemplatePath()
+			->setTraitsPath()
+			->removeTraits();
+
+		return true;
+
+	}
+
+	private function removeTraits()
+	{
+
+		$this->removeAssignmentTrait()
+			->removeMutatorsTrait()
+			->removeOperationsTrait()
+			->removeRelationsTrait()
+			->removeStorageTrait();
+
+		return $this;
+
+	}
+
+	private function removeAssignmentTrait()
+	{
+
+		$path = $this->modelTraitsPath . '/Assignments/' . $this->PascalCaseModelName . 'Assignment.php';
+
+		return (file_exists($path)) ? $this->dropFile($path) : false;
+
+	}
+
+	private function removeMutatorsTrait()
+	{
+
+		$path = $this->modelTraitsPath . '/Mutators/' . $this->PascalCaseModelName . 'Mutators.php';
+
+		return (file_exists($path)) ? $this->dropFile($path) : false;
+
+	}
+
+	private function removeOperationsTrait()
+	{
+
+		$path = $this->modelTraitsPath . '/Operations/' . $this->PascalCaseModelName . 'Operations.php';
+
+		return (file_exists($path)) ? $this->dropFile($path) : false;
+
+	}
+
+	private function removeRelationsTrait()
+	{
+
+		$path = $this->modelTraitsPath . '/Relations/' . $this->PascalCaseModelName . 'Relations.php';
+
+		return (file_exists($path)) ? $this->dropFile($path) : false;
+
+	}
+
+	private function removeStorageTrait()
+	{
+
+		$path = $this->modelTraitsPath . '/Storage/' . $this->PascalCaseModelName . 'Storage.php';
+
+		return (file_exists($path)) ? $this->dropFile($path) : false;
+
+	}
+
 }

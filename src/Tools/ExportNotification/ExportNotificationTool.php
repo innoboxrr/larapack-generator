@@ -79,4 +79,16 @@ class ExportNotificationTool extends Tool
 
 	}
 
+	public function remove(string $ModelName)
+	{
+
+		$this->init($ModelName)
+			->setExportNotificationPath();
+
+		$path = $this->exportNotificationPath . '/' . $this->PascalCaseModelName;
+
+		return (file_exists($path)) ? $this->dropDir($path) : false;
+
+	}
+
 }

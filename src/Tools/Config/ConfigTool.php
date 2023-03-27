@@ -30,12 +30,19 @@ class ConfigTool extends Tool
 
 	}
 
-	public function create()
+	private function setUp()
 	{
 
 		$this->init('')
 			->setConfigPath()
 			->setConfigTemplatePath();
+
+	}
+
+	public function create()
+	{
+
+		$this->setUp();
 
 		$configFile = $this->configPath . '/' . $this->namespaceWithoutSeparation . '.php';
 
@@ -60,6 +67,17 @@ class ConfigTool extends Tool
 		}
 
 		return true;
+
+	}
+
+	public function remove()
+	{
+		
+		$this->setUp();
+
+		$path = $this->configPath . '/' . $this->namespaceWithoutSeparation . '.php';
+
+		return (file_exists($path)) ? $this->dropFile($path) : false;
 
 	}
 

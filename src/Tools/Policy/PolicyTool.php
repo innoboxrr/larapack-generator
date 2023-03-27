@@ -63,4 +63,16 @@ class PolicyTool extends Tool
 
 	}
 
+	public function remove(string $ModelName)
+	{
+
+		$this->init($ModelName)
+			->setPolicyPath();
+
+		$path = $this->policyPath . '/' . $this->PascalCaseModelName . 'Policy.php';
+
+		return (file_exists($path)) ? $this->dropFile($path) : false;
+
+	}
+
 }
