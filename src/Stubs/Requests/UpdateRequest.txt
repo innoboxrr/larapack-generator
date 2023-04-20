@@ -3,8 +3,10 @@
 namespace Namespace\Http\Requests\PascalCaseModelName;
 
 use Namespace\Models\PascalCaseModelName;
+use Namespace\Http\Resources\Models\PascalCaseModelNameResource;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Namespace\Http\Events\PascalCaseModelName\Events\UpdateEvent;
 
 class UpdateRequest extends FormRequest
 {
@@ -24,6 +26,21 @@ class UpdateRequest extends FormRequest
             //
             'snake_case_model_name_id' => 'required|numeric'
         ];
+    }
+
+    public function handle()
+    {
+
+        $camelCaseModelName = PascalCaseModelName::findOrFail($request->snake_case_model_name_id);
+
+        $camelCaseModelName = $camelCaseModelName->updateModel($request);
+
+        $response = new PascalCaseModelNameResource($camelCaseModelName);
+
+        event(new UpdateEvent($camelCaseModelName, $request, $response));
+
+        return $response;
+
     }
 
 }

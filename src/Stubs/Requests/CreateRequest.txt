@@ -3,8 +3,10 @@
 namespace Namespace\Http\Requests\PascalCaseModelName;
 
 use Namespace\Models\PascalCaseModelName;
+use Namespace\Http\Resources\Models\PascalCaseModelNameResource;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Namespace\Http\Events\PascalCaseModelName\Events\CreateEvent;
 
 class CreateRequest extends FormRequest
 {
@@ -21,6 +23,19 @@ class CreateRequest extends FormRequest
         return [
             //
         ];
+    }
+
+    public function handle()
+    {
+
+        $camelCaseModelName = (new PascalCaseModelName)->createModel($request);
+
+        $response = new PascalCaseModelNameResource($camelCaseModelName);
+
+        event(new CreateEvent($camelCaseModelName, $request, $response));
+
+        return $response;
+
     }
     
 }

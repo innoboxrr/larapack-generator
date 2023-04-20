@@ -3,8 +3,10 @@
 namespace Namespace\Http\Requests\PascalCaseModelName;
 
 use Namespace\Models\PascalCaseModelName;
+use Namespace\Http\Resources\Models\PascalCaseModelNameResource;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Namespace\Http\Events\PascalCaseModelName\Events\RestoreEvent;
 
 class RestoreRequest extends FormRequest
 {
@@ -23,6 +25,21 @@ class RestoreRequest extends FormRequest
         return [
             'snake_case_model_name_id' => 'required|numeric'
         ];
+    }
+
+    public function handle()
+    {
+
+        $camelCaseModelName = PascalCaseModelName::withTrashed()->findOrFail($request->snake_case_model_name_id);
+
+        $camelCaseModelName->restoreModel();
+
+        $response = new PascalCaseModelNameResource($camelCaseModelName);
+
+        event(new RestoreEvent($camelCaseModelName, $request, $response));
+
+        return $response;
+
     }
     
 }

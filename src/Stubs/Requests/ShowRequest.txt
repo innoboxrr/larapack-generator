@@ -3,6 +3,7 @@
 namespace Namespace\Http\Requests\PascalCaseModelName;
 
 use Namespace\Models\PascalCaseModelName;
+use Namespace\Http\Resources\Models\PascalCaseModelNameResource;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -28,6 +29,17 @@ class ShowRequest extends FormRequest
             ],
             'snake_case_model_name_id' => 'required|numeric'
         ];
+    }
+
+    public function handle()
+    {
+
+        $camelCaseModelName = PascalCaseModelName::where('id', $request->snake_case_model_name_id)
+            ->with($request->load_relations ?? [])
+            ->firstOrFail();
+
+        return new PascalCaseModelNameResource($camelCaseModelName);
+
     }
     
 }

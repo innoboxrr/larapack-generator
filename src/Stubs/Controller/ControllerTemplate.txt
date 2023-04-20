@@ -2,9 +2,6 @@
 
 namespace Namespace\Http\Controllers;
 
-use Innoboxrr\SearchSurge\Search\Builder;
-use Namespace\Models\PascalCaseModelName;
-use Namespace\Http\Resources\Models\PascalCaseModelNameResource;
 use Namespace\Http\Requests\PascalCaseModelName\PoliciesRequest;
 use Namespace\Http\Requests\PascalCaseModelName\PolicyRequest;
 use Namespace\Http\Requests\PascalCaseModelName\IndexRequest;
@@ -15,159 +12,63 @@ use Namespace\Http\Requests\PascalCaseModelName\DeleteRequest;
 use Namespace\Http\Requests\PascalCaseModelName\RestoreRequest;
 use Namespace\Http\Requests\PascalCaseModelName\ForceDeleteRequest;
 use Namespace\Http\Requests\PascalCaseModelName\ExportRequest;
-use Namespace\Http\Events\PascalCaseModelName\Events\CreateEvent;
-use Namespace\Http\Events\PascalCaseModelName\Events\DeleteEvent;
-use Namespace\Http\Events\PascalCaseModelName\Events\ExportEvent;
-use Namespace\Http\Events\PascalCaseModelName\Events\ForceDeleteEvent;
-use Namespace\Http\Events\PascalCaseModelName\Events\RestoreEvent;
-use Namespace\Http\Events\PascalCaseModelName\Events\UpdateEvent;
 
 class PascalCaseModelNameController extends Controller
 {
     
     public function __construct()
     {
-        
         $this->middleware('auth:sanctum');
-
     }
 
     public function policies(PoliciesRequest $request)
     {
-
-        $camelCaseModelName = ($request->id) ? 
-            PascalCaseModelName::findOrFail($request->id) : 
-            app(PascalCaseModelName::class);
-
-        return response()->json([
-            'index'          => user()->can('index', $camelCaseModelName),
-            'view'           => user()->can('view', $camelCaseModelName),
-            'viewAny'        => user()->can('viewAny', $camelCaseModelName),
-            'create'         => user()->can('create', $camelCaseModelName),
-            'update'         => user()->can('update', $camelCaseModelName),
-            'delete'         => user()->can('delete', $camelCaseModelName),
-            'restore'        => user()->can('restore', $camelCaseModelName),
-            'forceDelete'    => user()->can('forceDelete', $camelCaseModelName),
-            'export'         => user()->can('export', $camelCaseModelName),
-        ]);
-
+        $request->handle();   
     }
 
     public function policy(PolicyRequest $request)
     {
-
-        $camelCaseModelName = ($request->id) ? 
-            PascalCaseModelName::findOrFail($request->id) : 
-            app(PascalCaseModelName::class);
-
-        return response()->json([
-            $request->policy => user()->can($request->policy, $camelCaseModelName),
-        ]);
-
+        $request->handle();
     }
 
     public function index(IndexRequest $request)
     {
-
-        $builder = new Builder();
-
-        $query = $builder->get('Namespace\PascalCaseModelName', $request);
-
-        return PascalCaseModelNameResource::collection($query);
-
+        $request->handle();   
     }
 
     public function show(ShowRequest $request)
     {
-
-        $camelCaseModelName = PascalCaseModelName::where('id', $request->snake_case_model_name_id)
-            ->with($request->load_relations ?? [])
-            ->firstOrFail();
-
-        return new PascalCaseModelNameResource($camelCaseModelName);
-
+        $request->handle();   
     }
 
     public function create(CreateRequest $request)
     {
-
-        $camelCaseModelName = (new PascalCaseModelName)->createModel($request);
-
-        $response = new PascalCaseModelNameResource($camelCaseModelName);
-
-        event(new CreateEvent($camelCaseModelName, $request, $response));
-
-        return $response;
-
+        $request->handle();   
     }
 
     public function update(UpdateRequest $request)
     {
-
-        $camelCaseModelName = PascalCaseModelName::findOrFail($request->snake_case_model_name_id);
-
-        $camelCaseModelName = $camelCaseModelName->updateModel($request);
-
-        $response = new PascalCaseModelNameResource($camelCaseModelName);
-
-        event(new UpdateEvent($camelCaseModelName, $request, $response));
-
-        return $response;
-
+        $request->handle();   
     }
 
     public function delete(DeleteRequest $request)
     {
-
-        $camelCaseModelName = PascalCaseModelName::findOrFail($request->snake_case_model_name_id);
-
-        $camelCaseModelName->deleteModel();
-
-        $response = new PascalCaseModelNameResource($camelCaseModelName);
-
-        event(new DeleteEvent($camelCaseModelName, $request, $response));
-
-        return $response;
-
+        $request->handle();   
     }
 
     public function restore(RestoreRequest $request)
     {
-
-        $camelCaseModelName = PascalCaseModelName::withTrashed()->findOrFail($request->snake_case_model_name_id);
-
-        $camelCaseModelName->restoreModel();
-
-        $response = new PascalCaseModelNameResource($camelCaseModelName);
-
-        event(new RestoreEvent($camelCaseModelName, $request, $response));
-
-        return $response;
-
+        $request->handle();   
     }
 
     public function forceDelete(ForceDeleteRequest $request)
     {
-
-        $camelCaseModelName = PascalCaseModelName::withTrashed()->findOrFail($request->snake_case_model_name_id);
-
-        $camelCaseModelName->forceDeleteModel();
-
-        $response = new PascalCaseModelNameResource($camelCaseModelName);
-
-        event(new ForceDeleteEvent($camelCaseModelName, $request, $response));
-
-        return $response;
-
+        $request->handle();   
     }
 
     public function export(ExportRequest $request)
     {
-
-        event(new ExportEvent($request));
-
-        return response()->json(['status' => true]);
-
+        $request->handle();   
     }
 
 }
