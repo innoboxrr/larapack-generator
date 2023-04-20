@@ -3,7 +3,9 @@
 namespace Namespace\Http\Requests\PascalCaseModelName;
 
 use Namespace\Models\PascalCaseModelName;
+use Namespace\Http\Resources\Models\PascalCaseModelNameResource;
 use Illuminate\Foundation\Http\FormRequest;
+use Namespace\Http\Events\PascalCaseModelName\Events\ForceDeleteEvent;
 
 class ForceDeleteRequest extends FormRequest
 {
@@ -22,6 +24,21 @@ class ForceDeleteRequest extends FormRequest
         return [
             'snake_case_model_name_id' => 'required|numeric'
         ];
+    }
+
+    public function handle()
+    {
+
+        $camelCaseModelName = PascalCaseModelName::withTrashed()->findOrFail($request->snake_case_model_name_id);
+
+        $camelCaseModelName->forceDeleteModel();
+
+        $response = new PascalCaseModelNameResource($camelCaseModelName);
+
+        event(new ForceDeleteEvent($camelCaseModelName, $request, $response));
+
+        return $response;
+
     }
     
 }
