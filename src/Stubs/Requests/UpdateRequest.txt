@@ -31,13 +31,13 @@ class UpdateRequest extends FormRequest
     public function handle()
     {
 
-        $camelCaseModelName = PascalCaseModelName::findOrFail($request->snake_case_model_name_id);
+        $camelCaseModelName = PascalCaseModelName::findOrFail($this->snake_case_model_name_id);
 
-        $camelCaseModelName = $camelCaseModelName->updateModel($request);
+        $camelCaseModelName = $camelCaseModelName->updateModel($this);
 
         $response = new PascalCaseModelNameResource($camelCaseModelName);
 
-        event(new UpdateEvent($camelCaseModelName, $request, $response));
+        event(new UpdateEvent($camelCaseModelName, $this, $response));
 
         return $response;
 
