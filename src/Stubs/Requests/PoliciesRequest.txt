@@ -23,8 +23,8 @@ class PoliciesRequest extends FormRequest
     public function handle()
     {
 
-        $camelCaseModelName = ($request->id) ? 
-            PascalCaseModelName::findOrFail($request->id) : 
+        $camelCaseModelName = ($this->id) ? 
+            PascalCaseModelName::findOrFail($this->id) : 
             app(PascalCaseModelName::class);
 
         return response()->json([

@@ -30,13 +30,13 @@ class RestoreRequest extends FormRequest
     public function handle()
     {
 
-        $camelCaseModelName = PascalCaseModelName::withTrashed()->findOrFail($request->snake_case_model_name_id);
+        $camelCaseModelName = PascalCaseModelName::withTrashed()->findOrFail($this->snake_case_model_name_id);
 
         $camelCaseModelName->restoreModel();
 
         $response = new PascalCaseModelNameResource($camelCaseModelName);
 
-        event(new RestoreEvent($camelCaseModelName, $request, $response));
+        event(new RestoreEvent($camelCaseModelName, $this, $response));
 
         return $response;
 

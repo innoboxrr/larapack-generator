@@ -29,13 +29,13 @@ class ForceDeleteRequest extends FormRequest
     public function handle()
     {
 
-        $camelCaseModelName = PascalCaseModelName::withTrashed()->findOrFail($request->snake_case_model_name_id);
+        $camelCaseModelName = PascalCaseModelName::withTrashed()->findOrFail($this->snake_case_model_name_id);
 
         $camelCaseModelName->forceDeleteModel();
 
         $response = new PascalCaseModelNameResource($camelCaseModelName);
 
-        event(new ForceDeleteEvent($camelCaseModelName, $request, $response));
+        event(new ForceDeleteEvent($camelCaseModelName, $this, $response));
 
         return $response;
 

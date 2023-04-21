@@ -29,13 +29,13 @@ class DeleteRequest extends FormRequest
     public function handle()
     {
 
-        $camelCaseModelName = PascalCaseModelName::findOrFail($request->snake_case_model_name_id);
+        $camelCaseModelName = PascalCaseModelName::findOrFail($this->snake_case_model_name_id);
 
         $camelCaseModelName->deleteModel();
 
         $response = new PascalCaseModelNameResource($camelCaseModelName);
 
-        event(new DeleteEvent($camelCaseModelName, $request, $response));
+        event(new DeleteEvent($camelCaseModelName, $this, $response));
 
         return $response;
 

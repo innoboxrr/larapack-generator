@@ -34,8 +34,8 @@ class ShowRequest extends FormRequest
     public function handle()
     {
 
-        $camelCaseModelName = PascalCaseModelName::where('id', $request->snake_case_model_name_id)
-            ->with($request->load_relations ?? [])
+        $camelCaseModelName = PascalCaseModelName::where('id', $this->snake_case_model_name_id)
+            ->with($this->load_relations ?? [])
             ->firstOrFail();
 
         return new PascalCaseModelNameResource($camelCaseModelName);
