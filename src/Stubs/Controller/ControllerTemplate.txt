@@ -23,52 +23,52 @@ class PascalCaseModelNameController extends Controller
 
     public function policies(PoliciesRequest $request)
     {
-        $request->handle();   
+        return $request->handle();   
     }
 
     public function policy(PolicyRequest $request)
     {
-        $request->handle();
+        return $request->handle();
     }
 
     public function index(IndexRequest $request)
     {
-        $request->handle();   
+        return $request->handle();   
     }
 
     public function show(ShowRequest $request)
     {
-        $request->handle();   
+        return $request->handle();   
     }
 
     public function create(CreateRequest $request)
     {
-        $request->handle();   
+        return $request->handle();   
     }
 
     public function update(UpdateRequest $request)
     {
-        $request->handle();   
+        return $request->handle();   
     }
 
     public function delete(DeleteRequest $request)
     {
-        $request->handle();   
+        return $request->handle();   
     }
 
     public function restore(RestoreRequest $request)
     {
-        $request->handle();   
+        return $request->handle();   
     }
 
     public function forceDelete(ForceDeleteRequest $request)
     {
-        $request->handle();   
+        return $request->handle();   
     }
 
     public function export(ExportRequest $request)
     {
-        $request->handle();   
+        return $request->handle();   
     }
 
 }
