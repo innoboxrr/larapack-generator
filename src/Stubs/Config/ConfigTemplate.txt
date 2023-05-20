@@ -2,6 +2,8 @@
 
 return [
 
+	'user_class' => 'App\Models\User',
+
 	'excel_view' => 'namespaceWithoutSeparation::excel.',
 
 	'notification_via' => ['mail', 'database'],
