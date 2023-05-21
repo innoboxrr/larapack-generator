@@ -4,12 +4,17 @@ namespace Namespace\Http\Requests\PascalCaseModelName;
 
 use Namespace\Models\PascalCaseModelName;
 use Namespace\Http\Resources\Models\PascalCaseModelNameResource;
+use Namespace\Http\Events\PascalCaseModelName\Events\CreateEvent;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
-use Namespace\Http\Events\PascalCaseModelName\Events\CreateEvent;
 
 class CreateRequest extends FormRequest
 {
+
+    protected function prepareForValidation()
+    {
+        //
+    }
 
     public function authorize()
     {
@@ -23,6 +28,25 @@ class CreateRequest extends FormRequest
         return [
             //
         ];
+    }
+
+    public function messages()
+    {
+        return [
+            //
+        ];
+    }
+
+    public function attributes()
+    {
+        return [
+            //
+        ];
+    }
+
+    protected function passedValidation()
+    {
+        //
     }
 
     public function handle()

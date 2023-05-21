@@ -4,12 +4,17 @@ namespace Namespace\Http\Requests\PascalCaseModelName;
 
 use Namespace\Models\PascalCaseModelName;
 use Namespace\Http\Resources\Models\PascalCaseModelNameResource;
+use Namespace\Http\Events\PascalCaseModelName\Events\RestoreEvent;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
-use Namespace\Http\Events\PascalCaseModelName\Events\RestoreEvent;
 
 class RestoreRequest extends FormRequest
 {
+
+    protected function prepareForValidation()
+    {
+        //
+    }
 
     public function authorize()
     {
@@ -25,6 +30,25 @@ class RestoreRequest extends FormRequest
         return [
             'snake_case_model_name_id' => 'required|numeric'
         ];
+    }
+
+    public function messages()
+    {
+        return [
+            //
+        ];
+    }
+
+    public function attributes()
+    {
+        return [
+            //
+        ];
+    }
+
+    protected function passedValidation()
+    {
+        //
     }
 
     public function handle()

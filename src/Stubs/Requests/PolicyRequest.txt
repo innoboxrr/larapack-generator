@@ -29,6 +29,11 @@ class PolicyRequest extends FormRequest
         'forceDelete',
     ];
 
+    protected function prepareForValidation()
+    {
+        //
+    }
+
     public function authorize()
     {
         return true;
@@ -47,6 +52,25 @@ class PolicyRequest extends FormRequest
                 Rule::requiredIf(in_array($this->policy, $this->modelPolicies)),
             ]
         ];
+    }
+
+    public function messages()
+    {
+        return [
+            //
+        ];
+    }
+
+    public function attributes()
+    {
+        return [
+            //
+        ];
+    }
+
+    protected function passedValidation()
+    {
+        //
     }
 
     public function handle()
