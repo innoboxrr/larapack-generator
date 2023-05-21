@@ -8,6 +8,11 @@ use Illuminate\Foundation\Http\FormRequest;
 class PoliciesRequest extends FormRequest
 {
 
+    protected function prepareForValidation()
+    {
+        //
+    }
+
     public function authorize()
     {
         return true;
@@ -20,24 +25,45 @@ class PoliciesRequest extends FormRequest
         ];
     }
 
-    public function handle()
+    public function messages()
+    {
+        return [
+            //
+        ];
+    }
+
+    public function attributes()
+    {
+        return [
+            //
+        ];
+    }
+
+    protected function passedValidation()
+    {
+        //
+    }
+
+    public function handle($controllerClass)
     {
 
-        $camelCaseModelName = ($this->id) ? 
-            PascalCaseModelName::findOrFail($this->id) : 
-            app(PascalCaseModelName::class);
+        $model = ($this->id) ? PascalCaseModelName::findOrFail($this->id) : app(PascalCaseModelName::class);
 
-        return response()->json([
-            'index'          => user()->can('index', $camelCaseModelName),
-            'view'           => user()->can('view', $camelCaseModelName),
-            'viewAny'        => user()->can('viewAny', $camelCaseModelName),
-            'create'         => user()->can('create', $camelCaseModelName),
-            'update'         => user()->can('update', $camelCaseModelName),
-            'delete'         => user()->can('delete', $camelCaseModelName),
-            'restore'        => user()->can('restore', $camelCaseModelName),
-            'forceDelete'    => user()->can('forceDelete', $camelCaseModelName),
-            'export'         => user()->can('export', $camelCaseModelName),
-        ]);
+        $result = [];
+
+        $methods = get_class_methods($controllerClass);
+
+        foreach ($methods as $method) {
+
+            if (method_exists($controllerClass, $method) && is_callable([$controllerClass, $method])) {
+            
+                $result[$method] = user()->can($method, $model);
+            
+            }
+
+        }
+
+        return response()->json($result);
 
     }
     

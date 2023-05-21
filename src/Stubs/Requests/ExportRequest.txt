@@ -3,8 +3,8 @@
 namespace Namespace\Http\Requests\PascalCaseModelName;
 
 use Namespace\Models\PascalCaseModelName;
-use Illuminate\Foundation\Http\FormRequest;
 use Namespace\Http\Events\PascalCaseModelName\Events\ExportEvent;
+use Illuminate\Foundation\Http\FormRequest;
 
 class ExportRequest extends FormRequest
 {
@@ -30,6 +30,25 @@ class ExportRequest extends FormRequest
         return [
             //
         ];
+    }
+
+    public function messages()
+    {
+        return [
+            //
+        ];
+    }
+
+    public function attributes()
+    {
+        return [
+            //
+        ];
+    }
+
+    protected function passedValidation()
+    {
+        //
     }
 
     public function handle()

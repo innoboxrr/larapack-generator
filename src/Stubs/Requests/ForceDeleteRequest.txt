@@ -4,11 +4,16 @@ namespace Namespace\Http\Requests\PascalCaseModelName;
 
 use Namespace\Models\PascalCaseModelName;
 use Namespace\Http\Resources\Models\PascalCaseModelNameResource;
-use Illuminate\Foundation\Http\FormRequest;
 use Namespace\Http\Events\PascalCaseModelName\Events\ForceDeleteEvent;
+use Illuminate\Foundation\Http\FormRequest;
 
 class ForceDeleteRequest extends FormRequest
 {
+
+    protected function prepareForValidation()
+    {
+        //
+    }
 
     public function authorize()
     {
@@ -24,6 +29,25 @@ class ForceDeleteRequest extends FormRequest
         return [
             'snake_case_model_name_id' => 'required|numeric'
         ];
+    }
+
+    public function messages()
+    {
+        return [
+            //
+        ];
+    }
+
+    public function attributes()
+    {
+        return [
+            //
+        ];
+    }
+
+    protected function passedValidation()
+    {
+        //
     }
 
     public function handle()

@@ -23,7 +23,7 @@ class PascalCaseModelNameController extends Controller
 
     public function policies(PoliciesRequest $request)
     {
-        return $request->handle();   
+        return $request->handle($this);   
     }
 
     public function policy(PolicyRequest $request)

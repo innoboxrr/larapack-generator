@@ -4,12 +4,17 @@ namespace Namespace\Http\Requests\PascalCaseModelName;
 
 use Namespace\Models\PascalCaseModelName;
 use Namespace\Http\Resources\Models\PascalCaseModelNameResource;
+use Namespace\Http\Events\PascalCaseModelName\Events\UpdateEvent;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
-use Namespace\Http\Events\PascalCaseModelName\Events\UpdateEvent;
 
 class UpdateRequest extends FormRequest
 {
+
+    protected function prepareForValidation()
+    {
+        //
+    }
 
     public function authorize()
     {
@@ -26,6 +31,25 @@ class UpdateRequest extends FormRequest
             //
             'snake_case_model_name_id' => 'required|numeric'
         ];
+    }
+
+    public function messages()
+    {
+        return [
+            //
+        ];
+    }
+
+    public function attributes()
+    {
+        return [
+            //
+        ];
+    }
+
+    protected function passedValidation()
+    {
+        //
     }
 
     public function handle()

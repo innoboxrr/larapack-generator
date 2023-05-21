@@ -10,6 +10,11 @@ use Illuminate\Validation\Rule;
 class ShowRequest extends FormRequest
 {
 
+    protected function prepareForValidation()
+    {
+        //
+    }
+
     public function authorize()
     {
 
@@ -29,6 +34,25 @@ class ShowRequest extends FormRequest
             ],
             'snake_case_model_name_id' => 'required|numeric'
         ];
+    }
+
+    public function messages()
+    {
+        return [
+            //
+        ];
+    }
+
+    public function attributes()
+    {
+        return [
+            //
+        ];
+    }
+
+    protected function passedValidation()
+    {
+        //
     }
 
     public function handle()
