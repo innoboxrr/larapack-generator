@@ -88,7 +88,7 @@
 
                     this.disabled = true;
 
-                    model.createModel(data)
+                    model.createModel({})
                         .then( res => {
 
                             this.$emit('submit', res);

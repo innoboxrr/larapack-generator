@@ -1,8 +1,10 @@
+const baseRouteName = 'api.snake_case_model_name';
+
 let filters = {}
 
 const setFilters = (newFilters = {}) => {
 
-	filters = {
+	mergedFilters = {
 
 		...filters,
 
@@ -10,7 +12,7 @@ const setFilters = (newFilters = {}) => {
 
 	}
 
-	return filters;
+	return mergedFilters;
 
 }
 
@@ -31,18 +33,30 @@ let strings = {
 			icon: 'fa-download'
 		}
 	},
+	deleteModel: {
+		confirmation: {
+			title: 'Confirmar operación',
+			text: 'Desea confirmar la exportación de datos',
+		}
+	},
+	restoreModel: {
+		confirmation: {
+			title: 'Confirmar operación',
+			text: 'Desea confirmar la restauración de datos',
+		}
+	},
+	forceDeleteModel: {
+		confirmation: {
+			title: 'Confirmar operación',
+			text: 'Desea confirmar la eliminación definitiva de datos',
+		}
+	},
 	exportModel: {
 		confirmation: {
 			title: 'Confirmar operación',
 			text: 'Desea confirmar la exportación de datos',
 		}
 	},
-	deleteModel: {
-		confirmation: {
-			title: 'Confirmar operación',
-			text: 'Desea confirmar la exportación de datos',
-		}
-	}
 }
 
 const crudActions = () => {
@@ -110,47 +124,95 @@ const dataTableSort = () => {
 
 }
 
-const exportModel = (data) => { 
+const policiesModel = (modelId = null) => {
 
-	return new Promise( (resolve, reject) => {
+	return new Promise((resolve, reject) => {
 
-		Swal.fire({
-			title: string.exportModel.confirmation.title,
-			text: string.exportModel.confirmation.text,
-			icon: 'warning',
-			showCancelButton: true,
-			confirmButtonColor: '#3085d6',
-			cancelButtonColor: '#d33',
-			confirmButtonText: 'Si, continuar'
-		}).then((result) => {
+		axios.post(route(`${baseRouteName}.policies`), {
 
-			if (result.isConfirmed) {
+				_token: csrf_token,
 
-				axios.post(route('api.snake_case_model_name.export'), {
+				id: modelId,
 
-			    	_token: csrf_token,
+			}).then( res => {
 
-			    	...filters,
+				resolve(res);
 
-			    }).then( res => {
+			}).catch( error => {
 
-					resolve({ message: 'En unos segundos recibirás un correo con el archivo de descarga' });
+				reject(error);
 
-				}).catch( error => {
+			});
 
-					reject({ message: error.response.data.message })
+	});
 
-				});
+}
 
-			} else {
+const policyModel = (action, modelId = null) => {
 
-				Swal.fire(
-					'Operación cancelada',
-					'Se ha cancelado la operación',
-					'error'
-				);
+	return new Promise((resolve, reject) => {
 
-			}
+		axios.post(route(`${baseRouteName}.policy`), {
+
+				_token: csrf_token,
+
+				id: modelId,
+
+				policy: action
+
+			}).then( res => {
+
+				resolve(res);
+
+			}).catch( error => {
+
+				reject(error);
+
+			});
+
+	});
+
+}
+
+const indexModel = (filters = {}) => {
+
+	return new Promise((resolve, reject) => {
+
+		axios.get(route(`${baseRouteName}.show`), {
+
+            params: {
+
+            	_token: csrf_token,
+
+            	...filters,
+
+            }
+
+        }).then( res => {
+
+            resolve(res);
+
+        }).catch( error => {
+
+            reject(error);
+
+        });
+
+	});
+
+}
+
+const showModel = (modelId) => {
+
+	return new Promise((resolve, reject) => {
+
+		getModel(modelId).then( res => {
+
+			resolve(res);
+
+		}).catch( error => {
+
+			reject(error);
 
 		});
 
@@ -162,7 +224,7 @@ const getModel = (modelId) => {
 
 	return new Promise((resolve, reject) => {
 
-		axios.get(route('api.snake_case_model_name.show'), {
+		axios.get(route(`${baseRouteName}.show`), {
 
             params: {
 
@@ -190,7 +252,7 @@ const createModel = (data) => {
 
 	return new Promise((resolve, reject) => {
 
-		axios.post(route('api.snake_case_model_name.create'), {
+		axios.post(route(`${baseRouteName}.create`), {
 
 	            _token: csrf_token,
 
@@ -216,7 +278,7 @@ const updateModel = (modelId, data) => {
 
 	return new Promise((resolve, reject) => {
 
-		axios.put(route('api.snake_case_model_name.update'), {
+		axios.put(route(`${baseRouteName}.update`), {
 
 	            _token: csrf_token,
 
@@ -256,7 +318,7 @@ const deleteModel = (data) => {
 
 			if (result.isConfirmed) {
 
-				axios.post(route('api.snake_case_model_name.delete'), {
+				axios.post(route(`${baseRouteName}.delete`), {
 
 			    	_token: csrf_token,
 
@@ -290,17 +352,170 @@ const deleteModel = (data) => {
 
 }
 
-// PENDIENTE: Crear los método, policy, policies, index, show, create, update, etc.
+const restoreModel = (data) => { 
+
+	return new Promise( (resolve, reject) => {
+
+		Swal.fire({
+			title: string.restoreModel.confirmation.title,
+			text: string.restoreModel.confirmation.text,
+			icon: 'warning',
+			showCancelButton: true,
+			confirmButtonColor: '#3085d6',
+			cancelButtonColor: '#d33',
+			confirmButtonText: 'Si, eliminar'
+		}).then((result) => {
+
+			if (result.isConfirmed) {
+
+				axios.post(route(`${baseRouteName}.restore`), {
+
+			    	_token: csrf_token,
+
+			    	_method: 'DELETE',
+
+			    	snake_case_model_name_id: data.id
+
+			    }).then( res => {
+
+					resolve({ message: 'Operación exitosa' });
+
+				}).catch( error => {
+
+					reject({ message: error.response.data.message })
+
+				});
+
+			} else {
+
+				Swal.fire(
+					'Operación cancelada',
+					'Se ha cancelado la operación',
+					'error'
+				);
+
+			}
+
+		});
+
+	});
+
+}
+
+const forceDeleteModel = (data) => { 
+
+	return new Promise( (resolve, reject) => {
+
+		Swal.fire({
+			title: string.forceDeleteModel.confirmation.title,
+			text: string.forceDeleteModel.confirmation.text,
+			icon: 'warning',
+			showCancelButton: true,
+			confirmButtonColor: '#3085d6',
+			cancelButtonColor: '#d33',
+			confirmButtonText: 'Si, eliminar'
+		}).then((result) => {
+
+			if (result.isConfirmed) {
+
+				axios.post(route(`${baseRouteName}.forceDelete`), {
+
+			    	_token: csrf_token,
+
+			    	_method: 'DELETE',
+
+			    	snake_case_model_name_id: data.id
+
+			    }).then( res => {
+
+					resolve({ message: 'Operación exitosa' });
+
+				}).catch( error => {
+
+					reject({ message: error.response.data.message })
+
+				});
+
+			} else {
+
+				Swal.fire(
+					'Operación cancelada',
+					'Se ha cancelado la operación',
+					'error'
+				);
+
+			}
+
+		});
+
+	});
+
+}
+
+const exportModel = (data) => { 
+
+	return new Promise( (resolve, reject) => {
+
+		Swal.fire({
+			title: string.exportModel.confirmation.title,
+			text: string.exportModel.confirmation.text,
+			icon: 'warning',
+			showCancelButton: true,
+			confirmButtonColor: '#3085d6',
+			cancelButtonColor: '#d33',
+			confirmButtonText: 'Si, continuar'
+		}).then((result) => {
+
+			if (result.isConfirmed) {
+
+				axios.post(route(`${baseRouteName}.export`), {
+
+			    	_token: csrf_token,
+
+			    	...filters,
+
+			    }).then( res => {
+
+					resolve({ message: 'En unos segundos recibirás un correo con el archivo de descarga' });
+
+				}).catch( error => {
+
+					reject({ message: error.response.data.message })
+
+				});
+
+			} else {
+
+				Swal.fire(
+					'Operación cancelada',
+					'Se ha cancelado la operación',
+					'error'
+				);
+
+			}
+
+		});
+
+	});
+
+}
 
 export { 
+	baseRouteName,
 	setFilters,
 	getFilters,
 	crudActions,
 	dataTableHead,
 	dataTableSort,
-	exportModel,
+	policiesModel,
+	policyModel,
+	indexModel,
+	showModel,
 	getModel,
 	createModel,
 	updateModel,
 	deleteModel,
+	restoreModel,
+	forceDeleteModel,
+	exportModel,
 };
