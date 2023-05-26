@@ -94,9 +94,9 @@
 
 			return {
 			
-				dataUrl: route('api.snake_case_model_name.index'),
+				dataUrl: route(`${baseRouteName}.index`),
 
-				policyUrl: route('api.snake_case_model_name.policies'),
+				policyUrl: route(`${baseRouteName}.policies`),
 
 				model: model,
 

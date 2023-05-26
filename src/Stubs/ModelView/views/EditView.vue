@@ -74,41 +74,33 @@
 
 			fetchEditPolicy() {
 
-				axios.post(route('api.snake_case_model_name.policy'), {
+				model.userCan('update', this.$route.params.id)
+					.then( res => {
 
-					_token: csrf_token,
+                        this.fetchEditPolicyAttempts = 0;
 
-					id: this.$route.params.id,
+						if(!res.data.update) {
 
-					policy: 'update'
+							// this.$router.push({name: "NotAuthorized" });
+							
+						}
 
-				}).then( res => {
+                    })
+                    .catch( error => {
 
-					this.fetchEditPolicyAttempts = 0;
+                        if(this.fetchEditPolicyAttempts <= 3) {
 
-					this.policy = res.data;
+                            setTimeout( () => {
 
-					if(!this.policy.update) {
+                                ++this.fetchEditPolicyAttempts;
 
-						this.$router.push({name: "NotAuthorized" });
-						
-					}
+                                this.fetchEditPolicy();
 
-				}).catch( error => {
+                            }, 1500);
 
-					if(this.fetchEditPolicyAttempts <= 3) {
+                        }
 
-	                    setTimeout( () => {
-
-	                    	++this.fetchEditPolicyAttempts;
-
-	                        this.fetchEditPolicy();
-
-	                    }, 1500);
-
-	                }
-
-				});
+                    });
 
 			},
 

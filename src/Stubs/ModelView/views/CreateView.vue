@@ -72,37 +72,33 @@
 
 			fetchCreatePolicy() {
 
-				axios.post(route('api.snake_case_model_name.policy'), {
+				model.userCan('create')
+					.then( res => {
 
-					_token: csrf_token,
+                        this.fetchCreatePolicyAttempts = 0;
 
-					policy: 'create'
+						if(!res.data.create) {
 
-				}).then( res => {
+							// this.$router.push({name: "NotAuthorized" });
+							
+						}
 
-					this.fetchCreatePolicyAttempts = 0;
+                    })
+                    .catch( error => {
 
-					if(!res.data.create) {
+                        if(this.fetchCreatePolicyAttempts <= 3) {
 
-						this.$router.push({name: "NotAuthorized" });
-						
-					}
+                            setTimeout( () => {
 
-				}).catch( error => {
+                                ++this.fetchCreatePolicyAttempts;
 
-					if(this.fetchCreatePolicyAttempts <= 3) {
+                                this.fetchCreatePolicy();
 
-	                    setTimeout( () => {
+                            }, 1500);
 
-	                    	++this.fetchCreatePolicyAttempts;
-	                    	
-	                        this.fetchCreatePolicy();
+                        }
 
-	                    }, 1500);
-
-	                }
-
-				});
+                    });
 
 			},
 
