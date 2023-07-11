@@ -81,7 +81,7 @@ class PolicyRequest extends FormRequest
             app(PascalCaseModelName::class);
 
         return response()->json([
-            $this->policy => user()->can($this->policy, $camelCaseModelName),
+            $this->policy => $this->user()->can($this->policy, $camelCaseModelName),
         ]);
 
     }
