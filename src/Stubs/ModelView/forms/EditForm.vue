@@ -25,7 +25,7 @@
 
 <script>
 
-    import * as model from '@models/kebabcasemodelname'
+    import { getModel, updateModel} from '@models/kebabcasemodelname'
     import JSValidator from 'innoboxrr-js-validator'
     import {
         TextInputComponent,
@@ -81,8 +81,6 @@
 
                 JSValidator: undefined,
 
-                fetchPascalCaseModelNameAttempts: 0,
-
             }
 
         },
@@ -97,29 +95,13 @@
 
             fetchPascalCaseModelName() {
 
-                model.getModel(this.camelCaseModelNameId)
-                    .then( res => {
+                getModel(this.camelCaseModelNameId).then( res => {
 
-                        this.fetchPascalCaseModelNameAttempts;
+                    this.camelCaseModelName = res.data;
 
-                        this.camelCaseModelName = res.data;
+                    // Map other data
 
-                    })
-                    .catch( error => {
-
-                        if(this.fetchPascalCaseModelNameAttempts <= 3) {
-
-                            setTimeout( () => {
-
-                                ++this.fetchPascalCaseModelNameAttempts;
-
-                                this.fetchPascalCaseModelName();
-
-                            }, 1500);
-
-                        }
-
-                    });
+                });
 
             },
 
@@ -129,23 +111,25 @@
 
                     this.disabled = true;
 
-                    model.updateModel({}, this.camelCaseModelName.id)
-                        .then( res => {
+                    updateModel({
 
-                            this.$emit('submit', res);
+                        // data...
 
-                            setTimeout(() => { this.disabled = false; }, 2500);
+                    }, this.camelCaseModelName.id).then( res => {
 
-                        })
-                        .catch(error => {
+                        this.$emit('submit', res);
 
-                            this.disabled = false;
+                        setTimeout(() => { this.disabled = false; }, 2500);
 
-                            if(error.response.status == 422)
-                                this.JSValidator
-                                    .appendExternalErrors(error.response.data.errors);
+                    }).catch(error => {
 
-                        });
+                        this.disabled = false;
+
+                        if(error.response.status == 422)
+                            this.JSValidator
+                                .appendExternalErrors(error.response.data.errors);
+
+                    });
 
                 } else {
 
