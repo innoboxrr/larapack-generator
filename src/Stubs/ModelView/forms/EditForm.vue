@@ -25,7 +25,7 @@
 
 <script>
 
-    import { getModel, updateModel} from '@models/kebabcasemodelname'
+    import { showModel, updateModel} from '@models/kebabcasemodelname'
     import JSValidator from 'innoboxrr-js-validator'
     import {
         TextInputComponent,
@@ -95,7 +95,7 @@
 
             fetchPascalCaseModelName() {
 
-                getModel(this.camelCaseModelNameId).then( res => {
+                showModel(this.camelCaseModelNameId).then( res => {
 
                     this.camelCaseModelName = res.data;
 
