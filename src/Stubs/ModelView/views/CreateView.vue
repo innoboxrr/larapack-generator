@@ -40,6 +40,7 @@
 
 <script>
 
+	import { getPolicy } from '@models/kebabcasemodelname'
 	import CreateForm from '@models/kebabcasemodelname/forms/CreateForm.vue'
 
 	export default {
@@ -58,47 +59,19 @@
 
 		},
 
-		data() {
-		
-			return {
-
-				fetchCreatePolicyAttempts: 0,
-
-			}
-		
-		},
-
 		methods: {
 
 			fetchCreatePolicy() {
 
-				model.userCan('create')
-					.then( res => {
+				getPolicy('create').then( res => {
 
-                        this.fetchCreatePolicyAttempts = 0;
+					if(!res.data.create) {
 
-						if(!res.data.create) {
+						// this.$router.push({name: "NotAuthorized" });
+						
+					}
 
-							// this.$router.push({name: "NotAuthorized" });
-							
-						}
-
-                    })
-                    .catch( error => {
-
-                        if(this.fetchCreatePolicyAttempts <= 3) {
-
-                            setTimeout( () => {
-
-                                ++this.fetchCreatePolicyAttempts;
-
-                                this.fetchCreatePolicy();
-
-                            }, 1500);
-
-                        }
-
-                    });
+                });
 
 			},
 

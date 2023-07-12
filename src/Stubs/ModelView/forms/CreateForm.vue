@@ -26,7 +26,7 @@
 
 <script>
 
-    import * as model from '@models/kebabcasemodelname'
+    import { createModel } from '@models/kebabcasemodelname'
     import JSValidator from 'innoboxrr-js-validator'
     import {
         TextInputComponent,
@@ -88,23 +88,25 @@
 
                     this.disabled = true;
 
-                    model.createModel({})
-                        .then( res => {
+                    createModel({
 
-                            this.$emit('submit', res);
+                        // data...
 
-                            setTimeout(() => { this.disabled = false; }, 2500);
+                    }).then( res => {
 
-                        })
-                        .catch(error => {
+                        this.$emit('submit', res);
 
-                            this.disabled = false;
+                        setTimeout(() => { this.disabled = false; }, 2500);
 
-                            if(error.response.status == 422)
-                                this.JSValidator
-                                    .appendExternalErrors(error.response.data.errors);
+                    }).catch(error => {
 
-                        });
+                        this.disabled = false;
+
+                        if(error.response.status == 422)
+                            this.JSValidator
+                                .appendExternalErrors(error.response.data.errors);
+
+                    });
 
                 } else {
 

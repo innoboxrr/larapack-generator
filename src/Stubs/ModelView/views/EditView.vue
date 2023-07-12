@@ -42,6 +42,7 @@
 
 <script>
 
+	import { getPolicy } from '@models/kebabcasemodelname'
 	import EditForm from '@models/kebabcasemodelname/forms/EditForm.vue'
 
 	export default {
@@ -74,33 +75,15 @@
 
 			fetchEditPolicy() {
 
-				model.userCan('update', this.$route.params.id)
-					.then( res => {
+				getPolicy('update', this.$route.params.id).then( res => {
 
-                        this.fetchEditPolicyAttempts = 0;
+					if(!res.data.update) {
 
-						if(!res.data.update) {
+						// this.$router.push({name: "NotAuthorized" });
+						
+					}
 
-							// this.$router.push({name: "NotAuthorized" });
-							
-						}
-
-                    })
-                    .catch( error => {
-
-                        if(this.fetchEditPolicyAttempts <= 3) {
-
-                            setTimeout( () => {
-
-                                ++this.fetchEditPolicyAttempts;
-
-                                this.fetchEditPolicy();
-
-                            }, 1500);
-
-                        }
-
-                    });
+                });
 
 			},
 
