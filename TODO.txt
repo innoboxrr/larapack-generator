@@ -7,3 +7,6 @@
  	- .gitignore
  	- CHANGELOG.md
  	- README.md
+ - Modificar la manera en la que se hacen los save y update para que sean reconocidos por los observers
+ - Corregir en el PoliciesRequest, el mapeo de métodos como se hace en Siconsulta
+ - Corregir, en lugar de usar user() como helper en los request, usar $this->user()
