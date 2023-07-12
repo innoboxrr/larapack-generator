@@ -15,9 +15,9 @@ trait PascalCaseModelNameOperations
     public function updatePayload()
     {
 
-        $this->update(['payload' => $this->buildPayload()]);
+        $this->payload = $this->buildPayload();
 
-        return $this;
+        return $this->save();
 
     }
 
