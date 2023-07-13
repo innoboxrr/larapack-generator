@@ -32,6 +32,8 @@
 
 <script>
 
+	import { showModel } from '@models/kebabcasemodelname'
+
 	export default {
 
 		mounted() {
@@ -47,6 +49,8 @@
 				dataLoaded: false,
 
 				title: undefined,
+
+				camelCaseModelNameId: this.$route.params.id,
 
 				camelCaseModelName: {},
 
@@ -74,29 +78,27 @@
 
 			fetchPascalCaseModelName() {
 
-                model.getModel(this.camelCaseModelNameId)
-                    .then( res => {
+                showModel(this.camelCaseModelNameId).then( res => {
 
-                        this.fetchPascalCaseModelNameAttempts;
+                    this.fetchPascalCaseModelNameAttempts;
 
-                        this.camelCaseModelName = res.data;
+                    this.camelCaseModelName = res.data;
 
-                    })
-                    .catch( error => {
+                }).catch( error => {
 
-                        if(this.fetchPascalCaseModelNameAttempts <= 3) {
+                    if(this.fetchPascalCaseModelNameAttempts <= 3) {
 
-                            setTimeout( () => {
+                        setTimeout( () => {
 
-                                ++this.fetchPascalCaseModelNameAttempts;
+                            ++this.fetchPascalCaseModelNameAttempts;
 
-                                this.fetchPascalCaseModelName();
+                            this.fetchPascalCaseModelName();
 
-                            }, 1500);
+                        }, 1500);
 
-                        }
+                    }
 
-                    });
+                });
 
             },
 
