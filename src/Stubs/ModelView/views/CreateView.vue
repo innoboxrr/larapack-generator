@@ -85,7 +85,7 @@
 
 					params: { 
 
-						id: payload.res.data.id 
+						id: payload.data.id 
 
 					} 
 

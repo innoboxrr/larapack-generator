@@ -54,8 +54,6 @@
 
 				camelCaseModelName: {},
 
-				fetchPascalCaseModelNameAttempt: 0
-
 			}
 		
 		},
@@ -78,27 +76,21 @@
 
 			fetchPascalCaseModelName() {
 
-                showModel(this.camelCaseModelNameId).then( res => {
+				return new Promise((resolve, reject) => {
 
-                    this.fetchPascalCaseModelNameAttempts;
+					showModel(this.camelCaseModelNameId).then( res => {
 
-                    this.camelCaseModelName = res.data;
+	                    this.camelCaseModelName = res.data;
 
-                }).catch( error => {
+	                    resolve(res);
 
-                    if(this.fetchPascalCaseModelNameAttempts <= 3) {
+	                }).catch( error => {
 
-                        setTimeout( () => {
+	                    reject(error);
 
-                            ++this.fetchPascalCaseModelNameAttempts;
+	                });
 
-                            this.fetchPascalCaseModelName();
-
-                        }, 1500);
-
-                    }
-
-                });
+				});
 
             },
 
