@@ -111,11 +111,11 @@
 
                     this.disabled = true;
 
-                    updateModel({
+                    updateModel(this.camelCaseModelName.id, {
 
                         // data...
 
-                    }, this.camelCaseModelName.id).then( res => {
+                    }).then( res => {
 
                         this.$emit('submit', res);
 
