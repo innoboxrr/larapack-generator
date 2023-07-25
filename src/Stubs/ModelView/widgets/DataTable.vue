@@ -3,7 +3,9 @@
 	<data-table
 		title="PascalCaseModelName" 
 		:data-url="dataUrl"
+		data-method="get"
 		:policy-url="policyUrl"
+		policy-method="get"
 		:model="model"
 		:external-filters="camelCaseModelNameExternalFilters"
 		:form-filters="formFilters"
