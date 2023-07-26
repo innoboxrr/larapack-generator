@@ -3,7 +3,9 @@
 	<data-table
 		title="PascalCaseModelName" 
 		:data-url="dataUrl"
+		data-method="get"
 		:policy-url="policyUrl"
+		policy-method="get"
 		:model="model"
 		:external-filters="camelCaseModelNameExternalFilters"
 		:form-filters="formFilters"
@@ -94,9 +96,9 @@
 
 			return {
 			
-				dataUrl: route(`${model.API_ROUTE_PREFIX}.index`),
+				dataUrl: route(`${model.API_ROUTE_PREFIX}index`),
 
-				policyUrl: route(`${model.API_ROUTE_PREFIX}.policies`),
+				policyUrl: route(`${model.API_ROUTE_PREFIX}policies`),
 
 				model: model,
 
