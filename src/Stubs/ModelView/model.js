@@ -307,8 +307,8 @@ export const deleteModel = (data) => {
 
 		const makeRequest = (retryCount) => {
 			Swal.fire({
-				title: string.deleteModel.confirmation.title,
-				text: string.deleteModel.confirmation.text,
+				title: strings.deleteModel.confirmation.title,
+				text: strings.deleteModel.confirmation.text,
 				icon: 'warning',
 				showCancelButton: true,
 				confirmButtonColor: '#3085d6',
@@ -349,8 +349,8 @@ export const exportModel = (data) => {
 
 		const makeRequest = (retryCount) => {
 			Swal.fire({
-				title: string.exportModel.confirmation.title,
-				text: string.exportModel.confirmation.text,
+				title: strings.exportModel.confirmation.title,
+				text: strings.exportModel.confirmation.text,
 				icon: 'warning',
 				showCancelButton: true,
 				confirmButtonColor: '#3085d6',

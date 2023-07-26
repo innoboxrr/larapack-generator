@@ -96,9 +96,9 @@
 
 			return {
 			
-				dataUrl: route(`${model.API_ROUTE_PREFIX}.index`),
+				dataUrl: route(`${model.API_ROUTE_PREFIX}index`),
 
-				policyUrl: route(`${model.API_ROUTE_PREFIX}.policies`),
+				policyUrl: route(`${model.API_ROUTE_PREFIX}policies`),
 
 				model: model,
 
