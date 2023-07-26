@@ -80,7 +80,7 @@ class PascalCaseModelNameResource extends JsonResource
         return [
             'id' => 'delete',
             'name' => 'Eliminar',
-            'callback' => 'deletePascalCaseModelName',
+            'callback' => 'deleteModel',
             'icon' => 'fa-trash-alt',
             'route' => false,
             'policy' => false,
