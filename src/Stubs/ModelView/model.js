@@ -1,6 +1,6 @@
 export const API_ROUTE_PREFIX = 'api.snake_case_model_name.'; // Reemplaza con la ruta adecuada
 
-export const CSRF_TOKEN = csrf_token; // Reemplaza con el token adecuado
+export const CSRF_TOKEN = document.querySelector('meta[name="csrf-token"]').getAttribute('content'); // Reemplaza con el token adecuado
 
 export let filters = {}
 
