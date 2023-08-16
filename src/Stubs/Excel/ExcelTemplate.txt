@@ -1,19 +1,21 @@
 <table>
     <thead>
         <tr>
-            <th>id</th>
+            @foreach($exportCols as $col)
 
-            <th>created_at</th>
-            <th>updated_at</th>
+                <th>{{ $col }}</th>
+
+            @endforeach
         </tr>
     </thead>
     <tbody>
         @foreach($plural_snake_case_model_name as $snake_case_model_name)
             <tr>
-                <td>{{ $snake_case_model_name->id }}</td>
+                @foreach($exportCols as $col)
 
-                <td>{{ $snake_case_model_name->created_at }}</td>
-                <td>{{ $snake_case_model_name->updated_at }}</td>
+                    <td>{{ $snake_case_model_name->$col }}</td>
+
+                @endforeach
             </tr>
         @endforeach
     </tbody>

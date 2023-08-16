@@ -36,6 +36,8 @@ class PascalCaseModelName extends Model
 
     protected $editable_metas = [];
 
+    public static $exportCols = [];
+
     public $loadable_relations = [];
 
     /*
