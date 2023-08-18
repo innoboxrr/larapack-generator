@@ -61,7 +61,7 @@ class UpdateRequest extends FormRequest
 
         $response = new PascalCaseModelNameResource($camelCaseModelName);
 
-        event(new UpdateEvent($camelCaseModelName, $this, $response));
+        event(new UpdateEvent($camelCaseModelName, $this->all(), $response));
 
         return $response;
 

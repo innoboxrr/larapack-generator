@@ -9,6 +9,9 @@ use Namespace\Tests\TestCase;
 class PascalCaseModelNameEndpointsTest extends TestCase
 {
 
+    use RefreshDatabase,
+        WithFaker;
+
     public function test_snake_case_model_name_policies_endpoint()
     {
 
@@ -24,7 +27,7 @@ class PascalCaseModelNameEndpointsTest extends TestCase
             'id' => $camelCaseModelName->id
         ];
 
-        $this->json('GET', '/api/slashLowerNamespace/kebabcasemodelname/policies', $payload, $headers)
+        $this->json('GET', '/api/slashLowerNamespacekebabcasemodelname/policies', $payload, $headers)
             ->assertStatus(200);
 
     }
@@ -41,7 +44,7 @@ class PascalCaseModelNameEndpointsTest extends TestCase
             'policy' => 'index'
         ];
 
-        $this->json('GET', '/api/slashLowerNamespace/kebabcasemodelname/policy', $payload, $headers)
+        $this->json('GET', '/api/slashLowerNamespacekebabcasemodelname/policy', $payload, $headers)
             ->assertJsonStructure([
                 'index'
             ])
@@ -62,7 +65,7 @@ class PascalCaseModelNameEndpointsTest extends TestCase
             'managed' => true
         ];
 
-        $this->json('GET', '/api/slashLowerNamespace/kebabcasemodelname/index', $payload, $headers)
+        $this->json('GET', '/api/slashLowerNamespacekebabcasemodelname/index', $payload, $headers)
             ->assertStatus(200);
 
     }
@@ -79,7 +82,7 @@ class PascalCaseModelNameEndpointsTest extends TestCase
             'managed' => true
         ];
 
-        $this->json('GET', '/api/slashLowerNamespace/kebabcasemodelname/index', $payload, $headers)
+        $this->json('GET', '/api/slashLowerNamespacekebabcasemodelname/index', $payload, $headers)
             ->assertStatus(401);
             
     }
@@ -99,7 +102,7 @@ class PascalCaseModelNameEndpointsTest extends TestCase
             'snake_case_model_name_id' => $camelCaseModelName->id
         ];
 
-        $this->json('GET', '/api/slashLowerNamespace/kebabcasemodelname/show', $payload, $headers)
+        $this->json('GET', '/api/slashLowerNamespacekebabcasemodelname/show', $payload, $headers)
             ->assertStatus(200);
             
     }
@@ -118,7 +121,7 @@ class PascalCaseModelNameEndpointsTest extends TestCase
             'snake_case_model_name_id' => $camelCaseModelName->id
         ];
 
-        $this->json('GET', '/api/slashLowerNamespace/kebabcasemodelname/show', $payload, $headers)
+        $this->json('GET', '/api/slashLowerNamespacekebabcasemodelname/show', $payload, $headers)
             ->assertStatus(401);
             
     }
@@ -136,7 +139,7 @@ class PascalCaseModelNameEndpointsTest extends TestCase
 
         $payload = \Namespace\Models\PascalCaseModelName::factory()->make()->getAttributes();
 
-        $this->json('POST', '/api/slashLowerNamespace/kebabcasemodelname/create', $payload, $headers)
+        $this->json('POST', '/api/slashLowerNamespacekebabcasemodelname/create', $payload, $headers)
             ->assertStatus(201);
             
     }
@@ -157,7 +160,7 @@ class PascalCaseModelNameEndpointsTest extends TestCase
             'snake_case_model_name_id' => $camelCaseModelName->id
         ];
 
-        $this->json('PUT', '/api/slashLowerNamespace/kebabcasemodelname/update', $payload, $headers)
+        $this->json('PUT', '/api/slashLowerNamespacekebabcasemodelname/update', $payload, $headers)
             ->assertStatus(200);
             
     }
@@ -177,7 +180,7 @@ class PascalCaseModelNameEndpointsTest extends TestCase
             'snake_case_model_name_id' => $camelCaseModelName->id
         ];
 
-        $this->json('DELETE', '/api/slashLowerNamespace/kebabcasemodelname/delete', $payload, $headers)
+        $this->json('DELETE', '/api/slashLowerNamespacekebabcasemodelname/delete', $payload, $headers)
             ->assertStatus(200);
             
     }
@@ -197,7 +200,7 @@ class PascalCaseModelNameEndpointsTest extends TestCase
             'snake_case_model_name_id' => $camelCaseModelName->id
         ];
 
-        $this->json('POST', '/api/slashLowerNamespace/kebabcasemodelname/restore', $payload, $headers)
+        $this->json('POST', '/api/slashLowerNamespacekebabcasemodelname/restore', $payload, $headers)
             ->assertStatus(200);
             
     }
@@ -217,7 +220,7 @@ class PascalCaseModelNameEndpointsTest extends TestCase
             'snake_case_model_name_id' => $camelCaseModelName->id
         ];
 
-        $this->json('DELETE', '/api/slashLowerNamespace/kebabcasemodelname/force-delete', $payload, $headers)
+        $this->json('DELETE', '/api/slashLowerNamespacekebabcasemodelname/force-delete', $payload, $headers)
             ->assertStatus(403);
             
     }
@@ -235,7 +238,7 @@ class PascalCaseModelNameEndpointsTest extends TestCase
             //
         ];
 
-        $this->json('POST', '/api/slashLowerNamespace/kebabcasemodelname/export', $payload, $headers)
+        $this->json('POST', '/api/slashLowerNamespacekebabcasemodelname/export', $payload, $headers)
             ->assertStatus(200);
             
     }

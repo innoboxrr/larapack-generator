@@ -52,7 +52,7 @@ class IndexRequest extends FormRequest
 
         $builder = new Builder();
 
-        $query = $builder->get(PascalCaseModelName::class, $this);
+        $query = $builder->get(PascalCaseModelName::class, $this->all());
 
         return PascalCaseModelNameResource::collection($query);
 

@@ -56,7 +56,7 @@ class CreateRequest extends FormRequest
 
         $response = new PascalCaseModelNameResource($camelCaseModelName);
 
-        event(new CreateEvent($camelCaseModelName, $this, $response));
+        event(new CreateEvent($camelCaseModelName, $this->all(), $response));
 
         return $response;
 

@@ -59,7 +59,7 @@ class DeleteRequest extends FormRequest
 
         $response = new PascalCaseModelNameResource($camelCaseModelName);
 
-        event(new DeleteEvent($camelCaseModelName, $this, $response));
+        event(new DeleteEvent($camelCaseModelName, $this->all(), $response));
 
         return $response;
 

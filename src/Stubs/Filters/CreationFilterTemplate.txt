@@ -5,11 +5,12 @@ namespace Namespace\Models\Filters\PascalCaseModelName;
 use Illuminate\Database\Eloquent\Builder;
 use Innoboxrr\SearchSurge\Search\Utils\Order;
 use Innoboxrr\SearchSurge\Search\Utils\CreationFilterQuery;
+use Innoboxrr\SearchSurge\Search\Support\DataContainer;
 
 class CreationFilter
 {
 
-    public static function apply(Builder $query, array $data)
+    public static function apply(Builder $query, DataContainer $data)
     {
 
         $query = CreationFilterQuery::sort($query, $data);

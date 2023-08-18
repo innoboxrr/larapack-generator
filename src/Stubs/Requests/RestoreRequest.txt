@@ -60,7 +60,7 @@ class RestoreRequest extends FormRequest
 
         $response = new PascalCaseModelNameResource($camelCaseModelName);
 
-        event(new RestoreEvent($camelCaseModelName, $this, $response));
+        event(new RestoreEvent($camelCaseModelName, $this->all(), $response));
 
         return $response;
 

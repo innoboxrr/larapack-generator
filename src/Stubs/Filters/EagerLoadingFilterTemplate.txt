@@ -4,11 +4,12 @@ namespace Namespace\Models\Filters\PascalCaseModelName;
 
 use Illuminate\Database\Eloquent\Builder;
 use Innoboxrr\SearchSurge\Search\Utils\Order;
+use Innoboxrr\SearchSurge\Search\Support\DataContainer;
 
 class EagerLoadingFilter
 {
 
-    public static function apply(Builder $query, $data)
+    public static function apply(Builder $query, DataContainer $data)
     {
         /*
 
