@@ -14,14 +14,14 @@ class ExportNotification extends Notification
 
     use Queueable;
 
-    private $request;
+    private $data;
 
     private $path;
 
-    public function __construct($request)
+    public function __construct($data)
     {   
 
-        $this->request = $request;
+        $this->data = $data;
 
         $this->path = $this->getPath();
 
@@ -64,7 +64,7 @@ class ExportNotification extends Notification
     private function createExport()
     {
 
-        Excel::store(new PluralPascalCaseModelNameExports($this->request), $this->path, config('namespaceWithoutSeparation.export_disk', 's3'));
+        Excel::store(new PluralPascalCaseModelNameExports($this->data), $this->path, config('namespaceWithoutSeparation.export_disk', 's3'));
 
     }
 

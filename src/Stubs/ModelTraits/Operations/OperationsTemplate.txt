@@ -5,6 +5,7 @@ namespace Namespace\Models\Traits\Operations;
 trait PascalCaseModelNameOperations
 {
 
+    /*
     public function buildPayload()
     {
 
@@ -20,5 +21,6 @@ trait PascalCaseModelNameOperations
         return $this->save();
 
     }
+    */
 
 }

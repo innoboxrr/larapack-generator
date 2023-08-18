@@ -54,7 +54,7 @@ class ExportRequest extends FormRequest
     public function handle()
     {
 
-        event(new ExportEvent($this));
+        event(new ExportEvent($this->all()));
 
         return response()->json(['status' => true]);
 

@@ -2,6 +2,8 @@
 
 namespace Namespace\Models\Traits\Storage;
 
+// use Namespace\Models\PascalCaseModelNameMeta;
+
 trait PascalCaseModelNameStorage
 {
 
@@ -23,14 +25,16 @@ trait PascalCaseModelNameStorage
 
     }
 
+    /*
     public function updateModelMetas($request)
     {
 
-        $this->update_metas($request, self::class, 'snake_case_model_name_id')->updatePayload();
+        $this->update_metas($request, PascalCaseModelNameMeta::class, 'snake_case_model_name_id')->updatePayload();
 
         return $this;
 
     }
+    */
 
     public function deleteModel()
     {

@@ -3,7 +3,6 @@
 namespace Namespace\Http\Events\PascalCaseModelName\Events;
 
 use Namespace\Models\PascalCaseModelName;
-use Namespace\Http\Requests\PascalCaseModelName\DeleteRequest;
 use Illuminate\Support\Facades\App;
 use Illuminate\Broadcasting\Channel;
 use Illuminate\Broadcasting\InteractsWithSockets;
@@ -20,24 +19,22 @@ class DeleteEvent
 
     public $camelCaseModelName;
 
-    public $request;
+    public $data;
 
     public $response;
 
     public $locale;
 
-    public function __construct(PascalCaseModelName $camelCaseModelName, DeleteRequest $request, $response)
+    public function __construct(PascalCaseModelName $camelCaseModelName, array $data, $response)
     {
         
         $this->camelCaseModelName = $camelCaseModelName;
 
-        $this->request = $request;
+        $this->data = $data;
 
         $this->response = $response;
 
-        $this->locale = ($this->request->hasSession() && 
-            $this->request->getSession()->has('locale')) ? $this->request->getSession()->get('locale') : 
-            'en';
+        $this->locale = $locale
 
         App::setLocale($this->locale);
 

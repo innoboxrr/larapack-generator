@@ -20,7 +20,7 @@ class SendExportNotification
 
         $event->request
             ->user()
-            ->notify((new ExportNotification($event->request))->locale($event->locale));
+            ->notify((new ExportNotification($event->data))->locale($event->locale));
 
     }
 

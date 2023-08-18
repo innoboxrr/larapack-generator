@@ -2,12 +2,16 @@
 
 namespace Namespace\Tests\Feature\Models;
 
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Foundation\Testing\WithFaker;
-use Namespace\Tests\TestCase;
+use Tests\TestCase;
 
 class PascalCaseModelNameEndpointsTest extends TestCase
 {
+
+    use RefreshDatabase,
+        WithFaker;
 
     public function test_snake_case_model_name_policies_endpoint()
     {
@@ -15,7 +19,7 @@ class PascalCaseModelNameEndpointsTest extends TestCase
         $camelCaseModelName = \Namespace\Models\PascalCaseModelName::factory()->create();
         
         $headers = [
-            'Authorization' => config('test.token'),
+            // 'Authorization' => config('test.token'),
             'Content-Type' => 'application/json',
             'Accept' => 'application/json'
         ];  
@@ -32,7 +36,7 @@ class PascalCaseModelNameEndpointsTest extends TestCase
     public function test_snake_case_model_name_policy_endpoint()
     {
         $headers = [
-            'Authorization' => config('test.token'),
+            // 'Authorization' => config('test.token'),
             'Content-Type' => 'application/json',
             'Accept' => 'application/json'
         ];  
@@ -53,7 +57,7 @@ class PascalCaseModelNameEndpointsTest extends TestCase
     {
 
         $headers = [
-            'Authorization' => config('test.token'),
+            // 'Authorization' => config('test.token'),
             'Content-Type' => 'application/json',
             'Accept' => 'application/json'
         ];  
@@ -69,6 +73,8 @@ class PascalCaseModelNameEndpointsTest extends TestCase
 
     public function test_snake_case_model_name_index_guest_endpoint()
     {
+
+        Auth::guard('web')->logout();
 
         $headers = [
             'Content-Type' => 'application/json',
@@ -87,10 +93,10 @@ class PascalCaseModelNameEndpointsTest extends TestCase
     public function test_snake_case_model_name_show_auth_endpoint()
     {
 
-        $camelCaseModelName = \Namespace\Models\PascalCaseModelName::latest()->first();
+        $camelCaseModelName = \Namespace\Models\PascalCaseModelName::factory()->create();
 
         $headers = [
-            'Authorization' => config('test.token'),
+            // 'Authorization' => config('test.token'),
             'Content-Type' => 'application/json',
             'Accept' => 'application/json'
         ];  
@@ -107,7 +113,9 @@ class PascalCaseModelNameEndpointsTest extends TestCase
     public function test_snake_case_model_name_show_guest_endpoint()
     {
 
-        $camelCaseModelName = \Namespace\Models\PascalCaseModelName::latest()->first();
+        Auth::guard('web')->logout();
+        
+        $camelCaseModelName = \Namespace\Models\PascalCaseModelName::factory()->create();
 
         $headers = [
             'Content-Type' => 'application/json',
@@ -129,7 +137,7 @@ class PascalCaseModelNameEndpointsTest extends TestCase
         $user = \Namespace\Models\User::first();
 
         $headers = [
-            'Authorization' => config('test.token'),
+            // 'Authorization' => config('test.token'),
             'Content-Type' => 'application/json',
             'Accept' => 'application/json'
         ];  
@@ -147,7 +155,7 @@ class PascalCaseModelNameEndpointsTest extends TestCase
         $camelCaseModelName = \Namespace\Models\PascalCaseModelName::factory()->create();
 
         $headers = [
-            'Authorization' => config('test.token'),
+            // 'Authorization' => config('test.token'),
             'Content-Type' => 'application/json',
             'Accept' => 'application/json'
         ];  
@@ -165,10 +173,10 @@ class PascalCaseModelNameEndpointsTest extends TestCase
     public function test_snake_case_model_name_delete_endpoint()
     {
 
-        $camelCaseModelName = \Namespace\Models\PascalCaseModelName::latest()->first();
+        $camelCaseModelName = \Namespace\Models\PascalCaseModelName::factory()->create();
 
         $headers = [
-            'Authorization' => config('test.token'),
+            // 'Authorization' => config('test.token'),
             'Content-Type' => 'application/json',
             'Accept' => 'application/json'
         ];  
@@ -185,10 +193,10 @@ class PascalCaseModelNameEndpointsTest extends TestCase
     public function test_snake_case_model_name_restore_endpoint()
     {
 
-        $camelCaseModelName = \Namespace\Models\PascalCaseModelName::first();
+        $camelCaseModelName = \Namespace\Models\PascalCaseModelName::factory()->create();
 
         $headers = [
-            'Authorization' => config('test.token'),
+            // 'Authorization' => config('test.token'),
             'Content-Type' => 'application/json',
             'Accept' => 'application/json'
         ];  
@@ -205,10 +213,10 @@ class PascalCaseModelNameEndpointsTest extends TestCase
     public function test_snake_case_model_name_force_delete_endpoint()
     {
 
-        $camelCaseModelName = \Namespace\Models\PascalCaseModelName::latest()->first();
+        $camelCaseModelName = \Namespace\Models\PascalCaseModelName::factory()->create();
 
         $headers = [
-            'Authorization' => config('test.token'),
+            // 'Authorization' => config('test.token'),
             'Content-Type' => 'application/json',
             'Accept' => 'application/json'
         ];  
@@ -226,7 +234,7 @@ class PascalCaseModelNameEndpointsTest extends TestCase
     {   
 
         $headers = [
-            'Authorization' => config('test.token'),
+            // 'Authorization' => config('test.token'),
             'Content-Type' => 'application/json',
             'Accept' => 'application/json'
         ];  

@@ -2,7 +2,6 @@
 
 namespace Namespace\Http\Events\PascalCaseModelName\Events;
 
-use Namespace\Http\Requests\PascalCaseModelName\ExportRequest;
 use Illuminate\Support\Facades\App;
 use Illuminate\Broadcasting\Channel;
 use Illuminate\Broadcasting\InteractsWithSockets;
@@ -16,18 +15,16 @@ class ExportEvent
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
-    public $request;
+    public $data;
 
     public $locale;
 
-    public function __construct(ExportRequest $request)
+    public function __construct(array $data)
     {
 
-        $this->request = $request;
+        $this->data = $data;
         
-        $this->locale = ($this->request->hasSession() && $this->request->getSession()->has('locale')) ? 
-            $this->request->getSession()->get('locale') : 
-            'en';
+        $this->locale = $locale
 
         App::setLocale($this->locale);
 
