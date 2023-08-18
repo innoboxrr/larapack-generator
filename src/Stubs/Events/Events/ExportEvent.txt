@@ -17,16 +17,16 @@ class ExportEvent
 
     public $data;
 
+    public $email;
+
     public $locale;
 
-    public function __construct(array $data)
+    public function __construct(array $data, $email)
     {
 
         $this->data = $data;
-        
-        $this->locale = $locale
 
-        App::setLocale($this->locale);
+        $this->email = $email;
 
     }
 

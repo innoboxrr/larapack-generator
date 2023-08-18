@@ -4,6 +4,7 @@ namespace Namespace\Http\Events\PascalCaseModelName\Listeners\ExportEvent;
 
 use Namespace\Notifications\PascalCaseModelName\ExportNotification;
 use Namespace\Http\Events\PascalCaseModelName\Events\ExportEvent;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Queue\InteractsWithQueue;
 
@@ -18,9 +19,8 @@ class SendExportNotification
     public function handle(ExportEvent $event)
     {
 
-        $event->request
-            ->user()
-            ->notify((new ExportNotification($event->data))->locale($event->locale));
+        Notification::route('mail', $event->email)
+            ->notify(new ExportNotification($event->data));
 
     }
 

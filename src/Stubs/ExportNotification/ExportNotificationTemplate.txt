@@ -41,7 +41,7 @@ class ExportNotification extends Notification
         
         return (new MailMessage)
                     ->subject($this->getSubject())
-                    ->greeting($this->getWellcomeMessage($notifiable))
+                    ->greeting($this->getWellcomeMessage())
                     ->line($this->getBodyMessage())
                     ->action($this->getActionButton(), $this->getNotificationUrl())
                     ->line($this->getFarewallMessage());
@@ -52,7 +52,7 @@ class ExportNotification extends Notification
     {
         
         return [
-            'action' => $this->getActionUrl($notifiable),
+            'action' => $this->getActionUrl(),
             'message' => $this->getBodyMessage(),
             'img' => $this->getImg(),
         ];
@@ -75,10 +75,10 @@ class ExportNotification extends Notification
 
     }
 
-    private function getWellcomeMessage($notifiable)
+    private function getWellcomeMessage()
     {
         
-        return 'Hola ' . $notifiable->name;
+        return 'Hola';
 
     }
 
@@ -103,7 +103,7 @@ class ExportNotification extends Notification
 
     }
 
-    private function getActionUrl($notifiable)
+    private function getActionUrl()
     {
         
         return config('app.aws_url') . $this->path;
