@@ -1,36 +1,15 @@
 <template>
 
 	<div class="uk-section uk-section-xsmall">
-
-		<!-- Header -->
-		<div class="uk-container uk-container-expand">
 			
-			<h3 class="uk-heading-divider">
-
-				<router-link :to="{name: 'AdminPluralPascalCaseModelName'}">
-					
-					<i class="fas fa-arrow-circle-left"></i>
-
-				</router-link>
-
-				Edit
+		<div class="uk-container uk-container-small ">
 			
-			</h3>
+			<div class="uk-card uk-card-default uk-card-body">
 
-		</div>
-
-		<div class="uk-section">
-			
-			<div class="uk-container uk-container-small ">
-				
-				<div class="uk-card uk-card-default uk-card-body">
-
-					<edit-form 
-						:key="$route.params.id"
-						:kebabcasemodelname-id="$route.params.id"
-						@submit="formSubmit"/>
-
-				</div>
+				<edit-form 
+					:key="$route.params.id"
+					:kebabcasemodelname-id="$route.params.id"
+					@submit="formSubmit"/>
 
 			</div>
 
@@ -59,16 +38,6 @@
 
 			this.fetchEditPolicy();
 
-		},
-
-		data() {
-		
-			return {
-
-				fetchEditPolicyAttempts: 0,
-
-			}
-		
 		},
 
 		methods: {

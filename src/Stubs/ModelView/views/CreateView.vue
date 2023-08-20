@@ -1,34 +1,13 @@
 <template>
 
 	<div class="uk-section uk-section-xsmall">
-
-		<!-- Header -->
-		<div class="uk-container uk-container-expand">
+	
+		<div class="uk-container uk-container-small ">
 			
-			<h3 class="uk-heading-divider">
-
-				<router-link :to="{name: 'AdminPluralPascalCaseModelName'}">
-					
-					<i class="fas fa-arrow-circle-left"></i>
-
-				</router-link>
-
-				Create
-			
-			</h3>
-
-		</div>
-
-		<div class="uk-section">
-			
-			<div class="uk-container uk-container-small ">
+			<div class="uk-card uk-card-default uk-card-body">
 				
-				<div class="uk-card uk-card-default uk-card-body">
-					
-					<create-form 
-						@submit="formSubmit"/>
-
-				</div>
+				<create-form 
+					@submit="formSubmit"/>
 
 			</div>
 

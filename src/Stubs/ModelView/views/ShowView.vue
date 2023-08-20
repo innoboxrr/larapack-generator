@@ -1,30 +1,12 @@
 <template>
 
-	<div class="uk-section uk-section-xsmall">
+	<div v-if="dataLoaded" class="uk-section uk-section-small">
+	    
+	    <div class="uk-container uk-container-expand">
 
-		<!-- Header -->
-		<div v-if="dataLoaded" class="uk-container uk-container-expand">
+	    	
 
-			<h3 class="uk-heading-divider">
-
-				<router-link :to="{name: 'AdminPluralPascalCaseModelName'}">
-					
-					<i class="fas fa-arrow-circle-left"></i>
-
-				</router-link>
-
-				ID: {{ camelCaseModelName.id }}
-			
-			</h3>
-
-		</div>
-
-		<!-- Body -->
-		<div v-if="dataLoaded" class="uk-section uk-section-small">
-			
-			<!-- Add specific view content -->
-
-		</div>
+	    </div>
 
 	</div>
 

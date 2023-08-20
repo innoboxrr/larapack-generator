@@ -6,6 +6,7 @@
 			
 			<data-table 
 				:show-title="false"
+				:hide-columns="hideColumns"
 				:key="crudKey" />
 
 		</div>
@@ -49,6 +50,20 @@
 			isHome() {
 
 				return (this.$route.name == 'AdminPluralPascalCaseModelName');
+
+			},
+
+			hideColumns() {
+
+				if(false) {
+
+					this.updateDatatable();
+
+					return [];
+
+				}
+
+				return [];
 
 			}
 
