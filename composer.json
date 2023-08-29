@@ -4,7 +4,7 @@
     "license": "MIT",
     "minimum-stability": "stable",
     "require": {
-        "innoboxrr/search-surge": "^1.0",
+        "innoboxrr/search-surge": "^2.0",
         "staudenmeir/belongs-to-through": "^2.5",
         "staudenmeir/eloquent-has-many-deep": "^1.7",
         "maatwebsite/excel": "^3.1",

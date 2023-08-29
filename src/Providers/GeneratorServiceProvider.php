@@ -30,11 +30,19 @@ class GeneratorServiceProvider extends ServiceProvider
 
         }
 
+        $this->mergeConfigFrom(__DIR__ . '/../../config/larapack-generator.php', 'larapack-generator');
+
     }
 
     public function boot()
     {
-        //
+
+        if ($this->app->runningInConsole()) {
+
+            $this->publishes([__DIR__.'/../../config/larapack-generator.php' => config_path('larapack-generator.php')], 'config');
+
+        }
+
     }
 
 }
