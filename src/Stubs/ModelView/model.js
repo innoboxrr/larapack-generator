@@ -178,7 +178,7 @@ export const getPolicy = (policy, modelId = null) => {
 	});
 };
 
-export const showModel = (modelId, loadRelations = []) => {
+export const showModel = (modelId, loadRelations = [], loadCounts = [], data = {}) => {
 	return new Promise((resolve, reject) => {
 		const maxRetries = 3;
 		const retryInterval = 1500;
@@ -190,6 +190,8 @@ export const showModel = (modelId, loadRelations = []) => {
 						_token: CSRF_TOKEN,
 						snake_case_model_name_id: modelId,
 						load_relations: loadRelations,
+						load_counts: loadCounts,
+						...data,
 					},
 				})
 				.then((res) => {

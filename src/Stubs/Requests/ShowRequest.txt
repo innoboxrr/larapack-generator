@@ -30,7 +30,12 @@ class ShowRequest extends FormRequest
             'load_relations' => [
                 'nullable',
                 'array',
-                Rule::in((new PascalCaseModelName)->loadable_relations)
+                Rule::in(PascalCaseModelName::$loadable_relations)
+            ],
+            'load_counts' => [
+                'nullable',
+                'array',
+                Rule::in(PascalCaseModelName::$loadable_counts)
             ],
             'snake_case_model_name_id' => 'required|numeric'
         ];
@@ -60,6 +65,7 @@ class ShowRequest extends FormRequest
 
         $camelCaseModelName = PascalCaseModelName::where('id', $this->snake_case_model_name_id)
             ->with($this->load_relations ?? [])
+            ->withCount($this->load_counts ?? [])
             ->firstOrFail();
 
         return new PascalCaseModelNameResource($camelCaseModelName);

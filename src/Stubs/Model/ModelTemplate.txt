@@ -38,7 +38,9 @@ class PascalCaseModelName extends Model
 
     public static $exportCols = [];
 
-    public $loadable_relations = [];
+    public static $loadable_relations = [];
+
+    public static $loadable_counts = [];
 
     /*
     protected static function newFactory()
