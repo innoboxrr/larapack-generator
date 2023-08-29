@@ -28,7 +28,7 @@ class PluralPascalCaseModelNameExports implements FromView
             ) . 'snake_case_model_name', 
             [
                 'plural_snake_case_model_name' => $this->getQuery(),
-                'exportCols' => PascalCaseModelName::$exportCols
+                'exportCols' => PascalCaseModelName::$export_cols
             ]
         );
     }
