@@ -24,7 +24,7 @@ class RestoreEvent
 
     public $locale;
 
-    public function __construct(PascalCaseModelName $camelCaseModelName, array $data, $response)
+    public function __construct(PascalCaseModelName $camelCaseModelName, array $data, $response, $locale = 'en')
     {
         
         $this->camelCaseModelName = $camelCaseModelName;
