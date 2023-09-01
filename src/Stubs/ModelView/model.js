@@ -114,7 +114,6 @@ export const dataTableSort = () => {
 	};
 };
 
-
 export const getPolicies = (modelId = null) => {
 	return new Promise((resolve, reject) => {
 		const maxRetries = 3;
