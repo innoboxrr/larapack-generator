@@ -17,16 +17,16 @@ class ExportEvent
 
     public $data;
 
-    public $email;
+    public $user;
 
     public $locale;
 
-    public function __construct(array $data, $email)
+    public function __construct(array $data, $user)
     {
 
         $this->data = $data;
 
-        $this->email = $email;
+        $this->user = $user;
 
     }
 

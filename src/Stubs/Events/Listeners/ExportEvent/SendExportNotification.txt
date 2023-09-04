@@ -19,8 +19,9 @@ class SendExportNotification
     public function handle(ExportEvent $event)
     {
 
-        Notification::route('mail', $event->email)
-            ->notify(new ExportNotification($event->data));
+        $event->user
+            ->notify((new ExportNotification($event->data))->locale($event->locale));
+
 
     }
 
