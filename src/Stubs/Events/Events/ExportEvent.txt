@@ -21,12 +21,14 @@ class ExportEvent
 
     public $locale;
 
-    public function __construct(array $data, $user)
+    public function __construct(array $data, $user, $locale = 'en')
     {
 
         $this->data = $data;
 
         $this->user = $user;
+
+        $this->locale = $locale;
 
     }
 
