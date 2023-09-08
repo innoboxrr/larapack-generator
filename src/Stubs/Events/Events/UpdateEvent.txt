@@ -34,7 +34,7 @@ class UpdateEvent
 
         $this->response = $response;
 
-        $this->locale = $locale
+        $this->locale = $locale;
 
         App::setLocale($this->locale);
 
