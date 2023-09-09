@@ -1,10 +1,10 @@
 <template>
 
-	<div class="uk-section uk-section-xsmall">
+	<div class="view-section">
 			
-		<div class="uk-container uk-container-small ">
+		<div class="view-container">
 			
-			<div class="uk-card uk-card-default uk-card-body">
+			<div class="uk-card uk-card-default uk-card-body uk-border-rounded uk-margin uk-padding-small">
 
 				<edit-form 
 					:key="$route.params.id"

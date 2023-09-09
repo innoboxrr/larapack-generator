@@ -1,8 +1,8 @@
 <template>
 
-	<div class="uk-section uk-section-xsmall">
-	
-		<div class="uk-container uk-container-small ">
+	<div class="view-section uk-section uk-section-xsmall">
+			
+		<div class="view-container uk-container uk-container-small">
 			
 			<div class="uk-card uk-card-default uk-card-body">
 				

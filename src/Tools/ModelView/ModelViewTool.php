@@ -21,6 +21,8 @@ class ModelViewTool extends Tool
 	protected $modelViewEditViewPath;
 	protected $modelViewShowViewPath;
 	protected $modelViewDataTablePath;
+	protected $modelViewModelCardPath;
+	protected $modelViewModelProfilePath;
 	
 	protected $modelViewTemplateModelJsPath;
 	protected $modelViewTemplateRouteJsPath;
@@ -33,6 +35,8 @@ class ModelViewTool extends Tool
 	protected $modelViewTemplateEditViewPath;
 	protected $modelViewTemplateShowViewPath;
 	protected $modelViewTemplateDataTablePath;
+	protected $modelViewTemplateModelCardPath;
+	protected $modelViewTemplateModelProfilePath;
 	
 
 	# ModelJS
@@ -596,6 +600,108 @@ class ModelViewTool extends Tool
 
 		}
 
+	# Widgets - ModelCard
+
+		// Definir la ruta de la aplicación
+		private function setModelViewModelCardPath()
+		{
+
+			$this->modelViewModelCardPath = get_path('resources/vue/app/sections/admin/models/' . $this->kebabcasemodelname . '/widgets');
+
+			return $this;
+
+		}
+
+		// Definir la ruta de la plantilla
+		private function setModelViewTemplateModelCardPath()
+		{
+
+			$this->modelViewTemplateModelCardPath = stubs_path('ModelView/widgets');
+
+			return $this;
+
+		}
+
+		// Crear
+		public function createModelViewModelCard()
+		{
+
+			$this->setModelViewModelCardPath()
+				->setModelViewTemplateModelCardPath();
+
+			$modelFile = $this->modelViewModelCardPath . '/ModelCard.vue';
+
+			if(!file_exists($modelFile)) {
+
+				$templateFile = $this->modelViewTemplateModelCardPath . '/ModelCard.vue';
+
+				if(copy($templateFile, $modelFile)) {
+
+					$this->replaceData($modelFile);
+
+				} else {
+
+					throw new MakerException;
+
+				}
+
+			}
+
+			return $this;
+
+		}
+
+	# Widgets - ModelProfile
+
+		// Definir la ruta de la aplicación
+		private function setModelViewModelProfilePath()
+		{
+
+			$this->modelViewModelProfilePath = get_path('resources/vue/app/sections/admin/models/' . $this->kebabcasemodelname . '/widgets');
+
+			return $this;
+
+		}
+
+		// Definir la ruta de la plantilla
+		private function setModelViewTemplateModelProfilePath()
+		{
+
+			$this->modelViewTemplateModelProfilePath = stubs_path('ModelView/widgets');
+
+			return $this;
+
+		}
+
+		// Crear
+		public function createModelViewModelProfile()
+		{
+
+			$this->setModelViewModelProfilePath()
+				->setModelViewTemplateModelProfilePath();
+
+			$modelFile = $this->modelViewModelProfilePath . '/ModelProfile.vue';
+
+			if(!file_exists($modelFile)) {
+
+				$templateFile = $this->modelViewTemplateModelProfilePath . '/ModelProfile.vue';
+
+				if(copy($templateFile, $modelFile)) {
+
+					$this->replaceData($modelFile);
+
+				} else {
+
+					throw new MakerException;
+
+				}
+
+			}
+
+			return $this;
+
+		}
+
 	//////////////////////
 	//////////////////////
 	//////////////////////	
@@ -616,7 +722,9 @@ class ModelViewTool extends Tool
 				->createModelViewCreateView()
 				->createModelViewEditView()
 				->createModelViewShowView()
-				->createModelViewDataTable();
+				->createModelViewDataTable()
+				->createModelViewModelCard()
+				->createModelViewModelProfile();
 
 			return true;
 

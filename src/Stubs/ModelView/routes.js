@@ -4,9 +4,9 @@ export default [
 	{
 		path: 'kebabcasemodelname',
 		name: "AdminPluralPascalCaseModelName",
-		component: () => import (/* webpackChunkName: "AdminPluralPascalCaseModelName"*/ "./../views/AdminView.vue"),
+		component: () => import ("./../views/AdminView.vue"),
 		meta: {
-			title: 'Panel de administración',
+			title: 'PluralPascalCaseModelName',
 			middleware: [
 				middleware.auth
 			]
@@ -15,35 +15,37 @@ export default [
 			{
 				path: 'create',
 				name: "AdminCreatePascalCaseModelName",
-				component: () => import (/* webpackChunkName: "CreatePascalCaseModelName"*/ "./../views/CreateView.vue"),
+				component: () => import ("./../views/CreateView.vue"),
 				meta: {
-					title: 'Crear',
+					title: 'Crear PluralPascalCaseModelName',
 					middleware: [
 						middleware.auth
 					]
 				}
 			},
 			{
-				path: ':id/show',
+				path: ':id',
 				name: "AdminShowPascalCaseModelName",
-				component: () => import (/* webpackChunkName: "ShowPascalCaseModelName"*/ "./../views/ShowView.vue"),
+				component: () => import ("./../views/ShowView.vue"),
 				meta: {
-					title: undefined,
+					title: 'Ver PluralPascalCaseModelName',
 					middleware: [
 						middleware.auth
 					]
-				}
-			},
-			{
-				path: ':id/edit',
-				name: "AdminEditPascalCaseModelName",
-				component: () => import (/* webpackChunkName: "EditPascalCaseModelName"*/ "./../views/EditView.vue"),
-				meta: {
-					title: 'Editar',
-					middleware: [
-						middleware.auth
-					]
-				}
+				},
+				children: [
+					{
+						path: 'edit',
+						name: "AdminEditPascalCaseModelName",
+						component: () => import ("./../views/EditView.vue"),
+						meta: {
+							title: 'Editar PluralPascalCaseModelName',
+							middleware: [
+								middleware.auth
+							]
+						}
+					},
+				]
 			},
 		]
 	},

@@ -2,6 +2,11 @@
 
 	<div id="AdminPluralPascalCaseModelNameWrapper">
 
+		<breadcrumbs-component 
+			:pages="[
+				{ link: $router.resolve({ name: 'AdminPluralPascalCaseModelName' }).fullPath, title: 'PluralPascalCaseModelName'}
+			]"/>
+
 		<div v-if="isHome" class="uk-section uk-section-xsmall">
 			
 			<data-table 
