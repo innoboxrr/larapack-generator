@@ -9,7 +9,7 @@
 	    		<div class="uk-width-1-3@m uk-width-1-1@s">
 
 					<model-card 
-						:kebabcasemodelname="fileSystem" />
+						:kebabcasemodelname="camelCaseModelName" />
 
 	    		</div>
 
@@ -18,7 +18,7 @@
 	    			<div v-if="this.isShowView">
 
 	    				<model-profile 
-	    					:kebabcasemodelname="fileSystem" />
+	    					:kebabcasemodelname="camelCaseModelName" />
 	    				
 	    			</div>
 
