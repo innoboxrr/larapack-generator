@@ -19,8 +19,8 @@ class EventServiceProvider extends ServiceProvider
 
         $data = Cache::remember($cacheKey, now()->addDay(), function () {
             return [
-                'events' => $this->getEvents(),
-                'observers' => $this->getObservers()
+                'events' => $this->customDiscoverEvents(),
+                'observers' => $this->customDiscoverObservers()
             ];
         });
 
@@ -37,7 +37,7 @@ class EventServiceProvider extends ServiceProvider
         }
     }
 
-    protected function getEvents()
+    protected function customDiscoverEvents()
     {
         $events = [];
         $basePath = realpath(__DIR__ . '/../Http/Events');
@@ -69,7 +69,7 @@ class EventServiceProvider extends ServiceProvider
         return $events;
     }
 
-    protected function getObservers()
+    protected function customDiscoverObservers()
     {
         $observers = [];
         $modelsPath = realpath(__DIR__ . '/../Models');
