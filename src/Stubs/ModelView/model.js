@@ -1,3 +1,5 @@
+import makeHttpRequest from 'innoboxrr-http-request'
+
 export const API_ROUTE_PREFIX = 'api.snake_case_model_name.'; // Reemplaza con la ruta adecuada
 
 export const CSRF_TOKEN = document.querySelector('meta[name="csrf-token"]').getAttribute('content'); // Reemplaza con el token adecuado
@@ -115,271 +117,81 @@ export const dataTableSort = () => {
 };
 
 export const getPolicies = (modelId = null) => {
-	return new Promise((resolve, reject) => {
-		const maxRetries = 3;
-		const retryInterval = 1500;
-
-		const makeRequest = (retryCount) => {
-			axios
-				.get(route(API_ROUTE_PREFIX + 'policies'), {
-					params: {
-						_token: CSRF_TOKEN,
-						id: modelId,
-					},
-				})
-				.then((res) => {
-					resolve(res);
-				})
-				.catch((error) => {
-					if (retryCount < maxRetries) {
-						setTimeout(() => {
-							makeRequest(retryCount + 1);
-						}, retryInterval);
-					} else {
-						reject(error); // Mensaje de error más descriptivo
-					}
-				});
-		};
-
-		makeRequest(0);
-	});
+    return makeHttpRequest('get', route(API_ROUTE_PREFIX + 'policies'), {
+        _token: CSRF_TOKEN,
+        id: modelId,
+    }, {}, 3, 1500);
 };
 
 export const getPolicy = (policy, modelId = null) => {
-	return new Promise((resolve, reject) => {
-		const maxRetries = 3;
-		const retryInterval = 1500;
-
-		const makeRequest = (retryCount) => {
-			axios
-				.get(route(API_ROUTE_PREFIX + 'policy'), {
-					params: {
-						_token: CSRF_TOKEN,
-						policy: policy,
-						id: modelId,
-					},
-				})
-				.then((res) => {
-					resolve(res);
-				})
-				.catch((error) => {
-					if (retryCount < maxRetries) {
-						setTimeout(() => {
-							makeRequest(retryCount + 1);
-						}, retryInterval);
-					} else {
-						reject(error); // Mensaje de error más descriptivo
-					}
-				});
-		};
-
-		makeRequest(0);
-	});
+    return makeHttpRequest('get', route(API_ROUTE_PREFIX + 'policy'), {
+        _token: CSRF_TOKEN,
+        policy: policy,
+        id: modelId,
+    }, {}, 3, 1500);
 };
 
 export const showModel = (modelId, loadRelations = [], loadCounts = [], data = {}) => {
-	return new Promise((resolve, reject) => {
-		const maxRetries = 3;
-		const retryInterval = 1500;
-
-		const makeRequest = (retryCount) => {
-			axios
-				.get(route(API_ROUTE_PREFIX + 'show'), {
-					params: {
-						_token: CSRF_TOKEN,
-						snake_case_model_name_id: modelId,
-						load_relations: loadRelations,
-						load_counts: loadCounts,
-						...data,
-					},
-				})
-				.then((res) => {
-					resolve(res);
-				})
-				.catch((error) => {
-					if (retryCount < maxRetries) {
-						setTimeout(() => {
-							makeRequest(retryCount + 1);
-						}, retryInterval);
-					} else {
-						reject(error); // Mensaje de error más descriptivo
-					}
-				});
-		};
-
-		makeRequest(0);
-	});
+    return makeHttpRequest('get', route(API_ROUTE_PREFIX + 'show'), {
+        _token: CSRF_TOKEN,
+        snake_case_model_name_id: modelId,
+        load_relations: loadRelations,
+        load_counts: loadCounts,
+        ...data,
+    }, {}, 3, 1500);
 };
 
 export const indexModel = (filters = {}) => {
-	return new Promise((resolve, reject) => {
-		const maxRetries = 3;
-		const retryInterval = 1500;
-
-		const makeRequest = (retryCount) => {
-			axios
-				.get(route(API_ROUTE_PREFIX + 'index'), {
-					params: {
-						_token: CSRF_TOKEN,
-						...filters,
-					},
-				})
-				.then((res) => {
-					resolve(res);
-				})
-				.catch((error) => {
-					if (retryCount < maxRetries) {
-						setTimeout(() => {
-							makeRequest(retryCount + 1);
-						}, retryInterval);
-					} else {
-						reject(error); // Mensaje de error más descriptivo
-					}
-				});
-		};
-
-		makeRequest(0);
-	});
+    return makeHttpRequest('get', route(API_ROUTE_PREFIX + 'index'), {
+        _token: CSRF_TOKEN,
+        ...filters,
+    }, {}, 3, 1500);
 };
 
 export const createModel = (data) => {
-	return new Promise((resolve, reject) => {
-		const maxRetries = 1;
-		const retryInterval = 1500;
-
-		const makeRequest = (retryCount) => {
-			axios
-				.post(route(API_ROUTE_PREFIX + 'create'), {
-					_token: CSRF_TOKEN,
-					...data,
-				})
-				.then((res) => {
-					resolve(res);
-				})
-				.catch((error) => {
-					if (retryCount < maxRetries) {
-						setTimeout(() => {
-							makeRequest(retryCount + 1);
-						}, retryInterval);
-					} else {
-						reject(error); // Mensaje de error más descriptivo
-					}
-				});
-		};
-
-		makeRequest(0);
-	});
+    return makeHttpRequest('post', route(API_ROUTE_PREFIX + 'create'), {
+        _token: CSRF_TOKEN,
+        ...data,
+    }, {}, 1, 1500);
 };
 
 export const updateModel = (modelId, data) => {
-	return new Promise((resolve, reject) => {
-		const maxRetries = 1;
-		const retryInterval = 1500;
-
-		const makeRequest = (retryCount) => {
-			axios
-				.put(route(API_ROUTE_PREFIX + 'update'), {
-					_token: CSRF_TOKEN,
-					...data,
-					snake_case_model_name_id: modelId,
-				})
-				.then((res) => {
-					resolve(res);
-				})
-				.catch((error) => {
-					if (retryCount < maxRetries) {
-						setTimeout(() => {
-							makeRequest(retryCount + 1);
-						}, retryInterval);
-					} else {
-						reject(error); // Mensaje de error más descriptivo
-					}
-				});
-		};
-
-		makeRequest(0);
-	});
+    return makeHttpRequest('put', route(API_ROUTE_PREFIX + 'update'), {
+        _token: CSRF_TOKEN,
+        ...data,
+        snake_case_model_name_id: modelId,
+    }, {}, 1, 1500);
 };
 
 export const deleteModel = (data) => {
-	return new Promise((resolve, reject) => {
-		const maxRetries = 3;
-		const retryInterval = 1500;
-
-		const makeRequest = (retryCount) => {
-			Swal.fire({
-				title: strings.deleteModel.confirmation.title,
-				text: strings.deleteModel.confirmation.text,
-				icon: 'warning',
-				showCancelButton: true,
-				confirmButtonColor: '#3085d6',
-				cancelButtonColor: '#d33',
-				confirmButtonText: t('Yes, delete'),
-			}).then((result) => {
-				if (result.isConfirmed) {
-					axios
-						.post(route(API_ROUTE_PREFIX + 'delete'), {
-							_token: CSRF_TOKEN,
-							_method: 'DELETE',
-							snake_case_model_name_id: data.id,
-						})
-						.then((res) => {
-							resolve({
-								message: t('Operation successful')
-							});
-						})
-						.catch((error) => {
-							reject({
-								message: error.response.data.message
-							});
-						});
-				} else {
-					Swal.fire(t('Operation canceled'), t('The operation has been canceled'), 'error');
-				}
-			});
-		};
-
-		makeRequest(0);
-	});
+    const confirmOptions = {
+        title: strings.deleteModel.confirmation.title,
+        text: strings.deleteModel.confirmation.text,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#3085d6',
+        cancelButtonColor: '#d33',
+        confirmButtonText: t('Yes, delete'),
+    };
+    return makeHttpRequest('post', route(API_ROUTE_PREFIX + 'delete'), {
+        _token: CSRF_TOKEN,
+        _method: 'DELETE',
+        snake_case_model_name_id: data.id,
+    }, {}, 3, 1500, confirmOptions);
 };
 
 export const exportModel = (data) => {
-	return new Promise((resolve, reject) => {
-		const maxRetries = 3;
-		const retryInterval = 1500;
-
-		const makeRequest = (retryCount) => {
-			Swal.fire({
-				title: strings.exportModel.confirmation.title,
-				text: strings.exportModel.confirmation.text,
-				icon: 'warning',
-				showCancelButton: true,
-				confirmButtonColor: '#3085d6',
-				cancelButtonColor: '#d33',
-				confirmButtonText: t('Yes, continue'),
-			}).then((result) => {
-				if (result.isConfirmed) {
-					axios
-						.post(route(API_ROUTE_PREFIX + 'export'), {
-							_token: CSRF_TOKEN,
-							...filters,
-						})
-						.then((res) => {
-							resolve({
-								message: t('You will receive an email with the download file in a few seconds')
-							});
-						})
-						.catch((error) => {
-							reject({
-								message: error.response.data.message
-							});
-						});
-				} else {
-					Swal.fire(t('Operation canceled'), t('The operation has been canceled'), 'error');
-				}
-			});
-		};
-
-		makeRequest(0);
-	});
+    const confirmOptions = {
+        title: strings.exportModel.confirmation.title,
+        text: strings.exportModel.confirmation.text,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#3085d6',
+        cancelButtonColor: '#d33',
+        confirmButtonText: t('Yes, continue'),
+    };
+    return makeHttpRequest('post', route(API_ROUTE_PREFIX + 'export'), {
+        _token: CSRF_TOKEN,
+        ...data,
+    }, {}, 3, 1500, confirmOptions);
 };

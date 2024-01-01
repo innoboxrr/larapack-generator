@@ -1,6 +1,8 @@
 <template>
 
-	<div v-if="dataLoaded" class="uk-section uk-section-small">
+	<div v-if="dataLoaded">
+
+		<breadcrumb-component :items="items" />
 	    
 	    <div class="uk-container uk-container-expand">
 
@@ -24,7 +26,7 @@
 
 	    			<div v-else>
 	    				
-	    				<router-view></router-view>
+	    				<router-view @updateData="fetchData"></router-view>
 
 	    			</div>
 
@@ -83,6 +85,27 @@
 				return (this.$route.name == 'AdminShowPascalCaseModelName');
 
 			},
+
+			items() {
+
+				if(this.$route.name == 'AdminShowPascalCaseModelName') {
+
+					return [
+						{ text: 'PluralPascalCaseModelName', path: '/admin/kebabcasemodelname'},
+						{ text: this.kebabcasemodelname.name ?? 'PascalCaseModelName', path: '/admin/kebabcasemodelname/' + this.kebabcasemodelname.id}
+					];
+
+				} else if(this.$route.name == 'AdminEditPascalCaseModelName') {
+
+					return [
+						{ text: 'PluralPascalCaseModelName', path: '/admin/kebabcasemodelname'},
+						{ text: this.kebabcasemodelname.name ?? 'PascalCaseModelName' , path: '/admin/kebabcasemodelname/' + this.kebabcasemodelname.id},
+						{ text: 'Editar kebabcasemodelname', path: '/admin/kebabcasemodelname/' + this.kebabcasemodelname.id + '/edit'}	
+					];
+
+				}
+
+			}
 
 		},
 

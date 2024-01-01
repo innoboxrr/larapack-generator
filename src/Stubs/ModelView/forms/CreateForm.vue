@@ -4,7 +4,7 @@
 
         <!-- NAME INPUT -->
         <text-input-component
-            custom-class="jsValidator"
+            :custom-class="inputClass"
             type="text"
             name="name"
             label="Nombre"
@@ -16,7 +16,7 @@
 
         
         <button-component
-            custom-class="uk-width-1-1"
+            :custom-class="buttonClass"
             :disabled="disabled"
             value="Crear" />
         

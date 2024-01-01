@@ -19,7 +19,7 @@ class PascalCaseModelNameObserver
      */
     public function created(PascalCaseModelName $camelCaseModelName): void
     {
-        // ...
+        // Remove if laravel-audit is used: $camelCaseModelName->log('created');
     }
  
     /**
@@ -27,7 +27,7 @@ class PascalCaseModelNameObserver
      */
     public function updated(PascalCaseModelName $camelCaseModelName): void
     {
-        // ...
+        // Remove if laravel-audit is used: $camelCaseModelName->log('updated');
     }
  
     /**
@@ -35,7 +35,7 @@ class PascalCaseModelNameObserver
      */
     public function deleted(PascalCaseModelName $camelCaseModelName): void
     {
-        // ...
+        // Remove if laravel-audit is used: $camelCaseModelName->log('deleted');
     }
  
     /**
@@ -43,7 +43,7 @@ class PascalCaseModelNameObserver
      */
     public function restored(PascalCaseModelName $camelCaseModelName): void
     {
-        // ...
+        // Remove if laravel-audit is used: $camelCaseModelName->log('restored');
     }
  
     /**
@@ -51,6 +51,6 @@ class PascalCaseModelNameObserver
      */
     public function forceDeleted(PascalCaseModelName $camelCaseModelName): void
     {
-        // ...
+        // Remove if laravel-audit is used: $camelCaseModelName->log('forceDeleted');
     }
 }

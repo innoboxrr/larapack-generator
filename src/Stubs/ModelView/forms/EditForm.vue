@@ -4,7 +4,7 @@
 
         <!-- INPUTS -->
         <text-input-component
-            custom-class="jsValidator"
+            :custom-class="inputClass"
             type="text"
             name="name"
             label="Nombre"
@@ -15,7 +15,7 @@
             v-model="name" />
 
         <button-component
-            custom-class="uk-width-1-1"
+            :custom-class="buttonClass"
             :disabled="disabled"
             value="Actualizar" />
         

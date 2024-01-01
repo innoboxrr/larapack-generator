@@ -1,13 +1,25 @@
 <template>
 
-	<div class="view-section uk-section uk-section-xsmall">
+	<div>
+
+		<breadcrumbs-component 
+			:pages="[
+				{ link: $router.resolve({ name: 'AdminPluralPascalCaseModelName' }).fullPath, title: 'PluralPascalCaseModelName'},
+				{ link: $router.resolve({ name: 'AdminCreatePascalCaseModelName' }).fullPath, title: 'Crear PluralPascalCaseModelName'}
+			]"/>
 			
-		<div class="view-container uk-container uk-container-small">
+		<div class="flex justify-center items-center mt-8">
 			
-			<div class="uk-card uk-card-default uk-card-body">
+			<div class="max-w-2xl w-full">
 				
-				<create-form 
-					@submit="formSubmit"/>
+				<div class="card bg-white dark:bg-slate-600 border rounded-lg px-8 pt-6 pb-8 mb-4 dark:border-slate-800">
+
+					<h2 class="text-4xl font-bold dark:text-white mb-6">Crear PluralPascalCaseModelName</h2>
+					
+					<create-form 
+						@submit="formSubmit"/>
+
+				</div>
 
 			</div>
 
