@@ -21,7 +21,7 @@ class AuthServiceProvider extends ServiceProvider
 
         // Intenta recuperar el mapeo de políticas desde el caché
         $policies = Cache::remember($cacheKey, now()->addDay(), function () {
-            return $this->discoverPolicies();
+            return $this->registerPolicies();
         });
 
         // Registra las políticas
@@ -35,7 +35,7 @@ class AuthServiceProvider extends ServiceProvider
      *
      * @return array
      */
-    protected function discoverPolicies()
+    protected function registerPolicies()
     {
         $policies = [];
 
