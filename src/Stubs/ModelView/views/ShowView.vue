@@ -111,37 +111,23 @@
 
 		methods: {
 
-			fetchData() {
+			async fetchData() {
 
-				this.fetchPascalCaseModelName().then( res => {
+				await this.fetchPascalCaseModelName()
 
-					this.dataLoaded = true;
-					
-					this.title = this.camelCaseModelName.name;
+				this.dataLoaded = true;
+				
+				this.title = this.camelCaseModelName.name;
 
-					document.title = this.title;
-
-				});
+				document.title = this.title;
 
 			},
 
-			fetchPascalCaseModelName() {
+			async fetchPascalCaseModelName() {
 
-				return new Promise((resolve, reject) => {
+				let res = await showModel(this.camelCaseModelNameId);
 
-					showModel(this.camelCaseModelNameId).then( res => {
-
-	                    this.camelCaseModelName = res.data;
-
-	                    resolve(res);
-
-	                }).catch( error => {
-
-	                    reject(error);
-
-	                });
-
-				});
+				this.camelCaseModelName = res.data;
 
             },
 

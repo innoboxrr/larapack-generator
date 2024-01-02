@@ -47,7 +47,7 @@
 
 			return {
 
-				dataLoaded: true
+				dataLoaded: false,
 
 			}
 		
