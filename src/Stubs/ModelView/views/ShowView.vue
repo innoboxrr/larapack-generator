@@ -127,7 +127,7 @@
 
 				let res = await showModel(this.camelCaseModelNameId);
 
-				this.camelCaseModelName = res.data;
+				this.camelCaseModelName = res;
 
             },
 

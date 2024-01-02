@@ -84,7 +84,7 @@
 
 				showModel(this.camelCaseModelNameId).then( res => {
 
-					this.camelCaseModelName = res.data;
+					this.camelCaseModelName = res;
 
 					this.dataLoaded = true;
 

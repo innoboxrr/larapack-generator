@@ -97,7 +97,7 @@
 
                 showModel(this.camelCaseModelNameId).then( res => {
 
-                    this.camelCaseModelName = res.data;
+                    this.camelCaseModelName = res;
 
                     // Map other data
 
