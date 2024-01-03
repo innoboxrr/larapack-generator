@@ -30,10 +30,8 @@ class EventServiceProvider extends ServiceProvider
             }
         }
 
-        foreach ($data['observers'] as $model => $observers) {
-            foreach ($observers as $observer) {
-                $model::observe($observer);
-            }
+        foreach ($data['observers'] as $model => $observer) {
+            $model::observe($observer);
         }
     }
 
