@@ -2,7 +2,7 @@
 
 	<div>
 
-		<breadcrumbs-component 
+		<breadcrumb-component 
 			:pages="[
 				{ link: $router.resolve({ name: 'AdminPluralPascalCaseModelName' }).fullPath, title: 'PluralPascalCaseModelName'},
 				{ link: $router.resolve({ name: 'AdminCreatePascalCaseModelName' }).fullPath, title: 'Crear PluralPascalCaseModelName'}
