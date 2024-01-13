@@ -2,13 +2,13 @@
 
 	<div id="AdminPluralPascalCaseModelNameWrapper">
 
-		<breadcrumb-component 
-			:pages="[
-				{ link: $router.resolve({ name: 'AdminPluralPascalCaseModelName' }).fullPath, title: 'PluralPascalCaseModelName'}
-			]"/>
-
 		<div v-if="isHome" class="uk-section uk-section-xsmall">
 			
+			<breadcrumb-component 
+				:pages="[
+					{ link: $router.resolve({ name: 'AdminPluralPascalCaseModelName' }).fullPath, title: 'PluralPascalCaseModelName'}
+				]"/>
+				
 			<data-table 
 				:show-title="false"
 				:hide-columns="hideColumns"
