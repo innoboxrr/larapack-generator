@@ -8,7 +8,7 @@
 				:items="[
 					{
 						type: 'router',
-						to= {
+						to: {
 							name: 'AdminShowPascalCaseModelName',
 							params: {
 								id: camelCaseModelName.id
@@ -18,7 +18,7 @@
 					},
 					{
 						type: 'router',
-						to= {
+						to: {
 							name: 'AdminEditPascalCaseModelName',
 							params: {
 								id: camelCaseModelName.id
