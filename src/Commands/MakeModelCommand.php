@@ -21,7 +21,7 @@ class MakeModelCommand extends Command
 
     }
 
-    protected function execute(InputInterface $input, OutputInterface $output)
+    protected function execute(InputInterface $input, OutputInterface $output): int
     {
 
         $modelName = $input->getArgument('name');
