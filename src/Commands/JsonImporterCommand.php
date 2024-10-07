@@ -4,26 +4,46 @@ namespace Innoboxrr\LarapackGenerator\Commands;
 
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
+use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 use Innoboxrr\LarapackGenerator\Tools\Tool;
-use Innoboxrr\LarapackGenerator\Commands\MakeFullModelCommand;
-use Symfony\Component\Console\Input\ArrayInput;
 
 class JsonImporterCommand extends Command
 {
     protected static $defaultName = 'json:importer';
 
+    // Comandos que se ejecutarán para cada modelo
+    protected $commands = [
+        'Migration',
+        'Controller',
+        'Events',
+        'Excel',
+        'Export',
+        'ExportNotification',
+        'Factory',
+        'Filters',
+        'Model',
+        'ModelTraits',
+        'Observer',
+        'Policy',
+        'Requests',
+        'Resource',
+        'Route',
+        'Test'
+    ];
+
     protected function configure()
     {
-        $this->setDescription('Import models and migrations from a JSON file')
-            ->addArgument('jsonPath', InputArgument::REQUIRED, 'The path to the JSON file')
+        $this->setName('json:importer')
+            ->setDescription('Import models and migrations from a JSON file')
+            ->addArgument('jsonPath', InputArgument::OPTIONAL, 'The path to the JSON file')
             ->addOption('vue', null, InputOption::VALUE_NONE, 'Include ModelView in commands');
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
-        $jsonPath = $input->getArgument('jsonPath');
+        $jsonPath = $input->getArgument('jsonPath') ?? base_path('laraimport.json');
 
         if (!file_exists($jsonPath)) {
             $output->writeln("<error>File not found at {$jsonPath}</error>");
@@ -33,64 +53,48 @@ class JsonImporterCommand extends Command
         $jsonContent = file_get_contents($jsonPath);
         $data = json_decode($jsonContent, true);
 
-        if (!$data) {
-            $output->writeln("<error>Invalid JSON content</error>");
+        if (is_null($data)) {
+            $output->writeln("<error>Invalid JSON content. Null returned</error>");
             return Command::FAILURE;
         }
 
-        // Establecer la variable global `fromJson` en true
         Tool::setFromJsonImporter(true);
 
-        // Procesar cada modelo
         foreach ($data['models'] as $model) {
             $output->writeln("Processing model: {$model['name']}");
-
-            // Llamar al comando `make:full-model` para cada modelo
-            $this->callMakeFullModelCommand($model['name'], $input->getOption('vue'), $output);
+            $this->runToolsForModel($model['name'], $input->getOption('vue'), $output);
         }
 
-        // Procesar pivotes
+        // Procesar pivotes (si es necesario)
         foreach ($data['pivots'] as $pivot) {
             $output->writeln("Processing pivot: {$pivot['name']}");
-
-            // Llamar al comando para manejar pivotes (crearás un comando para esto más adelante)
-            $this->callMakePivotCommand($pivot['name'], $output);
+            // Aquí puedes implementar el manejo de los pivotes si es necesario
         }
 
-        // Limpiar la variable global
         Tool::setFromJsonImporter(false);
         $output->writeln('<info>JSON import completed successfully</info>');
 
         return Command::SUCCESS;
     }
 
-    private function callMakeFullModelCommand($name, $includeVue, OutputInterface $output)
+    private function runToolsForModel($modelName, $includeVue, OutputInterface $output)
     {
-        // Instanciar el comando MakeFullModelCommand
-        $command = new MakeFullModelCommand();
-
-        // Crear la entrada de los argumentos del comando
-        $arguments = [
-            'name' => $name
-        ];
-
+        $commands = $this->commands;
         if ($includeVue) {
-            $arguments['--vue'] = true;
+            $commands[] = 'ModelView';
         }
 
-        // Crear el input para el comando
-        $input = new ArrayInput($arguments);
-
-        // Ejecutar el comando manualmente
-        $command->run($input, $output);
-    }
-
-    private function callMakePivotCommand($name, OutputInterface $output)
-    {
-        // Aquí deberías implementar la lógica para manejar los pivotes
-        // Por ejemplo, puedes crear un comando MakePivotCommand similar a MakeFullModelCommand
-        $output->writeln("Processing pivot: {$name}");
-
-        // Lógica para manejar los pivotes, o un comando específico para manejar pivotes
+        foreach ($commands as $command) {
+            $className = '\Innoboxrr\LarapackGenerator\Tools\\' . $command . '\\' . $command . 'Tool';
+            if (class_exists($className)) {
+                $output->writeln("Running tool: {$className} for model: {$modelName}");
+                $class = new \ReflectionClass($className);
+                $toolInstance = $class->newInstance();
+                $toolInstance->create($modelName);
+                $output->writeln("Finished tool: {$className} for model: {$modelName}");
+            } else {
+                $output->writeln("<error>Tool class not found: {$className}</error>");
+            }
+        }
     }
 }

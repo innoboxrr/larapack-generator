@@ -12,6 +12,7 @@ class MakeFullModelCommand extends Command
 {
 
     protected $commands = [
+        'Migration',
         'Controller',
         'Events',
         'Excel',
@@ -19,7 +20,6 @@ class MakeFullModelCommand extends Command
         'ExportNotification',
         'Factory',
         'Filters',
-        'Migration',
         'Model',
         'ModelTraits',
         'Observer',
@@ -32,46 +32,30 @@ class MakeFullModelCommand extends Command
     
     protected function configure()
     {
-
         $this->setName('make:full-model')
             ->setDescription('Create a completo model enviroment')
             ->addArgument('name', InputArgument::REQUIRED, 'The name of the model class')
             ->addOption('vue', 'vue', InputOption::VALUE_NONE, 'Include ModelView in commands');
-
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
-
         $modelName = $input->getArgument('name');
-
-        // Verificar si la opción --view está presente y agregar ModelView al array de commands
         $includeModelView = $input->getOption('vue');
-
         $commands = $this->commands;
 
         if ($includeModelView) {
-
             $commands[] = 'ModelView';
-
         }
 
         foreach($commands as $command) {
-
             $className = '\Innoboxrr\LarapackGenerator\Tools\\' . $command . '\\' . $command . 'Tool';
-
             if (class_exists($className)) {
-
                 $class = new \ReflectionClass($className);
-
                 ($class->newInstance())->create($modelName);
-
             }
-
         }
-
         return 1;
-
     }
 
 }
