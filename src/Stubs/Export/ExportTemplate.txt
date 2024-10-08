@@ -14,9 +14,7 @@ class PluralPascalCaseModelNameExports implements FromView
 
     public function __construct( array $data) 
     {
-
         $this->data = $data;
-
     }
 
     public function view(): View
@@ -35,11 +33,8 @@ class PluralPascalCaseModelNameExports implements FromView
 
     public function getQuery()
     {   
-
         $builder = new Builder();
-
         return $builder->get(PascalCaseModelName::class, $this->data);
-
     }
 
 }

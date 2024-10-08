@@ -57,6 +57,7 @@ class JsonImporterCommand extends Command
         // Procesar pivotes (si es necesario)
         foreach ($data['pivots'] as $pivot) {
             $output->writeln("Processing pivot: {$pivot['name']}");
+            $output->writeln("For now we are not processing pivots");
             // Aquí puedes implementar el manejo de los pivotes si es necesario
         }
 
@@ -91,10 +92,10 @@ class JsonImporterCommand extends Command
         $resultCode = $command->run($input, $output);
 
         // Verificar si el comando fue exitoso
-        if ($resultCode !== Command::SUCCESS) {
-            $output->writeln("<error>Error executing MakeFullModelCommand for model: {$modelName}</error>");
+        if ($resultCode == 1) {
+            $output->writeln("<info>Model {$modelName} created successfully</info>");
         } else {
-            $output->writeln("Successfully executed MakeFullModelCommand for model: {$modelName}");
+            $output->writeln("<error>Model {$modelName} could not be created</error>");
         }
     }
 }

@@ -16,9 +16,7 @@ class DefaultOperation
 
     public function handle(DeleteEvent $event)
     {
-
         //
-
     }
 
 }

@@ -2,9 +2,7 @@
     <thead>
         <tr>
             @foreach($exportCols as $col)
-
                 <th>{{ $col }}</th>
-
             @endforeach
         </tr>
     </thead>
@@ -12,9 +10,7 @@
         @foreach($plural_snake_case_model_name as $snake_case_model_name)
             <tr>
                 @foreach($exportCols as $col)
-
                     <td>{{ $snake_case_model_name->$col }}</td>
-
                 @endforeach
             </tr>
         @endforeach

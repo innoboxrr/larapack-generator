@@ -24,7 +24,6 @@ class MigrationTool extends Tool
 		return $this;
 	}
 
-
 	public function create(string $ModelName)
 	{
 		$this->init($ModelName)
@@ -73,52 +72,34 @@ class MigrationTool extends Tool
 
 	protected function processFileWithJson($migrationFile)
 	{
-		// Obtener el contenido JSON
 		$data = self::getJsonContent();
-	
-		// Recuperar la información del modelo
 		$model = collect($data['models'])->where('name', $this->ModelName)->first();
-	
-		// Recuperar el contenido del archivo
 		$fileContent = file_get_contents($migrationFile);
-	
-		// Generar el esquema para las columnas en función de los props
 		$columnsSchema = $this->generateMigrationColumns($model['props']);
-	
-		// Reemplazar //EDIT// en el archivo de migración
 		$updatedFileContent = str_replace('//EDIT//', $columnsSchema, $fileContent);
-	
-		// Guardar el archivo de nuevo con las columnas generadas
 		file_put_contents($migrationFile, $updatedFileContent);
 	}
 	
 	private function generateMigrationColumns(array $props)
 	{
-		// Ajustar la tabulación correcta (4 espacios en este caso)
 		$columns = '';
-	
 		foreach ($props as $index => $prop) {
 			$columnDefinition = $this->getColumnDefinition($prop);
 			if($index == 0) {
-				// No agregar tabulación para la primera columna
 				$columns .= "{$columnDefinition}\n";
 			} else if($index == count($props) - 1) {
-				// Agregar 3 niveles de tabulación para que coincida con la estructura del archivo
 				$columns .= "            {$columnDefinition}";
 			} else {
-				// Agregar 3 niveles de tabulación para que coincida con la estructura del archivo
 				$columns .= "            {$columnDefinition}\n";
 			}
-		}
-	
+		}	
 		return $columns;
 	}
 	
 	private function getColumnDefinition(array $prop)
 	{
-		// Crear las columnas en función del tipo y propiedades
 		$column = "\$table->{$prop['type']}('{$prop['name']}')";
-	
+
 		// Agregar las propiedades adicionales como 'nullable', 'default', 'after', etc.
 		if ($prop['nullable']) {
 			$column .= "->nullable()";
