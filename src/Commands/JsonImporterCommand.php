@@ -7,31 +7,12 @@ use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
-use Innoboxrr\LarapackGenerator\Tools\Tool;
+use Symfony\Component\Console\Input\ArrayInput;
+use Innoboxrr\LarapackGenerator\Commands\MakeFullModelCommand;
 
 class JsonImporterCommand extends Command
 {
     protected static $defaultName = 'json:importer';
-
-    // Comandos que se ejecutarán para cada modelo
-    protected $commands = [
-        'Migration',
-        'Controller',
-        'Events',
-        'Excel',
-        'Export',
-        'ExportNotification',
-        'Factory',
-        'Filters',
-        'Model',
-        'ModelTraits',
-        'Observer',
-        'Policy',
-        'Requests',
-        'Resource',
-        'Route',
-        'Test'
-    ];
 
     protected function configure()
     {
@@ -43,26 +24,32 @@ class JsonImporterCommand extends Command
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
+        // Obtener la ruta del archivo JSON o usar una predeterminada
         $jsonPath = $input->getArgument('jsonPath') ?? base_path('laraimport.json');
 
+        // Verificar si el archivo existe
         if (!file_exists($jsonPath)) {
             $output->writeln("<error>File not found at {$jsonPath}</error>");
             return Command::FAILURE;
         }
 
+        // Leer y decodificar el contenido JSON
         $jsonContent = file_get_contents($jsonPath);
         $data = json_decode($jsonContent, true);
 
+        // Validar si el contenido JSON es correcto
         if (is_null($data)) {
             $output->writeln("<error>Invalid JSON content. Null returned</error>");
             return Command::FAILURE;
         }
 
+        // Establecer la variable global `fromJson` en true
         Tool::setFromJsonImporter(true);
 
+        // Procesar cada modelo
         foreach ($data['models'] as $model) {
             $output->writeln("Processing model: {$model['name']}");
-            $this->runToolsForModel($model['name'], $input->getOption('vue'), $output);
+            $this->callMakeFullModelCommand($model['name'], $input->getOption('vue'), $output);
         }
 
         // Procesar pivotes (si es necesario)
@@ -71,30 +58,41 @@ class JsonImporterCommand extends Command
             // Aquí puedes implementar el manejo de los pivotes si es necesario
         }
 
+        // Limpiar la variable global `fromJson`
         Tool::setFromJsonImporter(false);
-        $output->writeln('<info>JSON import completed successfully</info>');
 
+        $output->writeln('<info>JSON import completed successfully</info>');
         return Command::SUCCESS;
     }
 
-    private function runToolsForModel($modelName, $includeVue, OutputInterface $output)
+    private function callMakeFullModelCommand($modelName, $includeVue, OutputInterface $output)
     {
-        $commands = $this->commands;
+        // Crear la instancia del comando MakeFullModelCommand
+        $command = new MakeFullModelCommand();
+
+        // Crear los argumentos para el comando MakeFullModelCommand
+        $arguments = [
+            'name' => $modelName
+        ];
+
+        // Si la opción --vue está presente, añadirla a los argumentos
         if ($includeVue) {
-            $commands[] = 'ModelView';
+            $arguments['--vue'] = true;
         }
 
-        foreach ($commands as $command) {
-            $className = '\Innoboxrr\LarapackGenerator\Tools\\' . $command . '\\' . $command . 'Tool';
-            if (class_exists($className)) {
-                $output->writeln("Running tool: {$className} for model: {$modelName}");
-                $class = new \ReflectionClass($className);
-                $toolInstance = $class->newInstance();
-                $toolInstance->create($modelName);
-                $output->writeln("Finished tool: {$className} for model: {$modelName}");
-            } else {
-                $output->writeln("<error>Tool class not found: {$className}</error>");
-            }
+        // Crear el input para el comando
+        $input = new ArrayInput($arguments);
+
+        // Ejecutar el comando
+        $output->writeln("Calling MakeFullModelCommand for model: {$modelName}");
+
+        $resultCode = $command->run($input, $output);
+
+        // Verificar si el comando fue exitoso
+        if ($resultCode !== Command::SUCCESS) {
+            $output->writeln("<error>Error executing MakeFullModelCommand for model: {$modelName}</error>");
+        } else {
+            $output->writeln("Successfully executed MakeFullModelCommand for model: {$modelName}");
         }
     }
 }
