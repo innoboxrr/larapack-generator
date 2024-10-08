@@ -27,7 +27,7 @@ class MigrationTool extends Tool
 	public function create(string $ModelName)
 	{
 		// Asegurarte de que la zona horaria sea la correcta
-		date_default_timezone_set(config('larapack-generator.timezone', 'UTC'));
+		date_default_timezone_set('UTC');
 		$this->init($ModelName)
 			->setMigrationPath()
 			->setMigrationTemplatePath();
@@ -53,7 +53,7 @@ class MigrationTool extends Tool
 	public function remove(string $ModelName)
 	{
 		// Asegurarte de que la zona horaria sea la correcta
-		date_default_timezone_set(config('larapack-generator.timezone', 'UTC'));
+		date_default_timezone_set('UTC');
 		$this->init($ModelName)
 			->setMigrationPath()
 			->setMigrationTemplatePath();
