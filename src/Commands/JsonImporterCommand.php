@@ -8,6 +8,7 @@ use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Input\ArrayInput;
+use Innoboxrr\LarapackGenerator\Tools\Tool;
 use Innoboxrr\LarapackGenerator\Commands\MakeFullModelCommand;
 
 class JsonImporterCommand extends Command
@@ -25,7 +26,7 @@ class JsonImporterCommand extends Command
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         // Obtener la ruta del archivo JSON o usar una predeterminada
-        $jsonPath = $input->getArgument('jsonPath') ?? base_path('laraimport.json');
+        $jsonPath = $input->getArgument('jsonPath') ?? root_path() . '/laraimport.json';
 
         // Verificar si el archivo existe
         if (!file_exists($jsonPath)) {
@@ -45,6 +46,7 @@ class JsonImporterCommand extends Command
 
         // Establecer la variable global `fromJson` en true
         Tool::setFromJsonImporter(true);
+        Tool::setJsonContent($data);
 
         // Procesar cada modelo
         foreach ($data['models'] as $model) {

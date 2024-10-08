@@ -11,6 +11,7 @@ class Tool
 {	
 
 	protected static $fromJsonImporter = false;
+	protected static $jsonContent;
 
 	// INFLECTOR
 		protected $inflector;
@@ -46,6 +47,16 @@ class Tool
 		public static function isFromJsonImporter(): bool
 		{
 			return self::$fromJsonImporter;
+		}
+
+		public static function setJsonContent(array $content)
+		{
+			self::$jsonContent = $content;
+		}
+
+		public static function getJsonContent(): array
+		{
+			return self::$jsonContent;
 		}
 
 		protected function processFileWithJson($fileToProcess)
