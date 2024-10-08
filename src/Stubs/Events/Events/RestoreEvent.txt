@@ -17,33 +17,22 @@ class RestoreEvent
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
     public $camelCaseModelName;
-
     public $data;
-
     public $response;
-
     public $locale;
 
     public function __construct(PascalCaseModelName $camelCaseModelName, array $data, $response, $locale = 'en')
     {
-        
         $this->camelCaseModelName = $camelCaseModelName;
-
         $this->data = $data;
-
         $this->response = $response;
-
         $this->locale = $locale;
-
         App::setLocale($this->locale);
-
     }
 
     public function broadcastOn()
     {
-        
         return new PrivateChannel('channel-name');
-
     }
 
 }

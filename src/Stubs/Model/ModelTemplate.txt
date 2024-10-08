@@ -26,23 +26,39 @@ class PascalCaseModelName extends Model
         PascalCaseModelNameOperations,
         PascalCaseModelNameMutators;
         
-    protected $fillable = [];
+    protected $fillable = [
+        //FILLABLE//
+    ];
 
-    protected $creatable = [];
+    protected $creatable = [
+        //CREATABLE//
+    ];
 
-    protected $updatable = [];
+    protected $updatable = [
+        //UPDATABLE//
+    ];
 
-    protected $casts = [];
+    protected $casts = [
+        //CASTS//
+    ];
 
     protected $protected_metas = [];
 
-    protected $editable_metas = [];
+    protected $editable_metas = [
+        //EDITABLEMETAS//
+    ];
 
-    public static $export_cols = [];
+    public static $export_cols = [
+        //EXPORTCOLS//
+    ];
 
-    public static $loadable_relations = [];
+    public static $loadable_relations = [
+        //LOADABLERELATIONS//
+    ];
 
-    public static $loadable_counts = [];
+    public static $loadable_counts = [
+        //LOADABLECOUNTS//
+    ];
 
     /*
     protected static function newFactory()

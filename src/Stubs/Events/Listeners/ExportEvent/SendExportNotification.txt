@@ -18,11 +18,7 @@ class SendExportNotification
 
     public function handle(ExportEvent $event)
     {
-
-        $event->user
-            ->notify((new ExportNotification($event->data))->locale($event->locale));
-
-
+        $event->user->notify((new ExportNotification($event->data))->locale($event->locale));
     }
 
 }

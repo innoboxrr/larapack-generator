@@ -15,6 +15,7 @@ return new class extends Migration
     {
         Schema::create('plural_snake_case_model_name', function (Blueprint $table) {
             $table->id();
+            //EDIT//
             $table->timestamps();
             $table->softDeletes();
         });

@@ -2,20 +2,21 @@
 
 namespace Namespace\Http\Controllers;
 
-use Namespace\Http\Requests\PascalCaseModelName\PoliciesRequest;
-use Namespace\Http\Requests\PascalCaseModelName\PolicyRequest;
-use Namespace\Http\Requests\PascalCaseModelName\IndexRequest;
-use Namespace\Http\Requests\PascalCaseModelName\ShowRequest;
-use Namespace\Http\Requests\PascalCaseModelName\CreateRequest;
-use Namespace\Http\Requests\PascalCaseModelName\UpdateRequest;
-use Namespace\Http\Requests\PascalCaseModelName\DeleteRequest;
-use Namespace\Http\Requests\PascalCaseModelName\RestoreRequest;
-use Namespace\Http\Requests\PascalCaseModelName\ForceDeleteRequest;
-use Namespace\Http\Requests\PascalCaseModelName\ExportRequest;
+use Namespace\Http\Requests\PascalCaseModelName\{
+    PoliciesRequest,
+    PolicyRequest,
+    IndexRequest,
+    ShowRequest,
+    CreateRequest,
+    UpdateRequest,
+    DeleteRequest,
+    RestoreRequest,
+    ForceDeleteRequest,
+    ExportRequest
+};
 
 class PascalCaseModelNameController extends Controller
 {
-    
     public function __construct()
     {
         $this->middleware('auth:sanctum');
@@ -70,5 +71,4 @@ class PascalCaseModelNameController extends Controller
     {
         return $request->handle();   
     }
-
 }
