@@ -90,8 +90,6 @@ class MigrationTool extends Tool
 	
 		// Guardar el archivo de nuevo con las columnas generadas
 		file_put_contents($migrationFile, $updatedFileContent);
-	
-		dd($updatedFileContent);
 	}
 	
 	private function generateMigrationColumns(array $props)
