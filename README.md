@@ -91,7 +91,6 @@ remove:full-model                - Elimina todas las entidades relacionadas con 
                     "name": "title",
                     "type": "string",
                     "constraint": null,
-                    "after": "id",
                     "default": null,
                     "nullable": false,
                     "fillable": true,
@@ -100,6 +99,13 @@ remove:full-model                - Elimina todas las entidades relacionadas con 
                     "exports_cols": true,
                     "cast": null,
                     "form": true,
+                    "form_component": "TextInputComponent",
+                    "form_submit": true,
+                    // USAR ENUM PARA SelectInputComponent
+                    "enum": {
+                        "op1": "Option 1",
+                        "op2": "Option 2"
+                    },
                     "datatable": true,
                     "metas": false
                 },
@@ -107,7 +113,6 @@ remove:full-model                - Elimina todas las entidades relacionadas con 
                     "name": "payload",
                     "type": "longText",
                     "constraint": null,
-                    "after": "title",
                     "default": null,
                     "nullable": true,
                     "fillable": true,
@@ -116,6 +121,12 @@ remove:full-model                - Elimina todas las entidades relacionadas con 
                     "exports_cols": true,
                     "cast": "json",
                     "form": false,
+                    "form_component": null,
+                    "form_submit": false,
+                    "enum": {
+                        "op1": "Option 1",
+                        "op2": "Option 2"
+                    },
                     "datatable": true,
                     "metas": true
                 },
@@ -123,7 +134,6 @@ remove:full-model                - Elimina todas las entidades relacionadas con 
                     "name": "user_id",
                     "type": "foreignId",
                     "constraint": "users",
-                    "after": "payload",
                     "default": null,
                     "nullable": false,
                     "fillable": true,
@@ -131,7 +141,13 @@ remove:full-model                - Elimina todas las entidades relacionadas con 
                     "updatable": true,
                     "exports_cols": true,
                     "cast": null,
-                    "form": true,
+                    "form": false,
+                    "form_component": null,
+                    "form_submit": true,
+                    "enum": {
+                        "op1": "Option 1",
+                        "op2": "Option 2"
+                    },
                     "datatable": true,
                     "metas": false
                 }
