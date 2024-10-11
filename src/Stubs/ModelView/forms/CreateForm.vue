@@ -43,10 +43,9 @@
 
         data() {
             return {
-                name: '',
-//add_more_data//
                 disabled: false,
                 JSValidator: undefined,
+//add_more_data//
             }
         },
 
