@@ -6,53 +6,20 @@ export const CSRF_TOKEN = document.querySelector('meta[name="csrf-token"]').getA
 
 export let filters = {}
 
-export let strings = {
-  crudActions: {
-    create: {
-      name: 'Create',
-      icon: 'fa-plus',
-    },
-    export: {
-      name: 'Export',
-      icon: 'fa-download',
-    },
-  },
-  exportModel: {
-    confirmation: {
-      title: 'Confirm operation',
-      text: 'Confirm export',
-    },
-  },
-  deleteModel: {
-    confirmation: {
-      title: 'Confirm operation',
-      text: 'Confirm delete',
-    },
-  },
-};
-
 export const setFilters = (newFilters = {}) => {
-
 	filters = {
-
 		...filters,
-
 		...newFilters,
-
 	}
-
 	return filters;
 };
 
 export const getFilters = () => {
-
 	return filters;
 };
 
 export const resetFilters = () => {
-
 	filters = {};
-
 	return filters;
 };
 
@@ -61,9 +28,9 @@ export const crudActions = () => {
 	return [
 		{
 			id: 'create',
-			name: strings.crudActions.create.name,
+			name: 'Create',
 			callback: 'createPascalCaseModelName',
-			icon: strings.crudActions.create.icon,
+			icon: 'fa-plus',
 			route: true,
 			policy: false,
 			params: {
@@ -75,9 +42,9 @@ export const crudActions = () => {
 		},
 		{
 			id: 'export',
-			name: strings.crudActions.export.name,
+			name: 'Export',
 			callback: 'exportModel',
-			icon: strings.crudActions.export.icon,
+			icon: 'fa-download',
 			route: false,
 			policy: false,
 			params: {}
@@ -93,6 +60,7 @@ export const dataTableHead = () => {
 			sortable: true,
 			html: false,
 		},
+//DATA_TABLE_COLUMNS//
 		/*
 		{
 			id: 'column',
@@ -112,7 +80,7 @@ export const dataTableHead = () => {
 export const dataTableSort = () => {
 	return {
 		id: 'asc',
-		// Añadir columnas ordenables
+//DATA_TABLE_SORT//
 	};
 };
 
@@ -165,8 +133,8 @@ export const updateModel = (modelId, data) => {
 
 export const deleteModel = (data) => {
     const confirmOptions = {
-        title: strings.deleteModel.confirmation.title,
-        text: strings.deleteModel.confirmation.text,
+        title: 'Confirm operation',
+        text: 'Are you sure you want to delete this item?',
         icon: 'warning',
         showCancelButton: true,
         confirmButtonColor: '#3085d6',
@@ -182,8 +150,8 @@ export const deleteModel = (data) => {
 
 export const exportModel = (data) => {
     const confirmOptions = {
-        title: strings.exportModel.confirmation.title,
-        text: strings.exportModel.confirmation.text,
+        title: 'Confirm operation',
+        text: 'Are you sure you want to export this item?',
         icon: 'warning',
         showCancelButton: true,
         confirmButtonColor: '#3085d6',

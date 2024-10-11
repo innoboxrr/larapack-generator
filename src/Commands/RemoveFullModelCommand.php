@@ -35,7 +35,8 @@ class RemoveFullModelCommand extends Command
 
         $this->setName('remove:full-model')
             ->setDescription('Elimina todas las entidades relacionadas con un modelo')
-            ->addArgument('name', InputArgument::REQUIRED, 'The name of the model class');
+            ->addArgument('name', InputArgument::REQUIRED, 'The name of the model class')
+            ->addOption('vue', 'vue', InputOption::VALUE_NONE, 'Include ModelView in commands');
 
     }
 
@@ -43,23 +44,21 @@ class RemoveFullModelCommand extends Command
     {
 
         $modelName = $input->getArgument('name');
+        $includeModelView = $input->getOption('vue');
+        $commands = $this->commands;
+
+        if ($includeModelView) {
+            $commands[] = 'ModelView';
+        }
         
         foreach($this->commands as $command) {
-
             $className = '\Innoboxrr\LarapackGenerator\Tools\\' . $command . '\\' . $command . 'Tool';
-
             if (class_exists($className)) {
-
                 $class = new \ReflectionClass($className);
-
                 ($class->newInstance())->remove($modelName);
-
             }
-
         }
-
         return 1;
-
     }
 
 }
