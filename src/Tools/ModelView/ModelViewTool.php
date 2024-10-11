@@ -436,7 +436,7 @@ class ModelViewTool extends Tool
 							$inputs .= "            validators=\"required length\"\n";
 							$inputs .= "            min_length=\"3\"\n";
 							$inputs .= "            max_length=\"130\"\n";
-							$inputs .= "            v-model=\"camelCaseModelName.{$prop['name']}\" />\n";
+							$inputs .= "            v-model=\"{$model['name']}.{$prop['name']}\" />\n";
 							break;
 		
 						case 'SelectInputComponent':
@@ -445,7 +445,7 @@ class ModelViewTool extends Tool
 							$inputs .= "            name=\"{$prop['name']}\"\n";
 							$inputs .= "            :label=\"__('" . ucfirst($prop['name']) . "')\"\n";
 							$inputs .= "            validators=\"required\"\n";
-							$inputs .= "            v-model=\"camelCaseModelName.{$prop['name']}\">\n";
+							$inputs .= "            v-model=\"{$model['name']}.{$prop['name']}\">\n";
 		
 							// Generar dinámicamente las opciones a partir del enum en el JSON
 							$options = '';
@@ -470,7 +470,7 @@ class ModelViewTool extends Tool
 							$inputs .= "            validators=\"required length\"\n";
 							$inputs .= "            min_length=\"3\"\n";
 							$inputs .= "            max_length=\"1500\"\n";
-							$inputs .= "            v-model=\"camelCaseModelName.{$prop['name']}\" />\n";
+							$inputs .= "            v-model=\"{$model['name']}.{$prop['name']}\" />\n";
 							break;
 		
 						case 'EditorInputComponent':
@@ -484,7 +484,7 @@ class ModelViewTool extends Tool
 							$inputs .= "            :label=\"__('" . ucfirst($prop['name']) . "')\"\n";
 							$inputs .= "            :placeholder=\"__('" . ucfirst($prop['name']) . "')\"\n";
 							$inputs .= "            validators=\"required\"\n";
-							$inputs .= "            v-model=\"camelCaseModelName.{$prop['name']}\" />\n";
+							$inputs .= "            v-model=\"{$model['name']}.{$prop['name']}\" />\n";
 							break;
 		
 						default:
@@ -506,7 +506,7 @@ class ModelViewTool extends Tool
 		
 				// Manejo de form_submit
 				if ($prop['form_submit']) {
-					$submitData .= "                        {$prop['name']}: this.camelCaseModelName.{$prop['name']},\n";
+					$submitData .= "                        {$prop['name']}: this.{$model['name']}.{$prop['name']},\n";
 				}
 		
 				// Si form es false pero form_submit es true
