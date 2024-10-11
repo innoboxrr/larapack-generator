@@ -501,7 +501,7 @@ class ModelViewTool extends Tool
 					}
 		
 					// Añadir al bloque de datos del modelo
-					$modelDataFields .= "            {$prop['name']}: '',\n";
+					$modelDataFields .= "                    {$prop['name']}: '',\n";
 				}
 		
 				// Manejo de form_submit
@@ -511,7 +511,7 @@ class ModelViewTool extends Tool
 		
 				// Si form es false pero form_submit es true
 				if (!$prop['form'] && $prop['form_submit']) {
-					$propsData .= "                        {$prop['name']}: '',\n";
+					$propsData .= "                            {$prop['name']}: '',\n";
 				}
 			}
 		
