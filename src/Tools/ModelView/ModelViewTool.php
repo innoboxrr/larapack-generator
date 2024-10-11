@@ -506,7 +506,7 @@ class ModelViewTool extends Tool
 		
 				// Manejo de form_submit
 				if ($prop['form_submit']) {
-					$submitData .= "                    {$prop['name']}: this.camelCaseModelName.{$prop['name']},\n";
+					$submitData .= "                        {$prop['name']}: this.camelCaseModelName.{$prop['name']},\n";
 				}
 		
 				// Si form es false pero form_submit es true

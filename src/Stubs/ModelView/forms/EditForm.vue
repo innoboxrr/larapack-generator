@@ -71,7 +71,6 @@
             fetchPascalCaseModelName() {
                 showModel(this.camelCaseModelNameId).then( res => {
                     this.camelCaseModelName = res;
-// Map other data
                 });
             },
 
