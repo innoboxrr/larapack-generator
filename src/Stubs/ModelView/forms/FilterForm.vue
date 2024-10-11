@@ -36,14 +36,14 @@
 	
 	import { 
 		TextInputComponent,
-		//import_more_components//
+//import_more_components//
 	} from 'innoboxrr-form-elements'
 
 	export default {
 
 		components: {
 			TextInputComponent,
-			//register_more_components//
+//register_more_components//
 		},
 
 		emits: ['submit'],
@@ -51,7 +51,7 @@
 		data() {
 			return {
 				id: null,
-				//add_more_data//
+//add_more_data//
 			}
 
 		},
@@ -64,7 +64,7 @@
 
 			resetForm() {
 				this.id = null;
-				//reset_inputs//
+//reset_inputs//
 				this.onSubmit();
 			}
 		}

@@ -2,7 +2,7 @@
 	
 	<form :id="formId" @submit.prevent="onSubmit">      
 
-        <!-- Add more inputs -->
+<!-- Add more inputs -->
 
         <button-component
             :custom-class="buttonClass"
@@ -20,7 +20,7 @@
     import {
         TextInputComponent,
         ButtonComponent,
-        //import_more_components//
+//import_more_components//
     } from 'innoboxrr-form-elements'
 	
 	export default {
@@ -28,7 +28,7 @@
         components: {
             TextInputComponent,
             ButtonComponent,
-            //register_more_components//
+//register_more_components//
         },
 
         props: {
@@ -36,7 +36,7 @@
         		type: String,
         		default: 'createPascalCaseModelNameForm',
         	}
-            //props//
+//props//
         },
 
         emits: ['submit'],
@@ -44,7 +44,7 @@
         data() {
             return {
                 name: '',
-                //add_more_data//
+//add_more_data//
                 disabled: false,
                 JSValidator: undefined,
             }
@@ -63,7 +63,7 @@
                 if(this.JSValidator.status) {
                     this.disabled = true;
                     createModel({
-                        //submit_data//
+//submit_data//
                     }).then( res => {
                         this.$emit('submit', res);
                         setTimeout(() => { this.disabled = false; }, 2500);

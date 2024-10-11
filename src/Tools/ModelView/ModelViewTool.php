@@ -278,11 +278,11 @@ class ModelViewTool extends Tool
 							$options = '';
 							if (isset($prop['enum'])) {
 								foreach ($prop['enum'] as $value => $label) {
-									$options .= "                <option value=\"{$value}\">{{ __('{$label}') }}</option>\n"; // 8 espacios para las opciones
+									$options .= "            <option value=\"{$value}\">{{ __('{$label}') }}</option>\n"; // 8 espacios para las opciones
 								}
 							} else {
 								// Opciones por defecto en caso de que no haya enum
-								$options = "                <option value=\"\">{{ __('Select') }}</option>\n";
+								$options = "            <option value=\"\">{{ __('Select') }}</option>\n";
 							}
 							$inputs .= $options;
 							$inputs .= "        </select-input-component>\n"; // cerrar componente con 4 espacios
@@ -322,23 +322,23 @@ class ModelViewTool extends Tool
 		
 					// Importar y registrar el componente si existe y no ha sido añadido antes
 					if ($componentName && !in_array($componentName, $addedComponents)) {
-						$importComponents .= "{$componentName},\n";
-						$registerComponents .= "{$componentName},\n";
+						$importComponents .= "        {$componentName},\n";
+						$registerComponents .= "            {$componentName},\n";
 						$addedComponents[] = $componentName; // Añadir el componente a la lista de los ya registrados
 					}
 		
 					// Añadir al bloque de datos
-					$dataFields .= "{$prop['name']}: '',\n";
+					$dataFields .= "                {$prop['name']}: '',\n";
 				}
 		
 				// Manejo de form_submit
 				if ($prop['form_submit']) {
-					$submitData .= "{$prop['name']}: this.{$prop['name']},\n";
+					$submitData .= "                        {$prop['name']}: this.{$prop['name']},\n";
 				}
 		
 				// Si form es false pero form_submit es true
 				if (!$prop['form'] && $prop['form_submit']) {
-					$propsData .= "{$prop['name']}: '',\n";
+					$propsData .= "            {$prop['name']}: '',\n";
 				}
 			}
 		
@@ -451,11 +451,11 @@ class ModelViewTool extends Tool
 							$options = '';
 							if (isset($prop['enum'])) {
 								foreach ($prop['enum'] as $value => $label) {
-									$options .= "                <option value=\"{$value}\">{{ __('{$label}') }}</option>\n"; // 8 espacios para las opciones
+									$options .= "            <option value=\"{$value}\">{{ __('{$label}') }}</option>\n"; // 8 espacios para las opciones
 								}
 							} else {
 								// Opciones por defecto en caso de que no haya enum
-								$options = "                <option value=\"\">{{ __('Select') }}</option>\n";
+								$options = "            <option value=\"\">{{ __('Select') }}</option>\n";
 							}
 							$inputs .= $options;
 							$inputs .= "        </select-input-component>\n"; // cerrar componente con 4 espacios
@@ -495,23 +495,23 @@ class ModelViewTool extends Tool
 		
 					// Importar y registrar el componente si existe y no ha sido añadido antes
 					if ($componentName && !in_array($componentName, $addedComponents)) {
-						$importComponents .= "{$componentName},\n";
-						$registerComponents .= "{$componentName},\n";
+						$importComponents .= "        {$componentName},\n";
+						$registerComponents .= "            {$componentName},\n";
 						$addedComponents[] = $componentName; // Añadir el componente a la lista de los ya registrados
 					}
 		
 					// Añadir al bloque de datos del modelo
-					$modelDataFields .= "{$prop['name']}: '',\n";
+					$modelDataFields .= "            {$prop['name']}: '',\n";
 				}
 		
 				// Manejo de form_submit
 				if ($prop['form_submit']) {
-					$submitData .= "{$prop['name']}: this.camelCaseModelName.{$prop['name']},\n";
+					$submitData .= "                    {$prop['name']}: this.camelCaseModelName.{$prop['name']},\n";
 				}
 		
 				// Si form es false pero form_submit es true
 				if (!$prop['form'] && $prop['form_submit']) {
-					$propsData .= "{$prop['name']}: '',\n";
+					$propsData .= "                        {$prop['name']}: '',\n";
 				}
 			}
 		
@@ -630,16 +630,16 @@ class ModelViewTool extends Tool
 					
 					// Importar y registrar el componente si existe y no ha sido añadido antes
 					if (!in_array($componentName, $addedComponents)) {
-						$importComponents .= "{$componentName},\n";
-						$registerComponents .= "{$componentName},\n";
+						$importComponents .= "        {$componentName},\n";
+						$registerComponents .= "            {$componentName},\n";
 						$addedComponents[] = $componentName; // Añadir el componente a la lista de los ya registrados
 					}
 					
 					// Añadir al bloque de data
-					$dataFields .= "            {$prop['name']}: null,\n";
+					$dataFields .= "                {$prop['name']}: null,\n";
 					
 					// Añadir al bloque de reseteo
-					$resetInputs .= "            this.{$prop['name']} = null;\n";
+					$resetInputs .= "                this.{$prop['name']} = null;\n";
 				}
 			}
 			

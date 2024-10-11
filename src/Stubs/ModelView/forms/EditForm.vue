@@ -2,7 +2,7 @@
 	
 	<form :id="formId" @submit.prevent="onSubmit">
 
-        <!-- Add more inputs -->
+<!-- Add more inputs -->
 
         <button-component
             :custom-class="buttonClass"
@@ -20,7 +20,7 @@
     import {
         TextInputComponent,
         ButtonComponent,
-        //import_more_components//
+//import_more_components//
     } from 'innoboxrr-form-elements'
     
 	
@@ -29,7 +29,7 @@
         components: {
             TextInputComponent,
             ButtonComponent,
-            //register_more_components//
+//register_more_components//
         },
 
         props: {
@@ -41,7 +41,7 @@
                 type: [Number, String],
                 required: true
             },
-            //props//
+//props//
         },
 
         emits: ['submit'],
@@ -55,7 +55,7 @@
         data() {
             return {
                 camelCaseModelName: {
-                    //model_data//
+//model_data//
                 },
                 disabled: false,
                 JSValidator: undefined,
@@ -71,7 +71,7 @@
             fetchPascalCaseModelName() {
                 showModel(this.camelCaseModelNameId).then( res => {
                     this.camelCaseModelName = res;
-                    // Map other data
+// Map other data
                 });
             },
 
@@ -79,7 +79,7 @@
                 if(this.JSValidator.status) {
                     this.disabled = true;
                     updateModel(this.camelCaseModelName.id, {
-                        //submit_data//
+//submit_data//
                     }).then( res => {
                         this.$emit('submit', res);
                         setTimeout(() => { this.disabled = false; }, 2500);
