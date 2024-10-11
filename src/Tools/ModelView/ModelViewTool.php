@@ -104,7 +104,7 @@ class ModelViewTool extends Tool
 
 				// Para el ordenamiento (sort)
 				if ($index === 0) {
-					$sort = "{$prop['name']}: 'asc',\n";
+					$sort = "        {$prop['name']}: 'asc',\n";
 				}
 			}
 
@@ -228,13 +228,13 @@ class ModelViewTool extends Tool
 		{
 			// Obtener el contenido JSON
 			$data = self::getJsonContent();
-
+		
 			// Recuperar la información del modelo actual
 			$model = collect($data['models'])->where('name', $this->ModelName)->first();
-
+		
 			// Obtener las props del modelo
 			$props = $model['props'];
-
+		
 			// Inicializar las cadenas para los inputs y otros bloques
 			$inputs = '';
 			$importComponents = '';
@@ -242,109 +242,109 @@ class ModelViewTool extends Tool
 			$dataFields = '';
 			$submitData = '';
 			$propsData = '';
-
+		
 			// Lista de componentes ya añadidos (para evitar duplicados)
 			$addedComponents = ['TextInputComponent']; // TextInputComponent ya está registrado por defecto
-
+		
 			// Generar el contenido basado en las props
 			foreach ($props as $prop) {
 				if ($prop['form']) {
 					$componentName = $prop['form_component'] ?? null;
-
+		
 					// Lógica para generar los componentes según su tipo
 					switch ($componentName) {
 						case 'TextInputComponent':
-							$inputs .= "<text-input-component
-								:custom-class=\"inputClass\"
-								type=\"text\"
-								name=\"{$prop['name']}\"
-								:label=\"__('" . ucfirst($prop['name']) . "')\"
-								:placeholder=\"__('" . ucfirst($prop['name']) . "')\"
-								validators=\"required length\"
-								min_length=\"3\"
-								max_length=\"130\"
-								v-model=\"{$prop['name']}\" />\n";
+							$inputs .= "        <text-input-component\n"; // 4 espacios para la indentación
+							$inputs .= "            :custom-class=\"inputClass\"\n";
+							$inputs .= "            type=\"text\"\n";
+							$inputs .= "            name=\"{$prop['name']}\"\n";
+							$inputs .= "            :label=\"__('" . ucfirst($prop['name']) . "')\"\n";
+							$inputs .= "            :placeholder=\"__('" . ucfirst($prop['name']) . "')\"\n";
+							$inputs .= "            validators=\"required length\"\n";
+							$inputs .= "            min_length=\"3\"\n";
+							$inputs .= "            max_length=\"130\"\n";
+							$inputs .= "            v-model=\"{$prop['name']}\" />\n";
 							break;
-
+		
 						case 'SelectInputComponent':
+							$inputs .= "        <select-input-component\n";
+							$inputs .= "            :custom-class=\"inputClass\"\n";
+							$inputs .= "            name=\"{$prop['name']}\"\n";
+							$inputs .= "            :label=\"__('" . ucfirst($prop['name']) . "')\"\n";
+							$inputs .= "            validators=\"required\"\n";
+							$inputs .= "            v-model=\"{$prop['name']}\">\n";
+		
 							// Generar dinámicamente las opciones a partir del enum en el JSON
 							$options = '';
 							if (isset($prop['enum'])) {
 								foreach ($prop['enum'] as $value => $label) {
-									$options .= "<option value=\"{$value}\">{{ __('{$label}') }}</option>\n";
+									$options .= "                <option value=\"{$value}\">{{ __('{$label}') }}</option>\n"; // 8 espacios para las opciones
 								}
 							} else {
 								// Opciones por defecto en caso de que no haya enum
-								$options = "<option value=\"\">{{ __('Select') }}</option>\n";
+								$options = "                <option value=\"\">{{ __('Select') }}</option>\n";
 							}
-
-							$inputs .= "<select-input-component
-								:custom-class=\"inputClass\"
-								name=\"{$prop['name']}\"
-								:label=\"__('" . ucfirst($prop['name']) . "')\"
-								validators=\"required\"
-								v-model=\"{$prop['name']}\">
-								{$options}
-							</select-input-component>\n";
+							$inputs .= $options;
+							$inputs .= "        </select-input-component>\n"; // cerrar componente con 4 espacios
 							break;
-
+		
 						case 'TextareaInputComponent':
-							$inputs .= "<textarea-input-component
-								:custom-class=\"inputClass\"
-								name=\"{$prop['name']}\"
-								:label=\"__('" . ucfirst($prop['name']) . "')\"
-								:placeholder=\"__('" . ucfirst($prop['name']) . "')\"
-								validators=\"required length\"
-								min_length=\"3\"
-								max_length=\"1500\"
-								v-model=\"{$prop['name']}\" />\n";
+							$inputs .= "        <textarea-input-component\n";
+							$inputs .= "            :custom-class=\"inputClass\"\n";
+							$inputs .= "            name=\"{$prop['name']}\"\n";
+							$inputs .= "            :label=\"__('" . ucfirst($prop['name']) . "')\"\n";
+							$inputs .= "            :placeholder=\"__('" . ucfirst($prop['name']) . "')\"\n";
+							$inputs .= "            validators=\"required length\"\n";
+							$inputs .= "            min_length=\"3\"\n";
+							$inputs .= "            max_length=\"1500\"\n";
+							$inputs .= "            v-model=\"{$prop['name']}\" />\n";
 							break;
-
+		
 						case 'EditorInputComponent':
-							$inputs .= "<editor-input-component
-								:id=\"`{$prop['name']}-\${formId}`\"
-								:file=\"true\"
-								:uploadUrl=\"fileUploadUrl\"
-								:on-file-upload-success=\"handleFileUploadSuccess\"
-								name=\"{$prop['name']}\"
-								:height=\"300\"
-								:label=\"__('" . ucfirst($prop['name']) . "')\"
-								:placeholder=\"__('" . ucfirst($prop['name']) . "')\"
-								validators=\"required\"
-								v-model=\"{$prop['name']}\" />\n";
+							$inputs .= "        <editor-input-component\n";
+							$inputs .= "            :id=\"`{$prop['name']}-\${formId}`\"\n";
+							$inputs .= "            :file=\"true\"\n";
+							$inputs .= "            :uploadUrl=\"fileUploadUrl\"\n";
+							$inputs .= "            :on-file-upload-success=\"handleFileUploadSuccess\"\n";
+							$inputs .= "            name=\"{$prop['name']}\"\n";
+							$inputs .= "            :height=\"300\"\n";
+							$inputs .= "            :label=\"__('" . ucfirst($prop['name']) . "')\"\n";
+							$inputs .= "            :placeholder=\"__('" . ucfirst($prop['name']) . "')\"\n";
+							$inputs .= "            validators=\"required\"\n";
+							$inputs .= "            v-model=\"{$prop['name']}\" />\n";
 							break;
-
+		
 						default:
 							// Si no hay componente configurado, añadir comentario
-							$inputs .= "<!-- {$prop['name']} input not configured, add a component -->\n";
+							$inputs .= "        <!-- {$prop['name']} input not configured, add a component -->\n";
 							break;
 					}
-
+		
 					// Importar y registrar el componente si existe y no ha sido añadido antes
 					if ($componentName && !in_array($componentName, $addedComponents)) {
 						$importComponents .= "{$componentName},\n";
 						$registerComponents .= "{$componentName},\n";
 						$addedComponents[] = $componentName; // Añadir el componente a la lista de los ya registrados
 					}
-
+		
 					// Añadir al bloque de datos
 					$dataFields .= "{$prop['name']}: '',\n";
 				}
-
+		
 				// Manejo de form_submit
 				if ($prop['form_submit']) {
 					$submitData .= "{$prop['name']}: this.{$prop['name']},\n";
 				}
-
+		
 				// Si form es false pero form_submit es true
 				if (!$prop['form'] && $prop['form_submit']) {
 					$propsData .= "{$prop['name']}: '',\n";
 				}
 			}
-
+		
 			// Cargar el contenido del archivo de plantilla
 			$fileContent = file_get_contents($modelFile);
-
+		
 			// Reemplazar los placeholders
 			$fileContent = str_replace('<!-- Add more inputs -->', rtrim($inputs, "\n"), $fileContent);
 			$fileContent = str_replace('//import_more_components//', rtrim($importComponents, ",\n"), $fileContent);
@@ -352,10 +352,10 @@ class ModelViewTool extends Tool
 			$fileContent = str_replace('//add_more_data//', rtrim($dataFields, ",\n"), $fileContent);
 			$fileContent = str_replace('//submit_data//', rtrim($submitData, ",\n"), $fileContent);
 			$fileContent = str_replace('//props//', rtrim($propsData, ",\n"), $fileContent);
-
+		
 			// Guardar el archivo modificado
 			file_put_contents($modelFile, $fileContent);
-		}
+		}		
 
 
 	# Forms - EditForm
@@ -401,13 +401,13 @@ class ModelViewTool extends Tool
 		{
 			// Obtener el contenido JSON
 			$data = self::getJsonContent();
-
+		
 			// Recuperar la información del modelo actual
 			$model = collect($data['models'])->where('name', $this->ModelName)->first();
-
+		
 			// Obtener las props del modelo
 			$props = $model['props'];
-
+		
 			// Inicializar las cadenas para los inputs y otros bloques
 			$inputs = '';
 			$importComponents = '';
@@ -415,109 +415,109 @@ class ModelViewTool extends Tool
 			$modelDataFields = '';
 			$submitData = '';
 			$propsData = '';
-
+		
 			// Lista de componentes ya añadidos (para evitar duplicados)
 			$addedComponents = ['TextInputComponent']; // TextInputComponent ya está registrado por defecto
-
+		
 			// Generar el contenido basado en las props
 			foreach ($props as $prop) {
 				if ($prop['form']) {
 					$componentName = $prop['form_component'] ?? null;
-
+		
 					// Lógica para generar los componentes según su tipo
 					switch ($componentName) {
 						case 'TextInputComponent':
-							$inputs .= "<text-input-component
-								:custom-class=\"inputClass\"
-								type=\"text\"
-								name=\"{$prop['name']}\"
-								:label=\"__('" . ucfirst($prop['name']) . "')\"
-								:placeholder=\"__('" . ucfirst($prop['name']) . "')\"
-								validators=\"required length\"
-								min_length=\"3\"
-								max_length=\"130\"
-								v-model=\"camelCaseModelName.{$prop['name']}\" />\n";
+							$inputs .= "        <text-input-component\n"; // 4 espacios para la indentación
+							$inputs .= "            :custom-class=\"inputClass\"\n";
+							$inputs .= "            type=\"text\"\n";
+							$inputs .= "            name=\"{$prop['name']}\"\n";
+							$inputs .= "            :label=\"__('" . ucfirst($prop['name']) . "')\"\n";
+							$inputs .= "            :placeholder=\"__('" . ucfirst($prop['name']) . "')\"\n";
+							$inputs .= "            validators=\"required length\"\n";
+							$inputs .= "            min_length=\"3\"\n";
+							$inputs .= "            max_length=\"130\"\n";
+							$inputs .= "            v-model=\"camelCaseModelName.{$prop['name']}\" />\n";
 							break;
-
+		
 						case 'SelectInputComponent':
+							$inputs .= "        <select-input-component\n";
+							$inputs .= "            :custom-class=\"inputClass\"\n";
+							$inputs .= "            name=\"{$prop['name']}\"\n";
+							$inputs .= "            :label=\"__('" . ucfirst($prop['name']) . "')\"\n";
+							$inputs .= "            validators=\"required\"\n";
+							$inputs .= "            v-model=\"camelCaseModelName.{$prop['name']}\">\n";
+		
 							// Generar dinámicamente las opciones a partir del enum en el JSON
 							$options = '';
 							if (isset($prop['enum'])) {
 								foreach ($prop['enum'] as $value => $label) {
-									$options .= "<option value=\"{$value}\">{{ __('{$label}') }}</option>\n";
+									$options .= "                <option value=\"{$value}\">{{ __('{$label}') }}</option>\n"; // 8 espacios para las opciones
 								}
 							} else {
 								// Opciones por defecto en caso de que no haya enum
-								$options = "<option value=\"\">{{ __('Select') }}</option>\n";
+								$options = "                <option value=\"\">{{ __('Select') }}</option>\n";
 							}
-
-							$inputs .= "<select-input-component
-								:custom-class=\"inputClass\"
-								name=\"{$prop['name']}\"
-								:label=\"__('" . ucfirst($prop['name']) . "')\"
-								validators=\"required\"
-								v-model=\"camelCaseModelName.{$prop['name']}\">
-								{$options}
-							</select-input-component>\n";
+							$inputs .= $options;
+							$inputs .= "        </select-input-component>\n"; // cerrar componente con 4 espacios
 							break;
-
+		
 						case 'TextareaInputComponent':
-							$inputs .= "<textarea-input-component
-								:custom-class=\"inputClass\"
-								name=\"{$prop['name']}\"
-								:label=\"__('" . ucfirst($prop['name']) . "')\"
-								:placeholder=\"__('" . ucfirst($prop['name']) . "')\"
-								validators=\"required length\"
-								min_length=\"3\"
-								max_length=\"1500\"
-								v-model=\"camelCaseModelName.{$prop['name']}\" />\n";
+							$inputs .= "        <textarea-input-component\n";
+							$inputs .= "            :custom-class=\"inputClass\"\n";
+							$inputs .= "            name=\"{$prop['name']}\"\n";
+							$inputs .= "            :label=\"__('" . ucfirst($prop['name']) . "')\"\n";
+							$inputs .= "            :placeholder=\"__('" . ucfirst($prop['name']) . "')\"\n";
+							$inputs .= "            validators=\"required length\"\n";
+							$inputs .= "            min_length=\"3\"\n";
+							$inputs .= "            max_length=\"1500\"\n";
+							$inputs .= "            v-model=\"camelCaseModelName.{$prop['name']}\" />\n";
 							break;
-
+		
 						case 'EditorInputComponent':
-							$inputs .= "<editor-input-component
-								:id=\"`{$prop['name']}-\${formId}`\"
-								:file=\"true\"
-								:uploadUrl=\"fileUploadUrl\"
-								:on-file-upload-success=\"handleFileUploadSuccess\"
-								name=\"{$prop['name']}\"
-								:height=\"300\"
-								:label=\"__('" . ucfirst($prop['name']) . "')\"
-								:placeholder=\"__('" . ucfirst($prop['name']) . "')\"
-								validators=\"required\"
-								v-model=\"camelCaseModelName.{$prop['name']}\" />\n";
+							$inputs .= "        <editor-input-component\n";
+							$inputs .= "            :id=\"`{$prop['name']}-\${formId}`\"\n";
+							$inputs .= "            :file=\"true\"\n";
+							$inputs .= "            :uploadUrl=\"fileUploadUrl\"\n";
+							$inputs .= "            :on-file-upload-success=\"handleFileUploadSuccess\"\n";
+							$inputs .= "            name=\"{$prop['name']}\"\n";
+							$inputs .= "            :height=\"300\"\n";
+							$inputs .= "            :label=\"__('" . ucfirst($prop['name']) . "')\"\n";
+							$inputs .= "            :placeholder=\"__('" . ucfirst($prop['name']) . "')\"\n";
+							$inputs .= "            validators=\"required\"\n";
+							$inputs .= "            v-model=\"camelCaseModelName.{$prop['name']}\" />\n";
 							break;
-
+		
 						default:
 							// Si no hay componente configurado, añadir comentario
-							$inputs .= "<!-- {$prop['name']} input not configured, add a component -->\n";
+							$inputs .= "        <!-- {$prop['name']} input not configured, add a component -->\n";
 							break;
 					}
-
+		
 					// Importar y registrar el componente si existe y no ha sido añadido antes
 					if ($componentName && !in_array($componentName, $addedComponents)) {
 						$importComponents .= "{$componentName},\n";
 						$registerComponents .= "{$componentName},\n";
 						$addedComponents[] = $componentName; // Añadir el componente a la lista de los ya registrados
 					}
-
+		
 					// Añadir al bloque de datos del modelo
 					$modelDataFields .= "{$prop['name']}: '',\n";
 				}
-
+		
 				// Manejo de form_submit
 				if ($prop['form_submit']) {
 					$submitData .= "{$prop['name']}: this.camelCaseModelName.{$prop['name']},\n";
 				}
-
+		
 				// Si form es false pero form_submit es true
 				if (!$prop['form'] && $prop['form_submit']) {
 					$propsData .= "{$prop['name']}: '',\n";
 				}
 			}
-
+		
 			// Cargar el contenido del archivo de plantilla
 			$fileContent = file_get_contents($modelFile);
-
+		
 			// Reemplazar los placeholders
 			$fileContent = str_replace('<!-- Add more inputs -->', rtrim($inputs, "\n"), $fileContent);
 			$fileContent = str_replace('//import_more_components//', rtrim($importComponents, ",\n"), $fileContent);
@@ -525,10 +525,10 @@ class ModelViewTool extends Tool
 			$fileContent = str_replace('//model_data//', rtrim($modelDataFields, ",\n"), $fileContent);
 			$fileContent = str_replace('//submit_data//', rtrim($submitData, ",\n"), $fileContent);
 			$fileContent = str_replace('//props//', rtrim($propsData, ",\n"), $fileContent);
-
+		
 			// Guardar el archivo modificado
 			file_put_contents($modelFile, $fileContent);
-		}
+		}		
 
 
 	# Forms - FilterForm
@@ -573,23 +573,23 @@ class ModelViewTool extends Tool
 		{
 			// Obtener el contenido JSON
 			$data = self::getJsonContent();
-		
+			
 			// Recuperar la información del modelo actual
 			$model = collect($data['models'])->where('name', $this->ModelName)->first();
-		
+			
 			// Obtener las props del modelo
 			$props = $model['props'];
-		
+			
 			// Inicializar las cadenas para los inputs, componentes, y otras secciones
 			$inputs = '';
 			$importComponents = '';
 			$registerComponents = '';
 			$dataFields = '';
 			$resetInputs = '';
-		
+			
 			// Lista de componentes ya añadidos (para evitar duplicados)
 			$addedComponents = ['TextInputComponent']; // TextInputComponent ya está registrado por defecto
-		
+			
 			// Generar el contenido basado en las props
 			foreach ($props as $prop) {
 				// Solo procesar si la propiedad está habilitada para formularios (form: true)
@@ -597,67 +597,66 @@ class ModelViewTool extends Tool
 					// Si la propiedad tiene enum, usamos SelectInputComponent
 					if (isset($prop['enum'])) {
 						$componentName = 'SelectInputComponent';
-		
+						
 						// Generar dinámicamente las opciones del enum
 						$options = '';
 						foreach ($prop['enum'] as $value => $label) {
-							$options .= "<option value=\"{$value}\">{{ __('{$label}') }}</option>\n";
+							$options .= "                <option value=\"{$value}\">{{ __('{$label}') }}</option>\n";
 						}
-		
-						$inputs .= "<div>
-							<select-input-component
-								:custom-class=\"inputClass\"
-								name=\"{$prop['name']}\"
-								:label=\"__('" . ucfirst($prop['name']) . "')\"
-								v-model=\"{$prop['name']}\">
-								{$options}
-							</select-input-component>
-						</div>\n";
+						
+						$inputs .= "            <div>\n";
+						$inputs .= "                <select-input-component\n";
+						$inputs .= "                    :custom-class=\"inputClass\"\n";
+						$inputs .= "                    name=\"{$prop['name']}\"\n";
+						$inputs .= "                    :label=\"__('" . ucfirst($prop['name']) . "')\"\n";
+						$inputs .= "                    v-model=\"{$prop['name']}\">\n";
+						$inputs .= $options;
+						$inputs .= "                </select-input-component>\n";
+						$inputs .= "            </div>\n";
 					} else {
 						// Usar TextInputComponent para cualquier otro tipo
 						$componentName = 'TextInputComponent';
-		
-						$inputs .= "<div>
-							<text-input-component
-								:custom-class=\"inputClass\"
-								type=\"text\"
-								name=\"{$prop['name']}\"
-								:label=\"__('" . ucfirst($prop['name']) . "')\"
-								:placeholder=\"__('" . ucfirst($prop['name']) . "')\"
-								v-model=\"{$prop['name']}\" />
-							</div>\n";
+						
+						$inputs .= "            <div>\n";
+						$inputs .= "                <text-input-component\n";
+						$inputs .= "                    :custom-class=\"inputClass\"\n";
+						$inputs .= "                    type=\"text\"\n";
+						$inputs .= "                    name=\"{$prop['name']}\"\n";
+						$inputs .= "                    :label=\"__('" . ucfirst($prop['name']) . "')\"\n";
+						$inputs .= "                    :placeholder=\"__('" . ucfirst($prop['name']) . "')\"\n";
+						$inputs .= "                    v-model=\"{$prop['name']}\" />\n";
+						$inputs .= "            </div>\n";
 					}
-		
+					
 					// Importar y registrar el componente si existe y no ha sido añadido antes
 					if (!in_array($componentName, $addedComponents)) {
 						$importComponents .= "{$componentName},\n";
 						$registerComponents .= "{$componentName},\n";
 						$addedComponents[] = $componentName; // Añadir el componente a la lista de los ya registrados
 					}
-		
+					
 					// Añadir al bloque de data
-					$dataFields .= "{$prop['name']}: null,\n";
-		
+					$dataFields .= "            {$prop['name']}: null,\n";
+					
 					// Añadir al bloque de reseteo
-					$resetInputs .= "this.{$prop['name']} = null;\n";
+					$resetInputs .= "            this.{$prop['name']} = null;\n";
 				}
 			}
-		
+			
 			// Cargar el contenido del archivo de plantilla
 			$fileContent = file_get_contents($modelFile);
-		
+			
 			// Reemplazar los placeholders
 			$fileContent = str_replace('<!-- Add more inputs -->', rtrim($inputs, "\n"), $fileContent);
 			$fileContent = str_replace('//import_more_components//', rtrim($importComponents, ",\n"), $fileContent);
 			$fileContent = str_replace('//register_more_components//', rtrim($registerComponents, ",\n"), $fileContent);
 			$fileContent = str_replace('//add_more_data//', rtrim($dataFields, ",\n"), $fileContent);
 			$fileContent = str_replace('//reset_inputs//', rtrim($resetInputs, "\n"), $fileContent);
-		
+			
 			// Guardar el archivo modificado
 			file_put_contents($modelFile, $fileContent);
 		}
 		
-
 	# Views - AdminView
 
 		// Definir la ruta de la aplicación
