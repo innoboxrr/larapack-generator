@@ -150,7 +150,7 @@ remove:full-model                - Elimina todas las entidades relacionadas con 
                 }
             ],
             "metas": true,
-            "load_relations": [
+            "relations": [
                 {
                     "type": "belongsTo",
                     "related": "User",
@@ -165,7 +165,7 @@ remove:full-model                - Elimina todas las entidades relacionadas con 
                     "mode": "like"
                 }
             ],
-            "request": [
+            "requests": [
                 {
                     "name": "Create",
                     "rules": {
@@ -194,7 +194,6 @@ remove:full-model                - Elimina todas las entidades relacionadas con 
                     "name": "role_id",
                     "type": "longText",
                     "constraint": "roles",
-                    "after": "id",
                     "default": null,
                     "nullable": false
                 }

@@ -2,6 +2,7 @@
 
 namespace Innoboxrr\LarapackGenerator\Commands;
 
+use Innoboxrr\LarapackGenerator\Tools\Migration\PivotMigrationTool;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputOption;
@@ -60,6 +61,8 @@ class JsonImporterCommand extends Command
             $output->writeln("Processing pivot: {$pivot['name']}");
             $output->writeln("For now we are not processing pivots");
             // Aquí puedes implementar el manejo de los pivotes si es necesario
+            $tool = new PivotMigrationTool();
+            $tool->create($pivot['name']);
         }
 
         // Limpiar la variable global `fromJson`
