@@ -77,6 +77,8 @@ make:route-service-provider       - Crea un proveedor de servicio de rutas.
 make:test                        - Crea una nueva clase de test.
 
 remove:full-model                - Elimina todas las entidades relacionadas con un modelo.
+
+json:importer                    - Importación desde el archivo de importación JSON
 ```
 
 ## Ejemplo de JSON de Importación
@@ -149,7 +151,7 @@ remove:full-model                - Elimina todas las entidades relacionadas con 
                 }
             ],
             "metas": true,
-            "relations": [
+            "load_relations": [
                 {
                     "type": "belongsTo",
                     "related": "User",

@@ -55,7 +55,7 @@ class ModelMetasTool extends Tool
 
 	private function createModelMetas()
 	{
-		$modelMetasFile = $this->modelMetasPath . '/' . $this->PascalCaseModelName . 'ModelMetas.php';
+		$modelMetasFile = $this->modelMetasPath . '/' . $this->PascalCaseModelName . 'Meta.php';
 		if(!file_exists($modelMetasFile)) {
 			$templateFile = $this->modelMetasTemplatePath . '/ModelMetasTemplate.txt';
 			if(copy($templateFile, $modelMetasFile)) {
@@ -71,7 +71,11 @@ class ModelMetasTool extends Tool
 	private function createMigrationMetas()
 	{
 		date_default_timezone_set('UTC');
-		$migrationMetasFile = $this->migrationMetasPath . '/' . date('Y_m_d_His') . '_create_' . $this->snake_case_model_name . '_metas_table.php';
+		// Añade 3 segundos a la fecha actual
+		$timestamp = date('Y_m_d_His', strtotime('+3 seconds'));
+		
+		$migrationMetasFile = $this->migrationMetasPath . '/' . $timestamp . '_create_' . $this->snake_case_model_name . '_metas_table.php';
+		
 		if(!file_exists($migrationMetasFile)) {
 			$templateFile = $this->migrationMetasTemplatePath . '/MigrationTemplate.txt';
 			if(copy($templateFile, $migrationMetasFile)) {
@@ -82,8 +86,9 @@ class ModelMetasTool extends Tool
 		} else {
 			return false;
 		}
+		
 		return true;
-	}
+	}	
 
 	public function remove(string $ModelName)
 	{

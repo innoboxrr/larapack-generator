@@ -1,6 +1,6 @@
 <?php
 
-namespace Innoboxrr\LarapackGenerator\Tools\Migration;
+namespace Innoboxrr\LarapackGenerator\Tools\PivotMigration;
 
 use Innoboxrr\LarapackGenerator\Tools\Tool;
 use Innoboxrr\LarapackGenerator\Exceptions\MakerException;
@@ -81,9 +81,9 @@ class PivotMigrationTool extends Tool
 	protected function processFileWithJson($migrationFile)
 	{
 		$data = self::getJsonContent();
-		$model = collect($data['models'])->where('name', $this->migrationName)->first();
-		$fileContent = file_get_contents($migrationFile);
-		$columnsSchema = $this->generateMigrationColumns($model['props']);
+		$pivot = collect($data['pivots'])->where('name', $this->migrationName)->first();
+		$fileContent = file_get_contents(filename: $migrationFile);
+		$columnsSchema = $this->generateMigrationColumns($pivot['props']);
 		$updatedFileContent = str_replace('//EDIT//', $columnsSchema, $fileContent);
 		file_put_contents($migrationFile, $updatedFileContent);
 	}
