@@ -7,5 +7,5 @@ namespace Namespace\Models\Traits\Relations;
 
 trait PascalCaseModelNameRelations
 {
-    //EDIT//
+//EDIT//
 }

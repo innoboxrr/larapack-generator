@@ -113,7 +113,7 @@ class ModelTraitsTool extends Tool
 			if(copy($templateFile, $relationsTraitFile)) {
 				$this->replaceData($relationsTraitFile);
 				if(self::isFromJsonImporter()) {
-					$this->processRelationsTraitWithJson($modelFile);
+					$this->processRelationsTraitWithJson($relationsTraitFile);
 				}
 			} else {
 				throw new MakerException;
