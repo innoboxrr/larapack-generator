@@ -101,7 +101,6 @@ remove:full-model                - Elimina todas las entidades relacionadas con 
                     "form": true,
                     "form_component": "TextInputComponent",
                     "form_submit": true,
-                    // USAR ENUM PARA SelectInputComponent
                     "enum": {
                         "op1": "Option 1",
                         "op2": "Option 2"
@@ -192,8 +191,15 @@ remove:full-model                - Elimina todas las entidades relacionadas con 
             "props": [
                 {
                     "name": "role_id",
-                    "type": "longText",
+                    "type": "foreignId",
                     "constraint": "roles",
+                    "default": null,
+                    "nullable": false
+                },
+                {
+                    "name": "user_id",
+                    "type": "foreignId",
+                    "constraint": "users",
                     "default": null,
                     "nullable": false
                 }
