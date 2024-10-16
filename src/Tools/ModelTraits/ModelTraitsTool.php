@@ -126,37 +126,49 @@ class ModelTraitsTool extends Tool
 	{
 		// Obtener el contenido del JSON
 		$data = self::getJsonContent();
-
+	
 		// Encontrar el modelo actual basado en su nombre
 		$model = collect($data['models'])->where('name', $this->ModelName)->first();
-
+	
 		// Obtener las relaciones
 		$relations = $model['load_relations'] ?? [];
-
+	
 		$relationsCode = '';
-
+		$imports = [];
+	
 		// Iterar a través de las relaciones
 		foreach ($relations as $relation) {
 			$relationType = $relation['type'];   // belongsTo, hasMany, etc.
 			$relatedModel = $relation['related']; // Modelo relacionado (por ejemplo, User)
 			$relationName = $relation['name'];   // Nombre de la relación (por ejemplo, user)
-
+			$relatedNamespace = $relation['namespace'] ?? 'App\\Models'; // Namespace del modelo relacionado
+	
 			// Generar el código de la relación
 			$relationsCode .= "    public function {$relationName}()\n";
 			$relationsCode .= "    {\n";
 			$relationsCode .= "        return \$this->{$relationType}({$relatedModel}::class);\n";
 			$relationsCode .= "    }\n\n";
+	
+			// Agregar el import del modelo relacionado, si aún no está en la lista
+			$importStatement = "use {$relatedNamespace}\\{$relatedModel};";
+			if (!in_array($importStatement, $imports)) {
+				$imports[] = $importStatement;
+			}
 		}
-
+	
 		// Cargar el contenido del archivo de plantilla
 		$fileContent = file_get_contents($traitFile);
-
-		// Reemplazar el placeholder con el código generado
+	
+		// Unir los imports generados
+		$importCode = implode("\n", $imports);
+	
+		// Reemplazar los placeholders con los imports y el código generado
+		$fileContent = str_replace('//IMPORTS//', rtrim($importCode, "\n"), $fileContent);
 		$fileContent = str_replace('//EDIT//', rtrim($relationsCode, "\n"), $fileContent);
-
+	
 		// Guardar el archivo modificado
 		file_put_contents($traitFile, $fileContent);
-	}
+	}	
 
 	private function createStorageTrait()
 	{

@@ -154,6 +154,7 @@ json:importer                    - Importación desde el archivo de importación
             "load_relations": [
                 {
                     "type": "belongsTo",
+                    "namespace": "App\\Models",
                     "related": "User",
                     "name": "user"
                 }
