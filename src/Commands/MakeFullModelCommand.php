@@ -35,17 +35,23 @@ class MakeFullModelCommand extends Command
         $this->setName('make:full-model')
             ->setDescription('Create a completo model enviroment')
             ->addArgument('name', InputArgument::REQUIRED, 'The name of the model class')
-            ->addOption('vue', 'vue', InputOption::VALUE_NONE, 'Include ModelView in commands');
+            ->addOption('vue', 'vue', InputOption::VALUE_NONE, 'Include ModelView in commands')
+            ->addOption('metas', 'metas', InputOption::VALUE_NONE, 'Include Metas in commands');
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         $modelName = $input->getArgument('name');
         $includeModelView = $input->getOption('vue');
+        $includeMetas = $input->getOption('metas');
         $commands = $this->commands;
 
         if ($includeModelView) {
             $commands[] = 'ModelView';
+        }
+
+        if ($includeMetas) {
+            $commands[] = 'ModelMetas';
         }
 
         foreach($commands as $command) {

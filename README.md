@@ -106,8 +106,7 @@ remove:full-model                - Elimina todas las entidades relacionadas con 
                         "op1": "Option 1",
                         "op2": "Option 2"
                     },
-                    "datatable": true,
-                    "metas": false
+                    "datatable": true
                 },
                 {
                     "name": "payload",
@@ -127,8 +126,7 @@ remove:full-model                - Elimina todas las entidades relacionadas con 
                         "op1": "Option 1",
                         "op2": "Option 2"
                     },
-                    "datatable": true,
-                    "metas": true
+                    "datatable": true
                 },
                 {
                     "name": "user_id",
@@ -148,10 +146,10 @@ remove:full-model                - Elimina todas las entidades relacionadas con 
                         "op1": "Option 1",
                         "op2": "Option 2"
                     },
-                    "datatable": true,
-                    "metas": false
+                    "datatable": true
                 }
             ],
+            "metas": true,
             "load_relations": [
                 {
                     "type": "belongsTo",

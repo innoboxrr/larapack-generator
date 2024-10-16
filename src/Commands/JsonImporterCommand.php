@@ -51,7 +51,8 @@ class JsonImporterCommand extends Command
         // Procesar cada modelo
         foreach ($data['models'] as $model) {
             $output->writeln("Processing model: {$model['name']}");
-            $this->callMakeFullModelCommand($model['name'], $input->getOption('vue'), $output);
+            $metas = $model['metas']  === true;
+            $this->callMakeFullModelCommand($model['name'], $input->getOption('vue'), $metas, $output);
         }
 
         // Procesar pivotes (si es necesario)
@@ -68,7 +69,7 @@ class JsonImporterCommand extends Command
         return Command::SUCCESS;
     }
 
-    private function callMakeFullModelCommand($modelName, $includeVue, OutputInterface $output)
+    private function callMakeFullModelCommand($modelName, $includeVue, $metas, OutputInterface $output)
     {
         // Crear la instancia del comando MakeFullModelCommand
         $command = new MakeFullModelCommand();
@@ -81,6 +82,11 @@ class JsonImporterCommand extends Command
         // Si la opción --vue está presente, añadirla a los argumentos
         if ($includeVue) {
             $arguments['--vue'] = true;
+        }
+
+        // Si la opción --metas está presente, añadirla a los argumentos
+        if ($metas) {
+            $arguments['--metas'] = true;
         }
 
         // Crear el input para el comando
