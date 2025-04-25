@@ -77,6 +77,8 @@ make:route-service-provider       - Crea un proveedor de servicio de rutas.
 make:test                        - Crea una nueva clase de test.
 
 remove:full-model                - Elimina todas las entidades relacionadas con un modelo.
+
+json:importer                    - Importación desde el archivo de importación JSON
 ```
 
 ## Ejemplo de JSON de Importación
@@ -101,13 +103,11 @@ remove:full-model                - Elimina todas las entidades relacionadas con 
                     "form": true,
                     "form_component": "TextInputComponent",
                     "form_submit": true,
-                    // USAR ENUM PARA SelectInputComponent
                     "enum": {
                         "op1": "Option 1",
                         "op2": "Option 2"
                     },
-                    "datatable": true,
-                    "metas": false
+                    "datatable": true
                 },
                 {
                     "name": "payload",
@@ -127,8 +127,7 @@ remove:full-model                - Elimina todas las entidades relacionadas con 
                         "op1": "Option 1",
                         "op2": "Option 2"
                     },
-                    "datatable": true,
-                    "metas": true
+                    "datatable": true
                 },
                 {
                     "name": "user_id",
@@ -148,13 +147,14 @@ remove:full-model                - Elimina todas las entidades relacionadas con 
                         "op1": "Option 1",
                         "op2": "Option 2"
                     },
-                    "datatable": true,
-                    "metas": false
+                    "datatable": true
                 }
             ],
+            "metas": true,
             "load_relations": [
                 {
                     "type": "belongsTo",
+                    "namespace": "App\\Models",
                     "related": "User",
                     "name": "user"
                 }
@@ -167,7 +167,7 @@ remove:full-model                - Elimina todas las entidades relacionadas con 
                     "mode": "like"
                 }
             ],
-            "request": [
+            "requests": [
                 {
                     "name": "Create",
                     "rules": {
@@ -194,9 +194,15 @@ remove:full-model                - Elimina todas las entidades relacionadas con 
             "props": [
                 {
                     "name": "role_id",
-                    "type": "longText",
+                    "type": "foreignId",
                     "constraint": "roles",
-                    "after": "id",
+                    "default": null,
+                    "nullable": false
+                },
+                {
+                    "name": "user_id",
+                    "type": "foreignId",
+                    "constraint": "users",
                     "default": null,
                     "nullable": false
                 }

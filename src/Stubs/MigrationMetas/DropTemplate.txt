@@ -1,0 +1,35 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    /**
+     * Run the migrations.
+     *
+     * @return void
+     */
+    public function up()
+    {
+        Schema::dropIfExists('snake_case_model_name_metas');
+    }
+
+    /**
+     * Reverse the migrations.
+     *
+     * @return void
+     */
+    public function down()
+    {
+        Schema::create('snake_case_model_name_metas', function (Blueprint $table) {
+            $table->id();
+            $table->string('key');
+            $table->longText('value');
+            $table->foreignId('snake_case_model_name_id')->constrained()->onDelete('cascade');
+            $table->timestamps();
+            $table->softDeletes();
+        });
+    }
+};

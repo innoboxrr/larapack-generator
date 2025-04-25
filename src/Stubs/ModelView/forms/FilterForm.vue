@@ -11,7 +11,7 @@
 					v-model="id" />
 			</div>
 
-			<!-- Add more inputs -->
+<!-- Add more inputs -->
 
 		</div>
 
