@@ -21,6 +21,8 @@ return new class extends Migration
             $table->timestamps();
             $table->softDeletes();
         });
+
+        $table->unique(['key', 'snake_case_model_name_id'], 'unique_key_snake_case_model_name_id');
     }
 
     /**
@@ -30,6 +32,10 @@ return new class extends Migration
      */
     public function down()
     {
+        Schema::table('snake_case_model_name_metas', function (Blueprint $table) {
+            $table->dropUnique('unique_key_snake_case_model_name_id');
+        });
+        
         Schema::dropIfExists('snake_case_model_name_metas');
     }
 };
