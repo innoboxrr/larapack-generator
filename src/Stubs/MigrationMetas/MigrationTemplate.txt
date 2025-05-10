@@ -20,9 +20,10 @@ return new class extends Migration
             $table->foreignId('snake_case_model_name_id')->constrained()->onDelete('cascade');
             $table->timestamps();
             $table->softDeletes();
-        });
 
-        $table->unique(['key', 'snake_case_model_name_id'], 'unique_key_snake_case_model_name_id');
+            $table->unique(['key', 'snake_case_model_name_id'], 'unique_key_snake_case_model_name_id');
+            
+        });
     }
 
     /**
