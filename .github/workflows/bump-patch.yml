@@ -1,0 +1,58 @@
+name: Bump Semantic Tag on Master
+
+on:
+    push:
+        branches:
+            - master
+
+jobs:
+    bump-version:
+        runs-on: ubuntu-latest
+
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v3
+              with:
+                  fetch-depth: 0  # Necesario para obtener todos los tags
+
+            - name: Set up Git
+              run: |
+                  git config user.name "github-actions[bot]"
+                  git config user.email "github-actions[bot]@users.noreply.github.com"
+
+            - name: Get latest tag and bump version
+              id: bump
+              run: |
+                  latestTag=$(git tag --sort=-creatordate | head -n 1)
+
+                  if [ -z "$latestTag" ]; then
+                      major=0
+                      minor=0
+                      patch=1
+                  else
+                      IFS='.' read -r major minor patch <<< "$latestTag"
+
+                      # Obtener mensaje del último commit
+                      commitMessage=$(git log -1 --pretty=%B)
+
+                      if [[ "$commitMessage" == *#major* ]]; then
+                          major=$((major + 1))
+                          minor=0
+                          patch=0
+                      elif [[ "$commitMessage" == *#minor* ]]; then
+                          minor=$((minor + 1))
+                          patch=0
+                      else
+                          patch=$((patch + 1))
+                      fi
+                  fi
+
+                  newTag="$major.$minor.$patch"
+
+                  echo "✅ Nuevo tag: $newTag"
+                  echo "new_tag=$newTag" >> "$GITHUB_OUTPUT"
+
+            - name: Create and push tag
+              run: |
+                  git tag ${{ steps.bump.outputs.new_tag }}
+                  git push origin ${{ steps.bump.outputs.new_tag }}
