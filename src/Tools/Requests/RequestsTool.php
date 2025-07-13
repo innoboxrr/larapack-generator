@@ -8,111 +8,113 @@ use Innoboxrr\LarapackGenerator\Exceptions\MakerException;
 class RequestsTool extends Tool
 {
 
-	protected $requestPath;
+    protected $requestPath;
 
-	protected $requestsTemplatePath;
+    protected $requestsTemplatePath;
 
-	protected $mainRequestsPath;
+    protected $mainRequestsPath;
 
-	protected $requests = [
-		'CreateRequest',
-		'DeleteRequest',
-		'ExportRequest',
-		'ForceDeleteRequest',
-		'IndexRequest',
-		'PoliciesRequest',
-		'PolicyRequest',
-		'RestoreRequest',
-		'ShowRequest',
-		'UpdateRequest'
-	];
+    protected $requests = [
+        'CreateRequest',
+        'DeleteRequest',
+        'ExportRequest',
+        'ForceDeleteRequest',
+        'IndexRequest',
+        'PoliciesRequest',
+        'PolicyRequest',
+        'RestoreRequest',
+        'ShowRequest',
+        'UpdateRequest'
+    ];
 
-	private function setRequestPath()
-	{
+    private function setRequestPath()
+    {
+        $this->requestPath = get_path(app_dir_name() . '/Http/Requests');
+        return $this;
+    }
 
-		$this->requestPath = get_path(app_dir_name() . '/Http/Requests');
+    private function setRequestsTemplatePath()
+    {
+        $this->requestsTemplatePath = stubs_path('Requests');
+        return $this;
+    }
 
-		return $this;
+    protected function setMainRequestsPath()
+    {
+        $path = $this->requestPath . '/' . $this->PascalCaseModelName;
+        if (!file_exists($path)) mkdir($path, 0777, true);
+        $this->mainRequestsPath = $path;
+        return $this;
+    }
 
-	}
+    protected function createRequest($requestName)
+    {
+        $requestFile = $this->mainRequestsPath . '/' . $requestName . '.php';
 
-	private function setRequestsTemplatePath()
-	{
+        if (!file_exists($requestFile)) {
+            $templateFile = $this->requestsTemplatePath . '/' . $requestName . '.txt';
 
-		$this->requestsTemplatePath = stubs_path('Requests');
+            if (copy($templateFile, $requestFile)) {
+                $this->replaceData($requestFile);
 
-		return $this;
+                if (self::isFromJsonImporter()) {
+                    $this->processFileWithJson($requestFile);
+                }
+            } else {
+                throw new MakerException;
+            }
+        } else {
+            return false;
+        }
 
-	}
+        return true;
+    }
 
-	protected function setMainRequestsPath()
-	{
+    public function create(string $ModelName)
+    {
+        $this->init($ModelName)
+            ->setRequestPath()
+            ->setRequestsTemplatePath()
+            ->setMainRequestsPath();
 
-		$path = $this->requestPath . '/' . $this->PascalCaseModelName;
+        foreach ($this->requests as $request) {
+            $this->createRequest($request);
+        }
+    }
 
-		if (!file_exists($path)) mkdir($path, 0777, true);
+    public function remove(string $ModelName)
+    {
+        $this->init($ModelName)
+            ->setRequestPath();
 
-		$this->mainRequestsPath = $path;
+        $path = $this->requestPath . '/' . $this->PascalCaseModelName;
 
-		return $this;
+        return (file_exists($path)) ? $this->dropDir($path) : false;
+    }
 
-	}
+    protected function processFileWithJson($filePath)
+    {
+        if (!in_array(basename($filePath), ['CreateRequest.php', 'UpdateRequest.php'])) return;
 
-	protected function createRequest($requestName)
-	{
+        $data = self::getJsonContent();
+        $model = collect($data['models'])->where('name', $this->ModelName)->first();
+        if (!$model) return;
 
-		$requestFile = $this->mainRequestsPath . '/' . $requestName . '.php';
+        $requestType = str_contains($filePath, 'CreateRequest') ? 'Create' : 'Update';
+        $requestData = collect($model['requests'])->firstWhere('name', $requestType);
+        if (!$requestData) return;
 
-		if(!file_exists($requestFile)) {
+        $rulesArray = isset($requestData['rules']) ? var_export($requestData['rules'], true) : '[]';
 
-			$templateFile = $this->requestsTemplatePath . '/' . $requestName . '.txt';
+        $fileContent = file_get_contents($filePath);
 
-			if(copy($templateFile, $requestFile)) {
+        $fileContent = preg_replace(
+            '/public function rules\(\)\s*\{[^}]+\}/s',
+            "public function rules()\n    {\n        return {$rulesArray};\n    }",
+            $fileContent
+        );
 
-				$this->replaceData($requestFile);
-
-			} else {
-
-				throw new MakerException;
-
-			}
-
-		} else {
-
-			return false;
-
-		}
-
-		return true;
-
-	}
-
-	public function create(string $ModelName)
-	{
-
-		$this->init($ModelName)
-			->setRequestPath()
-			->setRequestsTemplatePath()
-			->setMainRequestsPath();
-
-		foreach($this->requests as $request) {
-
-			$this->createRequest($request);
-
-		}
-
-	}
-	
-	public function remove(string $ModelName)
-	{	
-
-		$this->init($ModelName)
-			->setRequestPath();
-
-		$path = $this->requestPath . '/' . $this->PascalCaseModelName;
-
-		return (file_exists($path)) ? $this->dropDir($path) : false;
-
-	}
+        file_put_contents($filePath, $fileContent);
+    }
 
 }
