@@ -104,13 +104,19 @@ class RequestsTool extends Tool
         $requestData = collect($model['requests'])->firstWhere('name', $requestType);
         if (!$requestData) return;
 
-        $rulesArray = isset($requestData['rules']) ? var_export($requestData['rules'], true) : '[]';
+        $rulesArray = isset($requestData['rules']) && is_array($requestData['rules']) ? $requestData['rules'] : [];
+
+        $formattedRules = "[\n";
+        foreach ($rulesArray as $key => $value) {
+            $formattedRules .= "            '{$key}' => '{$value}',\n";
+        }
+        $formattedRules .= "        ]";
 
         $fileContent = file_get_contents($filePath);
 
         $fileContent = preg_replace(
             '/public function rules\(\)\s*\{[^}]+\}/s',
-            "public function rules()\n    {\n        return {$rulesArray};\n    }",
+            "public function rules()\n    {\n        return {$formattedRules};\n    }",
             $fileContent
         );
 
