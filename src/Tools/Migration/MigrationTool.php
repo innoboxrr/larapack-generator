@@ -106,27 +106,32 @@ class MigrationTool extends Tool
 	{
 		$column = "\$table->{$prop['type']}('{$prop['name']}')";
 
-		// Agregar las propiedades adicionales como 'nullable', 'default', 'after', etc.
 		if ($prop['nullable']) {
 			$column .= "->nullable()";
 		}
-	
-		if (!is_null($prop['default'])) {
-			$column .= "->default('{$prop['default']}')";
+
+		if (array_key_exists('default', $prop) && $prop['default'] !== null) {
+
+			$default = $prop['default'];
+
+			// Determinar tipo de valor default
+			if (is_bool($default)) {
+				$default = $default ? 'true' : 'false';
+			} elseif (is_numeric($default)) {
+				// se deja tal cual
+			} else {
+				$default = "'{$default}'"; // string u otro tipo
+			}
+
+			$column .= "->default({$default})";
 		}
-	
-		/*
-		if (!is_null($prop['after'])) {
-			$column .= "->after('{$prop['after']}')";
-		}
-		*/
-	
-		// Agregar restricciones de clave foránea si las hay
+
 		if ($prop['type'] === 'foreignId' && !is_null($prop['constraint'])) {
 			$column .= "->constrained('{$prop['constraint']}')->onUpdate('cascade')->onDelete('cascade')";
 		}
-	
+
 		return $column . ";";
 	}
+
 	
 }
