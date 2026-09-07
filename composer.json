@@ -6,15 +6,16 @@
     "minimum-stability": "stable",
     "prefer-stable": true,
     "require": {
-        "php": "^8.3",
-        "illuminate/support": "^13.0",
-        "symfony/console": "^7.4 || ^8.0",
         "doctrine/inflector": "^2.0",
+        "illuminate/support": "^13.0",
         "innoboxrr/search-surge": "^2.0",
         "innoboxrr/traits": "^1.0",
+        "maatwebsite/excel": "^3.1",
+        "opis/json-schema": "^2.6",
+        "php": "^8.3",
         "staudenmeir/belongs-to-through": "^2.5",
         "staudenmeir/eloquent-has-many-deep": "^1.7",
-        "maatwebsite/excel": "^3.1"
+        "symfony/console": "^7.4 || ^8.0"
     },
     "require-dev": {
         "orchestra/testbench": "^11.0",
@@ -53,6 +54,9 @@
             "providers": [
                 "Innoboxrr\\LarapackGenerator\\Providers\\GeneratorServiceProvider"
             ]
+        },
+        "larapack": {
+            "schema": "schema/laraimport.schema.json"
         }
     }
 }

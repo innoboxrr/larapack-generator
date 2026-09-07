@@ -1,0 +1,274 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://innoboxrr.com/schemas/laraimport/1.json",
+    "title": "laraimport",
+    "description": "Definición declarativa de las entidades de un paquete. Es la única fuente de verdad: el generador produce el resto a partir de aquí.",
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["models"],
+    "properties": {
+        "$schema": {
+            "type": "string",
+            "description": "Opcional; permite que el editor valide el archivo mientras se escribe."
+        },
+        "version": {
+            "type": "integer",
+            "const": 1,
+            "default": 1
+        },
+        "models": {
+            "type": "array",
+            "minItems": 1,
+            "items": { "$ref": "#/$defs/model" }
+        },
+        "pivots": {
+            "type": "array",
+            "default": [],
+            "items": { "$ref": "#/$defs/pivot" }
+        }
+    },
+    "$defs": {
+        "model": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "props"],
+            "properties": {
+                "name": {
+                    "$ref": "#/$defs/pascalCase",
+                    "description": "Nombre de la clase del modelo, en PascalCase y singular. Todo lo demás se deriva de aquí."
+                },
+                "props": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": { "$ref": "#/$defs/prop" }
+                },
+                "metas": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Genera la tabla y el modelo de metadatos asociados."
+                },
+                "editable_metas": {
+                    "type": "array",
+                    "default": [],
+                    "items": { "$ref": "#/$defs/snakeCase" }
+                },
+                "load_relations": {
+                    "type": "array",
+                    "default": [],
+                    "items": { "$ref": "#/$defs/relation" }
+                },
+                "load_counts": {
+                    "type": "array",
+                    "default": [],
+                    "items": { "$ref": "#/$defs/snakeCase" },
+                    "description": "Relaciones cuyo conteo puede pedirse con withCount."
+                },
+                "requests": {
+                    "type": "array",
+                    "default": [],
+                    "items": { "$ref": "#/$defs/request" }
+                },
+                "assignments": {
+                    "type": "array",
+                    "deprecated": true,
+                    "description": "No se usa. El trait de asignaciones se genera vacío para que lo completes."
+                },
+                "filters": {
+                    "type": "array",
+                    "deprecated": true,
+                    "description": "No se usa. FiltersTool genera un conjunto fijo de filtros."
+                }
+            }
+        },
+        "prop": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "type"],
+            "properties": {
+                "name": { "$ref": "#/$defs/snakeCase" },
+                "type": {
+                    "$ref": "#/$defs/columnType",
+                    "description": "Tipo de columna de Blueprint."
+                },
+                "nullable": { "type": "boolean", "default": false },
+                "default": {
+                    "type": ["string", "number", "boolean", "null"],
+                    "default": null
+                },
+                "constraint": {
+                    "type": ["string", "null"],
+                    "default": null,
+                    "description": "Tabla a la que apunta la clave foránea. Sólo tiene efecto con type: foreignId."
+                },
+                "cast": {
+                    "type": ["string", "null"],
+                    "default": null,
+                    "description": "Cast de Eloquent; se declara en el método casts() del modelo."
+                },
+                "fillable": { "type": "boolean", "default": true },
+                "creatable": { "type": "boolean", "default": true },
+                "updatable": { "type": "boolean", "default": true },
+                "exports_cols": { "type": "boolean", "default": true },
+                "form": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Aparece como campo en los formularios generados."
+                },
+                "form_component": {
+                    "oneOf": [
+                        { "$ref": "#/$defs/formComponent" },
+                        { "type": "null" }
+                    ],
+                    "default": null,
+                    "description": "Componente de innoboxrr-form-elements con el que se pinta. Obligatorio si form es true."
+                },
+                "form_submit": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Se envía al crear o actualizar. Si form es false, llega al formulario como prop."
+                },
+                "datatable": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Aparece como columna de la tabla."
+                },
+                "enum": {
+                    "type": "object",
+                    "minProperties": 1,
+                    "additionalProperties": { "type": "string" },
+                    "description": "Valor a etiqueta. Convierte el campo en un select."
+                }
+            },
+            "allOf": [
+                {
+                    "if": { "properties": { "form": { "const": true } }, "required": ["form"] },
+                    "then": {
+                        "required": ["form_component"],
+                        "properties": { "form_component": { "$ref": "#/$defs/formComponent" } },
+                        "$comment": "Sin componente el generador sólo puede dejar un comentario en el formulario."
+                    }
+                },
+                {
+                    "if": { "properties": { "type": { "const": "foreignId" } }, "required": ["type"] },
+                    "then": {
+                        "required": ["constraint"],
+                        "properties": { "constraint": { "type": "string", "minLength": 1 } },
+                        "$comment": "Una foreignId sin tabla a la que apuntar genera una migración incompleta."
+                    }
+                }
+            ]
+        },
+        "relation": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["type", "related", "name"],
+            "properties": {
+                "type": {
+                    "enum": ["belongsTo", "hasOne", "hasMany", "belongsToMany", "morphTo", "morphOne", "morphMany", "morphToMany"]
+                },
+                "related": {
+                    "$ref": "#/$defs/pascalCase",
+                    "description": "Modelo relacionado. Si está definido en este mismo archivo, su namespace se resuelve solo."
+                },
+                "name": {
+                    "$ref": "#/$defs/snakeCase",
+                    "description": "Nombre del método de relación."
+                },
+                "namespace": {
+                    "type": "string",
+                    "description": "Sólo si el modelo relacionado vive fuera de este paquete. Por omisión se resuelve contra los modelos de este archivo y, si no está, contra App\\Models."
+                }
+            }
+        },
+        "request": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name"],
+            "properties": {
+                "name": {
+                    "enum": ["Create", "Update"],
+                    "description": "Sólo estos dos reciben reglas desde aquí; el resto las derivan del modelo."
+                },
+                "rules": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": ["string", "array"],
+                        "items": { "type": "string" }
+                    },
+                    "description": "Reglas de validación de Laravel, por campo."
+                }
+            }
+        },
+        "pivot": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "props"],
+            "properties": {
+                "name": {
+                    "$ref": "#/$defs/snakeCase",
+                    "description": "Nombre de la tabla pivote, por convención los dos modelos en singular y orden alfabético."
+                },
+                "props": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": { "$ref": "#/$defs/pivotProp" }
+                }
+            }
+        },
+        "pivotProp": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "type"],
+            "properties": {
+                "name": { "$ref": "#/$defs/snakeCase" },
+                "type": { "$ref": "#/$defs/columnType" },
+                "nullable": { "type": "boolean", "default": false },
+                "default": { "type": ["string", "number", "boolean", "null"], "default": null },
+                "constraint": { "type": ["string", "null"], "default": null }
+            },
+            "allOf": [
+                {
+                    "if": { "properties": { "type": { "const": "foreignId" } }, "required": ["type"] },
+                    "then": {
+                        "required": ["constraint"],
+                        "properties": { "constraint": { "type": "string", "minLength": 1 } }
+                    }
+                }
+            ]
+        },
+        "pascalCase": {
+            "type": "string",
+            "pattern": "^[A-Z][A-Za-z0-9]*$",
+            "minLength": 1
+        },
+        "snakeCase": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*$",
+            "minLength": 1
+        },
+        "columnType": {
+            "enum": [
+                "bigIncrements", "bigInteger", "binary", "boolean", "char", "date", "dateTime",
+                "dateTimeTz", "decimal", "double", "enum", "float", "foreignId", "foreignUuid",
+                "geometry", "increments", "integer", "ipAddress", "json", "jsonb", "longText",
+                "macAddress", "mediumInteger", "mediumText", "morphs", "nullableMorphs",
+                "smallInteger", "string", "text", "time", "timeTz", "timestamp", "timestampTz",
+                "tinyInteger", "tinyText", "unsignedBigInteger", "unsignedInteger",
+                "unsignedSmallInteger", "unsignedTinyInteger", "uuid", "year"
+            ]
+        },
+        "formComponent": {
+            "enum": [
+                "AvatarInputComponent", "CheckboxInputComponent", "ClickToEditComponent",
+                "CodeInputComponent", "CodeMirrorComponent", "ColorPickerInputComponent",
+                "CountrySelectInputComponent", "DynamicGroupInputComponent", "EditorInputComponent",
+                "FileDropInputComponent", "FileInputComponent", "FqsInputComponent",
+                "ModelSearchInputComponent", "MultiCheckboxInputComponent", "PolymorphicInputComponent",
+                "RadioInputComponent", "SelectInputComponent", "SelectSearchInputComponent",
+                "SimpleFileInputComponent", "SingleCheckboxInputComponent", "StarsInputComponent",
+                "SwitchComponent", "TagsInputComponent", "TextEditorMonoStyleInputComponent",
+                "TextInputComponent", "TextareaInputComponent", "TimezoneSelectInputComponent"
+            ]
+        }
+    }
+}
