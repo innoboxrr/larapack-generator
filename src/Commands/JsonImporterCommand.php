@@ -24,7 +24,8 @@ class JsonImporterCommand extends Command
         $this->setName('larapack:import')
             ->setDescription('Import models and migrations from a JSON file')
             ->addArgument('jsonPath', InputArgument::OPTIONAL, 'The path to the JSON file')
-            ->addOption('vue', null, InputOption::VALUE_NONE, 'Include ModelView in commands');
+            ->addOption('vue', null, InputOption::VALUE_NONE, 'Genera tambien el modulo Vue de cada modelo')
+            ->addOption('react', null, InputOption::VALUE_NONE, 'Genera tambien el modulo React de cada modelo');
 
         $this->addGenerationOptions();
     }
@@ -67,7 +68,10 @@ class JsonImporterCommand extends Command
 
                 $this->callMakeFullModelCommand(
                     $model['name'],
-                    $input->getOption('vue'),
+                    [
+                        'vue' => (bool) $input->getOption('vue'),
+                        'react' => (bool) $input->getOption('react'),
+                    ],
                     $model['metas'],
                     $output
                 );
@@ -93,7 +97,10 @@ class JsonImporterCommand extends Command
         return Command::SUCCESS;
     }
 
-    private function callMakeFullModelCommand($modelName, $includeVue, $metas, OutputInterface $output)
+    /**
+     * @param  array<string, bool>  $ui  que modulos de interfaz generar
+     */
+    private function callMakeFullModelCommand($modelName, array $ui, $metas, OutputInterface $output)
     {
         // Crear la instancia del comando MakeFullModelCommand
         $command = new MakeFullModelCommand();
@@ -103,9 +110,10 @@ class JsonImporterCommand extends Command
             'name' => $modelName
         ];
 
-        // Si la opción --vue está presente, añadirla a los argumentos
-        if ($includeVue) {
-            $arguments['--vue'] = true;
+        foreach ($ui as $framework => $requested) {
+            if ($requested) {
+                $arguments['--' . $framework] = true;
+            }
         }
 
         // Si la opción --metas está presente, añadirla a los argumentos

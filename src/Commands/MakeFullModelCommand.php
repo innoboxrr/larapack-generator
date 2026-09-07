@@ -38,7 +38,8 @@ class MakeFullModelCommand extends Command
         $this->setName('larapack:full-model')
             ->setDescription('Create a completo model enviroment')
             ->addArgument('name', InputArgument::REQUIRED, 'The name of the model class')
-            ->addOption('vue', 'vue', InputOption::VALUE_NONE, 'Include ModelView in commands')
+            ->addOption('vue', null, InputOption::VALUE_NONE, 'Genera tambien el modulo Vue del modelo')
+            ->addOption('react', null, InputOption::VALUE_NONE, 'Genera tambien el modulo React del modelo')
             ->addOption('metas', 'metas', InputOption::VALUE_NONE, 'Include Metas in commands');
 
         $this->addGenerationOptions();
@@ -49,12 +50,17 @@ class MakeFullModelCommand extends Command
         $this->applyGenerationOptions($input);
 
         $modelName = $input->getArgument('name');
-        $includeModelView = $input->getOption('vue');
         $includeMetas = $input->getOption('metas');
         $commands = $this->commands;
 
-        if ($includeModelView) {
+        // La UI es opcional y no excluyente: el mismo laraimport puede generar
+        // los dos modulos, que consumen el mismo contrato.
+        if ($input->getOption('vue')) {
             $commands[] = 'ModelView';
+        }
+
+        if ($input->getOption('react')) {
+            $commands[] = 'ReactView';
         }
 
         if ($includeMetas) {

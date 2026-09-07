@@ -32,7 +32,7 @@ class RemoveFullModelCommand extends Command
         'Route',
         'Test'
     ];
-    
+
     protected function configure(): void
     {
 
@@ -41,7 +41,8 @@ class RemoveFullModelCommand extends Command
         $this->setName('larapack:remove-full-model')
             ->setDescription('Elimina todas las entidades relacionadas con un modelo')
             ->addArgument('name', InputArgument::REQUIRED, 'The name of the model class')
-            ->addOption('vue', 'vue', InputOption::VALUE_NONE, 'Include ModelView in commands');
+            ->addOption('vue', null, InputOption::VALUE_NONE, 'Elimina tambien el modulo Vue del modelo')
+            ->addOption('react', null, InputOption::VALUE_NONE, 'Elimina tambien el modulo React del modelo');
 
     }
 
@@ -50,14 +51,19 @@ class RemoveFullModelCommand extends Command
         $this->applyRootOption($input);
 
         $modelName = $input->getArgument('name');
-        $includeModelView = $input->getOption('vue');
         $commands = $this->commands;
 
-        if ($includeModelView) {
+        if ($input->getOption('vue')) {
             $commands[] = 'ModelView';
         }
-        
-        foreach($this->commands as $command) {
+
+        if ($input->getOption('react')) {
+            $commands[] = 'ReactView';
+        }
+
+        // Se iteraba $this->commands en vez de $commands, asi que --vue nunca
+        // llegaba a borrar el modulo generado.
+        foreach ($commands as $command) {
             $className = '\Innoboxrr\LarapackGenerator\Tools\\' . $command . '\\' . $command . 'Tool';
             if (class_exists($className)) {
                 $class = new \ReflectionClass($className);
