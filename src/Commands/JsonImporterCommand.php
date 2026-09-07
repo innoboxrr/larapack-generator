@@ -99,7 +99,7 @@ class JsonImporterCommand extends Command
         $resultCode = $command->run($input, $output);
 
         // Verificar si el comando fue exitoso
-        if ($resultCode == 1) {
+        if ($resultCode === Command::SUCCESS) {
             $output->writeln("<info>Model {$modelName} created successfully</info>");
         } else {
             $output->writeln("<error>Model {$modelName} could not be created</error>");

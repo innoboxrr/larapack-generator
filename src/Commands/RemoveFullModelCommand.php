@@ -58,7 +58,7 @@ class RemoveFullModelCommand extends Command
                 ($class->newInstance())->remove($modelName);
             }
         }
-        return 1;
+        return Command::SUCCESS;
     }
 
 }

@@ -61,7 +61,7 @@ class MakeFullModelCommand extends Command
                 ($class->newInstance())->create($modelName);
             }
         }
-        return 1;
+        return Command::SUCCESS;
     }
 
 }

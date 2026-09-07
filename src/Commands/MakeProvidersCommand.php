@@ -39,7 +39,7 @@ class MakeProvidersCommand extends Command
 
         }
 
-        return 1;
+        return Command::SUCCESS;
 
     }
 

@@ -24,7 +24,7 @@ class MakePivotMigrationCommand extends Command
         $tableName = $input->getArgument('name');
         $maker = new PivotMigrationTool();
         $maker->create($tableName);
-        return 1;
+        return Command::SUCCESS;
     }
 
 }

@@ -27,7 +27,7 @@ class MakeRouteServiceProviderCommand extends Command
 
         $maker->create();
 
-        return 1;
+        return Command::SUCCESS;
 
     }
 

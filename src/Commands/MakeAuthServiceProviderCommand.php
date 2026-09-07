@@ -27,7 +27,7 @@ class MakeAuthServiceProviderCommand extends Command
 
         $maker->create();
 
-        return 1;
+        return Command::SUCCESS;
 
     }
 

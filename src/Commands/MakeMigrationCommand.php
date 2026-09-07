@@ -24,7 +24,7 @@ class MakeMigrationCommand extends Command
         $modelName = $input->getArgument('name');
         $maker = new MigrationTool();
         $maker->create($modelName);
-        return 1;
+        return Command::SUCCESS;
     }
 
 }
