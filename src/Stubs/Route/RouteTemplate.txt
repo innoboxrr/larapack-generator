@@ -1,33 +1,34 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+use Namespace\Http\Controllers\PascalCaseModelNameController;
 
-Route::get('policies', 'PascalCaseModelNameController@policies')
+Route::get('policies', [PascalCaseModelNameController::class, 'policies'])
 	->name('policies');
 
-Route::get('policy', 'PascalCaseModelNameController@policy')
+Route::get('policy', [PascalCaseModelNameController::class, 'policy'])
 	->name('policy');
 
-Route::get('index', 'PascalCaseModelNameController@index')
+Route::get('index', [PascalCaseModelNameController::class, 'index'])
 	->name('index');
 
-Route::get('show', 'PascalCaseModelNameController@show')
+Route::get('show', [PascalCaseModelNameController::class, 'show'])
 	->name('show');
 
-Route::post('create', 'PascalCaseModelNameController@create')
+Route::post('create', [PascalCaseModelNameController::class, 'create'])
 	->name('create');
 
-Route::put('update', 'PascalCaseModelNameController@update')
+Route::put('update', [PascalCaseModelNameController::class, 'update'])
 	->name('update');
 
-Route::delete('delete', 'PascalCaseModelNameController@delete')
+Route::delete('delete', [PascalCaseModelNameController::class, 'delete'])
 	->name('delete');
 
-Route::post('restore', 'PascalCaseModelNameController@restore')
+Route::post('restore', [PascalCaseModelNameController::class, 'restore'])
 	->name('restore');
 
-Route::delete('force-delete', 'PascalCaseModelNameController@forceDelete')
+Route::delete('force-delete', [PascalCaseModelNameController::class, 'forceDelete'])
 	->name('force.delete');
 
-Route::post('export', 'PascalCaseModelNameController@export')
+Route::post('export', [PascalCaseModelNameController::class, 'export'])
 	->name('export');

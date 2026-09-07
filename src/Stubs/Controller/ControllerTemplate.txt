@@ -2,6 +2,8 @@
 
 namespace Namespace\Http\Controllers;
 
+use Illuminate\Routing\Controllers\HasMiddleware;
+use Illuminate\Routing\Controllers\Middleware;
 use Namespace\Http\Requests\PascalCaseModelName\{
     PoliciesRequest,
     PolicyRequest,
@@ -15,16 +17,23 @@ use Namespace\Http\Requests\PascalCaseModelName\{
     ExportRequest
 };
 
-class PascalCaseModelNameController extends Controller
+class PascalCaseModelNameController extends Controller implements HasMiddleware
 {
-    public function __construct()
+    /**
+     * Middleware aplicado a las acciones del controlador.
+     *
+     * @return array<int, \Illuminate\Routing\Controllers\Middleware|string>
+     */
+    public static function middleware(): array
     {
-        $this->middleware('auth:sanctum');
+        return [
+            new Middleware('auth:sanctum'),
+        ];
     }
 
     public function policies(PoliciesRequest $request)
     {
-        return $request->handle($this);   
+        return $request->handle($this);
     }
 
     public function policy(PolicyRequest $request)
@@ -34,41 +43,41 @@ class PascalCaseModelNameController extends Controller
 
     public function index(IndexRequest $request)
     {
-        return $request->handle();   
+        return $request->handle();
     }
 
     public function show(ShowRequest $request)
     {
-        return $request->handle();   
+        return $request->handle();
     }
 
     public function create(CreateRequest $request)
     {
-        return $request->handle();   
+        return $request->handle();
     }
 
     public function update(UpdateRequest $request)
     {
-        return $request->handle();   
+        return $request->handle();
     }
 
     public function delete(DeleteRequest $request)
     {
-        return $request->handle();   
+        return $request->handle();
     }
 
     public function restore(RestoreRequest $request)
     {
-        return $request->handle();   
+        return $request->handle();
     }
 
     public function forceDelete(ForceDeleteRequest $request)
     {
-        return $request->handle();   
+        return $request->handle();
     }
 
     public function export(ExportRequest $request)
     {
-        return $request->handle();   
+        return $request->handle();
     }
 }
