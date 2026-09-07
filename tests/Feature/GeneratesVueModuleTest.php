@@ -139,18 +139,17 @@ final class GeneratesVueModuleTest extends TestCase
     }
 
     /**
-     * Un form_component que no existe en innoboxrr-form-elements es una errata
-     * del JSON. Emitir el import igualmente rompia el build del modulo entero.
+     * El generador soporta los 27 componentes de innoboxrr-form-elements, no
+     * solo los cuatro que trataba el switch original: los que no necesitan
+     * atributos propios se emiten con la misma forma.
      */
-    public function test_un_componente_inexistente_no_se_importa(): void
+    public function test_soporta_cualquier_componente_del_paquete_de_formularios(): void
     {
         $create = $this->project->read(self::MODULE . '/forms/CreateForm.vue');
 
-        $this->assertStringNotContainsString('NoExisteComponent', $create);
-        $this->assertStringContainsString(
-            '<!-- status: declara form_component en el JSON de importacion -->',
-            $create
-        );
+        $this->assertStringContainsString('<CheckboxInputComponent', $create);
+        $this->assertStringContainsString('        CheckboxInputComponent,', $create);
+        $this->assertStringContainsString('v-model="form.status"', $create);
     }
 
     public function test_la_tabla_ordena_por_una_columna_que_muestra(): void
