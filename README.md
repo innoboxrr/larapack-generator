@@ -120,6 +120,67 @@ larapack:test                    - Crea una nueva clase de test.
 larapack:remove-full-model       - Elimina todas las entidades de un modelo.
 ```
 
+## Regenerar sin destruir
+
+El generador anota lo que produce en `.larapack/manifest.json`: cada archivo,
+la plantilla de la que salió y el hash de su contenido en ese momento. Con eso
+sabe distinguir lo que escribió él de lo que has escrito tú.
+
+```
+php artisan larapack:model Post --dry-run    # dice qué haría, sin escribir
+php artisan larapack:model Post --force      # regenera
+php artisan larapack:model Post --format=json
+```
+
+`--force` **nunca sobrescribe un archivo cuyo hash haya cambiado**. Si lo has
+editado, se conserva y se te dice. Un archivo que el manifiesto no conoce se
+respeta igual: el generador no toca lo que no escribió él.
+
+El manifiesto debe versionarse con el proyecto. Sin él, el generador no puede
+distinguir tu código del suyo y se vuelve conservador con todo.
+
+## Verificar la arquitectura
+
+```
+php artisan larapack:verify
+php artisan larapack:verify --strict          # los avisos cuentan como fallos
+php artisan larapack:verify --format=json
+```
+
+Comprueba cuatro cosas:
+
+| Comprobación | Nivel | Qué detecta |
+| --- | --- | --- |
+| `missing-file` | error | Algo que se generó y ya no está |
+| `customised` | info | Editado a mano; no se podrá regenerar sin perderlo |
+| `inconsistent-entity` | aviso | Una entidad sin un componente que todas las demás tienen |
+| `route-prefix` | error | El `API_ROUTE_PREFIX` del módulo JS dejó de cuadrar con el `->as()` del RouteServiceProvider |
+
+Devuelve un código de salida distinto de cero si hay errores, así que sirve
+como puerta en CI. La salida en JSON está pensada para que un agente lea qué
+corregir en lugar de raspar texto:
+
+```json
+{
+  "ok": false,
+  "errors": 1,
+  "warnings": 0,
+  "findings": [
+    {
+      "level": "error",
+      "check": "missing-file",
+      "model": "Post",
+      "file": "src/Policies/PostPolicy.php",
+      "message": "Se generó pero ya no existe. Regenéralo con --force o retíralo del manifiesto."
+    }
+  ]
+}
+```
+
+No intenta adivinar si una clase "tiene demasiada lógica": esa clase de
+comprobación produce falsos positivos y acaba desactivándose. Sólo verifica lo
+que es determinista.
+
 ## Ejemplo de JSON de Importación 
 
 ```json
