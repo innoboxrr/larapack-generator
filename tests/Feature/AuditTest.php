@@ -195,6 +195,36 @@ final class AuditTest extends TestCase
         ]));
     }
 
+    public function test_no_estrecha_las_peer_dependencies(): void
+    {
+        // Una libreria que declara `react: ^18 || ^19` como peer esta diciendo
+        // contra que puede funcionar, no contra que se construye. Exigirle la
+        // version exacta de la linea base la volveria peor.
+        $package = $this->package("con-peers", [
+            "name" => "innoboxrr/con-peers",
+            "description" => "x",
+            "license" => "MIT",
+            "autoload" => ["psr-4" => ["X\\" => "src/"]],
+            "require" => ["php" => "^8.3"],
+        ]);
+
+        file_put_contents("{$package}/package.json", (string) json_encode([
+            "name" => "innoboxrr-con-peers",
+            "version" => "1.0.0",
+            "license" => "MIT",
+            "type" => "module",
+            "exports" => ["." => "./index.js"],
+            "files" => ["index.js"],
+            "sideEffects" => false,
+            "engines" => ["node" => ">=20"],
+            "peerDependencies" => ["react" => "^18.0.0 || ^19.0.0"],
+        ]));
+
+        $this->withTests($package);
+        $this->withWorkflows($package, ["tests.yml", "release.yml"]);
+
+        $this->assertNotHasCheck("js-version", $this->audit($package));
+    }
     /**
      * @param  array<string, mixed>  $composer
      */

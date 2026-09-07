@@ -193,10 +193,14 @@ final class Ecosystem
             $findings[] = $this->finding(self::WARNING, 'node-engines', $name, "Declara `engines.node: {$declared}` y la línea base es `{$expectedEngines}`.");
         }
 
+        // Las peerDependencies quedan fuera a proposito. Una libreria que
+        // declara `react: ^18 || ^19` esta haciendo lo correcto: dice contra
+        // que puede funcionar, no contra que se construye. Exigirle la version
+        // exacta de la linea base la volveria mas estrecha sin ganar nada, y
+        // un aviso que no hay que atender es como se deja de mirar el resto.
         $deps = array_merge(
             is_array($npm['dependencies'] ?? null) ? $npm['dependencies'] : [],
             is_array($npm['devDependencies'] ?? null) ? $npm['devDependencies'] : [],
-            is_array($npm['peerDependencies'] ?? null) ? $npm['peerDependencies'] : [],
         );
 
         foreach ($rules['js'] ?? [] as $package => $expected) {
