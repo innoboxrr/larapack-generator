@@ -1,0 +1,40 @@
+{
+    "$comment": "Fuente de verdad de versiones del ecosistema innoboxrr. Lo ejerce `larapack:audit`. Un paquete que no cumpla esto no debe publicarse.",
+    "version": 1,
+    "php": {
+        "require": "^8.3",
+        "matrix": ["8.3", "8.4"]
+    },
+    "laravel": {
+        "illuminate": "^13.0",
+        "testbench": "^11.0"
+    },
+    "dev": {
+        "phpunit/phpunit": "^12.0 || ^13.0",
+        "laravel/pint": "^1.18",
+        "larastan/larastan": "^3.0"
+    },
+    "node": {
+        "engines": ">=20",
+        "ci": "22"
+    },
+    "js": {
+        "vite": "^7.1.0",
+        "vitest": "^3.0.0",
+        "vue": "^3.5.0",
+        "react": "^19.0.0"
+    },
+    "internal": {
+        "innoboxrr/larapack-generator": "^6.0",
+        "innoboxrr/traits": "^2.0",
+        "innoboxrr/search-surge": "^3.0"
+    },
+    "required": {
+        "composer": ["name", "description", "license", "autoload"],
+        "npm": ["name", "version", "license", "type", "exports", "files", "sideEffects"]
+    },
+    "workflows": {
+        "composer": ["tests.yml", "release.yml"],
+        "npm": ["tests.yml", "release.yml"]
+    }
+}
