@@ -57,14 +57,14 @@ export default function ShowView() {
         <div>
             <Breadcrumbs pages={breadcrumbs} />
 
-            <div className="uk-container uk-container-expand">
-                <div className="uk-grid-small" uk-grid="">
+            <div className="fe-container-wide">
+                <div className="fe-split">
 
-                    <div className="uk-width-1-3@m uk-width-1-1@s">
+                    <div>
                         <ModelCard camelCaseModelName={camelCaseModelName} />
                     </div>
 
-                    <div className="uk-width-expand uk-width-1-2@m uk-width-1-1@s">
+                    <div>
                         {isShowView
                             ? <ModelProfile camelCaseModelName={camelCaseModelName} />
                             : <Outlet context={{ onUpdateData: load }} />}

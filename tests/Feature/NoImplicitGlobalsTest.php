@@ -64,6 +64,26 @@ final class NoImplicitGlobalsTest extends TestCase
         $this->assertSame([], $offenders, implode("\n", $offenders));
     }
 
+    public function test_ningun_stub_depende_de_uikit(): void
+    {
+        // UIkit no lo declaraba ningún package.json del ecosistema: se
+        // consumía como CSS global del anfitrión, así que un módulo generado
+        // solo se veía bien dentro de una aplicación que ya lo trajera. La
+        // maquetación sale ahora del sistema de diseño de form-core.
+        $offenders = [];
+
+        foreach ($this->stubFiles() as $file) {
+            $contents = $this->withoutComments((string) file_get_contents($file));
+
+            if (preg_match_all('/\buk-[a-z0-9@-]+/', $contents, $matches)) {
+                $offenders[] = basename(dirname($file)) . '/' . basename($file)
+                    . ': ' . implode(', ', array_unique($matches[0]));
+            }
+        }
+
+        $this->assertSame([], $offenders, implode("\n", $offenders));
+    }
+
     public function test_las_dos_ramas_generan_los_componentes_compartidos(): void
     {
         foreach ([

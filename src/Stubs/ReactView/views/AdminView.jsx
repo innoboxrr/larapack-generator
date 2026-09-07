@@ -28,7 +28,7 @@ export default function AdminView() {
         <div id="AdminPluralPascalCaseModelNameWrapper">
 
             {isIndex ? (
-                <div className="uk-section uk-section-xsmall">
+                <div className="fe-section-sm">
                     <Breadcrumbs pages={breadcrumbs} />
 
                     <DataTable key={crudKey} hideColumns={[]} />

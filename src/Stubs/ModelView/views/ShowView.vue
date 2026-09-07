@@ -4,14 +4,14 @@
 
         <Breadcrumbs :pages="breadcrumbs" />
 
-        <div class="uk-container uk-container-expand">
-            <div class="uk-grid-small" uk-grid>
+        <div class="fe-container-wide">
+            <div class="fe-split">
 
-                <div class="uk-width-1-3@m uk-width-1-1@s">
+                <div>
                     <ModelCard :kebabcasemodelname="camelCaseModelName" />
                 </div>
 
-                <div class="uk-width-expand uk-width-1-2@m uk-width-1-1@s">
+                <div>
 
                     <div v-if="isShowView">
                         <ModelProfile :kebabcasemodelname="camelCaseModelName" />

@@ -28,7 +28,7 @@ export default function FilterForm({ formId = 'camelCaseModelNameFilterForm', on
                 submit(form)
             }}>
 
-            <div className="uk-flex uk-flex-left uk-child-width-1-4@m uk-child-width-1-1@s" uk-grid="">
+            <div className="fe-filter-grid">
 
                 <div>
                     <TextInputComponent
@@ -44,7 +44,7 @@ export default function FilterForm({ formId = 'camelCaseModelNameFilterForm', on
 
             </div>
 
-            <div className="uk-flex uk-flex-right uk-child-width-auto@m uk-child-width-1-1@m" uk-grid="">
+            <div className="fe-filter-actions">
                 <div>
                     <ButtonComponent value={t('Search')} />
                 </div>

@@ -2,7 +2,7 @@
 
     <div id="AdminPluralPascalCaseModelNameWrapper">
 
-        <div v-if="isIndex" class="uk-section uk-section-xsmall">
+        <div v-if="isIndex" class="fe-section-sm">
 
             <Breadcrumbs :pages="breadcrumbs" />
 

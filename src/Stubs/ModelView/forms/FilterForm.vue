@@ -2,7 +2,7 @@
 
     <form :id="formId" @submit.prevent="onSubmit">
 
-        <div class="uk-flex uk-flex-left uk-child-width-1-4@m uk-child-width-1-1@s" uk-grid>
+        <div class="fe-filter-grid">
 
             <div>
                 <TextInputComponent
@@ -17,7 +17,7 @@
 
         </div>
 
-        <div class="uk-flex uk-flex-right uk-child-width-auto@m uk-child-width-1-1@m" uk-grid>
+        <div class="fe-filter-actions">
             <div>
                 <ButtonComponent :value="t('Search')" />
             </div>
