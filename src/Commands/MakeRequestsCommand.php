@@ -12,7 +12,7 @@ use Innoboxrr\LarapackGenerator\Tools\Requests\RequestsTool;
 class MakeRequestsCommand extends Command
 {
     
-    protected function configure()
+    protected function configure(): void
     {
 
         $this->setName('make:requests')

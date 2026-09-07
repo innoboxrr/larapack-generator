@@ -12,7 +12,7 @@ use Innoboxrr\LarapackGenerator\Tools\Providers\AuthServiceProviderTool;
 class MakeAuthServiceProviderCommand extends Command
 {
     
-    protected function configure()
+    protected function configure(): void
     {
 
         $this->setName('make:auth-service-provider')

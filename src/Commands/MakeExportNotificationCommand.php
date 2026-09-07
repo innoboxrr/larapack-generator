@@ -12,7 +12,7 @@ use Innoboxrr\LarapackGenerator\Tools\ExportNotification\ExportNotificationTool;
 class MakeExportNotificationCommand extends Command
 {
     
-    protected function configure()
+    protected function configure(): void
     {
 
         $this->setName('make:export-notification')

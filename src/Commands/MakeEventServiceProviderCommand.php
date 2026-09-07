@@ -12,7 +12,7 @@ use Innoboxrr\LarapackGenerator\Tools\Providers\EventServiceProviderTool;
 class MakeEventServiceProviderCommand extends Command
 {
     
-    protected function configure()
+    protected function configure(): void
     {
 
         $this->setName('make:event-service-provider')

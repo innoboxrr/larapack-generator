@@ -12,7 +12,7 @@ use Innoboxrr\LarapackGenerator\Tools\Export\ExportTool;
 class MakeExportCommand extends Command
 {
     
-    protected function configure()
+    protected function configure(): void
     {
 
         $this->setName('make:export')

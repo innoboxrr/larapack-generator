@@ -12,7 +12,7 @@ use Innoboxrr\LarapackGenerator\Tools\Policy\PolicyTool;
 class MakePolicyCommand extends Command
 {
     
-    protected function configure()
+    protected function configure(): void
     {
 
         $this->setName('make:policy')

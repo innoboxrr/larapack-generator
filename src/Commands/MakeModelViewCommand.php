@@ -12,7 +12,7 @@ use Innoboxrr\LarapackGenerator\Tools\ModelView\ModelViewTool;
 class MakeModelViewCommand extends Command
 {
     
-    protected function configure()
+    protected function configure(): void
     {
 
         $this->setName('make:model-view')

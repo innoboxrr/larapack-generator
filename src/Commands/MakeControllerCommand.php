@@ -12,7 +12,7 @@ use Innoboxrr\LarapackGenerator\Tools\Controller\ControllerTool;
 class MakeControllerCommand extends Command
 {
     
-    protected function configure()
+    protected function configure(): void
     {
 
         $this->setName('make:controller')

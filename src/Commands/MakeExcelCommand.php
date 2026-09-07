@@ -12,7 +12,7 @@ use Innoboxrr\LarapackGenerator\Tools\Excel\ExcelTool;
 class MakeExcelCommand extends Command
 {
     
-    protected function configure()
+    protected function configure(): void
     {
 
         $this->setName('make:excel')

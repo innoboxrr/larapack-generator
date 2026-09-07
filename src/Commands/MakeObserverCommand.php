@@ -12,7 +12,7 @@ use Innoboxrr\LarapackGenerator\Tools\Observer\ObserverTool;
 class MakeObserverCommand extends Command
 {
     
-    protected function configure()
+    protected function configure(): void
     {
 
         $this->setName('make:observer')

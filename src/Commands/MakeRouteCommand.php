@@ -12,7 +12,7 @@ use Innoboxrr\LarapackGenerator\Tools\Route\RouteTool;
 class MakeRouteCommand extends Command
 {
     
-    protected function configure()
+    protected function configure(): void
     {
 
         $this->setName('make:route')

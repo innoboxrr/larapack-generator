@@ -12,7 +12,7 @@ use Innoboxrr\LarapackGenerator\Tools\Model\ModelTool;
 class MakeModelCommand extends Command
 {
     
-    protected function configure()
+    protected function configure(): void
     {
 
         $this->setName('make:model')

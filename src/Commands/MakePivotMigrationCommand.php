@@ -12,7 +12,7 @@ use Innoboxrr\LarapackGenerator\Tools\Migration\PivotMigrationTool;
 class MakePivotMigrationCommand extends Command
 {
     
-    protected function configure()
+    protected function configure(): void
     {
         $this->setName('make:pivot-migration')
             ->setDescription('Create a new pivot migration class')

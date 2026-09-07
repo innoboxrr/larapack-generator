@@ -12,7 +12,7 @@ use Innoboxrr\LarapackGenerator\Tools\Factory\FactoryTool;
 class MakeFactoryCommand extends Command
 {
     
-    protected function configure()
+    protected function configure(): void
     {
 
         $this->setName('make:factory')

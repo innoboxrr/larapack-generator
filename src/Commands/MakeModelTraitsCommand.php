@@ -12,7 +12,7 @@ use Innoboxrr\LarapackGenerator\Tools\ModelTraits\ModelTraitsTool;
 class MakeModelTraitsCommand extends Command
 {
     
-    protected function configure()
+    protected function configure(): void
     {
 
         $this->setName('make:model-traits')

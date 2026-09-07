@@ -12,7 +12,7 @@ use Innoboxrr\LarapackGenerator\Tools\Test\TestTool;
 class MakeTestCommand extends Command
 {
     
-    protected function configure()
+    protected function configure(): void
     {
 
         $this->setName('make:test')

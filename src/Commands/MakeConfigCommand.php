@@ -12,7 +12,7 @@ use Innoboxrr\LarapackGenerator\Tools\Config\ConfigTool;
 class MakeConfigCommand extends Command
 {
     
-    protected function configure()
+    protected function configure(): void
     {
 
         $this->setName('make:config')

@@ -12,7 +12,7 @@ use Innoboxrr\LarapackGenerator\Tools\Events\EventsTool;
 class MakeEventsCommand extends Command
 {
     
-    protected function configure()
+    protected function configure(): void
     {
 
         $this->setName('make:events')

@@ -12,7 +12,7 @@ use Innoboxrr\LarapackGenerator\Tools\Resource\ResourceTool;
 class MakeResourceCommand extends Command
 {
     
-    protected function configure()
+    protected function configure(): void
     {
 
         $this->setName('make:resource')

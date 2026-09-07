@@ -12,7 +12,7 @@ use Innoboxrr\LarapackGenerator\Tools\Migration\MigrationTool;
 class MakeMigrationCommand extends Command
 {
     
-    protected function configure()
+    protected function configure(): void
     {
         $this->setName('make:migration')
             ->setDescription('Create a new migration class')

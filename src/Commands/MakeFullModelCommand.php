@@ -30,7 +30,7 @@ class MakeFullModelCommand extends Command
         'Test'
     ];
     
-    protected function configure()
+    protected function configure(): void
     {
         $this->setName('make:full-model')
             ->setDescription('Create a completo model enviroment')

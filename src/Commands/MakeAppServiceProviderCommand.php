@@ -12,7 +12,7 @@ use Innoboxrr\LarapackGenerator\Tools\Providers\AppServiceProviderTool;
 class MakeAppServiceProviderCommand extends Command
 {
     
-    protected function configure()
+    protected function configure(): void
     {
 
         $this->setName('make:app-service-provider')

@@ -12,7 +12,7 @@ use Innoboxrr\LarapackGenerator\Tools\Providers\RouteServiceProviderTool;
 class MakeRouteServiceProviderCommand extends Command
 {
     
-    protected function configure()
+    protected function configure(): void
     {
 
         $this->setName('make:route-service-provider')

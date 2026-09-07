@@ -14,9 +14,7 @@ use Innoboxrr\LarapackGenerator\Tools\PivotMigration\PivotMigrationTool;
 
 class JsonImporterCommand extends Command
 {
-    protected static $defaultName = 'json:importer';
-
-    protected function configure()
+    protected function configure(): void
     {
         $this->setName('json:importer')
             ->setDescription('Import models and migrations from a JSON file')
@@ -58,7 +56,7 @@ class JsonImporterCommand extends Command
 
         // Procesar pivotes (si es necesario)
         foreach ($data['pivots'] as $pivot) {
-            sleep(3);
+            sleep(3); // Garantiza timestamps únicos en los nombres de archivo de migración
             $output->writeln("Processing pivot: {$pivot['name']}");
             // Aquí puedes implementar el manejo de los pivotes si es necesario
             $tool = new PivotMigrationTool();

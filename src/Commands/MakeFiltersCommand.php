@@ -12,7 +12,7 @@ use Innoboxrr\LarapackGenerator\Tools\Filters\FiltersTool;
 class MakeFiltersCommand extends Command
 {
     
-    protected function configure()
+    protected function configure(): void
     {
 
         $this->setName('make:filters')

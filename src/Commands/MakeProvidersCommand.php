@@ -18,7 +18,7 @@ class MakeProvidersCommand extends Command
         'Route'
     ];
     
-    protected function configure()
+    protected function configure(): void
     {
 
         $this->setName('make:providers')

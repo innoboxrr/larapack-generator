@@ -30,7 +30,7 @@ class RemoveFullModelCommand extends Command
         'Test'
     ];
     
-    protected function configure()
+    protected function configure(): void
     {
 
         $this->setName('remove:full-model')
