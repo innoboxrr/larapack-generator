@@ -1,23 +1,44 @@
 #!/usr/bin/env php
-
 <?php
 
-$application = new Symfony\Component\Console\Application();
+use Symfony\Component\Console\Application;
 
-/** Inicio comandos de la aplicación */
+// Carga el autoloader tanto si el paquete se ejecuta clonado como si está
+// instalado dentro de vendor/ de un proyecto anfitrión.
+(static function (): void {
+    $candidates = [
+        __DIR__ . '/vendor/autoload.php',
+        __DIR__ . '/../../autoload.php',
+        __DIR__ . '/../../../autoload.php',
+    ];
 
-$commandFiles = glob(__DIR__ . '/src/Commands/*Command.php');
+    foreach ($candidates as $autoload) {
+        if (file_exists($autoload)) {
+            require_once $autoload;
 
-foreach ($commandFiles as $file) {
+            return;
+        }
+    }
+})();
 
-    $className = '\Innoboxrr\LarapackGenerator\Commands\\' . basename($file, '.php');
-    
-    $class = new ReflectionClass($className);
+$application = new Application('Larapack Generator');
 
-    $application->add($class->newInstance());
-    
+foreach (glob(__DIR__ . '/src/Commands/*Command.php') ?: [] as $file) {
+    $class = 'Innoboxrr\\LarapackGenerator\\Commands\\' . basename($file, '.php');
+
+    if (! class_exists($class)) {
+        continue;
+    }
+
+    $command = new $class();
+
+    // Symfony Console 7.4 deprecó Application::add() y 8.0 lo eliminó
+    // en favor de addCommand().
+    if (method_exists($application, 'addCommand')) {
+        $application->addCommand($command);
+    } else {
+        $application->add($command);
+    }
 }
-
-/** Fin comandos de la aplicación */
 
 $application->run();
