@@ -1,17 +1,24 @@
 {
     "name": "innoboxrr/larapack-generator",
+    "description": "Generador de scaffolding para paquetes y proyectos Laravel 13",
     "type": "library",
     "license": "MIT",
     "minimum-stability": "stable",
+    "prefer-stable": true,
     "require": {
+        "php": "^8.3",
+        "illuminate/support": "^13.0",
+        "symfony/console": "^7.4 || ^8.0",
+        "doctrine/inflector": "^2.0",
         "innoboxrr/search-surge": "^2.0",
+        "innoboxrr/traits": "^1.0",
         "staudenmeir/belongs-to-through": "^2.5",
         "staudenmeir/eloquent-has-many-deep": "^1.7",
-        "maatwebsite/excel": "^3.1",
-        "innoboxrr/traits": "^1.0"
+        "maatwebsite/excel": "^3.1"
     },
     "require-dev": {
-        "orchestra/testbench": "^9.0"
+        "orchestra/testbench": "^11.0",
+        "phpunit/phpunit": "^12.0 || ^13.0"
     },
     "autoload": {
         "psr-4": {
@@ -30,6 +37,9 @@
     "bin": [
         "builder"
     ],
+    "config": {
+        "sort-packages": true
+    },
     "extra": {
         "laravel": {
             "providers": [
