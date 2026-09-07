@@ -1,19 +1,25 @@
 name: Bump Semantic Tag on Master
 
+# Se dispara cuando el workflow de Tests termina en master, no en cada push:
+# etiquetar una version que no pasa los tests la publica rota en Packagist,
+# y un tag no se puede despublicar.
 on:
-    push:
-        branches:
-            - master
+    workflow_run:
+        workflows: ["Tests"]
+        types: [completed]
+        branches: [master]
 
 jobs:
     bump-version:
         runs-on: ubuntu-latest
+        if: ${{ github.event.workflow_run.conclusion == 'success' }}
 
         steps:
             - name: Checkout code
               uses: actions/checkout@v4
               with:
                   fetch-depth: 0  # Necesario para obtener todos los tags
+                  ref: ${{ github.event.workflow_run.head_sha }}
 
             - name: Set up Git
               run: |

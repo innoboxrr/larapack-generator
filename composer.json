@@ -28,6 +28,14 @@
             "src/Helpers/app.php"
         ]
     },
+    "autoload-dev": {
+        "psr-4": {
+            "Innoboxrr\\LarapackGenerator\\Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "test": "phpunit"
+    },
     "authors": [
         {
             "name": "Homero Raul",

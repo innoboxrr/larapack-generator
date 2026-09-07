@@ -1,0 +1,106 @@
+{
+    "models": [
+        {
+            "name": "Post",
+            "props": [
+                {
+                    "name": "title",
+                    "type": "string",
+                    "constraint": null,
+                    "default": null,
+                    "nullable": false,
+                    "fillable": true,
+                    "creatable": true,
+                    "updatable": true,
+                    "exports_cols": true,
+                    "cast": null,
+                    "form": true,
+                    "form_component": "TextInputComponent",
+                    "form_submit": true,
+                    "datatable": true
+                },
+                {
+                    "name": "payload",
+                    "type": "longText",
+                    "constraint": null,
+                    "default": null,
+                    "nullable": true,
+                    "fillable": true,
+                    "creatable": true,
+                    "updatable": true,
+                    "exports_cols": true,
+                    "cast": "json",
+                    "form": false,
+                    "form_component": null,
+                    "form_submit": false,
+                    "datatable": false
+                },
+                {
+                    "name": "published",
+                    "type": "boolean",
+                    "constraint": null,
+                    "default": false,
+                    "nullable": false,
+                    "fillable": true,
+                    "creatable": true,
+                    "updatable": true,
+                    "exports_cols": true,
+                    "cast": "boolean",
+                    "form": true,
+                    "form_component": "SelectInputComponent",
+                    "form_submit": true,
+                    "datatable": true
+                },
+                {
+                    "name": "user_id",
+                    "type": "foreignId",
+                    "constraint": "users",
+                    "default": null,
+                    "nullable": false,
+                    "fillable": true,
+                    "creatable": true,
+                    "updatable": true,
+                    "exports_cols": false,
+                    "cast": null,
+                    "form": false,
+                    "form_component": null,
+                    "form_submit": true,
+                    "datatable": false
+                }
+            ],
+            "metas": true,
+            "load_relations": [
+                {
+                    "type": "belongsTo",
+                    "namespace": "App\\Models",
+                    "related": "User",
+                    "name": "user"
+                }
+            ],
+            "editable_metas": ["seo_title"],
+            "assignments": [],
+            "filters": [],
+            "requests": [
+                {
+                    "name": "Create",
+                    "rules": {
+                        "title": "required|string|max:255",
+                        "payload": "nullable",
+                        "user_id": "required|exists:users,id"
+                    }
+                },
+                {
+                    "name": "Update",
+                    "rules": {
+                        "post_id": "required|numeric",
+                        "title": "nullable|string|max:255",
+                        "payload": "nullable",
+                        "user_id": "nullable|exists:users,id"
+                    }
+                }
+            ],
+            "load_counts": []
+        }
+    ],
+    "pivots": []
+}

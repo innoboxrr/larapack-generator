@@ -1,0 +1,38 @@
+name: Tests
+
+on:
+    push:
+        branches: [master]
+    pull_request:
+
+jobs:
+    test:
+        runs-on: ubuntu-latest
+
+        strategy:
+            fail-fast: false
+            matrix:
+                # 8.3 resuelve symfony/console 7.4 y 8.4+ resuelve 8.x, que
+                # tienen firmas distintas en Command::configure(). La matriz
+                # existe precisamente para cubrir esa diferencia.
+                php: ['8.3', '8.4', '8.5']
+
+        name: PHP ${{ matrix.php }}
+
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Set up PHP
+              uses: shivammathur/setup-php@v2
+              with:
+                  php-version: ${{ matrix.php }}
+                  coverage: none
+
+            - name: Install dependencies
+              run: composer update --prefer-dist --no-interaction --no-progress
+
+            - name: Report resolved versions
+              run: composer show symfony/console phpunit/phpunit laravel/framework | grep -E '^(name|versions)'
+
+            - name: Run tests
+              run: vendor/bin/phpunit
