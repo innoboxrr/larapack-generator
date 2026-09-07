@@ -281,8 +281,19 @@ que el agregador del módulo recorre el árbol de rutas y registra los nombres e
 `innoboxrr-react-datatable`. Para navegar desde una vista React usa
 `buildPath('AdminShowPost', { id })`, nunca una ruta escrita a mano.
 
-**Las clases CSS** (`inputClass`, `buttonClass`) viven en
-`resources/<ui>/src/theme.js`, no en un mixin global. Cámbialas ahí.
+**El aspecto** sale de un tema, no de clases escritas en cada formulario. Cada
+control lee su token —`input`, `select`, `textarea`, `checkbox`, `radio`,
+`button`—, así que **un formulario generado no lleva ninguna clase CSS**. Para
+cambiar el aspecto de todo el paquete, edita el `setTheme` de
+`resources/<ui>/src/theme.js`:
+
+```js
+setTheme({ input: 'form-control', button: 'btn btn-primary' })
+```
+
+Es el mismo tema (`innoboxrr-form-core`) para Vue y para React, así que los dos
+módulos se ven igual. **No añadas `customClass` a un input generado**: eso es
+para el caso puntual, y si lo usas en todos has vuelto al problema.
 
 ## El contrato front ↔ back
 
