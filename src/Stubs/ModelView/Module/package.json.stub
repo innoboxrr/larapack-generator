@@ -29,9 +29,9 @@
     "dependencies": {
         "innoboxrr-form-core": "^1.0.0",
         "innoboxrr-form-elements": "^4.1.0",
-        "innoboxrr-http-request": "^1.1.0",
+        "innoboxrr-http-request": "^2.0.0",
         "innoboxrr-i18n": "^1.0.0",
-        "innoboxrr-js-validator": "^1.1.1",
+        "innoboxrr-js-validator": "^2.0.0",
         "innoboxrr-route-resolver": "^1.0.0",
         "innoboxrr-vue-datatable": "^1.3.4"
     },

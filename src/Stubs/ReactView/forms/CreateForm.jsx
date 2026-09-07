@@ -27,12 +27,18 @@ export default function CreateForm({
 
     useEffect(() => {
         validator.current = new JSValidator(formId).init()
+
+        // Sin esto, un formulario que se monta y desmonta varias veces —un
+        // modal, una vista de edicion— acumula manejadores de submit.
+        return () => validator.current?.destroy()
     }, [formId])
 
     const handleSubmit = async (event) => {
         event.preventDefault()
 
-        if (! validator.current?.status) {
+        // validate() devuelve el resultado, asi que no depende de que el
+        // manejador del validador haya corrido antes que este.
+        if (! validator.current?.validate()) {
             return
         }
 

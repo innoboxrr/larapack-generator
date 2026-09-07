@@ -14,7 +14,7 @@
 
 <script setup>
 
-    import { onMounted, reactive, ref } from 'vue'
+    import { onMounted, onUnmounted, reactive, ref } from 'vue'
     import JSValidator from 'innoboxrr-js-validator'
     import t from 'innoboxrr-i18n'
     import {
@@ -61,13 +61,14 @@
         })
 
         validator.value = new JSValidator(props.formId).init()
-        validator.value.status = true
 
     })
 
+    onUnmounted(() => validator.value?.destroy())
+
     const onSubmit = async () => {
 
-        if (! validator.value?.status) {
+        if (! validator.value?.validate()) {
             return
         }
 

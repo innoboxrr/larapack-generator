@@ -14,7 +14,7 @@
 
 <script setup>
 
-    import { onMounted, reactive, ref } from 'vue'
+    import { onMounted, onUnmounted, reactive, ref } from 'vue'
     import JSValidator from 'innoboxrr-js-validator'
     import t from 'innoboxrr-i18n'
     import {
@@ -48,9 +48,15 @@
         validator.value = new JSValidator(props.formId).init()
     })
 
+    // Sin esto, un formulario que se monta y desmonta varias veces —un modal,
+    // una vista de edicion— acumula manejadores de submit.
+    onUnmounted(() => validator.value?.destroy())
+
     const onSubmit = async () => {
 
-        if (! validator.value?.status) {
+        // validate() devuelve el resultado, asi que no depende de que el
+        // manejador del validador haya corrido antes que este.
+        if (! validator.value?.validate()) {
             return
         }
 

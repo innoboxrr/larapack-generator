@@ -48,20 +48,20 @@ export default function EditForm({
             ))
 
             validator.current = new JSValidator(formId).init()
-            validator.current.status = true
         }
 
         load()
 
         return () => {
             alive = false
+            validator.current?.destroy()
         }
     }, [camelCaseModelNameId, fetchOne, formId])
 
     const handleSubmit = async (event) => {
         event.preventDefault()
 
-        if (! validator.current?.status) {
+        if (! validator.current?.validate()) {
             return
         }
 

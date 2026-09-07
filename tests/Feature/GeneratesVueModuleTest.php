@@ -210,6 +210,49 @@ final class GeneratesVueModuleTest extends TestCase
         $this->assertStringNotContainsString('bg-gray-400', $filter);
     }
 
+    /**
+     * El formulario leia `validator.status`, que empieza en false y solo pasa
+     * a true dentro del manejador del propio validador. Como el del formulario
+     * corre antes, el primer envio siempre se descartaba: habia que pulsar dos
+     * veces para crear un registro.
+     */
+    public function test_el_formulario_pregunta_al_validador_en_vez_de_leer_su_estado(): void
+    {
+        foreach (['CreateForm', 'EditForm'] as $form) {
+            $contents = $this->project->read(self::MODULE . "/forms/{$form}.vue");
+
+            $this->assertStringContainsString('validator.value?.validate()', $contents, "{$form} sigue leyendo .status.");
+            $this->assertStringNotContainsString('validator.value?.status', $contents);
+        }
+    }
+
+    /**
+     * Un formulario que se monta y desmonta varias veces —un modal, una vista
+     * de edicion— acumulaba manejadores de submit.
+     */
+    public function test_el_validador_se_desengancha_al_desmontar(): void
+    {
+        foreach (['CreateForm', 'EditForm'] as $form) {
+            $this->assertStringContainsString(
+                'destroy()',
+                $this->project->read(self::MODULE . "/forms/{$form}.vue"),
+                "{$form} no desengancha el validador."
+            );
+        }
+    }
+
+    /**
+     * El stub de edicion forzaba `status = true` justo despues del init para
+     * esquivar el fallo del validador. Con validate() ese parche sobra.
+     */
+    public function test_no_queda_el_parche_que_forzaba_el_estado(): void
+    {
+        $this->assertStringNotContainsString(
+            'status = true',
+            $this->project->read(self::MODULE . '/forms/EditForm.vue')
+        );
+    }
+
     public function test_el_package_json_del_modulo_es_valido(): void
     {
         $package = json_decode($this->project->read('resources/vue/package.json'), true);

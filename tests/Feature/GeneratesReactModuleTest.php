@@ -227,6 +227,35 @@ final class GeneratesReactModuleTest extends TestCase
         $this->assertStringNotContainsString('bg-gray-400', $filter);
     }
 
+    public function test_el_formulario_pregunta_al_validador_en_vez_de_leer_su_estado(): void
+    {
+        foreach (['CreateForm', 'EditForm'] as $form) {
+            $contents = $this->project->read(self::REACT . "/forms/{$form}.jsx");
+
+            $this->assertStringContainsString('validator.current?.validate()', $contents, "{$form} sigue leyendo .status.");
+            $this->assertStringNotContainsString('validator.current?.status', $contents);
+        }
+    }
+
+    public function test_el_validador_se_desengancha_al_desmontar(): void
+    {
+        foreach (['CreateForm', 'EditForm'] as $form) {
+            $this->assertStringContainsString(
+                'destroy()',
+                $this->project->read(self::REACT . "/forms/{$form}.jsx"),
+                "{$form} no desengancha el validador."
+            );
+        }
+    }
+
+    public function test_no_queda_el_parche_que_forzaba_el_estado(): void
+    {
+        $this->assertStringNotContainsString(
+            'status = true',
+            $this->project->read(self::REACT . '/forms/EditForm.jsx')
+        );
+    }
+
     public function test_el_package_json_del_modulo_es_valido(): void
     {
         $package = json_decode($this->project->read('resources/react/package.json'), true);
