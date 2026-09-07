@@ -1,0 +1,13 @@
+# El repositorio es LF, tambien en un checkout de Windows.
+#
+# Sin esto, autocrlf convertia los stubs a CRLF al cambiar de rama y el codigo
+# generado salia con finales de linea distintos segun quien lo generara. Los
+# tests que comparan el contenido generado lo notaban; el resto, no, y esa es
+# la parte peligrosa.
+* text=auto eol=lf
+
+# Binarios, sin tocar.
+*.png binary
+*.jpg binary
+*.gif binary
+*.ico binary

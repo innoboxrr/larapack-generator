@@ -10,7 +10,6 @@
         "illuminate/support": "^13.0",
         "innoboxrr/search-surge": "^3.0",
         "innoboxrr/traits": "^2.0",
-        "maatwebsite/excel": "^3.1",
         "opis/json-schema": "^2.6",
         "php": "^8.3",
         "staudenmeir/belongs-to-through": "^2.5",
@@ -58,5 +57,8 @@
         "larapack": {
             "schema": "schema/laraimport.schema.json"
         }
+    },
+    "suggest": {
+        "maatwebsite/excel": "Necesario en el proyecto destino si se usan las clases de exportacion que genera este paquete (^3.1)."
     }
 }
