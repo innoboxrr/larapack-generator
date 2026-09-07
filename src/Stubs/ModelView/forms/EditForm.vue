@@ -24,6 +24,7 @@
 //import_more_components//
     } from 'innoboxrr-form-elements'
 
+    import { buttonClass, inputClass } from '../../../theme'
     import { usePascalCaseModelNameStore } from '../store'
 
     const props = defineProps({
