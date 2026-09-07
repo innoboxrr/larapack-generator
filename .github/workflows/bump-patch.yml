@@ -12,7 +12,12 @@ on:
 jobs:
     bump-version:
         runs-on: ubuntu-latest
-        if: ${{ github.event.workflow_run.conclusion == 'success' }}
+        if: >
+            github.event.workflow_run.conclusion == 'success' &&
+            github.event.workflow_run.event == 'push'
+
+        permissions:
+            contents: write
 
         steps:
             - name: Checkout code
@@ -29,7 +34,14 @@ jobs:
             - name: Get latest tag and bump version
               id: bump
               run: |
-                  latestTag=$(git tag --sort=-creatordate | head -n 1)
+                  # El tag mas ALTO, no el mas reciente, y solo los que son
+                  # semver de verdad: con --sort=-creatordate basta un tag
+                  # v1.0.1 para que la lectura con IFS deje major='v1', que en
+                  # aritmetica de bash vale 0, y el bump retroceda.
+                  latestTag=$(git tag --list \
+                      | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' \
+                      | sort -t. -k1,1n -k2,2n -k3,3n \
+                      | tail -n 1)
 
                   if [ -z "$latestTag" ]; then
                       major=0
