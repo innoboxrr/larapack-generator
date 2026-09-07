@@ -10,6 +10,9 @@ use Innoboxrr\SearchSurge\Search\Support\DataContainer;
 class UpdatedFilter
 {
 
+    /** @var array<int, string> */
+    public static array $keys = [...UpdatedFilterQuery::KEYS, ...Order::KEYS];
+
     public static function apply(Builder $query, DataContainer $data)
     {
 

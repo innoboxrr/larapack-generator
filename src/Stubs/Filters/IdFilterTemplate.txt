@@ -9,12 +9,26 @@ use Innoboxrr\SearchSurge\Search\Support\DataContainer;
 class IdFilter
 {
 
+    /**
+     * Claves que consume este filtro. Si no viene ninguna, SearchSurge se lo
+     * salta entero. Declaralas todas, incluidas las de ordenamiento.
+     *
+     * @var array<int, string>
+     */
+    public static array $keys = ['id', 'ids', ...Order::KEYS];
+
     public static function apply(Builder $query, DataContainer $data)
     {
 
-        if ($data->id) {
+        if ($data->filled('id')) {
 
-            $query->where('id', $data->id);
+            $query->where('id', $data->integer('id'));
+
+        }
+
+        if ($data->filled('ids')) {
+
+            $query->whereIn('id', $data->array('ids'));
 
         }
 
