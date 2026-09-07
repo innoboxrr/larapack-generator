@@ -4,6 +4,7 @@ namespace Namespace\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class PascalCaseModelNameMeta extends Model
 {
@@ -12,7 +13,7 @@ class PascalCaseModelNameMeta extends Model
 
     protected $guarded = [];
 
-    public function camelCaseModelName()
+    public function camelCaseModelName(): BelongsTo
     {
         return $this->belongsTo(PascalCaseModelName::class);
     }

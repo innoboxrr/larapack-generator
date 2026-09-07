@@ -14,7 +14,10 @@ class PascalCaseModelNameFactory extends Factory
 
     protected $model = PascalCaseModelName::class;
 
-    public function definition()
+    /**
+     * @return array<string, mixed>
+     */
+    public function definition(): array
     {
         return [
             //EDIT//

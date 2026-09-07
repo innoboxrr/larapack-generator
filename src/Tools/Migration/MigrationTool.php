@@ -3,7 +3,6 @@
 namespace Innoboxrr\LarapackGenerator\Tools\Migration;
 
 use Innoboxrr\LarapackGenerator\Tools\Tool;
-use Illuminate\Support\Facades\Schema;
 use Innoboxrr\LarapackGenerator\Exceptions\MakerException;
 
 class MigrationTool extends Tool
