@@ -79,6 +79,13 @@ El binario mantiene los nombres antiguos (`make:*`, `json:importer`) como alias.
 En Artisan no se registran porque `make:model`, `make:policy`, `make:factory` y
 `make:observer` son comandos del propio Laravel.
 
+Todos aceptan `--root=<ruta>` para decir sobre que proyecto se trabaja. Sin
+esa opcion la raiz se descubre subiendo directorios desde el paquete hasta dar
+con un `vendor/autoload.php`: dentro de una aplicacion Laravel eso da la raiz
+correcta, pero con el binario sobre un clon del generador da el propio
+generador. Los generadores aceptan ademas `--force` y `--dry-run`, y todos
+`--format=json`.
+
 ### Importador JSON
 
 Genera todo el entorno de varios modelos a partir de un archivo declarativo:
@@ -151,6 +158,12 @@ larapack:resource                - Crea una nueva clase de recurso.
 larapack:route                   - Crea una nueva ruta.
 larapack:route-service-provider  - Crea un proveedor de servicio de rutas.
 larapack:test                    - Crea una nueva clase de test.
+
+larapack:import                  - Genera varios modelos desde un laraimport.
+larapack:validate                - Valida un laraimport sin generar nada.
+larapack:schema                  - Emite el esquema del laraimport.
+larapack:verify                  - Busca desviaciones respecto al manifiesto.
+larapack:skill                   - Instala las instrucciones para un agente.
 
 larapack:remove-full-model       - Elimina todas las entidades de un modelo.
 ```
@@ -351,6 +364,44 @@ mano:
 
 `assignments` y `filters` siguen aceptandose por compatibilidad, pero estan
 marcadas como obsoletas en el esquema: el generador no las lee.
+
+## Para un agente (Claude Code, Codex)
+
+El problema mas grande de dejar que una IA escriba Laravel no es que escriba
+mal: es que cada modelo sale un poco distinto del anterior, y a los treinta
+modelos la aplicacion ya no tiene una arquitectura. Un generador determinista
+invierte esa dinamica — el agente escribe un JSON pequeno y verificable, y las
+~58 piezas de cada modelo salen identicas siempre.
+
+Para que eso funcione el agente necesita tres cosas, y las tres son comandos:
+
+```
+larapack:schema      descubrir el contrato, en vez de deducirlo de un ejemplo
+larapack:validate    comprobar su JSON antes de generar nada
+larapack:verify      comprobar su propio trabajo despues
+```
+
+Los tres devuelven `--format=json` y codigo de salida distinto de cero, asi
+que el agente puede iterar solo, sin preguntar y sin raspar texto.
+
+Falta lo que le dice como usarlos. Eso vive en `skill/SKILL.md` dentro del
+paquete y se instala en el proyecto:
+
+```
+php artisan larapack:skill                 # -> .claude/skills/larapack/SKILL.md
+php artisan larapack:skill --print         # emitelo por salida estandar
+php artisan larapack:skill --path=AGENTS.md
+```
+
+Un paquete dentro de `vendor/` no lo lee nadie, de ahi la copia. Y al vivir el
+original en el paquete, actualizar el generador actualiza las instrucciones:
+reejecuta `larapack:skill` despues de un `composer update`. Si el destino se
+ha ampliado con reglas del proyecto, no se pisa sin `--force`.
+
+El texto ensena la regla —la arquitectura se declara, no se escribe—, el flujo
+completo, el mapa de lo que se genera, **donde va la logica de negocio** (los
+huecos: `Operations`, `ManagedFilter::canView`, `rules()`, los listeners, el
+Resource) y que no hay que tocar.
 
 ## Notas Importantes
 
