@@ -2,6 +2,7 @@
 
 namespace Innoboxrr\LarapackGenerator\Commands;
 
+use Innoboxrr\LarapackGenerator\Commands\Concerns\TargetsProject;
 use Innoboxrr\LarapackGenerator\Support\Verifier;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
@@ -18,8 +19,12 @@ use Symfony\Component\Console\Output\OutputInterface;
  */
 class VerifyCommand extends Command
 {
+    use TargetsProject;
+
     protected function configure(): void
     {
+        $this->addRootOption();
+
         $this->setName('larapack:verify')
             ->setDescription('Comprueba que lo generado siga coherente con el manifiesto')
             ->addOption('format', null, InputOption::VALUE_REQUIRED, 'Formato de salida: txt o json', 'txt')
@@ -28,6 +33,8 @@ class VerifyCommand extends Command
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
+        $this->applyRootOption($input);
+
         $findings = (new Verifier())->run();
 
         $errors = $this->count($findings, Verifier::ERROR);

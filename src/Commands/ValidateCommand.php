@@ -2,6 +2,7 @@
 
 namespace Innoboxrr\LarapackGenerator\Commands;
 
+use Innoboxrr\LarapackGenerator\Commands\Concerns\TargetsProject;
 use Innoboxrr\LarapackGenerator\Support\Import\ImportDocument;
 use Innoboxrr\LarapackGenerator\Support\Import\SemanticValidator;
 use Symfony\Component\Console\Command\Command;
@@ -19,8 +20,12 @@ use Symfony\Component\Console\Output\OutputInterface;
  */
 class ValidateCommand extends Command
 {
+    use TargetsProject;
+
     protected function configure(): void
     {
+        $this->addRootOption();
+
         $this->setName('larapack:validate')
             ->setDescription('Valida un laraimport.json contra el esquema y comprueba sus referencias')
             ->addArgument('jsonPath', InputArgument::OPTIONAL, 'Ruta del archivo; por omisión laraimport.json en la raíz')
@@ -30,6 +35,8 @@ class ValidateCommand extends Command
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
+        $this->applyRootOption($input);
+
         $path = $input->getArgument('jsonPath') ?? root_path() . '/laraimport.json';
 
         ['document' => $document, 'errors' => $findings] = ImportDocument::fromFile($path);

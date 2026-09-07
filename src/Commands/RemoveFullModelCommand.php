@@ -2,6 +2,7 @@
 
 namespace Innoboxrr\LarapackGenerator\Commands;
 
+use Innoboxrr\LarapackGenerator\Commands\Concerns\TargetsProject;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputOption;
@@ -10,6 +11,8 @@ use Symfony\Component\Console\Output\OutputInterface;
 
 class RemoveFullModelCommand extends Command
 {
+
+    use TargetsProject;
 
     protected $commands = [
         'Controller',
@@ -33,6 +36,8 @@ class RemoveFullModelCommand extends Command
     protected function configure(): void
     {
 
+        $this->addRootOption();
+
         $this->setName('larapack:remove-full-model')
             ->setDescription('Elimina todas las entidades relacionadas con un modelo')
             ->addArgument('name', InputArgument::REQUIRED, 'The name of the model class')
@@ -42,6 +47,7 @@ class RemoveFullModelCommand extends Command
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
+        $this->applyRootOption($input);
 
         $modelName = $input->getArgument('name');
         $includeModelView = $input->getOption('vue');

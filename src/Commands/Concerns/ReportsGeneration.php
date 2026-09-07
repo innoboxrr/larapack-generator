@@ -16,8 +16,12 @@ use Symfony\Component\Console\Output\OutputInterface;
  */
 trait ReportsGeneration
 {
+    use TargetsProject;
+
     protected function addGenerationOptions(): void
     {
+        $this->addRootOption();
+
         $this
             ->addOption('force', null, InputOption::VALUE_NONE, 'Regenera los archivos que no se hayan editado a mano')
             ->addOption('dry-run', null, InputOption::VALUE_NONE, 'Muestra lo que haría sin escribir nada')
@@ -26,6 +30,8 @@ trait ReportsGeneration
 
     protected function applyGenerationOptions(InputInterface $input): void
     {
+        $this->applyRootOption($input);
+
         Generation::reset();
 
         Generation::force((bool) $input->getOption('force'));
