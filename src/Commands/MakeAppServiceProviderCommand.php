@@ -15,7 +15,7 @@ class MakeAppServiceProviderCommand extends Command
     protected function configure(): void
     {
 
-        $this->setName('make:app-service-provider')
+        $this->setName('larapack:app-service-provider')
             ->setDescription('Create an app service provider for the package');
 
     }

@@ -15,7 +15,7 @@ class MakeResourceCommand extends Command
     protected function configure(): void
     {
 
-        $this->setName('make:resource')
+        $this->setName('larapack:resource')
             ->setDescription('Create a new resource class')
             ->addArgument('name', InputArgument::REQUIRED, 'The name of the model class');
 

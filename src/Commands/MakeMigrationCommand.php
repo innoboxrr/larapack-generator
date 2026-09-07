@@ -14,7 +14,7 @@ class MakeMigrationCommand extends Command
     
     protected function configure(): void
     {
-        $this->setName('make:migration')
+        $this->setName('larapack:migration')
             ->setDescription('Create a new migration class')
             ->addArgument('name', InputArgument::REQUIRED, 'The name of the model class');
     }

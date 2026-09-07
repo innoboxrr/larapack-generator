@@ -15,7 +15,7 @@ class MakePolicyCommand extends Command
     protected function configure(): void
     {
 
-        $this->setName('make:policy')
+        $this->setName('larapack:policy')
             ->setDescription('Create a new policy class')
             ->addArgument('name', InputArgument::REQUIRED, 'The name of the model class');
 

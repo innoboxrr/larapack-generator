@@ -16,8 +16,8 @@ final class GeneratesFullModelTest extends TestCase
 
         $this->assertSame(
             Command::SUCCESS,
-            $this->runCommand('make:full-model', ['name' => 'Product', '--metas' => true]),
-            "make:full-model terminó con error:\n" . $this->lastOutput
+            $this->runCommand('larapack:full-model', ['name' => 'Product', '--metas' => true]),
+            "larapack:full-model terminó con error:\n" . $this->lastOutput
         );
     }
 

@@ -15,7 +15,7 @@ class MakeObserverCommand extends Command
     protected function configure(): void
     {
 
-        $this->setName('make:observer')
+        $this->setName('larapack:observer')
             ->setDescription('Create a new observer class')
             ->addArgument('name', InputArgument::REQUIRED, 'The name of the observed model');
 

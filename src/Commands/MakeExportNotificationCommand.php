@@ -15,7 +15,7 @@ class MakeExportNotificationCommand extends Command
     protected function configure(): void
     {
 
-        $this->setName('make:export-notification')
+        $this->setName('larapack:export-notification')
             ->setDescription('Create a new export-notification class')
             ->addArgument('name', InputArgument::REQUIRED, 'The name of the model class');
 

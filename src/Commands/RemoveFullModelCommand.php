@@ -33,7 +33,7 @@ class RemoveFullModelCommand extends Command
     protected function configure(): void
     {
 
-        $this->setName('remove:full-model')
+        $this->setName('larapack:remove-full-model')
             ->setDescription('Elimina todas las entidades relacionadas con un modelo')
             ->addArgument('name', InputArgument::REQUIRED, 'The name of the model class')
             ->addOption('vue', 'vue', InputOption::VALUE_NONE, 'Include ModelView in commands');

@@ -15,7 +15,7 @@ class MakeConfigCommand extends Command
     protected function configure(): void
     {
 
-        $this->setName('make:config')
+        $this->setName('larapack:config')
             ->setDescription('Create the config file');
 
     }

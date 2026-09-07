@@ -15,7 +15,7 @@ class MakeRequestsCommand extends Command
     protected function configure(): void
     {
 
-        $this->setName('make:requests')
+        $this->setName('larapack:requests')
             ->setDescription('Create a new requests class')
             ->addArgument('name', InputArgument::REQUIRED, 'The name of the model class');
 

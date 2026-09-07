@@ -68,45 +68,56 @@ Los stubs producen código alineado con las convenciones de Laravel 11+/13:
 
 ## Comandos Disponibles
 
-### JSON Importer
-
-Este comando permite importar modelos y migraciones desde un archivo JSON. Ejemplo de uso:
+Los comandos viven en el espacio `larapack:` y estan disponibles de dos formas:
 
 ```
-php builder json:importer /path/to/file.json
+php artisan larapack:full-model Post      # dentro de una app Laravel
+php builder larapack:full-model Post      # binario, tambien fuera de Laravel
 ```
 
-### Otros Comandos
+El binario mantiene los nombres antiguos (`make:*`, `json:importer`) como alias.
+En Artisan no se registran porque `make:model`, `make:policy`, `make:factory` y
+`make:observer` son comandos del propio Laravel.
+
+### Importador JSON
+
+Genera todo el entorno de varios modelos a partir de un archivo declarativo:
 
 ```
-make:app-service-provider        - Crea un proveedor de servicio de aplicación.
-make:auth-service-provider       - Crea un proveedor de servicio de autenticación.
-make:config                      - Crea un archivo de configuración.
-make:controller                  - Crea un nuevo controlador.
-make:event-service-provider      - Crea un proveedor de servicio de eventos.
-make:events                      - Crea eventos y listeners para el modelo.
-make:excel                       - Crea una clase de Excel.
-make:export                      - Crea una clase de exportación.
-make:export-notification         - Crea una clase de notificación de exportación.
-make:factory                     - Crea una nueva fábrica.
-make:filters                     - Crea una clase de filtros.
-make:full-model                  - Crea un entorno completo de modelo.
-make:migration                   - Crea una nueva migración.
-make:model                       - Crea un nuevo modelo.
-make:model-traits                - Crea traits para el modelo.
-make:model-view                  - Crea la sección de administración en Vue.
-make:observer                    - Crea un observer.
-make:policy                      - Crea una nueva política.
-make:providers                   - Crea todos los proveedores de servicio.
-make:requests                    - Crea una clase de requests.
-make:resource                    - Crea una nueva clase de recurso.
-make:route                       - Crea una nueva ruta.
-make:route-service-provider       - Crea un proveedor de servicio de rutas.
-make:test                        - Crea una nueva clase de test.
+php artisan larapack:import /ruta/al/laraimport.json
+```
 
-remove:full-model                - Elimina todas las entidades relacionadas con un modelo.
+Sin ruta, busca `laraimport.json` en la raiz del proyecto.
 
-json:importer                    - Importación desde el archivo de importación JSON
+### Resto de comandos
+
+```
+larapack:app-service-provider    - Crea un proveedor de servicio de aplicacion.
+larapack:auth-service-provider   - Crea un proveedor de servicio de autenticacion.
+larapack:config                  - Crea un archivo de configuracion.
+larapack:controller              - Crea un nuevo controlador.
+larapack:event-service-provider  - Crea un proveedor de servicio de eventos.
+larapack:events                  - Crea eventos y listeners para el modelo.
+larapack:excel                   - Crea una clase de Excel.
+larapack:export                  - Crea una clase de exportacion.
+larapack:export-notification     - Crea una clase de notificacion de exportacion.
+larapack:factory                 - Crea una nueva fabrica.
+larapack:filters                 - Crea una clase de filtros.
+larapack:full-model              - Crea un entorno completo de modelo.
+larapack:migration               - Crea una nueva migracion.
+larapack:model                   - Crea un nuevo modelo.
+larapack:model-traits            - Crea traits para el modelo.
+larapack:model-view              - Crea la seccion de administracion en Vue.
+larapack:observer                - Crea un observer.
+larapack:policy                  - Crea una nueva politica.
+larapack:providers               - Crea todos los proveedores de servicio.
+larapack:requests                - Crea una clase de requests.
+larapack:resource                - Crea una nueva clase de recurso.
+larapack:route                   - Crea una nueva ruta.
+larapack:route-service-provider  - Crea un proveedor de servicio de rutas.
+larapack:test                    - Crea una nueva clase de test.
+
+larapack:remove-full-model       - Elimina todas las entidades de un modelo.
 ```
 
 ## Ejemplo de JSON de Importación 

@@ -15,7 +15,7 @@ class MakeControllerCommand extends Command
     protected function configure(): void
     {
 
-        $this->setName('make:controller')
+        $this->setName('larapack:controller')
             ->setDescription('Create a new controller class')
             ->addArgument('name', InputArgument::REQUIRED, 'The name of the model class');
 

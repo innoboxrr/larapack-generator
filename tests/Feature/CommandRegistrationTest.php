@@ -58,4 +58,35 @@ final class CommandRegistrationTest extends TestCase
             'Hay comandos que comparten nombre: ' . implode(', ', array_diff_assoc($names, array_unique($names)))
         );
     }
+
+    /**
+     * Los comandos se registran en Artisan, donde `make:model`, `make:policy`,
+     * `make:factory`, `make:observer` y compañía son del propio Laravel:
+     * registrarlos con ese nombre los sobrescribiria.
+     */
+    public function test_todos_viven_en_el_espacio_larapack(): void
+    {
+        foreach (self::commandClasses() as [$class]) {
+            $name = (new $class())->getName();
+
+            $this->assertStringStartsWith(
+                'larapack:',
+                (string) $name,
+                "{$class} se llama '{$name}' y pisaria un comando de Laravel al registrarse en Artisan."
+            );
+        }
+    }
+
+    /**
+     * Los nombres historicos siguen funcionando en el binario `builder`, que
+     * es donde no hay riesgo de colision.
+     */
+    public function test_el_binario_conserva_los_nombres_historicos_como_alias(): void
+    {
+        $builder = file_get_contents(dirname(__DIR__, 2) . '/builder');
+
+        $this->assertStringContainsString('$legacyAlias', $builder);
+        $this->assertStringContainsString("'larapack:import' => 'json:importer'", $builder);
+        $this->assertStringContainsString("'make:' . substr(\$name, strlen('larapack:'))", $builder);
+    }
 }

@@ -16,7 +16,7 @@ class JsonImporterCommand extends Command
 {
     protected function configure(): void
     {
-        $this->setName('json:importer')
+        $this->setName('larapack:import')
             ->setDescription('Import models and migrations from a JSON file')
             ->addArgument('jsonPath', InputArgument::OPTIONAL, 'The path to the JSON file')
             ->addOption('vue', null, InputOption::VALUE_NONE, 'Include ModelView in commands');

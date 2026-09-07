@@ -15,7 +15,7 @@ class MakeRouteCommand extends Command
     protected function configure(): void
     {
 
-        $this->setName('make:route')
+        $this->setName('larapack:route')
             ->setDescription('Create a new route class')
             ->addArgument('name', InputArgument::REQUIRED, 'The name of the model class');
 

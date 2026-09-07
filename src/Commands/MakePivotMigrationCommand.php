@@ -14,7 +14,7 @@ class MakePivotMigrationCommand extends Command
     
     protected function configure(): void
     {
-        $this->setName('make:pivot-migration')
+        $this->setName('larapack:pivot-migration')
             ->setDescription('Create a new pivot migration class')
             ->addArgument('name', InputArgument::REQUIRED, 'The name of the model class');
     }

@@ -15,7 +15,7 @@ class MakeFactoryCommand extends Command
     protected function configure(): void
     {
 
-        $this->setName('make:factory')
+        $this->setName('larapack:factory')
             ->setDescription('Create a new factory class')
             ->addArgument('name', InputArgument::REQUIRED, 'The name of the model class');
 

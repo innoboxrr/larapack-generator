@@ -15,7 +15,7 @@ class MakeRouteServiceProviderCommand extends Command
     protected function configure(): void
     {
 
-        $this->setName('make:route-service-provider')
+        $this->setName('larapack:route-service-provider')
             ->setDescription('Create an route service provider for the package');
 
     }

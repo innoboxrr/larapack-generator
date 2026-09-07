@@ -15,7 +15,7 @@ class MakeTestCommand extends Command
     protected function configure(): void
     {
 
-        $this->setName('make:test')
+        $this->setName('larapack:test')
             ->setDescription('Create a new test class')
             ->addArgument('name', InputArgument::REQUIRED, 'The name of the model class');
 

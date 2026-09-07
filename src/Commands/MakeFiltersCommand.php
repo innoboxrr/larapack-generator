@@ -15,7 +15,7 @@ class MakeFiltersCommand extends Command
     protected function configure(): void
     {
 
-        $this->setName('make:filters')
+        $this->setName('larapack:filters')
             ->setDescription('Create a new filters class')
             ->addArgument('name', InputArgument::REQUIRED, 'The name of the model class');
 

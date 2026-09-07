@@ -15,7 +15,7 @@ class MakeModelViewCommand extends Command
     protected function configure(): void
     {
 
-        $this->setName('make:model-view')
+        $this->setName('larapack:model-view')
             ->setDescription('Crea la sección de administración de vue para el paquete laravel-setup')
             ->addArgument('name', InputArgument::REQUIRED, 'The name of the model class');
 

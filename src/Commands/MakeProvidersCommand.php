@@ -21,7 +21,7 @@ class MakeProvidersCommand extends Command
     protected function configure(): void
     {
 
-        $this->setName('make:providers')
+        $this->setName('larapack:providers')
             ->setDescription('Crea todos los proveedores de servicio');
 
     }

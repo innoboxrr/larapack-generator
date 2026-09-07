@@ -15,7 +15,7 @@ class MakeEventServiceProviderCommand extends Command
     protected function configure(): void
     {
 
-        $this->setName('make:event-service-provider')
+        $this->setName('larapack:event-service-provider')
             ->setDescription('Create an event service provider for the package');
 
     }

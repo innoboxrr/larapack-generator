@@ -15,7 +15,7 @@ class MakeAuthServiceProviderCommand extends Command
     protected function configure(): void
     {
 
-        $this->setName('make:auth-service-provider')
+        $this->setName('larapack:auth-service-provider')
             ->setDescription('Create an auth service provider for the package');
 
     }

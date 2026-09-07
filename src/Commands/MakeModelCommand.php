@@ -15,7 +15,7 @@ class MakeModelCommand extends Command
     protected function configure(): void
     {
 
-        $this->setName('make:model')
+        $this->setName('larapack:model')
             ->setDescription('Create a new model class')
             ->addArgument('name', InputArgument::REQUIRED, 'The name of the model class');
 

@@ -15,7 +15,7 @@ class MakeModelTraitsCommand extends Command
     protected function configure(): void
     {
 
-        $this->setName('make:model-traits')
+        $this->setName('larapack:model-traits')
             ->setDescription('Create a new model-traits class')
             ->addArgument('name', InputArgument::REQUIRED, 'The name of the model class');
 

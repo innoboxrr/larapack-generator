@@ -32,7 +32,7 @@ class MakeFullModelCommand extends Command
     
     protected function configure(): void
     {
-        $this->setName('make:full-model')
+        $this->setName('larapack:full-model')
             ->setDescription('Create a completo model enviroment')
             ->addArgument('name', InputArgument::REQUIRED, 'The name of the model class')
             ->addOption('vue', 'vue', InputOption::VALUE_NONE, 'Include ModelView in commands')

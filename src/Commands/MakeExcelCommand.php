@@ -15,7 +15,7 @@ class MakeExcelCommand extends Command
     protected function configure(): void
     {
 
-        $this->setName('make:excel')
+        $this->setName('larapack:excel')
             ->setDescription('Create a new excel class')
             ->addArgument('name', InputArgument::REQUIRED, 'The name of the model class');
 

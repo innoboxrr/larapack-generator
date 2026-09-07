@@ -15,7 +15,7 @@ class MakeEventsCommand extends Command
     protected function configure(): void
     {
 
-        $this->setName('make:events')
+        $this->setName('larapack:events')
             ->setDescription('Create CURD events and listeners for model')
             ->addArgument('name', InputArgument::REQUIRED, 'The name of the model class');
 

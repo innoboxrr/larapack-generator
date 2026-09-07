@@ -15,7 +15,7 @@ class MakeExportCommand extends Command
     protected function configure(): void
     {
 
-        $this->setName('make:export')
+        $this->setName('larapack:export')
             ->setDescription('Create a new export class')
             ->addArgument('name', InputArgument::REQUIRED, 'The name of the model class');
 
