@@ -1,6 +1,9 @@
 import { useCallback, useEffect } from 'react'
 import { Outlet, useMatches, useParams } from 'react-router-dom'
+import { buildPath } from 'innoboxrr-react-datatable'
+import t from 'innoboxrr-i18n'
 
+import Breadcrumbs from '../../../components/Breadcrumbs.jsx'
 import ModelCard from '../widgets/ModelCard.jsx'
 import ModelProfile from '../widgets/ModelProfile.jsx'
 import { usePascalCaseModelNameStore } from '../store'
@@ -32,8 +35,28 @@ export default function ShowView() {
         return null
     }
 
+    const breadcrumbs = [
+        {
+            link: buildPath('AdminPluralPascalCaseModelName'),
+            title: 'PluralPascalCaseModelName',
+        },
+        {
+            link: buildPath('AdminShowPascalCaseModelName', { id: camelCaseModelName.id }),
+            title: camelCaseModelName.name ?? 'PascalCaseModelName',
+        },
+    ]
+
+    if (! isShowView) {
+        breadcrumbs.push({
+            link: buildPath('AdminEditPascalCaseModelName', { id: camelCaseModelName.id }),
+            title: t('Edit'),
+        })
+    }
+
     return (
         <div>
+            <Breadcrumbs pages={breadcrumbs} />
+
             <div className="uk-container uk-container-expand">
                 <div className="uk-grid-small" uk-grid="">
 

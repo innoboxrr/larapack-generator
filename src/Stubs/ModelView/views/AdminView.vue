@@ -4,7 +4,7 @@
 
         <div v-if="isIndex" class="uk-section uk-section-xsmall">
 
-            <BreadcrumbsComponent :pages="breadcrumbs" />
+            <Breadcrumbs :pages="breadcrumbs" />
 
             <DataTable
                 :show-title="false"
@@ -27,6 +27,8 @@
     import { RouterView, useRoute, useRouter } from 'vue-router'
 
     import DataTable from '../widgets/DataTable.vue'
+
+    import Breadcrumbs from '../../../components/Breadcrumbs.vue'
 
     const route = useRoute()
     const router = useRouter()

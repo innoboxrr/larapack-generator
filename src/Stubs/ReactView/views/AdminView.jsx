@@ -1,7 +1,9 @@
 import { useCallback, useState } from 'react'
 import { Outlet, useMatches } from 'react-router-dom'
+import { buildPath } from 'innoboxrr-react-datatable'
 
 import DataTable from '../widgets/DataTable.jsx'
+import Breadcrumbs from '../../../components/Breadcrumbs.jsx'
 
 export default function AdminView() {
     const matches = useMatches()
@@ -15,11 +17,20 @@ export default function AdminView() {
 
     const refresh = useCallback(() => setCrudKey((key) => key + 1), [])
 
+    const breadcrumbs = [
+        {
+            link: buildPath('AdminPluralPascalCaseModelName'),
+            title: 'PluralPascalCaseModelName',
+        },
+    ]
+
     return (
         <div id="AdminPluralPascalCaseModelNameWrapper">
 
             {isIndex ? (
                 <div className="uk-section uk-section-xsmall">
+                    <Breadcrumbs pages={breadcrumbs} />
+
                     <DataTable key={crudKey} hideColumns={[]} />
                 </div>
             ) : (

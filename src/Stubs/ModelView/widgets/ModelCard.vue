@@ -3,7 +3,7 @@
     <div class="bg-white dark:bg-gray-800 border rounded-lg overflow-hidden dark:border-gray-700">
 
         <div class="flex justify-end p-4">
-            <DropdownButtonComponent :items="actions" />
+            <ActionMenu :items="actions" />
         </div>
 
         <div class="flex flex-col items-center px-6 pb-8">
@@ -28,6 +28,7 @@
     import { useRouter } from 'vue-router'
     import t from 'innoboxrr-i18n'
 
+    import ActionMenu from '../../../components/ActionMenu.vue'
     import { usePascalCaseModelNameStore } from '../store'
 
     const props = defineProps({
@@ -70,6 +71,7 @@
             type: 'event',
             action: remove,
             label: t('Delete'),
+            danger: true,
         },
     ])
 

@@ -2,7 +2,7 @@
 
     <div>
 
-        <BreadcrumbsComponent :pages="breadcrumbs" />
+        <Breadcrumbs :pages="breadcrumbs" />
 
         <div class="flex justify-center items-center mt-8">
             <div class="max-w-2xl w-full">
@@ -26,6 +26,8 @@
 
     import { computed, onMounted } from 'vue'
     import { useRouter } from 'vue-router'
+
+    import Breadcrumbs from '../../../components/Breadcrumbs.vue'
     import t from 'innoboxrr-i18n'
 
     import CreateForm from '../forms/CreateForm.vue'

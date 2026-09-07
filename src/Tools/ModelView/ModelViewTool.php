@@ -48,6 +48,8 @@ class ModelViewTool extends UiModuleTool
 			'ModelView/Module/index.js' => 'index.js',
 			'ModelView/Module/routes.js' => 'src/routes/index.js',
 			'ModelView/Module/theme.js' => 'src/theme.js',
+			'ModelView/Module/Breadcrumbs.vue' => 'src/components/Breadcrumbs.vue',
+			'ModelView/Module/ActionMenu.vue' => 'src/components/ActionMenu.vue',
 		];
 	}
 

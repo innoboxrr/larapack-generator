@@ -1,8 +1,9 @@
 import { useMemo } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { buildPath } from 'innoboxrr-react-datatable'
 import t from 'innoboxrr-i18n'
 
+import ActionMenu from '../../../components/ActionMenu.jsx'
 import { usePascalCaseModelNameStore } from '../store'
 
 export default function ModelCard({ camelCaseModelName }) {
@@ -28,18 +29,15 @@ export default function ModelCard({ camelCaseModelName }) {
                 navigate(buildPath('AdminPluralPascalCaseModelName'))
             },
             label: t('Delete'),
+            danger: true,
         },
     ], [camelCaseModelName.id, remove, navigate])
 
     return (
         <div className="bg-white dark:bg-gray-800 border rounded-lg overflow-hidden dark:border-gray-700">
 
-            <div className="flex justify-end p-4 gap-2">
-                {actions.map((action) => (
-                    action.type === 'router'
-                        ? <Link key={action.label} to={action.to} className="text-sm text-blue-600">{action.label}</Link>
-                        : <button key={action.label} type="button" className="text-sm text-red-600" onClick={action.action}>{action.label}</button>
-                ))}
+            <div className="flex justify-end p-4">
+                <ActionMenu items={actions} />
             </div>
 
             <div className="flex flex-col items-center px-6 pb-8">

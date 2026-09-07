@@ -2,7 +2,7 @@
 
     <div v-if="camelCaseModelName">
 
-        <BreadcrumbsComponent :pages="breadcrumbs" />
+        <Breadcrumbs :pages="breadcrumbs" />
 
         <div class="uk-container uk-container-expand">
             <div class="uk-grid-small" uk-grid>
@@ -34,6 +34,8 @@
 
     import { computed, onMounted, watch } from 'vue'
     import { RouterView, useRoute, useRouter } from 'vue-router'
+
+    import Breadcrumbs from '../../../components/Breadcrumbs.vue'
     import t from 'innoboxrr-i18n'
 
     import ModelCard from '../widgets/ModelCard.vue'

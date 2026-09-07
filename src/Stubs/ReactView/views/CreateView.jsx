@@ -4,6 +4,7 @@ import { buildPath } from 'innoboxrr-react-datatable'
 import t from 'innoboxrr-i18n'
 
 import CreateForm from '../forms/CreateForm.jsx'
+import Breadcrumbs from '../../../components/Breadcrumbs.jsx'
 import { getPolicy } from '../index'
 
 export default function CreateView() {
@@ -24,8 +25,21 @@ export default function CreateView() {
         navigate(buildPath('AdminShowPascalCaseModelName', { id: camelCaseModelName.id }))
     }
 
+    const breadcrumbs = [
+        {
+            link: buildPath('AdminPluralPascalCaseModelName'),
+            title: 'PluralPascalCaseModelName',
+        },
+        {
+            link: buildPath('AdminCreatePascalCaseModelName'),
+            title: t('Create PluralPascalCaseModelName'),
+        },
+    ]
+
     return (
         <div>
+            <Breadcrumbs pages={breadcrumbs} />
+
             <div className="flex justify-center items-center mt-8">
                 <div className="max-w-2xl w-full">
                     <div className="card bg-white dark:bg-slate-600 border rounded-lg px-8 pt-6 pb-8 mb-4 dark:border-slate-800">
