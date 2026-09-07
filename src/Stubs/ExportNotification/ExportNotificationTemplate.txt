@@ -14,21 +14,22 @@ class ExportNotification extends Notification
 
     use Queueable;
 
-    private $data;
-    private $path;
+    private string $path;
 
-    public function __construct(array $data)
-    {   
-        $this->data = $data;
+    public function __construct(private array $data)
+    {
         $this->path = $this->getPath();
     }
 
-    public function via($notifiable)
+    /**
+     * @return array<int, string>
+     */
+    public function via(object $notifiable): array
     {
         return config('namespaceWithoutSeparation.notification_via', ['mail', 'database']);
     }
 
-    public function toMail($notifiable)
+    public function toMail(object $notifiable): MailMessage
     {
         $this->createExport();
         return (new MailMessage)
@@ -39,7 +40,10 @@ class ExportNotification extends Notification
                     ->line($this->getFarewallMessage());
     }
 
-    public function toArray($notifiable)
+    /**
+     * @return array<string, mixed>
+     */
+    public function toArray(object $notifiable): array
     {
         return [
             'action' => $this->getActionUrl(),
@@ -50,7 +54,7 @@ class ExportNotification extends Notification
 
     // CUSTOME METHODS
     
-    private function createExport()
+    private function createExport(): void
     {
         Excel::store(
             new PluralPascalCaseModelNameExports($this->data), 
@@ -59,47 +63,47 @@ class ExportNotification extends Notification
         );
     }
 
-    private function getSubject()
+    private function getSubject(): string
     {
-        return env('APP_NAME') . ' | PascalCaseModelName export notification';
+        return config('app.name') . ' | PascalCaseModelName export notification';
     }
 
-    private function getWellcomeMessage()
+    private function getWellcomeMessage(): string
     {
         return 'Hola';
     }
 
-    private function getBodyMessage()
+    private function getBodyMessage(): string
     {
         return 'Da clic para descargar el archivo. Después de 24 horas será eliminado.';
     }
 
-    private function getActionButton()
+    private function getActionButton(): string
     {
         return 'Descargar';
     }
 
-    private function getNotificationUrl()
+    private function getNotificationUrl(): string
     {
         return url('/notification/read/' . $this->id);
     }
 
-    private function getActionUrl()
+    private function getActionUrl(): string
     {
         return config('app.aws_url') . $this->path;
     }
 
-    private function getImg()
+    private function getImg(): string
     {
         return 'https://www.gravatar.com/avatar';
     }
 
-    private function getFarewallMessage()
+    private function getFarewallMessage(): string
     {
         return '¡Gracias por utilizar nuestra aplicación!';
     }
 
-    private function getPath()
+    private function getPath(): string
     {
         return 'exports/' . base64_encode(microtime()) . '.xlsx';
     }

@@ -10,11 +10,8 @@ use Maatwebsite\Excel\Concerns\FromView;
 class PluralPascalCaseModelNameExports implements FromView
 {
 
-    protected $data;
-
-    public function __construct( array $data) 
+    public function __construct(protected array $data)
     {
-        $this->data = $data;
     }
 
     public function view(): View
@@ -34,7 +31,9 @@ class PluralPascalCaseModelNameExports implements FromView
     public function getQuery()
     {   
         $builder = new Builder();
-        return $builder->get(PascalCaseModelName::class, $this->data);
+        // lazy() en vez de get(): un export recorre la tabla entera y
+        // hidratar todas las filas a la vez es lo que revienta la memoria.
+        return $builder->lazy(PascalCaseModelName::class, $this->data);
     }
 
 }

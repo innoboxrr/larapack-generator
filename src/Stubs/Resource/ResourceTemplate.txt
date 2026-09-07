@@ -2,25 +2,32 @@
 
 namespace Namespace\Http\Resources\Models;
 
+use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
 class PascalCaseModelNameResource extends JsonResource
 {
-    
-    public function toArray($request)
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function toArray(Request $request): array
     {
 
         if ($request->has('appends') && is_array($request->get('appends'))) {
             $this->resource->setAppends($request->get('appends'));
         }
-        
+
         return parent::toArray($request) + [
             'actions' => $this->actions($request)
         ];
 
     }
 
-    private function actions($request) 
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function actions(Request $request): array
     {
 
         $actions = [];
@@ -37,7 +44,10 @@ class PascalCaseModelNameResource extends JsonResource
 
     }
 
-    private function view() 
+    /**
+     * @return array<string, mixed>
+     */
+    private function view(): array
     {
         return [
             'id' => 'view',
@@ -58,7 +68,10 @@ class PascalCaseModelNameResource extends JsonResource
         ];
     }
 
-    private function edit()
+    /**
+     * @return array<string, mixed>
+     */
+    private function edit(): array
     {
         return [
             'id' => 'update',
@@ -79,7 +92,10 @@ class PascalCaseModelNameResource extends JsonResource
         ];
     }
 
-    private function delete()
+    /**
+     * @return array<string, mixed>
+     */
+    private function delete(): array
     {
         return [
             'id' => 'delete',

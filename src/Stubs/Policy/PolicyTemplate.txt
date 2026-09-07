@@ -3,67 +3,68 @@
 namespace Namespace\Policies;
 
 use App\Models\User;
+use Illuminate\Auth\Access\Response;
 use Namespace\Models\PascalCaseModelName;
-use Illuminate\Auth\Access\HandlesAuthorization;
 
 class PascalCaseModelNamePolicy
 {
-    use HandlesAuthorization;
 
-    public function before($user, $ability)
+    public function before(User $user, string $ability): ?bool
     {
 
         $exceptAbilities = [];
 
-        if($user->isAdmin() && !in_array($ability, $exceptAbilities)){
-        
+        if ($user->isAdmin() && ! in_array($ability, $exceptAbilities, true)) {
+
             return true;
-            
+
         }
 
+        return null;
+
     }
 
-    public function index(User $user)
+    public function index(User $user): Response|bool
     {
         return false;
     }
 
-    public function viewAny(User $user)
+    public function viewAny(User $user): Response|bool
     {
         return false;
     }
 
-    public function view(User $user, PascalCaseModelName $camelCaseModelName)
+    public function view(User $user, PascalCaseModelName $camelCaseModelName): Response|bool
     {
         return false;
     }
 
-    public function create(User $user)
+    public function create(User $user): Response|bool
     {
         return false;
     }
 
-    public function update(User $user, PascalCaseModelName $camelCaseModelName)
+    public function update(User $user, PascalCaseModelName $camelCaseModelName): Response|bool
     {
         return false;
     }
 
-    public function delete(User $user, PascalCaseModelName $camelCaseModelName)
+    public function delete(User $user, PascalCaseModelName $camelCaseModelName): Response|bool
     {
         return false;
     }
 
-    public function restore(User $user, PascalCaseModelName $camelCaseModelName)
+    public function restore(User $user, PascalCaseModelName $camelCaseModelName): Response|bool
     {
         return false;
     }
 
-    public function forceDelete(User $user, PascalCaseModelName $camelCaseModelName)
+    public function forceDelete(User $user, PascalCaseModelName $camelCaseModelName): Response|bool
     {
         return false;
     }
 
-    public function export(User $user)
+    public function export(User $user): Response|bool
     {
         return false;
     }

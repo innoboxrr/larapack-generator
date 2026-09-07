@@ -7,12 +7,13 @@ use Namespace\Models\PascalCaseModelName;
 class PascalCaseModelNameObserver
 {
 
-    /**
-     * Handle events after all transactions are committed.
+    /*
+     * Este observer se enlaza al modelo mediante el atributo
+     * #[ObservedBy(PascalCaseModelNameObserver::class)] declarado en él.
      *
-     * @var bool
+     * Para ejecutar los handlers sólo después de confirmar la transacción,
+     * implementa Illuminate\Contracts\Events\ShouldHandleEventsAfterCommit.
      */
-    // public $afterCommit = true;
 
     /**
      * Handle the PascalCaseModelName "created" event.
