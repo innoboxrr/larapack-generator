@@ -63,7 +63,7 @@
                     "exports_cols": false,
                     "cast": null,
                     "form": true,
-                    "form_component": "NoExisteComponent",
+                    "form_component": "CheckboxInputComponent",
                     "form_submit": false,
                     "datatable": false
                 },
@@ -102,6 +102,7 @@
                     "rules": {
                         "title": "required|string|max:255",
                         "payload": "nullable",
+                        "status": ["nullable", "regex:/^[a-z]{3,}$/"],
                         "user_id": "required|exists:users,id"
                     }
                 },

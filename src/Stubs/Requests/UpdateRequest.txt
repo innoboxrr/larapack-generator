@@ -28,8 +28,8 @@ class UpdateRequest extends FormRequest
     public function rules(): array
     {
         return [
-            //
-            'snake_case_model_name_id' => 'required|numeric'
+            'snake_case_model_name_id' => 'required|numeric',
+            //RULES//
         ];
     }
 

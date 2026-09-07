@@ -47,6 +47,46 @@ final class JsonImporterTest extends TestCase
         $this->assertStringContainsString('$this->post_id', $update);
     }
 
+    /**
+     * El preg_replace anterior cortaba por el primer `}`, asi que una regla
+     * con cuantificador se llevaba por delante el resto del metodo, y las
+     * reglas en array salian como la cadena 'Array'.
+     */
+    public function test_una_regla_con_llaves_no_destruye_el_archivo(): void
+    {
+        $create = $this->project->read('src/Http/Requests/Post/CreateRequest.php');
+
+        $this->assertStringContainsString(
+            "'status' => ['nullable', 'regex:/^[a-z]{3,}$/'],",
+            $create
+        );
+
+        // Lo que venia detras de rules() sigue ahi.
+        foreach (['public function messages(): array', 'public function attributes(): array', 'public function handle()'] as $survivor) {
+            $this->assertStringContainsString($survivor, $create, "La inyeccion de reglas se comio {$survivor}.");
+        }
+    }
+
+    /**
+     * El stub trae la regla del id para que el archivo sea correcto sin
+     * importador; cuando el JSON declara esa clave manda la del JSON, y no
+     * puede quedar declarada dos veces.
+     */
+    public function test_no_duplica_la_regla_del_identificador(): void
+    {
+        $update = $this->project->read('src/Http/Requests/Post/UpdateRequest.php');
+
+        $this->assertSame(1, substr_count($update, "'post_id' =>"));
+    }
+
+    public function test_deja_intacto_lo_que_el_stub_declara_fuera_del_marcador(): void
+    {
+        $create = $this->project->read('src/Http/Requests/Post/CreateRequest.php');
+
+        $this->assertStringNotContainsString('//RULES//', $create);
+        $this->assertStringContainsString('return $this->user()->can(\'create\', Post::class);', $create);
+    }
+
     public function test_no_toca_las_reglas_de_los_demas_requests(): void
     {
         $show = $this->project->read('src/Http/Requests/Post/ShowRequest.php');
