@@ -7,22 +7,22 @@ use Illuminate\Support\ServiceProvider;
 class AppServiceProvider extends ServiceProvider
 {
 
-    public function register()
+    public function register(): void
     {
-        
+
         // $this->mergeConfigFrom(__DIR__ . '/../../config/namespaceWithoutSeparation.php', 'namespaceWithoutSeparation');
 
     }
 
-    public function boot()
+    public function boot(): void
     {
-        
+
         // $this->loadMigrationsFrom(__DIR__ . '/../../database/migrations');
 
         // $this->loadViewsFrom(__DIR__.'/../../resources/views', 'namespaceWithoutSeparation');
 
         if ($this->app->runningInConsole()) {
-            
+
             // $this->publishes([__DIR__.'/../../resources/views' => resource_path('views/vendor/namespaceWithoutSeparation'),], 'views');
 
             // $this->publishes([__DIR__.'/../../config/namespaceWithoutSeparation.php' => config_path('namespaceWithoutSeparation.php')], 'config');
@@ -30,5 +30,5 @@ class AppServiceProvider extends ServiceProvider
         }
 
     }
-    
+
 }

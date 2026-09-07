@@ -2,34 +2,37 @@
 
 namespace Namespace\Providers;
 
+use Illuminate\Contracts\Foundation\CachesRoutes;
 use Illuminate\Support\Facades\Route;
-use Illuminate\Foundation\Support\Providers\RouteServiceProvider as ServiceProvider;
+use Illuminate\Support\ServiceProvider;
 
 class RouteServiceProvider extends ServiceProvider
 {
 
-    public function map()
+    public function boot(): void
     {
+        // Cuando las rutas están cacheadas no hay que volver a registrarlas.
+        if ($this->app instanceof CachesRoutes && $this->app->routesAreCached()) {
+            return;
+        }
 
-        $this->mapApiRoutes();      
-
+        $this->mapApiRoutes();
     }
 
-    protected function mapApiRoutes()
+    protected function mapApiRoutes(): void
     {
-
-        foreach (glob(__DIR__ . '/../../routes/api/models/*.php') as $file) {
+        foreach (glob(__DIR__ . '/../../routes/api/models/*.php') ?: [] as $file) {
 
             $name = basename($file, '.php');
 
+            // Los archivos de rutas usan callables [Controlador::class, 'método'],
+            // por lo que ya no hace falta declarar un namespace de controladores.
             Route::middleware('api')
                 ->prefix('api/slashLowerNamespace' . $name)
                 ->as('api.dotNamespace' . $name . '.')
-                ->namespace('Namespace\Http\Controllers')
                 ->group($file);
 
         }
-
     }
 
 }

@@ -3,52 +3,26 @@
 namespace Namespace\Providers;
 
 use Illuminate\Support\Facades\Gate;
-use Illuminate\Foundation\Support\Providers\AuthServiceProvider as ServiceProvider;
-use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\ServiceProvider;
 
 class AuthServiceProvider extends ServiceProvider
 {
 
-    public function boot()
-    {
-        $this->mapPolicies();
-    }
-
-    public function mapPolicies()
-    {
-        // Define una clave única para el caché
-        $cacheKey = 'auth_policies';
-
-        // Intenta recuperar el mapeo de políticas desde el caché
-        $policies = Cache::remember($cacheKey, now()->addDay(), function () {
-            return $this->customDiscoverPolicies();
-        });
-
-        // Registra las políticas
-        foreach ($policies as $model => $policy) {
-            Gate::policy($model, $policy);
-        }
-    }
-
     /**
-     * Descubre las políticas de los modelos.
-     *
-     * @return array
+     * Las políticas de los modelos ya no se registran aquí: cada modelo declara
+     * la suya con el atributo #[UsePolicy(FooPolicy::class)], que Laravel resuelve
+     * automáticamente. Este proveedor queda para gates y habilidades sueltas.
      */
-    protected function customDiscoverPolicies()
+    public function boot(): void
     {
-        $policies = [];
+        $this->defineGates();
+    }
 
-        foreach (glob(__DIR__ . '/../Policies/*.php') as $file) {
-            $policy = 'Namespace\Policies\\' . substr(basename($file), 0, -4);
-            $model = 'Namespace\Models\\' . str_replace('Policy', '', $policy);
-
-            if (class_exists($model) && class_exists($policy)) {
-                $policies[$model] = $policy;
-            }
-        }
-
-        return $policies;
+    protected function defineGates(): void
+    {
+        // Gate::define('nombre-de-la-habilidad', function ($user) {
+        //     return $user->isAdmin();
+        // });
     }
 
 }
