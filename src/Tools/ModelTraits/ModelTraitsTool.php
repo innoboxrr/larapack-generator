@@ -141,7 +141,14 @@ class ModelTraitsTool extends Tool
 			$relationType = $relation['type'];   // belongsTo, hasMany, etc.
 			$relatedModel = $relation['related']; // Modelo relacionado (por ejemplo, User)
 			$relationName = $relation['name'];   // Nombre de la relación (por ejemplo, user)
-			$relatedNamespace = $relation['namespace'] ?? 'App\\Models'; // Namespace del modelo relacionado
+			// El documento resuelve el namespace: null significa que el modelo
+			// relacionado se declara en este mismo laraimport, es decir que vive
+			// en el paquete. Antes se asumia siempre App\Models y el `use`
+			// generado apuntaba a una clase inexistente.
+			$relatedNamespace = rtrim(
+				$relation['namespace'] ?? (rtrim($this->namespace, '\\') . '\\Models'),
+				'\\'
+			);
 	
 			// Generar el código de la relación
 			$relationsCode .= "    public function {$relationName}()\n";
@@ -151,6 +158,13 @@ class ModelTraitsTool extends Tool
 	
 			// Agregar el import del modelo relacionado, si aún no está en la lista
 			$importStatement = "use {$relatedNamespace}\\{$relatedModel};";
+
+			// Una relacion hacia el propio modelo no necesita import, y en PHP
+			// importarse a si mismo es un error de compilacion.
+			if ($relatedModel === $this->PascalCaseModelName) {
+				continue;
+			}
+
 			if (!in_array($importStatement, $imports)) {
 				$imports[] = $importStatement;
 			}

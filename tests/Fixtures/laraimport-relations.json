@@ -1,0 +1,29 @@
+{
+    "models": [
+        {
+            "name": "Post",
+            "props": [
+                { "name": "title", "type": "string" },
+                { "name": "category_id", "type": "foreignId", "constraint": "categories" },
+                { "name": "user_id", "type": "foreignId", "constraint": "users" },
+                { "name": "parent_id", "type": "foreignId", "constraint": "posts", "nullable": true }
+            ],
+            "load_relations": [
+                { "type": "belongsTo", "related": "Category", "name": "category" },
+                { "type": "belongsTo", "related": "User", "name": "user" },
+                { "type": "belongsTo", "related": "Post", "name": "parent" },
+                { "type": "belongsTo", "related": "Tenant", "name": "tenant", "namespace": "Acme\\Tenancy" }
+            ]
+        },
+        {
+            "name": "Category",
+            "props": [
+                { "name": "name", "type": "string" }
+            ],
+            "load_relations": [
+                { "type": "hasMany", "related": "Post", "name": "posts" }
+            ]
+        }
+    ],
+    "pivots": []
+}
