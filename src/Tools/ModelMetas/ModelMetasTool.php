@@ -61,7 +61,7 @@ class ModelMetasTool extends Tool
 			if(copy($templateFile, $modelMetasFile)) {
 				$this->replaceData($modelMetasFile);
 			} else {
-				throw new MakerException;
+				throw MakerException::copyFailed($templateFile, $modelMetasFile);
 			}
 		} else {
 			return false;
@@ -76,18 +76,7 @@ class ModelMetasTool extends Tool
 		
 		$migrationMetasFile = $this->migrationMetasPath . '/' . $timestamp . '_create_' . $this->snake_case_model_name . '_metas_table.php';
 		
-		if(!file_exists($migrationMetasFile)) {
-			$templateFile = $this->migrationMetasTemplatePath . '/MigrationTemplate.txt';
-			if(copy($templateFile, $migrationMetasFile)) {
-				$this->replaceData($migrationMetasFile);
-			} else {
-				throw new MakerException;
-			}
-		} else {
-			return false;
-		}
-		
-		return true;
+		return $this->generate($this->migrationMetasTemplatePath . '/MigrationTemplate.txt', $migrationMetasFile);
 	}	
 
 	public function remove(string $ModelName)
@@ -112,17 +101,7 @@ class ModelMetasTool extends Tool
 		date_default_timezone_set('UTC');
 		$migrationFilename = date('Y_m_d_His') . '_drop_' . $this->snake_case_model_name . '_metas_table.php';
 		$migrationFile = $this->migrationMetasPath . '/' . $migrationFilename;
-		if(!file_exists($migrationFile)) {
-			$templateFile = $this->migrationMetasTemplatePath . '/DropTemplate.txt';
-			if(copy($templateFile, $migrationFile)) {
-				$this->replaceData($migrationFile);
-			} else {
-				throw new MakerException;
-			}
-		} else {
-			return false;
-		}
-		return true;
+		return $this->generate($this->migrationMetasTemplatePath . '/DropTemplate.txt', $migrationFile);
 	}
 
 }

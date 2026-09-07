@@ -3,7 +3,6 @@
 namespace Innoboxrr\LarapackGenerator\Tools\Route;
 
 use Innoboxrr\LarapackGenerator\Tools\Tool;
-use Innoboxrr\LarapackGenerator\Exceptions\MakerException;
 
 class RouteTool extends Tool
 {
@@ -39,27 +38,7 @@ class RouteTool extends Tool
 
 		$routeFile = $this->apiRoutepath . '/' . $this->snake_case_model_name . '.php';
 
-		if(!file_exists($routeFile)) {
-
-			$templateFile = $this->routeTemplatePath . '/RouteTemplate.txt';
-
-			if(copy($templateFile, $routeFile)) {
-
-				$this->replaceData($routeFile);
-
-			} else {
-
-				throw new MakerException;
-
-			}
-
-		} else {
-
-			return false;
-
-		}
-
-		return true;
+		return $this->generate($this->routeTemplatePath . '/RouteTemplate.txt', $routeFile);
 
 	}
 

@@ -3,7 +3,6 @@
 namespace Innoboxrr\LarapackGenerator\Tools\Export;
 
 use Innoboxrr\LarapackGenerator\Tools\Tool;
-use Innoboxrr\LarapackGenerator\Exceptions\MakerException;
 
 class ExportTool extends Tool
 {
@@ -46,27 +45,7 @@ class ExportTool extends Tool
 
 		$exportFile = $this->exportPath . '/' . $this->PluralPascalCaseModelName . 'Exports.php';
 
-		if(!file_exists($exportFile)) {
-
-			$templateFile = $this->exportTemplatePath . '/ExportTemplate.txt';
-
-			if(copy($templateFile, $exportFile)) {
-
-				$this->replaceData($exportFile);
-
-			} else {
-
-				throw new MakerException;
-
-			}
-
-		} else {
-
-			return false;
-
-		}
-
-		return true;
+		return $this->generate($this->exportTemplatePath . '/ExportTemplate.txt', $exportFile);
 
 	}
 

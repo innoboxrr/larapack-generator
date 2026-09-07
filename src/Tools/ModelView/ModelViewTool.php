@@ -72,7 +72,7 @@ class ModelViewTool extends Tool
 						$this->processViewModelJSWithJson($modelFile);
 					}
 				} else {
-					throw new MakerException;
+					throw MakerException::copyFailed($templateFile, $modelFile);
 				}
 			}
 			return $this;
@@ -145,7 +145,7 @@ class ModelViewTool extends Tool
 				if(copy($templateFile, $modelFile)) {
 					$this->replaceData($modelFile);
 				} else {
-					throw new MakerException;
+					throw MakerException::copyFailed($templateFile, $modelFile);
 				}
 			}
 			return $this;
@@ -180,7 +180,7 @@ class ModelViewTool extends Tool
 				if(copy($templateFile, $modelFile)) {
 					$this->replaceData($modelFile);
 				} else {
-					throw new MakerException;
+					throw MakerException::copyFailed($templateFile, $modelFile);
 				}
 			}
 			return $this;
@@ -218,7 +218,7 @@ class ModelViewTool extends Tool
 						$this->processCreateFormWithJson($modelFile);
 					}
 				} else {
-					throw new MakerException;
+					throw MakerException::copyFailed($templateFile, $modelFile);
 				}
 			}
 			return $this;
@@ -391,7 +391,7 @@ class ModelViewTool extends Tool
 						$this->processEditFormWithJson($modelFile);
 					}
 				} else {
-					throw new MakerException;
+					throw MakerException::copyFailed($templateFile, $modelFile);
 				}
 			}
 			return $this;
@@ -565,7 +565,7 @@ class ModelViewTool extends Tool
 						$this->processFilterFormWithJson($modelFile);
 					}
 				} else {
-					throw new MakerException;
+					throw MakerException::copyFailed($templateFile, $modelFile);
 				}
 			}
 			return $this;
@@ -688,7 +688,7 @@ class ModelViewTool extends Tool
 				if(copy($templateFile, $modelFile)) {
 					$this->replaceData($modelFile);
 				} else {
-					throw new MakerException;
+					throw MakerException::copyFailed($templateFile, $modelFile);
 				}
 			}
 			return $this;
@@ -735,7 +735,7 @@ class ModelViewTool extends Tool
 
 				} else {
 
-					throw new MakerException;
+					throw MakerException::copyFailed($templateFile, $modelFile);
 
 				}
 
@@ -786,7 +786,7 @@ class ModelViewTool extends Tool
 
 				} else {
 
-					throw new MakerException;
+					throw MakerException::copyFailed($templateFile, $modelFile);
 
 				}
 
@@ -837,7 +837,7 @@ class ModelViewTool extends Tool
 
 				} else {
 
-					throw new MakerException;
+					throw MakerException::copyFailed($templateFile, $modelFile);
 
 				}
 
@@ -888,7 +888,7 @@ class ModelViewTool extends Tool
 
 				} else {
 
-					throw new MakerException;
+					throw MakerException::copyFailed($templateFile, $modelFile);
 
 				}
 
@@ -939,7 +939,7 @@ class ModelViewTool extends Tool
 
 				} else {
 
-					throw new MakerException;
+					throw MakerException::copyFailed($templateFile, $modelFile);
 
 				}
 
@@ -990,7 +990,7 @@ class ModelViewTool extends Tool
 
 				} else {
 
-					throw new MakerException;
+					throw MakerException::copyFailed($templateFile, $modelFile);
 
 				}
 

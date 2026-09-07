@@ -3,7 +3,6 @@
 namespace Innoboxrr\LarapackGenerator\Tools\Requests;
 
 use Innoboxrr\LarapackGenerator\Tools\Tool;
-use Innoboxrr\LarapackGenerator\Exceptions\MakerException;
 
 class RequestsTool extends Tool
 {
@@ -51,23 +50,7 @@ class RequestsTool extends Tool
     {
         $requestFile = $this->mainRequestsPath . '/' . $requestName . '.php';
 
-        if (!file_exists($requestFile)) {
-            $templateFile = $this->requestsTemplatePath . '/' . $requestName . '.txt';
-
-            if (copy($templateFile, $requestFile)) {
-                $this->replaceData($requestFile);
-
-                if (self::isFromJsonImporter()) {
-                    $this->processFileWithJson($requestFile);
-                }
-            } else {
-                throw new MakerException;
-            }
-        } else {
-            return false;
-        }
-
-        return true;
+        return $this->generate($this->requestsTemplatePath . '/' . $requestName . '.txt', $requestFile);
     }
 
     public function create(string $ModelName)

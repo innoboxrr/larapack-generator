@@ -3,7 +3,6 @@
 namespace Innoboxrr\LarapackGenerator\Tools\Excel;
 
 use Innoboxrr\LarapackGenerator\Tools\Tool;
-use Innoboxrr\LarapackGenerator\Exceptions\MakerException;
 
 class ExcelTool extends Tool
 {
@@ -46,27 +45,7 @@ class ExcelTool extends Tool
 
 		$excelFile = $this->excelPath . '/' . $this->snake_case_model_name . '.blade.php';
 
-		if(!file_exists($excelFile)) {
-
-			$templateFile = $this->excelTemplatePath . '/ExcelTemplate.txt';
-
-			if(copy($templateFile, $excelFile)) {
-
-				$this->replaceData($excelFile);
-
-			} else {
-
-				throw new MakerException;
-
-			}
-
-		} else {
-
-			return false;
-
-		}
-
-		return true;
+		return $this->generate($this->excelTemplatePath . '/ExcelTemplate.txt', $excelFile);
 
 	}
 

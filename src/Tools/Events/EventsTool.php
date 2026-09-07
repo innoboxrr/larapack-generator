@@ -3,7 +3,6 @@
 namespace Innoboxrr\LarapackGenerator\Tools\Events;
 
 use Innoboxrr\LarapackGenerator\Tools\Tool;
-use Innoboxrr\LarapackGenerator\Exceptions\MakerException;
 
 class EventsTool extends Tool
 {
@@ -95,34 +94,14 @@ class EventsTool extends Tool
 	private function createEvent($eventName)
 	{
 		$eventFile = $this->mainEventsPath . '/Events/' . $eventName . '.php';
-		if(!file_exists($eventFile)) {
-			$templateFile = $this->eventsTemplatePath . '/Events/' . $eventName . '.txt';
-			if(copy($templateFile, $eventFile)) {
-				$this->replaceData($eventFile);
-			} else {
-				throw new MakerException;
-			}
-		} else {
-			return false;
-		}
-		return true;
+		return $this->generate($this->eventsTemplatePath . '/Events/' . $eventName . '.txt', $eventFile);
 	}
 
 	private function createListener($eventName, $listenerName)
 	{
 		$listenerPath = $this->createEventListenerDir($eventName);
 		$listenerFile = $listenerPath . '/' . $listenerName . '.php';
-		if(!file_exists($listenerFile)) {
-			$templateFile = $this->eventsTemplatePath . '/Listeners/' . $eventName . '/' . $listenerName . '.txt';
-			if(copy($templateFile, $listenerFile)) {
-				$this->replaceData($listenerFile);
-			} else {
-				throw new MakerException;
-			}
-		} else {
-			return false;
-		}
-		return true;
+		return $this->generate($this->eventsTemplatePath . '/Listeners/' . $eventName . '/' . $listenerName . '.txt', $listenerFile);
 	}
 
 	private function createEventListenerDir($eventName)

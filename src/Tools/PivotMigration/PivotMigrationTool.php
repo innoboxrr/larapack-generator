@@ -40,7 +40,7 @@ class PivotMigrationTool extends Tool
 					$this->processFileWithJson($migrationFile);
 				}
 			} else {
-				throw new MakerException;
+				throw MakerException::copyFailed($templateFile, $migrationFile);
 			}
 		} else {
 			return false;
@@ -63,7 +63,7 @@ class PivotMigrationTool extends Tool
 			if(copy($templateFile, $migrationFile)) {
 				$this->replaceMigrationData($migrationFile);
 			} else {
-				throw new MakerException;
+				throw MakerException::copyFailed($templateFile, $migrationFile);
 			}
 		} else {
 			return false;

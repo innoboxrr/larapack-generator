@@ -3,7 +3,6 @@
 namespace Innoboxrr\LarapackGenerator\Tools\Resource;
 
 use Innoboxrr\LarapackGenerator\Tools\Tool;
-use Innoboxrr\LarapackGenerator\Exceptions\MakerException;
 
 class ResourceTool extends Tool
 {
@@ -39,27 +38,7 @@ class ResourceTool extends Tool
 
 		$resourceFile = $this->resourcePath . '/' . $this->PascalCaseModelName . 'Resource.php';
 
-		if(!file_exists($resourceFile)) {
-
-			$templateFile = $this->resourceTemplatePath . '/ResourceTemplate.txt';
-
-			if(copy($templateFile, $resourceFile)) {
-
-				$this->replaceData($resourceFile);
-
-			} else {
-
-				throw new MakerException;
-
-			}
-
-		} else {
-
-			return false;
-
-		}
-
-		return true;
+		return $this->generate($this->resourceTemplatePath . '/ResourceTemplate.txt', $resourceFile);
 
 	}
 

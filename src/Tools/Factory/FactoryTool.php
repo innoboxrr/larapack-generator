@@ -3,7 +3,6 @@
 namespace Innoboxrr\LarapackGenerator\Tools\Factory;
 
 use Innoboxrr\LarapackGenerator\Tools\Tool;
-use Innoboxrr\LarapackGenerator\Exceptions\MakerException;
 
 class FactoryTool extends Tool
 {
@@ -31,20 +30,7 @@ class FactoryTool extends Tool
 			->addDatabaseNamespaceToComposerJson();
 
 		$factoryFile = $this->factoryPath . '/' . $this->PascalCaseModelName . 'Factory.php';
-		if(!file_exists($factoryFile)) {
-			$templateFile = $this->factoryTemplatePath . '/FactoryTemplate.txt';
-			if(copy($templateFile, $factoryFile)) {
-				$this->replaceData($factoryFile);
-				if(self::isFromJsonImporter()) {
-					$this->processFileWithJson($factoryFile);
-				}
-			} else {
-				throw new MakerException;
-			}
-		} else {
-			return false;
-		}
-		return true;
+		return $this->generate($this->factoryTemplatePath . '/FactoryTemplate.txt', $factoryFile);
 	}
 
 	private function addDatabaseNamespaceToComposerJson()

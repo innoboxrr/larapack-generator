@@ -3,7 +3,6 @@
 namespace Innoboxrr\LarapackGenerator\Tools\Model;
 
 use Innoboxrr\LarapackGenerator\Tools\Tool;
-use Innoboxrr\LarapackGenerator\Exceptions\MakerException;
 
 class ModelTool extends Tool
 {
@@ -31,20 +30,7 @@ class ModelTool extends Tool
 			->setModelTemplatePath();
 
 		$modelFile = $this->modelPath . '/' . $this->PascalCaseModelName . '.php';
-		if(!file_exists($modelFile)) {
-			$templateFile = $this->modelTemplatePath . '/ModelTemplate.txt';
-			if(copy($templateFile, $modelFile)) {
-				$this->replaceData($modelFile);
-				if(self::isFromJsonImporter()) {
-					$this->processFileWithJson($modelFile);
-				}
-			} else {
-				throw new MakerException;
-			}
-		} else {
-			return false;
-		}
-		return true;
+		return $this->generate($this->modelTemplatePath . '/ModelTemplate.txt', $modelFile);
 	}
 
 	public function remove(string $ModelName)

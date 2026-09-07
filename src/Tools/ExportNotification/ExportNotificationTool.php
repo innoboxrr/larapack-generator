@@ -3,7 +3,6 @@
 namespace Innoboxrr\LarapackGenerator\Tools\ExportNotification;
 
 use Innoboxrr\LarapackGenerator\Tools\Tool;
-use Innoboxrr\LarapackGenerator\Exceptions\MakerException;
 
 class ExportNotificationTool extends Tool
 {
@@ -55,27 +54,7 @@ class ExportNotificationTool extends Tool
 
 		$exportNotificationFile = $this->modelExportNotificationPath . '/' . 'ExportNotification.php';
 
-		if(!file_exists($exportNotificationFile)) {
-
-			$templateFile = $this->exportNotificationTemplatePath . '/ExportNotificationTemplate.txt';
-
-			if(copy($templateFile, $exportNotificationFile)) {
-
-				$this->replaceData($exportNotificationFile);
-
-			} else {
-
-				throw new MakerException;
-
-			}
-
-		} else {
-
-			return false;
-
-		}
-
-		return true;
+		return $this->generate($this->exportNotificationTemplatePath . '/ExportNotificationTemplate.txt', $exportNotificationFile);
 
 	}
 

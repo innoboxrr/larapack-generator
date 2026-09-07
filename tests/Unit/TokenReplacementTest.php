@@ -3,8 +3,8 @@
 namespace Innoboxrr\LarapackGenerator\Tests\Unit;
 
 use Innoboxrr\LarapackGenerator\Support\ProjectRoot;
+use Innoboxrr\LarapackGenerator\Tests\Support\ExposedTool;
 use Innoboxrr\LarapackGenerator\Tests\Support\FakeProject;
-use Innoboxrr\LarapackGenerator\Tools\Tool;
 use PHPUnit\Framework\TestCase;
 
 final class TokenReplacementTest extends TestCase
@@ -98,22 +98,5 @@ final class TokenReplacementTest extends TestCase
 
         $this->assertSame('categories', $this->tool->replace('plural_snake_case_model_name'));
         $this->assertSame('Categories', $this->tool->replace('PluralPascalCaseModelName'));
-    }
-}
-
-/**
- * Tool tiene init() y replaceTokens() protegidos porque son detalle interno
- * de las herramientas; aqui se exponen para poder probarlos aislados.
- */
-final class ExposedTool extends Tool
-{
-    public function prepare(string $modelName): void
-    {
-        $this->init($modelName);
-    }
-
-    public function replace(string $content): string
-    {
-        return $this->replaceTokens($content);
     }
 }

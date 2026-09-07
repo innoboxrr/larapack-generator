@@ -3,7 +3,6 @@
 namespace Innoboxrr\LarapackGenerator\Tools\Providers;
 
 use Innoboxrr\LarapackGenerator\Tools\Tool;
-use Innoboxrr\LarapackGenerator\Exceptions\MakerException;
 
 class AuthServiceProviderTool extends Tool
 {
@@ -40,27 +39,7 @@ class AuthServiceProviderTool extends Tool
 
 		$authServiceProviderFile = $this->authServiceProviderPath . '/AuthServiceProvider.php';
 
-		if(!file_exists($authServiceProviderFile)) {
-
-			$templateFile = $this->authServiceProviderTemplatePath . '/AuthServiceProviderTemplate.txt';
-
-			if(copy($templateFile, $authServiceProviderFile)) {
-
-				$this->replaceData($authServiceProviderFile);
-
-			} else {
-
-				throw new MakerException;
-
-			}
-
-		} else {
-
-			return false;
-
-		}
-
-		return true;
+		return $this->generate($this->authServiceProviderTemplatePath . '/AuthServiceProviderTemplate.txt', $authServiceProviderFile);
 
 	}
 

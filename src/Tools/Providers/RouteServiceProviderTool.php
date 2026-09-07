@@ -3,7 +3,6 @@
 namespace Innoboxrr\LarapackGenerator\Tools\Providers;
 
 use Innoboxrr\LarapackGenerator\Tools\Tool;
-use Innoboxrr\LarapackGenerator\Exceptions\MakerException;
 
 class RouteServiceProviderTool extends Tool
 {
@@ -40,27 +39,7 @@ class RouteServiceProviderTool extends Tool
 
 		$routeServiceProviderFile = $this->routeServiceProviderPath . '/RouteServiceProvider.php';
 
-		if(!file_exists($routeServiceProviderFile)) {
-
-			$templateFile = $this->routeServiceProviderTemplatePath . '/RouteServiceProviderTemplate.txt';
-
-			if(copy($templateFile, $routeServiceProviderFile)) {
-
-				$this->replaceData($routeServiceProviderFile);
-
-			} else {
-
-				throw new MakerException;
-
-			}
-
-		} else {
-
-			return false;
-
-		}
-
-		return true;
+		return $this->generate($this->routeServiceProviderTemplatePath . '/RouteServiceProviderTemplate.txt', $routeServiceProviderFile);
 
 	}
 

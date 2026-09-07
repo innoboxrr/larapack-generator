@@ -6,6 +6,7 @@ namespace Innoboxrr\LarapackGenerator\Tools;
 use Doctrine\Inflector\Inflector; 
 use Doctrine\Inflector\NoopWordInflector;
 use Illuminate\Support\Pluralizer;
+use Innoboxrr\LarapackGenerator\Exceptions\MakerException;
 
 class Tool
 {	
@@ -175,8 +176,49 @@ class Tool
 			}
 		}
 
+	// GENERACION
+
+		/**
+		 * Copia un stub al destino, sustituye sus tokens y, si venimos del
+		 * importador JSON, aplica el post-proceso con los datos del modelo.
+		 *
+		 * Este era el cuerpo que cada tool repetia en su create(), con la
+		 * salvedad de que un copy() fallido lanzaba una MakerException vacia:
+		 * ahora dice que plantilla y que destino.
+		 *
+		 * @return bool  false si el destino ya existia; no se sobrescribe.
+		 */
+		protected function generate(string $stub, string $destination): bool
+		{
+			if (file_exists($destination)) {
+				return false;
+			}
+
+			if (! is_file($stub)) {
+				throw MakerException::stubNotFound($stub);
+			}
+
+			$directory = dirname($destination);
+
+			if (! is_dir($directory) && ! mkdir($directory, 0777, true) && ! is_dir($directory)) {
+				throw MakerException::directoryNotCreated($directory);
+			}
+
+			if (! copy($stub, $destination)) {
+				throw MakerException::copyFailed($stub, $destination);
+			}
+
+			$this->replaceData($destination);
+
+			if (self::isFromJsonImporter()) {
+				$this->processFileWithJson($destination);
+			}
+
+			return true;
+		}
+
 	// TOOLS
-	
+
 		protected function dropFile(string $file)
 		{
 			return unlink($file);

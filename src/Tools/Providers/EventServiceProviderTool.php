@@ -3,7 +3,6 @@
 namespace Innoboxrr\LarapackGenerator\Tools\Providers;
 
 use Innoboxrr\LarapackGenerator\Tools\Tool;
-use Innoboxrr\LarapackGenerator\Exceptions\MakerException;
 
 class EventServiceProviderTool extends Tool
 {
@@ -40,27 +39,7 @@ class EventServiceProviderTool extends Tool
 
 		$eventServiceProviderFile = $this->eventServiceProviderPath . '/EventServiceProvider.php';
 
-		if(!file_exists($eventServiceProviderFile)) {
-
-			$templateFile = $this->eventServiceProviderTemplatePath . '/EventServiceProviderTemplate.txt';
-
-			if(copy($templateFile, $eventServiceProviderFile)) {
-
-				$this->replaceData($eventServiceProviderFile);
-
-			} else {
-
-				throw new MakerException;
-
-			}
-
-		} else {
-
-			return false;
-
-		}
-
-		return true;
+		return $this->generate($this->eventServiceProviderTemplatePath . '/EventServiceProviderTemplate.txt', $eventServiceProviderFile);
 
 	}
 

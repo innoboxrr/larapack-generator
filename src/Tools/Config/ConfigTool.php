@@ -3,7 +3,6 @@
 namespace Innoboxrr\LarapackGenerator\Tools\Config;
 
 use Innoboxrr\LarapackGenerator\Tools\Tool;
-use Innoboxrr\LarapackGenerator\Exceptions\MakerException;
 
 class ConfigTool extends Tool
 {
@@ -46,27 +45,7 @@ class ConfigTool extends Tool
 
 		$configFile = $this->configPath . '/' . $this->namespaceWithoutSeparation . '.php';
 
-		if(!file_exists($configFile)) {
-
-			$templateFile = $this->configTemplatePath . '/ConfigTemplate.txt';
-
-			if(copy($templateFile, $configFile)) {
-
-				$this->replaceData($configFile);
-
-			} else {
-
-				throw new MakerException;
-
-			}
-
-		} else {
-
-			return false;
-
-		}
-
-		return true;
+		return $this->generate($this->configTemplatePath . '/ConfigTemplate.txt', $configFile);
 
 	}
 

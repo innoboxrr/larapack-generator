@@ -3,7 +3,6 @@
 namespace Innoboxrr\LarapackGenerator\Tools\Filters;
 
 use Innoboxrr\LarapackGenerator\Tools\Tool;
-use Innoboxrr\LarapackGenerator\Exceptions\MakerException;
 
 class FiltersTool extends Tool
 {
@@ -76,27 +75,7 @@ class FiltersTool extends Tool
 
 		$filterFile = $this->mainFiltersPath . '/' . $filterName . '.php';
 
-		if(!file_exists($filterFile)) {
-
-			$templateFile = $this->filtersTemplatePath . '/' . $filterName . 'Template.txt';
-
-			if(copy($templateFile, $filterFile)) {
-
-				$this->replaceData($filterFile);
-
-			} else {
-
-				throw new MakerException;
-
-			}
-
-		} else {
-
-			return false;
-
-		}
-
-		return true;
+		return $this->generate($this->filtersTemplatePath . '/' . $filterName . 'Template.txt', $filterFile);
 
 	}
 

@@ -71,7 +71,7 @@ class ModelTraitsTool extends Tool
 			if(copy($templateFile, $assignmentTraitFile)) {
 				$this->replaceData($assignmentTraitFile);
 			} else {
-				throw new MakerException;
+				throw MakerException::copyFailed($templateFile, $assignmentTraitFile);
 			}
 		} 
 		return $this;
@@ -85,7 +85,7 @@ class ModelTraitsTool extends Tool
 			if(copy($templateFile, $mutatorsTraitFile)) {
 				$this->replaceData($mutatorsTraitFile);
 			} else {
-				throw new MakerException;
+				throw MakerException::copyFailed($templateFile, $mutatorsTraitFile);
 			}
 		} 
 		return $this;
@@ -99,7 +99,7 @@ class ModelTraitsTool extends Tool
 			if(copy($templateFile, $operationsTraitFile)) {
 				$this->replaceData($operationsTraitFile);
 			} else {
-				throw new MakerException;
+				throw MakerException::copyFailed($templateFile, $operationsTraitFile);
 			}
 		} 
 		return $this;
@@ -116,7 +116,7 @@ class ModelTraitsTool extends Tool
 					$this->processRelationsTraitWithJson($relationsTraitFile);
 				}
 			} else {
-				throw new MakerException;
+				throw MakerException::copyFailed($templateFile, $relationsTraitFile);
 			}
 		} 
 		return $this;
@@ -178,7 +178,7 @@ class ModelTraitsTool extends Tool
 			if(copy($templateFile, $storageTraitFile)) {
 				$this->replaceData($storageTraitFile);
 			} else {
-				throw new MakerException;
+				throw MakerException::copyFailed($templateFile, $storageTraitFile);
 			}
 		} 
 		return $this;

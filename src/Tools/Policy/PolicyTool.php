@@ -3,7 +3,6 @@
 namespace Innoboxrr\LarapackGenerator\Tools\Policy;
 
 use Innoboxrr\LarapackGenerator\Tools\Tool;
-use Innoboxrr\LarapackGenerator\Exceptions\MakerException;
 
 class PolicyTool extends Tool
 {
@@ -39,27 +38,7 @@ class PolicyTool extends Tool
 
 		$policyFile = $this->policyPath . '/' . $this->PascalCaseModelName . 'Policy.php';
 
-		if(!file_exists($policyFile)) {
-
-			$templateFile = $this->policyTemplatePath . '/PolicyTemplate.txt';
-
-			if(copy($templateFile, $policyFile)) {
-
-				$this->replaceData($policyFile);
-
-			} else {
-
-				throw new MakerException;
-
-			}
-
-		} else {
-
-			return false;
-
-		}
-
-		return true;
+		return $this->generate($this->policyTemplatePath . '/PolicyTemplate.txt', $policyFile);
 
 	}
 

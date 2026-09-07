@@ -35,20 +35,7 @@ class MigrationTool extends Tool
 	
 		$migrationFile = $this->migrationPath . '/' . date('Y_m_d_His') . '_create_' . $this->plural_snake_case_model_name . '_table.php';
 		// PENDIENTE: Cambiar esto para que en lugar de esta validación verifique si no existe esta misma clase en las migraciones de la aplicación
-		if(!file_exists($migrationFile)) {
-			$templateFile = $this->migrationTemplatePath . '/MigrationTemplate.txt';
-			if(copy($templateFile, $migrationFile)) {
-				$this->replaceData($migrationFile);
-				if(self::isFromJsonImporter()) {
-					$this->processFileWithJson($migrationFile);
-				}
-			} else {
-				throw new MakerException;
-			}
-		} else {
-			return false;
-		}
-		return true;
+		return $this->generate($this->migrationTemplatePath . '/MigrationTemplate.txt', $migrationFile);
 	}
 
 	public function remove(string $ModelName)
@@ -67,7 +54,7 @@ class MigrationTool extends Tool
 				// Remplace dummy data
 				$this->replaceData($migrationFile);
 			} else {
-				throw new MakerException;
+				throw MakerException::copyFailed($templateFile, $migrationFile);
 			}
 		} else {
 			return false;

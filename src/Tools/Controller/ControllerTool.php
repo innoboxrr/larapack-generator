@@ -3,7 +3,6 @@
 namespace Innoboxrr\LarapackGenerator\Tools\Controller;
 
 use Innoboxrr\LarapackGenerator\Tools\Tool;
-use Innoboxrr\LarapackGenerator\Exceptions\MakerException;
 
 class ControllerTool extends Tool
 {
@@ -27,17 +26,7 @@ class ControllerTool extends Tool
 	{
 		if(app_dir_name() == 'src') {
 			$controllerFile = $this->controllerPath . '/' . 'Controller.php';
-			if(!file_exists($controllerFile)) {
-				$templateFile = $this->controllerTemplatePath . '/Controller.txt';
-				if(copy($templateFile, $controllerFile)) {
-					$this->replaceData($controllerFile);
-				} else {
-					throw new MakerException;
-				}
-			} else {
-				return false;
-			}
-			return true;
+			return $this->generate($this->controllerTemplatePath . '/Controller.txt', $controllerFile);
 		}
 	}
 
@@ -53,17 +42,7 @@ class ControllerTool extends Tool
 	{
 		$this->setUp($ModelName);
 		$controllerFile = $this->controllerPath . '/' . $this->PascalCaseModelName . 'Controller.php';
-		if(!file_exists($controllerFile)) {
-			$templateFile = $this->controllerTemplatePath . '/ControllerTemplate.txt';
-			if(copy($templateFile, $controllerFile)) {
-				$this->replaceData($controllerFile);
-			} else {
-				throw new MakerException;
-			}
-		} else {
-			return false;
-		}
-		return true;
+		return $this->generate($this->controllerTemplatePath . '/ControllerTemplate.txt', $controllerFile);
 	}
 
 	public function remove(string $ModelName)

@@ -3,7 +3,6 @@
 namespace Innoboxrr\LarapackGenerator\Tools\Providers;
 
 use Innoboxrr\LarapackGenerator\Tools\Tool;
-use Innoboxrr\LarapackGenerator\Exceptions\MakerException;
 
 class AppServiceProviderTool extends Tool
 {
@@ -40,27 +39,7 @@ class AppServiceProviderTool extends Tool
 
 		$appServiceProviderFile = $this->appServiceProviderPath . '/AppServiceProvider.php';
 
-		if(!file_exists($appServiceProviderFile)) {
-
-			$templateFile = $this->appServiceProviderTemplatePath . '/AppServiceProviderTemplate.txt';
-
-			if(copy($templateFile, $appServiceProviderFile)) {
-
-				$this->replaceData($appServiceProviderFile);
-
-			} else {
-
-				throw new MakerException;
-
-			}
-
-		} else {
-
-			return false;
-
-		}
-
-		return true;
+		return $this->generate($this->appServiceProviderTemplatePath . '/AppServiceProviderTemplate.txt', $appServiceProviderFile);
 
 	}
 

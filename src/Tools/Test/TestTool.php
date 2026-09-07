@@ -173,7 +173,7 @@ class TestTool extends Tool
 
 			} else {
 
-				throw new MakerException;
+				throw MakerException::copyFailed($templateFile, $testFile);
 
 			}
 

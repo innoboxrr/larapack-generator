@@ -3,7 +3,6 @@
 namespace Innoboxrr\LarapackGenerator\Tools\Observer;
 
 use Innoboxrr\LarapackGenerator\Tools\Tool;
-use Innoboxrr\LarapackGenerator\Exceptions\MakerException;
 
 class ObserverTool extends Tool
 {
@@ -39,27 +38,7 @@ class ObserverTool extends Tool
 
 		$observerFile = $this->observerPath . '/' . $this->PascalCaseModelName . 'Observer.php';
 
-		if(!file_exists($observerFile)) {
-
-			$templateFile = $this->observerTemplatePath . '/ObserverTemplate.txt';
-
-			if(copy($templateFile, $observerFile)) {
-
-				$this->replaceData($observerFile);
-
-			} else {
-
-				throw new MakerException;
-
-			}
-
-		} else {
-
-			return false;
-
-		}
-
-		return true;
+		return $this->generate($this->observerTemplatePath . '/ObserverTemplate.txt', $observerFile);
 
 	}
 
