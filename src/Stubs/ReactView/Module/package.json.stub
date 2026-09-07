@@ -1,0 +1,41 @@
+{
+    "name": "packageName-react",
+    "version": "0.1.0",
+    "description": "Modulo React de packageName",
+    "type": "module",
+    "main": "index.js",
+    "exports": {
+        ".": "./index.js",
+        "./src/*": "./src/*"
+    },
+    "files": [
+        "index.js",
+        "src"
+    ],
+    "sideEffects": [
+        "*.css"
+    ],
+    "scripts": {
+        "build": "vite build",
+        "locale": "npx locale-gen"
+    },
+    "license": "MIT",
+    "peerDependencies": {
+        "react": "^19.0.0",
+        "react-dom": "^19.0.0",
+        "react-router-dom": "^7.0.0",
+        "zustand": "^5.0.0"
+    },
+    "dependencies": {
+        "innoboxrr-http-request": "^1.1.0",
+        "innoboxrr-i18n": "^1.0.0",
+        "innoboxrr-js-validator": "^1.1.1",
+        "innoboxrr-react-datatable": "^1.0.0",
+        "innoboxrr-react-form-elements": "^1.0.0",
+        "innoboxrr-route-resolver": "^1.0.0"
+    },
+    "devDependencies": {
+        "@vitejs/plugin-react": "^5.0.0",
+        "vite": "^7.1.0"
+    }
+}
