@@ -21,6 +21,7 @@ class Tool
 		protected $namespace;
 		protected $dotNamespace;
 		protected $kebabNamespace;
+		protected $packageName;
 		protected $namespaceWithoutSeparation;
 		protected $lowerNamespace;
 		protected $slashLowerNamespace;
@@ -78,6 +79,9 @@ class Tool
 			$this->namespace = get_namespace();
 			$this->dotNamespace = get_dot_namespace();
 			$this->kebabNamespace = get_kebab_namespace();
+			// El kebab del namespace acaba en separador (innoboxrr-deals-); el
+			// nombre de paquete npm no puede llevarlo.
+			$this->packageName = rtrim($this->kebabNamespace, "-");
 			$this->namespaceWithoutSeparation = str_replace('.', '', mb_strtolower($this->dotNamespace));
 			$this->lowerNamespace = mb_strtolower($this->namespace);
 			$this->slashLowerNamespace = str_replace('\\', '/', $this->lowerNamespace);
@@ -132,6 +136,7 @@ class Tool
 				'Namespace\\' => $this->namespace,
 				'dotNamespace' => $this->dotNamespace,
 				'kebabNamespace' => $this->kebabNamespace,
+				'packageName' => $this->packageName,
 				'namespaceWithoutSeparation' => $this->namespaceWithoutSeparation,
 				'lowerNamespace' => $this->lowerNamespace,
 				'slashLowerNamespace' => $this->slashLowerNamespace,
