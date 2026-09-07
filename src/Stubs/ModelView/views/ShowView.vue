@@ -1,78 +1,100 @@
 <template>
-	<div v-if="dataLoaded">
-		<breadcrumbs-component :items="items" />
-	    <div class="uk-container uk-container-expand">
-	    	<div class="uk-grid-small" uk-grid>
-	    		<div class="uk-width-1-3@m uk-width-1-1@s">
-					<model-card 
-						:kebabcasemodelname="camelCaseModelName" />
-	    		</div>
-	    		<div class="uk-width-expand uk-width-1-2@m uk-width-1-1@s">
-	    			<div v-if="this.isShowView">
-	    				<model-profile 
-	    					:kebabcasemodelname="camelCaseModelName" />
-	    			</div>
-	    			<div v-else>
-	    				<router-view @updateData="fetchData"></router-view>
-	    			</div>
-	    		</div>
-	    	</div>
-	    </div>
-	</div>
+
+    <div v-if="camelCaseModelName">
+
+        <BreadcrumbsComponent :pages="breadcrumbs" />
+
+        <div class="uk-container uk-container-expand">
+            <div class="uk-grid-small" uk-grid>
+
+                <div class="uk-width-1-3@m uk-width-1-1@s">
+                    <ModelCard :kebabcasemodelname="camelCaseModelName" />
+                </div>
+
+                <div class="uk-width-expand uk-width-1-2@m uk-width-1-1@s">
+
+                    <div v-if="isShowView">
+                        <ModelProfile :kebabcasemodelname="camelCaseModelName" />
+                    </div>
+
+                    <div v-else>
+                        <RouterView @update-data="load" />
+                    </div>
+
+                </div>
+
+            </div>
+        </div>
+
+    </div>
+
 </template>
 
-<script>
+<script setup>
 
-	import { showModel } from '@models/kebabcasemodelname'
-	import ModelCard from '@models/kebabcasemodelname/widgets/ModelCard.vue'
-	import ModelProfile from '@models/kebabcasemodelname/widgets/ModelProfile.vue'
+    import { computed, onMounted, watch } from 'vue'
+    import { RouterView, useRoute, useRouter } from 'vue-router'
+    import t from 'innoboxrr-i18n'
 
-	export default {
-		components: {
-			ModelCard,
-			ModelProfile
-		},
-		mounted() {
-			this.fetchData();
-		},
-		data() {
-			return {
-				dataLoaded: false,
-				title: undefined,
-				camelCaseModelNameId: this.$route.params.id,
-				camelCaseModelName: {},
-			}
-		},
-		computed: {
-			isShowView() {
-				return (this.$route.name == 'AdminShowPascalCaseModelName');
-			},
-			items() {
-				if(this.$route.name == 'AdminShowPascalCaseModelName') {
-					return [
-						{ text: 'PluralPascalCaseModelName', path: '/admin/kebabcasemodelname'},
-						{ text: this.camelCaseModelName.name ?? 'PascalCaseModelName', path: '/admin/kebabcasemodelname/' + this.camelCaseModelName.id}
-					];
-				} else if(this.$route.name == 'AdminEditPascalCaseModelName') {
-					return [
-						{ text: 'PluralPascalCaseModelName', path: '/admin/kebabcasemodelname'},
-						{ text: this.camelCaseModelName.name ?? 'PascalCaseModelName' , path: '/admin/kebabcasemodelname/' + this.camelCaseModelName.id},
-						{ text: 'Editar kebabcasemodelname', path: '/admin/kebabcasemodelname/' + this.camelCaseModelName.id + '/edit'}	
-					];
-				}
-			}
-		},
-		methods: {
-			async fetchData() {
-				await this.fetchPascalCaseModelName()
-				this.dataLoaded = true;
-				this.title = this.camelCaseModelName.name;
-				document.title = this.title;
-			},
-			async fetchPascalCaseModelName() {
-				let res = await showModel(this.camelCaseModelNameId);
-				this.camelCaseModelName = res;
+    import ModelCard from '../widgets/ModelCard.vue'
+    import ModelProfile from '../widgets/ModelProfile.vue'
+    import { usePascalCaseModelNameStore } from '../store'
+
+    const route = useRoute()
+    const router = useRouter()
+
+    const store = usePascalCaseModelNameStore()
+
+    const camelCaseModelName = computed(() => store.current)
+
+    const isShowView = computed(() => route.name === 'AdminShowPascalCaseModelName')
+
+    const load = async () => {
+
+        const loaded = await store.fetchOne(route.params.id)
+
+        document.title = loaded?.name ?? 'PascalCaseModelName'
+
+    }
+
+    onMounted(load)
+
+    // Navegar de un registro a otro sin desmontar la vista tiene que recargar.
+    watch(() => route.params.id, (id) => id && load())
+
+    const breadcrumbs = computed(() => {
+
+        const pages = [
+            {
+                link: router.resolve({ name: 'AdminPluralPascalCaseModelName' }).fullPath,
+                title: 'PluralPascalCaseModelName',
             },
-		}
-	}
+        ]
+
+        if (! camelCaseModelName.value) {
+            return pages
+        }
+
+        pages.push({
+            link: router.resolve({
+                name: 'AdminShowPascalCaseModelName',
+                params: { id: camelCaseModelName.value.id },
+            }).fullPath,
+            title: camelCaseModelName.value.name ?? 'PascalCaseModelName',
+        })
+
+        if (route.name === 'AdminEditPascalCaseModelName') {
+            pages.push({
+                link: router.resolve({
+                    name: 'AdminEditPascalCaseModelName',
+                    params: { id: camelCaseModelName.value.id },
+                }).fullPath,
+                title: t('Edit'),
+            })
+        }
+
+        return pages
+
+    })
+
 </script>

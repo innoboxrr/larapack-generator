@@ -1,138 +1,92 @@
 <template>
-	
-	<data-table
-		title="PascalCaseModelName" 
-		:data-url="dataUrl"
-		data-method="get"
-		:policy-url="policyUrl"
-		policy-method="get"
-		:model="model"
-		:external-filters="camelCaseModelNameExternalFilters"
-		:form-filters="formFilters"
-		:extra-params="extraParams"
-		:hide-columns="hideColumns"
-		:card-wrapper="cardWrapper"
-		:show-topbar="showTopbar"
-		:show-title="showTitle"
-		:has-actions="hasActions" 
-		:has-filter="hasFilter" >
 
-		<template v-slot:filterForm>
-			
-			<filter-form @submit="updateFormFilters" />
+    <DataTable
+        title="PascalCaseModelName"
+        :data-url="dataUrl"
+        data-method="get"
+        :policy-url="policyUrl"
+        policy-method="get"
+        :model="model"
+        :external-filters="mergedExternalFilters"
+        :form-filters="formFilters"
+        :extra-params="extraParams"
+        :hide-columns="hideColumns"
+        :card-wrapper="cardWrapper"
+        :show-topbar="showTopbar"
+        :show-title="showTitle"
+        :has-actions="hasActions"
+        :has-filter="hasFilter">
 
-		</template>
+        <template #filterForm>
+            <FilterForm @submit="updateFormFilters" />
+        </template>
 
-	</data-table>
+    </DataTable>
 
 </template>
 
-<script>
-	
-	import DataTable from 'innoboxrr-vue-datatable'
-	import FilterForm from '@models/kebabcasemodelname/forms/FilterForm.vue'
-	import * as model from '@models/kebabcasemodelname' 
+<script setup>
 
-	export default {
+    import { computed, ref } from 'vue'
+    import DataTable from 'innoboxrr-vue-datatable'
+    import route from 'innoboxrr-route-resolver'
 
-		components: {
-			
-			DataTable,
-			
-			FilterForm ,
+    import FilterForm from '../forms/FilterForm.vue'
+    import * as model from '../index'
 
-		},
+    const props = defineProps({
+        showTopbar: {
+            type: Boolean,
+            default: true,
+        },
+        showTitle: {
+            type: Boolean,
+            default: true,
+        },
+        showBreadcrumb: {
+            type: Boolean,
+            default: false,
+        },
+        hasActions: {
+            type: Boolean,
+            default: true,
+        },
+        hasFilter: {
+            type: Boolean,
+            default: true,
+        },
+        // Vue 3 exige factoria para los valores por defecto de objeto y array;
+        // declararlos como literal comparte la misma instancia entre montajes.
+        externalFilters: {
+            type: Object,
+            default: () => ({}),
+        },
+        extraParams: {
+            type: Object,
+            default: () => ({}),
+        },
+        hideColumns: {
+            type: Array,
+            default: () => [],
+        },
+        cardWrapper: {
+            type: Boolean,
+            default: true,
+        },
+    })
 
-		props: {
+    const dataUrl = route(`${model.API_ROUTE_PREFIX}index`)
+    const policyUrl = route(`${model.API_ROUTE_PREFIX}policies`)
 
-			showTopbar:{
-				type: Boolean,
-				default: true
-			},
-			
-			showTitle: {
-				type: Boolean,
-				default: true
-			},
+    const formFilters = ref({})
 
-			showBreadcrumb: {
-				type: Boolean,
-				default: false
-			},
+    const updateFormFilters = (filters) => {
+        formFilters.value = filters
+    }
 
-			hasActions: {
-				type: Boolean,
-				default: true
-			},
-
-			hasFilter: {
-				type: Boolean,
-				default: true
-			},
-
-			externalFilters: {
-				type: Object,
-				default: {}
-			},
-
-			extraParams: {
-				type: Object,
-				default: {}
-			},
-
-			hideColumns: {
-				type: Array,
-				default: []
-			},
-
-			cardWrapper: {
-				type: Boolean,
-				default: true
-			},
-
-		},		
-
-		data() {
-
-			return {
-			
-				dataUrl: route(`${model.API_ROUTE_PREFIX}index`),
-
-				policyUrl: route(`${model.API_ROUTE_PREFIX}policies`),
-
-				model: model,
-
-				formFilters: {}
-			
-			}
-
-		},
-
-		computed: {
-
-			camelCaseModelNameExternalFilters() {
-
-				let filters = {/* Add custom filters */}
-
-				return {
-					...this.externalFilters,
-					...filters
-				}
-
-			}
-
-		},
-
-		methods: {
-
-			updateFormFilters(filters) {
-
-				this.formFilters = filters;
-
-			},
-
-		}
-
-	}
+    const mergedExternalFilters = computed(() => ({
+        ...props.externalFilters,
+        // Filtros propios del widget
+    }))
 
 </script>

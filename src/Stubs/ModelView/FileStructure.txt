@@ -1,83 +1,57 @@
-/vue
-	/app
-		/sections
-			/admin
-				/layouts
-					/default
-						AdminLayout.vue
-				/models
-					/{model}
-						/forms
-							CreateForm.vue
-							EditForm.vue
-							FilterForm.vue
-						/routes
-							index.js
-						/views
-							AdminView.vue
-							CreateView.vue
-							EditView.vue
-							ShowView.vue
-						/vuex
-							index.js
-						/widgets
-							DataTable.vue
-						index.js
-				/pages
-					/{page-name}
-						/routes
-							index.js
-						/views
-							CustomView.vue
-						/vuex
-							index.js
-				/routes
-					index.js
-				/vuex
-					index.js
-			/error
-				/layouts
-					/default
-						ErrorLayout.vue
-				/pages
-					/{error-code}
-						/route
-							index.js
-						/views
-							CustomView.vue
-						/vuex
-							index.js
-				/routes
-					index.js
-				/vuex
-					index.js
-			/site
-				/layouts
-					/default
-						SiteLayout.vue
-				/pages
-					/{page-name (Home)}
-						/routes	
-							index.js
-						/views
-							/CustomView.vue
-						/vuex
-							index.js
-				/routes
-					index.js
-				/vuex
-					index.js
-		App.vue
-	/router
-		/middleware
-			/validations
-				auth.js
-				guest.js
-			middlewarePipeline.js
-			index.js
-		/routes
-			dynamicRouteImport.js
-			index.js
-		index.js
-	/vuex
-		index.js
+Estructura que genera larapack:model-view dentro del paquete.
+
+El modulo Vue vive junto al backend y se publica como paquete npm propio, de
+forma que la API y su interfaz viajan y se versionan juntas. El anfitrion lo
+descubre por glob de Vite; no hay que enumerar rutas en ningun indice global.
+
+resources/vue/
+    package.json                    -> paquete npm "packageName" (una vez)
+    vite.config.js                  -> build en modo libreria (una vez)
+    index.js                        -> punto de entrada: exporta routes (una vez)
+    src/
+        routes/
+            index.js                -> agrega ../models/*/routes/index.js (una vez)
+        models/
+            <kebab-del-modelo>/
+                index.js            -> contrato del modelo: sin framework
+                store/
+                    index.js        -> store Pinia
+                routes/
+                    index.js        -> rutas del modelo (vue-router 4)
+                forms/
+                    CreateForm.vue
+                    EditForm.vue
+                    FilterForm.vue
+                views/
+                    AdminView.vue   -> indice + router-view de las hijas
+                    CreateView.vue
+                    EditView.vue
+                    ShowView.vue
+                widgets/
+                    DataTable.vue
+                    ModelCard.vue
+                    ModelProfile.vue
+
+Contrato con el backend
+-----------------------
+
+  index.js            API_ROUTE_PREFIX = 'api.<dotNamespace><snake_del_modelo>.'
+  RouteServiceProvider ->as('api.<dotNamespace><archivo_de_rutas>.')
+
+Los dos tienen que coincidir: el front resuelve cada URL por nombre de ruta
+con innoboxrr-route-resolver, que lee el routes.json que genera
+`php artisan route:json` (innoboxrr/routes-to-json).
+
+El array `actions` que emite el Resource de Laravel alimenta las acciones por
+fila del datatable: `route: true` se renderiza como router-link hacia
+params.to.name; `route: false` invoca model[callback](params), asi que el
+callback tiene que ser un export real de index.js.
+
+Requisitos del anfitrion
+------------------------
+
+  - JsonResource::withoutWrapping() en el AppServiceProvider. El codigo
+    generado espera el recurso plano, no envuelto en { data: ... }.
+  - El alias @router apuntando a resources/vue/router (middleware de rutas).
+  - Los mixins globales que aportan inputClass y buttonClass.
+  - window.route y las traducciones inicializadas en el bootstrap.

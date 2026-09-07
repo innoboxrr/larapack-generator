@@ -1,72 +1,75 @@
-<template>	
-	<form id="camelCaseModelNameFilterForm" @submit.prevent="onSubmit">
-		<div class="uk-flex uk-flex-left uk-child-width-1-4@m uk-child-width-1-1@s" uk-grid>
-			<div>
-				<text-input-component
-					:custom-class="inputClass"
-					type="text"
-					name="id"
-					label="ID"
-					placeholder="ID" 
-					v-model="id" />
-			</div>
+<template>
+
+    <form :id="formId" @submit.prevent="onSubmit">
+
+        <div class="uk-flex uk-flex-left uk-child-width-1-4@m uk-child-width-1-1@s" uk-grid>
+
+            <div>
+                <TextInputComponent
+                    :custom-class="inputClass"
+                    type="text"
+                    name="id"
+                    label="ID"
+                    placeholder="ID"
+                    v-model="form.id" />
+            </div>
 
 <!-- Add more inputs -->
 
-		</div>
+        </div>
 
-		<div class="uk-flex uk-flex-right uk-child-width-auto@m uk-child-width-1-1@m" uk-grid>
-			<div>
-				<button :class="buttonClass">
-					{{ __('Search') }}
-				</button>
-			</div>
-			<div>
-				<button 
-					:class="buttonClass + ' bg-gray-400'"
-					@click.prevent="resetForm()">
-					{{ __('Reset') }}
-				</button>
-			</div>
-		</div>
-	</form>
+        <div class="uk-flex uk-flex-right uk-child-width-auto@m uk-child-width-1-1@m" uk-grid>
+            <div>
+                <button :class="buttonClass">
+                    {{ t('Search') }}
+                </button>
+            </div>
+            <div>
+                <button
+                    :class="buttonClass + ' bg-gray-400'"
+                    @click.prevent="resetForm">
+                    {{ t('Reset') }}
+                </button>
+            </div>
+        </div>
+
+    </form>
+
 </template>
 
-<script>
-	
-	import { 
-		TextInputComponent,
+<script setup>
+
+    import { reactive } from 'vue'
+    import t from 'innoboxrr-i18n'
+    import {
+        TextInputComponent,
 //import_more_components//
-	} from 'innoboxrr-form-elements'
+    } from 'innoboxrr-form-elements'
 
-	export default {
+    defineProps({
+        formId: {
+            type: String,
+            default: 'camelCaseModelNameFilterForm',
+        },
+    })
 
-		components: {
-			TextInputComponent,
-//register_more_components//
-		},
+    const emit = defineEmits(['submit'])
 
-		emits: ['submit'],
+    const initialState = () => ({
+        id: null,
+//form_fields//
+    })
 
-		data() {
-			return {
-				id: null,
-//add_more_data//
-			}
+    const form = reactive(initialState())
 
-		},
+    // El datatable espera recibir el objeto de filtros completo, no solo los
+    // que tienen valor: un campo vaciado tiene que limpiar su filtro.
+    const onSubmit = () => emit('submit', { ...form })
 
-		methods: {
+    const resetForm = () => {
+        Object.assign(form, initialState())
 
-			onSubmit() {
-				this.$emit('submit', this.$data);
-			},
+        onSubmit()
+    }
 
-			resetForm() {
-				this.id = null;
-//reset_inputs//
-				this.onSubmit();
-			}
-		}
-	}
 </script>

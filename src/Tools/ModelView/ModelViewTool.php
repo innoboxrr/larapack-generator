@@ -3,1038 +3,395 @@
 namespace Innoboxrr\LarapackGenerator\Tools\ModelView;
 
 use Innoboxrr\LarapackGenerator\Tools\Tool;
-use Innoboxrr\LarapackGenerator\Exceptions\MakerException;
 
 class ModelViewTool extends Tool
 {
+	/**
+	 * Plantilla => destino, relativo al modulo del modelo.
+	 */
+	private const FILES = [
+		'model.js' => 'index.js',
+		'store.js' => 'store/index.js',
+		'routes.js' => 'routes/index.js',
+		'forms/CreateForm.vue' => 'forms/CreateForm.vue',
+		'forms/EditForm.vue' => 'forms/EditForm.vue',
+		'forms/FilterForm.vue' => 'forms/FilterForm.vue',
+		'views/AdminView.vue' => 'views/AdminView.vue',
+		'views/CreateView.vue' => 'views/CreateView.vue',
+		'views/EditView.vue' => 'views/EditView.vue',
+		'views/ShowView.vue' => 'views/ShowView.vue',
+		'widgets/DataTable.vue' => 'widgets/DataTable.vue',
+		'widgets/ModelCard.vue' => 'widgets/ModelCard.vue',
+		'widgets/ModelProfile.vue' => 'widgets/ModelProfile.vue',
+	];
 
-	protected $errors;
+	/**
+	 * Andamiaje del modulo npm, creado una sola vez por paquete.
+	 */
+	private const MODULE_FILES = [
+		'Module/package.json.stub' => 'package.json',
+		'Module/vite.config.js' => 'vite.config.js',
+		'Module/index.js' => 'index.js',
+		'Module/routes.js' => 'src/routes/index.js',
+	];
 
-	protected $modelViewModelJsPath;
-	protected $modelViewRouteJsPath;
-	protected $modelViewVuexJsPath;
-	protected $modelViewCreateFormPath;
-	protected $modelViewEditFormPath;
-	protected $modelViewFilterFormPath;
-	protected $modelViewAdminViewPath;
-	protected $modelViewCreateViewPath;
-	protected $modelViewEditViewPath;
-	protected $modelViewShowViewPath;
-	protected $modelViewDataTablePath;
-	protected $modelViewModelCardPath;
-	protected $modelViewModelProfilePath;
-	
-	protected $modelViewTemplateModelJsPath;
-	protected $modelViewTemplateRouteJsPath;
-	protected $modelViewTemplateVuexJsPath;
-	protected $modelViewTemplateCreateFormPath;
-	protected $modelViewTemplateEditFormPath;
-	protected $modelViewTemplateFilterFormPath;
-	protected $modelViewTemplateAdminViewPath;
-	protected $modelViewTemplateCreateViewPath;
-	protected $modelViewTemplateEditViewPath;
-	protected $modelViewTemplateShowViewPath;
-	protected $modelViewTemplateDataTablePath;
-	protected $modelViewTemplateModelCardPath;
-	protected $modelViewTemplateModelProfilePath;
-	
+	/**
+	 * Componentes de innoboxrr-form-elements que el stub ya importa.
+	 */
+	private const ALWAYS_IMPORTED = ['TextInputComponent', 'ButtonComponent'];
 
-	# ModelJS
+	/**
+	 * Lo que exporta innoboxrr-form-elements. Un form_component fuera de esta
+	 * lista es una errata en el JSON: se deja un comentario en el formulario
+	 * en lugar de emitir un import que rompe el build.
+	 */
+	private const FORM_COMPONENTS = [
+		'AvatarInputComponent',
+		'CheckboxInputComponent',
+		'ClickToEditComponent',
+		'CodeInputComponent',
+		'CodeMirrorComponent',
+		'ColorPickerInputComponent',
+		'CountrySelectInputComponent',
+		'DynamicGroupInputComponent',
+		'EditorInputComponent',
+		'FileDropInputComponent',
+		'FileInputComponent',
+		'FqsInputComponent',
+		'ModelSearchInputComponent',
+		'MultiCheckboxInputComponent',
+		'PolymorphicInputComponent',
+		'RadioInputComponent',
+		'SelectInputComponent',
+		'SelectSearchInputComponent',
+		'SimpleFileInputComponent',
+		'SingleCheckboxInputComponent',
+		'StarsInputComponent',
+		'SwitchComponent',
+		'TagsInputComponent',
+		'TextEditorMonoStyleInputComponent',
+		'TextInputComponent',
+		'TextareaInputComponent',
+		'TimezoneSelectInputComponent',
+	];
 
-		// Definir la ruta de la aplicación
-		private function setModelViewModelJsPath()
-		{
-			$this->modelViewModelJsPath = get_path('resources/vue/app/sections/admin/models/' . $this->kebabcasemodelname);
-			return $this;
+	/**
+	 * Raiz del modulo Vue del modelo.
+	 *
+	 * Vive dentro del paquete (`resources/vue/src/models/<modelo>`), igual que
+	 * en consultant-manager y affiliate-saas, para que el backend y su UI
+	 * viajen y se versionen juntos. Antes solo se generaba cuando el destino
+	 * era una aplicacion, asi que en un paquete `--vue` no hacia nada.
+	 */
+	private function modulePath(): string
+	{
+		return get_path('resources/vue/src/models/' . $this->kebabcasemodelname);
+	}
+
+	private function packagePath(): string
+	{
+		return get_path('resources/vue');
+	}
+
+	public function create(string $ModelName)
+	{
+		$this->init($ModelName);
+
+		$this->scaffoldModule();
+
+		$created = false;
+
+		foreach (self::FILES as $stub => $destination) {
+			$created = $this->generate(
+				stubs_path('ModelView/' . $stub),
+				$this->modulePath() . '/' . $destination
+			) || $created;
 		}
 
-		// Definir la ruta de la plantilla
-		private function setModelViewTemplateModelJsPath()
-		{
-			$this->modelViewTemplateModelJsPath = stubs_path('ModelView');
-			return $this;
+		return $created;
+	}
+
+	/**
+	 * package.json, vite.config.js y el agregador de rutas del modulo. Se
+	 * crean con el primer modelo y no se vuelven a tocar: sin ellos el modulo
+	 * generado no se puede construir ni publicar.
+	 */
+	private function scaffoldModule(): void
+	{
+		foreach (self::MODULE_FILES as $stub => $destination) {
+			$this->generate(
+				stubs_path('ModelView/' . $stub),
+				$this->packagePath() . '/' . $destination
+			);
+		}
+	}
+
+	public function remove(string $ModelName)
+	{
+		$this->init($ModelName);
+
+		$path = $this->modulePath();
+
+		return file_exists($path) ? $this->dropDir($path) : false;
+	}
+
+	/**
+	 * Tool::generate() llama aqui una vez por archivo generado cuando venimos
+	 * del importador; se despacha por nombre de archivo.
+	 */
+	protected function processFileWithJson($fileToProcess)
+	{
+		$file = str_replace('\\', '/', $fileToProcess);
+
+		if (str_ends_with($file, '/models/' . $this->kebabcasemodelname . '/index.js')) {
+			$this->processModelModule($fileToProcess);
+
+			return;
 		}
 
-		// Crear
-		public function createModelViewModelJS()
-		{
+		foreach (['CreateForm' => 'create', 'EditForm' => 'edit', 'FilterForm' => 'filter'] as $name => $mode) {
+			if (str_ends_with($file, "/forms/{$name}.vue")) {
+				$this->processForm($fileToProcess, $mode);
 
-			$this->setModelViewModelJsPath()
-				->setModelViewTemplateModelJsPath();
-
-			$modelFile = $this->modelViewModelJsPath . '/index.js';
-
-			if(!file_exists($modelFile)) {
-				$templateFile = $this->modelViewTemplateModelJsPath . '/model.js';
-				if(copy($templateFile, $modelFile)) {
-					$this->replaceData($modelFile);
-					if(self::isFromJsonImporter()) {
-						$this->processViewModelJSWithJson($modelFile);
-					}
-				} else {
-					throw MakerException::copyFailed($templateFile, $modelFile);
-				}
+				return;
 			}
-			return $this;
 		}
-
-		private function processViewModelJSWithJson($modelFile)
-		{
-			// Obtener el contenido JSON
-			$data = self::getJsonContent();
-			$model = collect($data['models'])->where('name', $this->ModelName)->first();
-			$props = $model['props'];
-			$columns = '';
-			$sort = '';
-
-			// Generar el contenido para las columnas de la tabla y el ordenamiento
-			foreach ($props as $index => $prop) {
-				// Para las columnas
-				if (isset($prop['datatable']) && $prop['datatable'] === true) {
-					$columns .= "        {\n";
-					$columns .= "            id: '{$prop['name']}',\n";
-					$columns .= "            value: '" . ucfirst($prop['name']) . "',\n";
-					$columns .= "            sortable: true,\n";
-					$columns .= "            html: false,\n";
-					$columns .= "            parser: (value) => {\n";
-					$columns .= "                return value;\n";
-					$columns .= "            }\n";
-					$columns .= "        },\n";
-				}
-
-				// Para el ordenamiento (sort)
-				if ($index === 0) {
-					$sort = "        {$prop['name']}: 'asc',\n";
-				}
-			}
-
-			// Cargar el contenido del archivo de plantilla
-			$fileContent = file_get_contents($modelFile);
-			$fileContent = str_replace('//DATA_TABLE_COLUMNS//', $columns, $fileContent);
-			$fileContent = str_replace('//DATA_TABLE_SORT//', $sort, $fileContent);
-			file_put_contents($modelFile, $fileContent);
-		}
-
-
-	# RouteJS
-
-		// Definir la ruta de la aplicación
-		private function setModelViewRouteJsPath()
-		{
-			$this->modelViewRouteJsPath = get_path('resources/vue/app/sections/admin/models/' . $this->kebabcasemodelname . '/routes');
-			return $this;
-		}
-
-		// Definir la ruta de la plantilla
-		private function setModelViewTemplateRouteJsPath()
-		{
-			$this->modelViewTemplateRouteJsPath = stubs_path('ModelView');
-			return $this;
-		}
-
-		// Crear
-		public function createModelViewRouteJS()
-		{
-			$this->setModelViewRouteJsPath()
-				->setModelViewTemplateRouteJsPath();
-
-			$modelFile = $this->modelViewRouteJsPath . '/index.js';
-
-			if(!file_exists($modelFile)) {
-				$templateFile = $this->modelViewTemplateRouteJsPath . '/routes.js';
-				if(copy($templateFile, $modelFile)) {
-					$this->replaceData($modelFile);
-				} else {
-					throw MakerException::copyFailed($templateFile, $modelFile);
-				}
-			}
-			return $this;
-		}
-
-	# VuexJS
-
-		// Definir la ruta de la aplicación
-		private function setModelViewVuexJsPath()
-		{
-			$this->modelViewVuexJsPath = get_path('resources/vue/app/sections/admin/models/' . $this->kebabcasemodelname . '/vuex');
-			return $this;
-		}
-
-		// Definir la ruta de la plantilla
-		private function setModelViewTemplateVuexJsPath()
-		{
-			$this->modelViewTemplateVuexJsPath = stubs_path('ModelView');
-			return $this;
-		}
-
-		// Crear
-		public function createModelViewVuexJS()
-		{
-			$this->setModelViewVuexJsPath()
-				->setModelViewTemplateVuexJsPath();
-
-			$modelFile = $this->modelViewVuexJsPath . '/' . $this->camelCaseModelName . 'Model.js';
-
-			if(!file_exists($modelFile)) {
-				$templateFile = $this->modelViewTemplateVuexJsPath . '/vuex.js';
-				if(copy($templateFile, $modelFile)) {
-					$this->replaceData($modelFile);
-				} else {
-					throw MakerException::copyFailed($templateFile, $modelFile);
-				}
-			}
-			return $this;
-		}
-
-	# Forms - CreateForm
-
-		// Definir la ruta de la aplicación
-		private function setModelViewCreateFormPath()
-		{
-			$this->modelViewCreateFormPath = get_path('resources/vue/app/sections/admin/models/' . $this->kebabcasemodelname . '/forms');
-			return $this;
-		}
-
-		// Definir la ruta de la plantilla
-		private function setModelViewTemplateCreateFormPath()
-		{
-			$this->modelViewTemplateCreateFormPath = stubs_path('ModelView/forms');
-			return $this;
-		}
-
-		// Crear
-		public function createModelViewCreateForm()
-		{
-			$this->setModelViewCreateFormPath()
-				->setModelViewTemplateCreateFormPath();
-
-			$modelFile = $this->modelViewCreateFormPath . '/CreateForm.vue';
-
-			if(!file_exists($modelFile)) {
-				$templateFile = $this->modelViewTemplateCreateFormPath . '/CreateForm.vue';
-				if(copy($templateFile, $modelFile)) {
-					$this->replaceData($modelFile);
-					if(self::isFromJsonImporter()) {
-						$this->processCreateFormWithJson($modelFile);
-					}
-				} else {
-					throw MakerException::copyFailed($templateFile, $modelFile);
-				}
-			}
-			return $this;
-		}
-
-		private function processCreateFormWithJson($modelFile)
-		{
-			// Obtener el contenido JSON
-			$data = self::getJsonContent();
-		
-			// Recuperar la información del modelo actual
-			$model = collect($data['models'])->where('name', $this->ModelName)->first();
-		
-			// Obtener las props del modelo
-			$props = $model['props'];
-		
-			// Inicializar las cadenas para los inputs y otros bloques
-			$inputs = '';
-			$importComponents = '';
-			$registerComponents = '';
-			$dataFields = '';
-			$submitData = '';
-			$propsData = '';
-		
-			// Lista de componentes ya añadidos (para evitar duplicados)
-			$addedComponents = ['TextInputComponent']; // TextInputComponent ya está registrado por defecto
-		
-			// Generar el contenido basado en las props
-			foreach ($props as $prop) {
-				if ($prop['form']) {
-					$componentName = $prop['form_component'] ?? null;
-		
-					// Lógica para generar los componentes según su tipo
-					switch ($componentName) {
-						case 'TextInputComponent':
-							$inputs .= "        <text-input-component\n"; // 4 espacios para la indentación
-							$inputs .= "            :custom-class=\"inputClass\"\n";
-							$inputs .= "            type=\"text\"\n";
-							$inputs .= "            name=\"{$prop['name']}\"\n";
-							$inputs .= "            :label=\"__('" . ucfirst($prop['name']) . "')\"\n";
-							$inputs .= "            :placeholder=\"__('" . ucfirst($prop['name']) . "')\"\n";
-							$inputs .= "            validators=\"required length\"\n";
-							$inputs .= "            min_length=\"3\"\n";
-							$inputs .= "            max_length=\"130\"\n";
-							$inputs .= "            v-model=\"{$prop['name']}\" />\n";
-							break;
-		
-						case 'SelectInputComponent':
-							$inputs .= "        <select-input-component\n";
-							$inputs .= "            :custom-class=\"inputClass\"\n";
-							$inputs .= "            name=\"{$prop['name']}\"\n";
-							$inputs .= "            :label=\"__('" . ucfirst($prop['name']) . "')\"\n";
-							$inputs .= "            validators=\"required\"\n";
-							$inputs .= "            v-model=\"{$prop['name']}\">\n";
-		
-							// Generar dinámicamente las opciones a partir del enum en el JSON
-							$options = '';
-							if (isset($prop['enum'])) {
-								foreach ($prop['enum'] as $value => $label) {
-									$options .= "            <option value=\"{$value}\">{{ __('{$label}') }}</option>\n"; // 8 espacios para las opciones
-								}
-							} else {
-								// Opciones por defecto en caso de que no haya enum
-								$options = "            <option value=\"\">{{ __('Select') }}</option>\n";
-							}
-							$inputs .= $options;
-							$inputs .= "        </select-input-component>\n"; // cerrar componente con 4 espacios
-							break;
-		
-						case 'TextareaInputComponent':
-							$inputs .= "        <textarea-input-component\n";
-							$inputs .= "            :custom-class=\"inputClass\"\n";
-							$inputs .= "            name=\"{$prop['name']}\"\n";
-							$inputs .= "            :label=\"__('" . ucfirst($prop['name']) . "')\"\n";
-							$inputs .= "            :placeholder=\"__('" . ucfirst($prop['name']) . "')\"\n";
-							$inputs .= "            validators=\"required length\"\n";
-							$inputs .= "            min_length=\"3\"\n";
-							$inputs .= "            max_length=\"1500\"\n";
-							$inputs .= "            v-model=\"{$prop['name']}\" />\n";
-							break;
-		
-						case 'EditorInputComponent':
-							$inputs .= "        <editor-input-component\n";
-							$inputs .= "            :id=\"`{$prop['name']}-\${formId}`\"\n";
-							$inputs .= "            :file=\"true\"\n";
-							$inputs .= "            :uploadUrl=\"fileUploadUrl\"\n";
-							$inputs .= "            :on-file-upload-success=\"handleFileUploadSuccess\"\n";
-							$inputs .= "            name=\"{$prop['name']}\"\n";
-							$inputs .= "            :height=\"300\"\n";
-							$inputs .= "            :label=\"__('" . ucfirst($prop['name']) . "')\"\n";
-							$inputs .= "            :placeholder=\"__('" . ucfirst($prop['name']) . "')\"\n";
-							$inputs .= "            validators=\"required\"\n";
-							$inputs .= "            v-model=\"{$prop['name']}\" />\n";
-							break;
-		
-						default:
-							// Si no hay componente configurado, añadir comentario
-							$inputs .= "        <!-- {$prop['name']} input not configured, add a component -->\n";
-							break;
-					}
-		
-					// Importar y registrar el componente si existe y no ha sido añadido antes
-					if ($componentName && !in_array($componentName, $addedComponents)) {
-						$importComponents .= "        {$componentName},\n";
-						$registerComponents .= "            {$componentName},\n";
-						$addedComponents[] = $componentName; // Añadir el componente a la lista de los ya registrados
-					}
-		
-					// Añadir al bloque de datos
-					$dataFields .= "                {$prop['name']}: '',\n";
-				}
-		
-				// Manejo de form_submit
-				if ($prop['form_submit']) {
-					$submitData .= "                        {$prop['name']}: this.{$prop['name']},\n";
-				}
-		
-				// Si form es false pero form_submit es true
-				if (!$prop['form'] && $prop['form_submit']) {
-					$propsData .= "            {$prop['name']}: '',\n";
-				}
-			}
-		
-			// Cargar el contenido del archivo de plantilla
-			$fileContent = file_get_contents($modelFile);
-		
-			// Reemplazar los placeholders
-			$fileContent = str_replace('<!-- Add more inputs -->', rtrim($inputs, "\n"), $fileContent);
-			$fileContent = str_replace('//import_more_components//', rtrim($importComponents, ",\n"), $fileContent);
-			$fileContent = str_replace('//register_more_components//', rtrim($registerComponents, ",\n"), $fileContent);
-			$fileContent = str_replace('//add_more_data//', rtrim($dataFields, ",\n"), $fileContent);
-			$fileContent = str_replace('//submit_data//', rtrim($submitData, ",\n"), $fileContent);
-			$fileContent = str_replace('//props//', rtrim($propsData, ",\n"), $fileContent);
-		
-			// Guardar el archivo modificado
-			file_put_contents($modelFile, $fileContent);
-		}		
-
-
-	# Forms - EditForm
-
-		// Definir la ruta de la aplicación
-		private function setModelViewEditFormPath()
-		{
-			$this->modelViewEditFormPath = get_path('resources/vue/app/sections/admin/models/' . $this->kebabcasemodelname . '/forms');
-			return $this;
-		}
-
-		// Definir la ruta de la plantilla
-		private function setModelViewTemplateEditFormPath()
-		{
-			$this->modelViewTemplateEditFormPath = stubs_path('ModelView/forms');
-			return $this;
-		}
-
-		// Crear
-		public function createModelViewEditForm()
-		{
-
-			$this->setModelViewEditFormPath()
-				->setModelViewTemplateEditFormPath();
-
-			$modelFile = $this->modelViewEditFormPath . '/EditForm.vue';
-
-			if(!file_exists($modelFile)) {
-				$templateFile = $this->modelViewTemplateEditFormPath . '/EditForm.vue';
-				if(copy($templateFile, $modelFile)) {
-					$this->replaceData($modelFile);
-					if(self::isFromJsonImporter()) {
-						$this->processEditFormWithJson($modelFile);
-					}
-				} else {
-					throw MakerException::copyFailed($templateFile, $modelFile);
-				}
-			}
-			return $this;
-		}
-
-		private function processEditFormWithJson($modelFile)
-		{
-			// Obtener el contenido JSON
-			$data = self::getJsonContent();
-		
-			// Recuperar la información del modelo actual
-			$model = collect($data['models'])->where('name', $this->ModelName)->first();
-
-			$camelCaseModelName = $this->camelCaseModelName;
-		
-			// Obtener las props del modelo
-			$props = $model['props'];
-		
-			// Inicializar las cadenas para los inputs y otros bloques
-			$inputs = '';
-			$importComponents = '';
-			$registerComponents = '';
-			$modelDataFields = '';
-			$submitData = '';
-			$propsData = '';
-		
-			// Lista de componentes ya añadidos (para evitar duplicados)
-			$addedComponents = ['TextInputComponent']; // TextInputComponent ya está registrado por defecto
-		
-			// Generar el contenido basado en las props
-			foreach ($props as $prop) {
-				if ($prop['form']) {
-					$componentName = $prop['form_component'] ?? null;
-		
-					// Lógica para generar los componentes según su tipo
-					switch ($componentName) {
-						case 'TextInputComponent':
-							$inputs .= "        <text-input-component\n"; // 4 espacios para la indentación
-							$inputs .= "            :custom-class=\"inputClass\"\n";
-							$inputs .= "            type=\"text\"\n";
-							$inputs .= "            name=\"{$prop['name']}\"\n";
-							$inputs .= "            :label=\"__('" . ucfirst($prop['name']) . "')\"\n";
-							$inputs .= "            :placeholder=\"__('" . ucfirst($prop['name']) . "')\"\n";
-							$inputs .= "            validators=\"required length\"\n";
-							$inputs .= "            min_length=\"3\"\n";
-							$inputs .= "            max_length=\"130\"\n";
-							$inputs .= "            v-model=\"{$camelCaseModelName}.{$prop['name']}\" />\n";
-							break;
-		
-						case 'SelectInputComponent':
-							$inputs .= "        <select-input-component\n";
-							$inputs .= "            :custom-class=\"inputClass\"\n";
-							$inputs .= "            name=\"{$prop['name']}\"\n";
-							$inputs .= "            :label=\"__('" . ucfirst($prop['name']) . "')\"\n";
-							$inputs .= "            validators=\"required\"\n";
-							$inputs .= "            v-model=\"{$camelCaseModelName}.{$prop['name']}\">\n";
-		
-							// Generar dinámicamente las opciones a partir del enum en el JSON
-							$options = '';
-							if (isset($prop['enum'])) {
-								foreach ($prop['enum'] as $value => $label) {
-									$options .= "            <option value=\"{$value}\">{{ __('{$label}') }}</option>\n"; // 8 espacios para las opciones
-								}
-							} else {
-								// Opciones por defecto en caso de que no haya enum
-								$options = "            <option value=\"\">{{ __('Select') }}</option>\n";
-							}
-							$inputs .= $options;
-							$inputs .= "        </select-input-component>\n"; // cerrar componente con 4 espacios
-							break;
-		
-						case 'TextareaInputComponent':
-							$inputs .= "        <textarea-input-component\n";
-							$inputs .= "            :custom-class=\"inputClass\"\n";
-							$inputs .= "            name=\"{$prop['name']}\"\n";
-							$inputs .= "            :label=\"__('" . ucfirst($prop['name']) . "')\"\n";
-							$inputs .= "            :placeholder=\"__('" . ucfirst($prop['name']) . "')\"\n";
-							$inputs .= "            validators=\"required length\"\n";
-							$inputs .= "            min_length=\"3\"\n";
-							$inputs .= "            max_length=\"1500\"\n";
-							$inputs .= "            v-model=\"{$camelCaseModelName}.{$prop['name']}\" />\n";
-							break;
-		
-						case 'EditorInputComponent':
-							$inputs .= "        <editor-input-component\n";
-							$inputs .= "            :id=\"`{$prop['name']}-\${formId}`\"\n";
-							$inputs .= "            :file=\"true\"\n";
-							$inputs .= "            :uploadUrl=\"fileUploadUrl\"\n";
-							$inputs .= "            :on-file-upload-success=\"handleFileUploadSuccess\"\n";
-							$inputs .= "            name=\"{$prop['name']}\"\n";
-							$inputs .= "            :height=\"300\"\n";
-							$inputs .= "            :label=\"__('" . ucfirst($prop['name']) . "')\"\n";
-							$inputs .= "            :placeholder=\"__('" . ucfirst($prop['name']) . "')\"\n";
-							$inputs .= "            validators=\"required\"\n";
-							$inputs .= "            v-model=\"{$camelCaseModelName}.{$prop['name']}\" />\n";
-							break;
-		
-						default:
-							// Si no hay componente configurado, añadir comentario
-							$inputs .= "        <!-- {$prop['name']} input not configured, add a component -->\n";
-							break;
-					}
-		
-					// Importar y registrar el componente si existe y no ha sido añadido antes
-					if ($componentName && !in_array($componentName, $addedComponents)) {
-						$importComponents .= "        {$componentName},\n";
-						$registerComponents .= "            {$componentName},\n";
-						$addedComponents[] = $componentName; // Añadir el componente a la lista de los ya registrados
-					}
-		
-					// Añadir al bloque de datos del modelo
-					$modelDataFields .= "                    {$prop['name']}: '',\n";
-				}
-		
-				// Manejo de form_submit
-				if ($prop['form_submit']) {
-					$submitData .= "                        {$prop['name']}: this.{$camelCaseModelName}.{$prop['name']},\n";
-				}
-		
-				// Si form es false pero form_submit es true
-				if (!$prop['form'] && $prop['form_submit']) {
-					$propsData .= "                            {$prop['name']}: '',\n";
-				}
-			}
-		
-			// Cargar el contenido del archivo de plantilla
-			$fileContent = file_get_contents($modelFile);
-		
-			// Reemplazar los placeholders
-			$fileContent = str_replace('<!-- Add more inputs -->', rtrim($inputs, "\n"), $fileContent);
-			$fileContent = str_replace('//import_more_components//', rtrim($importComponents, ",\n"), $fileContent);
-			$fileContent = str_replace('//register_more_components//', rtrim($registerComponents, ",\n"), $fileContent);
-			$fileContent = str_replace('//model_data//', rtrim($modelDataFields, ",\n"), $fileContent);
-			$fileContent = str_replace('//submit_data//', rtrim($submitData, ",\n"), $fileContent);
-			$fileContent = str_replace('//props//', rtrim($propsData, ",\n"), $fileContent);
-		
-			// Guardar el archivo modificado
-			file_put_contents($modelFile, $fileContent);
-		}		
-
-
-	# Forms - FilterForm
-
-		// Definir la ruta de la aplicación
-		private function setModelViewFilterFormPath()
-		{
-			$this->modelViewFilterFormPath = get_path('resources/vue/app/sections/admin/models/' . $this->kebabcasemodelname . '/forms');
-			return $this;
-		}
-
-		// Definir la ruta de la plantilla
-		private function setModelViewTemplateFilterFormPath()
-		{
-			$this->modelViewTemplateFilterFormPath = stubs_path('ModelView/forms');
-			return $this;
-		}
-
-		// Crear
-		public function createModelViewFilterForm()
-		{
-			$this->setModelViewFilterFormPath()
-				->setModelViewTemplateFilterFormPath();
-
-			$modelFile = $this->modelViewFilterFormPath . '/FilterForm.vue';
-
-			if(!file_exists($modelFile)) {
-				$templateFile = $this->modelViewTemplateFilterFormPath . '/FilterForm.vue';
-				if(copy($templateFile, $modelFile)) {
-					$this->replaceData($modelFile);
-					if(self::isFromJsonImporter()) {
-						$this->processFilterFormWithJson($modelFile);
-					}
-				} else {
-					throw MakerException::copyFailed($templateFile, $modelFile);
-				}
-			}
-			return $this;
-		}
-
-		private function processFilterFormWithJson($modelFile)
-		{
-			// Obtener el contenido JSON
-			$data = self::getJsonContent();
-			
-			// Recuperar la información del modelo actual
-			$model = collect($data['models'])->where('name', $this->ModelName)->first();
-			
-			// Obtener las props del modelo
-			$props = $model['props'];
-			
-			// Inicializar las cadenas para los inputs, componentes, y otras secciones
-			$inputs = '';
-			$importComponents = '';
-			$registerComponents = '';
-			$dataFields = '';
-			$resetInputs = '';
-			
-			// Lista de componentes ya añadidos (para evitar duplicados)
-			$addedComponents = ['TextInputComponent']; // TextInputComponent ya está registrado por defecto
-			
-			// Generar el contenido basado en las props
-			foreach ($props as $prop) {
-				// Solo procesar si la propiedad está habilitada para formularios (form: true)
-				if ($prop['form'] && $prop['name'] !== 'id') {
-					// Si la propiedad tiene enum, usamos SelectInputComponent
-					if (isset($prop['enum'])) {
-						$componentName = 'SelectInputComponent';
-						
-						// Generar dinámicamente las opciones del enum
-						$options = '';
-						foreach ($prop['enum'] as $value => $label) {
-							$options .= "                <option value=\"{$value}\">{{ __('{$label}') }}</option>\n";
-						}
-						
-						$inputs .= "            <div>\n";
-						$inputs .= "                <select-input-component\n";
-						$inputs .= "                    :custom-class=\"inputClass\"\n";
-						$inputs .= "                    name=\"{$prop['name']}\"\n";
-						$inputs .= "                    :label=\"__('" . ucfirst($prop['name']) . "')\"\n";
-						$inputs .= "                    v-model=\"{$prop['name']}\">\n";
-						$inputs .= $options;
-						$inputs .= "                </select-input-component>\n";
-						$inputs .= "            </div>\n";
-					} else {
-						// Usar TextInputComponent para cualquier otro tipo
-						$componentName = 'TextInputComponent';
-						
-						$inputs .= "            <div>\n";
-						$inputs .= "                <text-input-component\n";
-						$inputs .= "                    :custom-class=\"inputClass\"\n";
-						$inputs .= "                    type=\"text\"\n";
-						$inputs .= "                    name=\"{$prop['name']}\"\n";
-						$inputs .= "                    :label=\"__('" . ucfirst($prop['name']) . "')\"\n";
-						$inputs .= "                    :placeholder=\"__('" . ucfirst($prop['name']) . "')\"\n";
-						$inputs .= "                    v-model=\"{$prop['name']}\" />\n";
-						$inputs .= "            </div>\n";
-					}
-					
-					// Importar y registrar el componente si existe y no ha sido añadido antes
-					if (!in_array($componentName, $addedComponents)) {
-						$importComponents .= "        {$componentName},\n";
-						$registerComponents .= "            {$componentName},\n";
-						$addedComponents[] = $componentName; // Añadir el componente a la lista de los ya registrados
-					}
-					
-					// Añadir al bloque de data
-					$dataFields .= "                {$prop['name']}: null,\n";
-					
-					// Añadir al bloque de reseteo
-					$resetInputs .= "                this.{$prop['name']} = null;\n";
-				}
-			}
-			
-			// Cargar el contenido del archivo de plantilla
-			$fileContent = file_get_contents($modelFile);
-			
-			// Reemplazar los placeholders
-			$fileContent = str_replace('<!-- Add more inputs -->', rtrim($inputs, "\n"), $fileContent);
-			$fileContent = str_replace('//import_more_components//', rtrim($importComponents, ",\n"), $fileContent);
-			$fileContent = str_replace('//register_more_components//', rtrim($registerComponents, ",\n"), $fileContent);
-			$fileContent = str_replace('//add_more_data//', rtrim($dataFields, ",\n"), $fileContent);
-			$fileContent = str_replace('//reset_inputs//', rtrim($resetInputs, "\n"), $fileContent);
-			
-			// Guardar el archivo modificado
-			file_put_contents($modelFile, $fileContent);
-		}
-		
-	# Views - AdminView
-
-		// Definir la ruta de la aplicación
-		private function setModelViewAdminViewPath()
-		{
-			$this->modelViewAdminViewPath = get_path('resources/vue/app/sections/admin/models/' . $this->kebabcasemodelname . '/views');
-			return $this;
-		}
-
-		// Definir la ruta de la plantilla
-		private function setModelViewTemplateAdminViewPath()
-		{
-			$this->modelViewTemplateAdminViewPath = stubs_path('ModelView/views');
-			return $this;
-		}
-
-		// Crear
-		public function createModelViewAdminView()
-		{
-			$this->setModelViewAdminViewPath()
-				->setModelViewTemplateAdminViewPath();
-
-			$modelFile = $this->modelViewAdminViewPath . '/AdminView.vue';
-
-			if(!file_exists($modelFile)) {
-				$templateFile = $this->modelViewTemplateAdminViewPath . '/AdminView.vue';
-				if(copy($templateFile, $modelFile)) {
-					$this->replaceData($modelFile);
-				} else {
-					throw MakerException::copyFailed($templateFile, $modelFile);
-				}
-			}
-			return $this;
-		}
-
-	# Views - CreateView
-
-		// Definir la ruta de la aplicación
-		private function setModelViewCreateViewPath()
-		{
-
-			$this->modelViewCreateViewPath = get_path('resources/vue/app/sections/admin/models/' . $this->kebabcasemodelname . '/views');
-
-			return $this;
-
-		}
-
-		// Definir la ruta de la plantilla
-		private function setModelViewTemplateCreateViewPath()
-		{
-
-			$this->modelViewTemplateCreateViewPath = stubs_path('ModelView/views');
-
-			return $this;
-
-		}
-
-		// Crear
-		public function createModelViewCreateView()
-		{
-
-			$this->setModelViewCreateViewPath()
-				->setModelViewTemplateCreateViewPath();
-
-			$modelFile = $this->modelViewCreateViewPath . '/CreateView.vue';
-
-			if(!file_exists($modelFile)) {
-
-				$templateFile = $this->modelViewTemplateCreateViewPath . '/CreateView.vue';
-
-				if(copy($templateFile, $modelFile)) {
-
-					$this->replaceData($modelFile);
-
-				} else {
-
-					throw MakerException::copyFailed($templateFile, $modelFile);
-
-				}
-
+	}
+
+	/**
+	 * @return array<int, array<string, mixed>>
+	 */
+	private function props(): array
+	{
+		$model = collect(self::getJsonContent()['models'] ?? [])
+			->where('name', $this->ModelName)
+			->first();
+
+		return $model['props'] ?? [];
+	}
+
+	// MODULO DEL MODELO
+
+	private function processModelModule(string $file): void
+	{
+		$columns = '';
+		$sortColumn = 'id';
+
+		foreach ($this->props() as $prop) {
+			if (empty($prop['datatable'])) {
+				continue;
 			}
 
-			return $this;
+			if ($sortColumn === 'id') {
+				$sortColumn = $prop['name'];
+			}
 
+			$label = $this->label($prop['name']);
+
+			$columns .= "    {\n";
+			$columns .= "        id: '{$prop['name']}',\n";
+			$columns .= "        value: '{$label}',\n";
+			$columns .= "        sortable: true,\n";
+			$columns .= "        html: false,\n";
+			$columns .= "    },\n";
 		}
 
-	# Views - EditView
+		$content = file_get_contents($file);
 
-		// Definir la ruta de la aplicación
-		private function setModelViewEditViewPath()
-		{
+		$content = str_replace('//DATA_TABLE_COLUMNS//' . "\n", $columns, $content);
 
-			$this->modelViewEditViewPath = get_path('resources/vue/app/sections/admin/models/' . $this->kebabcasemodelname . '/views');
+		// Se sustituye tambien la linea del valor por defecto para no acabar
+		// con dos claves de ordenamiento en el mismo objeto.
+		$content = str_replace(
+			"//DATA_TABLE_SORT//\n    id: 'asc',",
+			"    {$sortColumn}: 'asc',",
+			$content
+		);
 
-			return $this;
+		file_put_contents($file, $content);
+	}
 
-		}
+	// FORMULARIOS
 
-		// Definir la ruta de la plantilla
-		private function setModelViewTemplateEditViewPath()
-		{
+	/**
+	 * @param  string  $mode  create|edit|filter
+	 */
+	private function processForm(string $file, string $mode): void
+	{
+		$inputs = '';
+		$fields = '';
+		$submit = '';
+		$componentProps = '';
+		$imports = [];
 
-			$this->modelViewTemplateEditViewPath = stubs_path('ModelView/views');
+		foreach ($this->props() as $prop) {
+			$name = $prop['name'];
 
-			return $this;
+			// El filtro no ofrece el id como campo: ya lo trae el stub.
+			$inForm = ! empty($prop['form']) && ! ($mode === 'filter' && $name === 'id');
 
-		}
+			if ($inForm) {
+				$component = $this->componentFor($prop, $mode);
 
-		// Crear
-		public function createModelViewEditView()
-		{
+				$inputs .= $this->input($prop, $component, $mode);
 
-			$this->setModelViewEditViewPath()
-				->setModelViewTemplateEditViewPath();
-
-			$modelFile = $this->modelViewEditViewPath . '/EditView.vue';
-
-			if(!file_exists($modelFile)) {
-
-				$templateFile = $this->modelViewTemplateEditViewPath . '/EditView.vue';
-
-				if(copy($templateFile, $modelFile)) {
-
-					$this->replaceData($modelFile);
-
-				} else {
-
-					throw MakerException::copyFailed($templateFile, $modelFile);
-
+				if ($component !== null && ! in_array($component, self::ALWAYS_IMPORTED, true)) {
+					$imports[$component] = true;
 				}
 
+				$fields .= $mode === 'filter'
+					? "        {$name}: null,\n"
+					: "        {$name}: '',\n";
 			}
 
-			return $this;
-
-		}
-
-	# Views - ShowView
-
-		// Definir la ruta de la aplicación
-		private function setModelViewShowViewPath()
-		{
-
-			$this->modelViewShowViewPath = get_path('resources/vue/app/sections/admin/models/' . $this->kebabcasemodelname . '/views');
-
-			return $this;
-
-		}
-
-		// Definir la ruta de la plantilla
-		private function setModelViewTemplateShowViewPath()
-		{
-
-			$this->modelViewTemplateShowViewPath = stubs_path('ModelView/views');
-
-			return $this;
-
-		}
-
-		// Crear
-		public function createModelViewShowView()
-		{
-
-			$this->setModelViewShowViewPath()
-				->setModelViewTemplateShowViewPath();
-
-			$modelFile = $this->modelViewShowViewPath . '/ShowView.vue';
-
-			if(!file_exists($modelFile)) {
-
-				$templateFile = $this->modelViewTemplateShowViewPath . '/ShowView.vue';
-
-				if(copy($templateFile, $modelFile)) {
-
-					$this->replaceData($modelFile);
-
-				} else {
-
-					throw MakerException::copyFailed($templateFile, $modelFile);
-
-				}
-
+			if ($mode === 'filter') {
+				continue;
 			}
 
-			return $this;
-
-		}
-
-	# Widgets - DataTable
-
-		// Definir la ruta de la aplicación
-		private function setModelViewDataTablePath()
-		{
-
-			$this->modelViewDataTablePath = get_path('resources/vue/app/sections/admin/models/' . $this->kebabcasemodelname . '/widgets');
-
-			return $this;
-
-		}
-
-		// Definir la ruta de la plantilla
-		private function setModelViewTemplateDataTablePath()
-		{
-
-			$this->modelViewTemplateDataTablePath = stubs_path('ModelView/widgets');
-
-			return $this;
-
-		}
-
-		// Crear
-		public function createModelViewDataTable()
-		{
-
-			$this->setModelViewDataTablePath()
-				->setModelViewTemplateDataTablePath();
-
-			$modelFile = $this->modelViewDataTablePath . '/DataTable.vue';
-
-			if(!file_exists($modelFile)) {
-
-				$templateFile = $this->modelViewTemplateDataTablePath . '/DataTable.vue';
-
-				if(copy($templateFile, $modelFile)) {
-
-					$this->replaceData($modelFile);
-
-				} else {
-
-					throw MakerException::copyFailed($templateFile, $modelFile);
-
-				}
-
+			if (! empty($prop['form_submit'])) {
+				$submit .= empty($prop['form'])
+					? "                {$name}: props.{$name},\n"
+					: "                {$name}: form.{$name},\n";
 			}
 
-			return $this;
-
-		}
-
-	# Widgets - ModelCard
-
-		// Definir la ruta de la aplicación
-		private function setModelViewModelCardPath()
-		{
-
-			$this->modelViewModelCardPath = get_path('resources/vue/app/sections/admin/models/' . $this->kebabcasemodelname . '/widgets');
-
-			return $this;
-
-		}
-
-		// Definir la ruta de la plantilla
-		private function setModelViewTemplateModelCardPath()
-		{
-
-			$this->modelViewTemplateModelCardPath = stubs_path('ModelView/widgets');
-
-			return $this;
-
-		}
-
-		// Crear
-		public function createModelViewModelCard()
-		{
-
-			$this->setModelViewModelCardPath()
-				->setModelViewTemplateModelCardPath();
-
-			$modelFile = $this->modelViewModelCardPath . '/ModelCard.vue';
-
-			if(!file_exists($modelFile)) {
-
-				$templateFile = $this->modelViewTemplateModelCardPath . '/ModelCard.vue';
-
-				if(copy($templateFile, $modelFile)) {
-
-					$this->replaceData($modelFile);
-
-				} else {
-
-					throw MakerException::copyFailed($templateFile, $modelFile);
-
-				}
-
+			// Lo que no se pide en el formulario pero si se envia tiene que
+			// llegar desde fuera, asi que se declara como prop de verdad y no
+			// como la cadena vacia que se emitia antes (invalida en Vue 3).
+			if (empty($prop['form']) && ! empty($prop['form_submit'])) {
+				$componentProps .= "        {$name}: {\n";
+				$componentProps .= "            type: [String, Number],\n";
+				$componentProps .= "            default: null,\n";
+				$componentProps .= "        },\n";
 			}
-
-			return $this;
-
 		}
 
-	# Widgets - ModelProfile
+		$importLines = '';
 
-		// Definir la ruta de la aplicación
-		private function setModelViewModelProfilePath()
-		{
-
-			$this->modelViewModelProfilePath = get_path('resources/vue/app/sections/admin/models/' . $this->kebabcasemodelname . '/widgets');
-
-			return $this;
-
+		foreach (array_keys($imports) as $component) {
+			$importLines .= "        {$component},\n";
 		}
 
-		// Definir la ruta de la plantilla
-		private function setModelViewTemplateModelProfilePath()
-		{
+		$content = file_get_contents($file);
 
-			$this->modelViewTemplateModelProfilePath = stubs_path('ModelView/widgets');
+		$content = str_replace('<!-- Add more inputs -->' . "\n", $inputs, $content);
+		$content = str_replace('//import_more_components//' . "\n", $importLines, $content);
+		$content = str_replace('//form_fields//' . "\n", $fields, $content);
+		$content = str_replace('//submit_data//' . "\n", $submit, $content);
+		$content = str_replace('//props//' . "\n", $componentProps, $content);
 
-			return $this;
+		file_put_contents($file, $content);
+	}
 
+	/**
+	 * El filtro decide por la presencia de `enum`; los formularios respetan
+	 * `form_component`.
+	 */
+	private function componentFor(array $prop, string $mode): ?string
+	{
+		if ($mode === 'filter') {
+			return isset($prop['enum']) ? 'SelectInputComponent' : 'TextInputComponent';
 		}
 
-		// Crear
-		public function createModelViewModelProfile()
-		{
+		$component = $prop['form_component'] ?? null;
 
-			$this->setModelViewModelProfilePath()
-				->setModelViewTemplateModelProfilePath();
+		return in_array($component, self::FORM_COMPONENTS, true) ? $component : null;
+	}
 
-			$modelFile = $this->modelViewModelProfilePath . '/ModelProfile.vue';
+	private function input(array $prop, ?string $component, string $mode): string
+	{
+		$name = $prop['name'];
+		$label = $this->label($name);
+		$model = "form.{$name}";
 
-			if(!file_exists($modelFile)) {
+		$indent = $mode === 'filter' ? '            ' : '        ';
 
-				$templateFile = $this->modelViewTemplateModelProfilePath . '/ModelProfile.vue';
+		$open = $mode === 'filter' ? "{$indent}<div>\n" : '';
+		$close = $mode === 'filter' ? "{$indent}</div>\n" : '';
 
-				if(copy($templateFile, $modelFile)) {
+		$attrIndent = $mode === 'filter' ? $indent . '    ' : $indent . '    ';
+		$tagIndent = $mode === 'filter' ? $indent . '    ' : $indent;
 
-					$this->replaceData($modelFile);
+		$validators = $mode === 'filter' ? '' : "{$attrIndent}validators=\"required\"\n";
 
-				} else {
-
-					throw MakerException::copyFailed($templateFile, $modelFile);
-
-				}
-
-			}
-
-			return $this;
-
+		if ($component === null) {
+			return "{$tagIndent}<!-- {$name}: declara form_component en el JSON de importacion -->\n";
 		}
 
-	//////////////////////
-	/////// MAIN /////////
-	//////////////////////	
+		$common = "{$attrIndent}:custom-class=\"inputClass\"\n"
+			. "{$attrIndent}name=\"{$name}\"\n"
+			. "{$attrIndent}:label=\"t('{$label}')\"\n";
 
-		public function create(string $ModelName)
-		{
-			if(app_dir_name() == 'app') {
-				$this->init($ModelName)
-					->createModelViewModelJS()
-					->createModelViewRouteJS()
-					->createModelViewVuexJS()
-					->createModelViewCreateForm()
-					->createModelViewEditForm()
-					->createModelViewFilterForm()
-					->createModelViewAdminView()
-					->createModelViewCreateView()
-					->createModelViewEditView()
-					->createModelViewShowView()
-					->createModelViewDataTable()
-					->createModelViewModelCard()
-					->createModelViewModelProfile();
-				return true;
-			}
-			return false;
+		// Select y editor necesitan atributos propios; los otros 27
+		// componentes de innoboxrr-form-elements comparten la misma forma, asi
+		// que no hace falta enumerarlos uno a uno.
+		if ($component === 'SelectInputComponent') {
+			return $open
+				. "{$tagIndent}<{$component}\n"
+				. $common
+				. $validators
+				. "{$attrIndent}v-model=\"{$model}\">\n"
+				. $this->options($prop, $attrIndent . '    ')
+				. "{$tagIndent}</{$component}>\n"
+				. $close;
 		}
 
-		public function remove(string $ModelName)
-		{
-			if(app_dir_name() == 'app') {
-				$this->init($ModelName);
-				$path = get_path('resources/vue/app/sections/admin/models/' . $this->kebabcasemodelname);
-				$this->dropDir($path);
-				return true;
-			}
-			return false;
+		if ($component === 'EditorInputComponent') {
+			// El stub no define fileUploadUrl ni handleFileUploadSuccess, asi
+			// que se emite sin subida de archivos en lugar de referenciar
+			// variables inexistentes.
+			return $open
+				. "{$tagIndent}<{$component}\n"
+				. "{$attrIndent}:id=\"`{$name}-\${formId}`\"\n"
+				. $common
+				. "{$attrIndent}:height=\"300\"\n"
+				. $validators
+				. "{$attrIndent}v-model=\"{$model}\" />\n"
+				. $close;
 		}
 
+		$type = $component === 'TextInputComponent'
+			? "{$attrIndent}type=\"text\"\n"
+			: '';
+
+		$placeholder = in_array($component, ['TextInputComponent', 'TextareaInputComponent'], true)
+			? "{$attrIndent}:placeholder=\"t('{$label}')\"\n"
+			: '';
+
+		return $open
+			. "{$tagIndent}<{$component}\n"
+			. $type
+			. $common
+			. $placeholder
+			. $validators
+			. "{$attrIndent}v-model=\"{$model}\" />\n"
+			. $close;
+	}
+
+	private function options(array $prop, string $indent): string
+	{
+		if (! isset($prop['enum']) || ! is_array($prop['enum'])) {
+			return "{$indent}<option value=\"\">{{ t('Select') }}</option>\n";
+		}
+
+		$options = '';
+
+		foreach ($prop['enum'] as $value => $label) {
+			$options .= "{$indent}<option value=\"{$value}\">{{ t('" . $this->escape((string) $label) . "') }}</option>\n";
+		}
+
+		return $options;
+	}
+
+	private function label(string $name): string
+	{
+		return $this->escape(ucfirst(str_replace('_', ' ', $name)));
+	}
+
+	/**
+	 * Las etiquetas acaban dentro de cadenas JS con comilla simple.
+	 */
+	private function escape(string $value): string
+	{
+		return str_replace("'", "\\'", $value);
+	}
 }

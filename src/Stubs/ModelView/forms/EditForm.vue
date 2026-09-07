@@ -1,97 +1,97 @@
 <template>
-	
-	<form :id="formId" @submit.prevent="onSubmit">
+
+    <form :id="formId" @submit.prevent="onSubmit">
 
 <!-- Add more inputs -->
 
-        <button-component
+        <ButtonComponent
             :custom-class="buttonClass"
             :disabled="disabled"
-            value="Actualizar" />
-        
+            :value="t('Update')" />
+
     </form>
 
 </template>
 
-<script>
+<script setup>
 
-    import { showModel, updateModel} from '@models/kebabcasemodelname'
+    import { onMounted, reactive, ref } from 'vue'
     import JSValidator from 'innoboxrr-js-validator'
+    import t from 'innoboxrr-i18n'
     import {
-        TextInputComponent,
         ButtonComponent,
+        TextInputComponent,
 //import_more_components//
     } from 'innoboxrr-form-elements'
-    
-	
-	export default {
 
-        components: {
-            TextInputComponent,
-            ButtonComponent,
-//register_more_components//
+    import { usePascalCaseModelNameStore } from '../store'
+
+    const props = defineProps({
+        formId: {
+            type: String,
+            default: 'editPascalCaseModelNameForm',
         },
-
-        props: {
-            formId: {
-                type: String,
-                default: 'editPascalCaseModelNameForm'
-            },
-            camelCaseModelNameId: {
-                type: [Number, String],
-                required: true
-            },
+        camelCaseModelNameId: {
+            type: [Number, String],
+            required: true,
+        },
 //props//
-        },
+    })
 
-        emits: ['submit'],
+    const emit = defineEmits(['submit'])
 
-        mounted() {
-            this.fetchData(); 
-            this.JSValidator = new JSValidator(this.formId).init();
-            this.JSValidator.status = true;
-        },
+    const store = usePascalCaseModelNameStore()
 
-        data() {
-            return {
-                camelCaseModelName: {
-//model_data//
-                },
-                disabled: false,
-                JSValidator: undefined,
+    const disabled = ref(false)
+    const validator = ref(null)
+
+    const form = reactive({
+//form_fields//
+    })
+
+    onMounted(async () => {
+
+        const camelCaseModelName = await store.fetchOne(props.camelCaseModelNameId)
+
+        // Solo se rellenan las claves que el formulario declara; asi un campo
+        // nuevo en la API no se cuela en el payload de actualizacion.
+        Object.keys(form).forEach((field) => {
+            if (camelCaseModelName[field] !== undefined) {
+                form[field] = camelCaseModelName[field]
             }
-        },
+        })
 
-        methods: {
+        validator.value = new JSValidator(props.formId).init()
+        validator.value.status = true
 
-            fetchData() {
-                this.fetchPascalCaseModelName();
-            },
+    })
 
-            fetchPascalCaseModelName() {
-                showModel(this.camelCaseModelNameId).then( res => {
-                    this.camelCaseModelName = res;
-                });
-            },
+    const onSubmit = async () => {
 
-            onSubmit() {
-                if(this.JSValidator.status) {
-                    this.disabled = true;
-                    updateModel(this.camelCaseModelName.id, {
-//submit_data//
-                    }).then( res => {
-                        this.$emit('submit', res);
-                        setTimeout(() => { this.disabled = false; }, 2500);
-                    }).catch(error => {
-                        this.disabled = false;
-                        if(error.response.status == 422)
-                            this.JSValidator
-                                .appendExternalErrors(error.response.data.errors);
-                    });
-                } else {
-                    this.disabled = false;
-                }
-            }
+        if (! validator.value?.status) {
+            return
         }
-	}
+
+        disabled.value = true
+
+        try {
+
+            emit('submit', await store.update(props.camelCaseModelNameId, {
+//submit_data//
+            }))
+
+        } catch (error) {
+
+            if (error.response?.status === 422) {
+                validator.value.appendExternalErrors(error.response.data.errors)
+            }
+
+        } finally {
+
+            disabled.value = false
+
+        }
+
+    }
+
 </script>

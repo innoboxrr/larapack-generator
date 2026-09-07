@@ -1,0 +1,41 @@
+{
+    "name": "packageName",
+    "version": "0.1.0",
+    "description": "Modulo Vue de packageName",
+    "type": "module",
+    "main": "index.js",
+    "exports": {
+        ".": "./index.js",
+        "./src/*": "./src/*"
+    },
+    "files": [
+        "index.js",
+        "src"
+    ],
+    "sideEffects": [
+        "*.css",
+        "*.vue"
+    ],
+    "scripts": {
+        "build": "vite build",
+        "locale": "npx locale-gen"
+    },
+    "license": "MIT",
+    "peerDependencies": {
+        "pinia": "^3.0.0",
+        "vue": "^3.5.0",
+        "vue-router": "^4.5.0"
+    },
+    "dependencies": {
+        "innoboxrr-form-elements": "^4.0.4",
+        "innoboxrr-http-request": "^1.1.0",
+        "innoboxrr-i18n": "^1.0.0",
+        "innoboxrr-js-validator": "^1.1.1",
+        "innoboxrr-route-resolver": "^1.0.0",
+        "innoboxrr-vue-datatable": "^1.3.4"
+    },
+    "devDependencies": {
+        "@vitejs/plugin-vue": "^6.0.0",
+        "vite": "^7.1.0"
+    }
+}

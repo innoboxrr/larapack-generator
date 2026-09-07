@@ -1,81 +1,82 @@
 <template>
-	
-	<form :id="formId" @submit.prevent="onSubmit">      
+
+    <form :id="formId" @submit.prevent="onSubmit">
 
 <!-- Add more inputs -->
 
-        <button-component
+        <ButtonComponent
             :custom-class="buttonClass"
             :disabled="disabled"
-            value="Crear" />
-        
+            :value="t('Create')" />
+
     </form>
 
 </template>
 
-<script>
+<script setup>
 
-    import { createModel } from '@models/kebabcasemodelname'
+    import { onMounted, reactive, ref } from 'vue'
     import JSValidator from 'innoboxrr-js-validator'
+    import t from 'innoboxrr-i18n'
     import {
-        TextInputComponent,
         ButtonComponent,
+        TextInputComponent,
 //import_more_components//
     } from 'innoboxrr-form-elements'
-	
-	export default {
 
-        components: {
-            TextInputComponent,
-            ButtonComponent,
-//register_more_components//
+    import { usePascalCaseModelNameStore } from '../store'
+
+    const props = defineProps({
+        formId: {
+            type: String,
+            default: 'createPascalCaseModelNameForm',
         },
-
-        props: {
-        	formId: {
-        		type: String,
-        		default: 'createPascalCaseModelNameForm',
-        	}
 //props//
-        },
+    })
 
-        emits: ['submit'],
+    const emit = defineEmits(['submit'])
 
-        data() {
-            return {
-                disabled: false,
-                JSValidator: undefined,
-//add_more_data//
-            }
-        },
+    const store = usePascalCaseModelNameStore()
 
-        mounted() {
-            this.fetchData();
-            this.JSValidator = new JSValidator(this.formId).init();
-        },
+    const disabled = ref(false)
+    const validator = ref(null)
 
-        methods: {
+    const form = reactive({
+//form_fields//
+    })
 
-            fetchData() {},
+    onMounted(() => {
+        validator.value = new JSValidator(props.formId).init()
+    })
 
-            onSubmit() {
-                if(this.JSValidator.status) {
-                    this.disabled = true;
-                    createModel({
-//submit_data//
-                    }).then( res => {
-                        this.$emit('submit', res);
-                        setTimeout(() => { this.disabled = false; }, 2500);
-                    }).catch(error => {
-                        this.disabled = false;
-                        if(error.response.status == 422)
-                            this.JSValidator
-                                .appendExternalErrors(error.response.data.errors);
-                    });
-                } else {
-                    this.disabled = false;
-                }
-            }
+    const onSubmit = async () => {
+
+        if (! validator.value?.status) {
+            return
         }
-	}
+
+        disabled.value = true
+
+        try {
+
+            emit('submit', await store.create({
+//submit_data//
+            }))
+
+        } catch (error) {
+
+            // 422 son los errores de validacion del FormRequest de Laravel:
+            // se pintan sobre el mismo formulario en lugar de descartarse.
+            if (error.response?.status === 422) {
+                validator.value.appendExternalErrors(error.response.data.errors)
+            }
+
+        } finally {
+
+            disabled.value = false
+
+        }
+
+    }
+
 </script>
