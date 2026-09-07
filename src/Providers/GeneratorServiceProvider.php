@@ -6,43 +6,20 @@ use Illuminate\Support\ServiceProvider;
 
 class GeneratorServiceProvider extends ServiceProvider
 {
-    
-    public function register()
+    public function register(): void
     {
-
-        $files = glob(__DIR__ . '/../Facades/*.php');
-
-        foreach ($files as $file) {
-
-            $class = basename($file, '.php');
-
-            $accesor = get_accessor($class);
-
-            $this->app->bind($accesor, function($app) use ($class) {
-
-                $className = '\Innoboxrr\LarapackGenerator\Facades\\' . $class;
-    
-                $class = new ReflectionClass($className);
-                
-                return $class->newInstance();
-
-            });
-
-        }
-
-        $this->mergeConfigFrom(__DIR__ . '/../../config/larapack-generator.php', 'larapack-generator');
-
+        $this->mergeConfigFrom(
+            __DIR__ . '/../../config/larapack-generator.php',
+            'larapack-generator'
+        );
     }
 
-    public function boot()
+    public function boot(): void
     {
-
         if ($this->app->runningInConsole()) {
-
-            $this->publishes([__DIR__.'/../../config/larapack-generator.php' => config_path('larapack-generator.php')], 'config');
-
+            $this->publishes([
+                __DIR__ . '/../../config/larapack-generator.php' => config_path('larapack-generator.php'),
+            ], 'larapack-generator-config');
         }
-
     }
-
 }
