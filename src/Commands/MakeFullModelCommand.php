@@ -2,6 +2,7 @@
 
 namespace Innoboxrr\LarapackGenerator\Commands;
 
+use Innoboxrr\LarapackGenerator\Commands\Concerns\ReportsGeneration;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputOption;
@@ -10,6 +11,8 @@ use Symfony\Component\Console\Output\OutputInterface;
 
 class MakeFullModelCommand extends Command
 {
+    use ReportsGeneration;
+
 
     protected $commands = [
         'Migration',
@@ -37,10 +40,14 @@ class MakeFullModelCommand extends Command
             ->addArgument('name', InputArgument::REQUIRED, 'The name of the model class')
             ->addOption('vue', 'vue', InputOption::VALUE_NONE, 'Include ModelView in commands')
             ->addOption('metas', 'metas', InputOption::VALUE_NONE, 'Include Metas in commands');
+
+        $this->addGenerationOptions();
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
+        $this->applyGenerationOptions($input);
+
         $modelName = $input->getArgument('name');
         $includeModelView = $input->getOption('vue');
         $includeMetas = $input->getOption('metas');
@@ -61,6 +68,8 @@ class MakeFullModelCommand extends Command
                 ($class->newInstance())->create($modelName);
             }
         }
+        $this->reportGeneration($input, $output);
+
         return Command::SUCCESS;
     }
 

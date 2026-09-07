@@ -2,6 +2,8 @@
 
 namespace Innoboxrr\LarapackGenerator\Tests;
 
+use Innoboxrr\LarapackGenerator\Support\Generation;
+use Innoboxrr\LarapackGenerator\Support\MigrationTimestamp;
 use Innoboxrr\LarapackGenerator\Support\ProjectRoot;
 use Innoboxrr\LarapackGenerator\Tests\Support\FakeProject;
 use PHPUnit\Framework\TestCase as BaseTestCase;
@@ -18,6 +20,8 @@ abstract class TestCase extends BaseTestCase
     protected function tearDown(): void
     {
         ProjectRoot::set(null);
+        Generation::reset();
+        MigrationTimestamp::reset();
 
         if (isset($this->project)) {
             $this->project->cleanup();

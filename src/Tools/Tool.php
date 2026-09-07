@@ -7,6 +7,8 @@ use Doctrine\Inflector\Inflector;
 use Doctrine\Inflector\NoopWordInflector;
 use Illuminate\Support\Pluralizer;
 use Innoboxrr\LarapackGenerator\Exceptions\MakerException;
+use Innoboxrr\LarapackGenerator\Support\Generation;
+use Innoboxrr\LarapackGenerator\Support\Manifest;
 
 class Tool
 {	
@@ -39,6 +41,9 @@ class Tool
 		protected $PluralPascalCaseModelName;
 		protected $pluralkebabcasemodelname;
 		protected $pluralDotModelName;
+
+	// MANIFIESTO
+		protected ?Manifest $manifest = null;
 
 	// SET FROM JSON IMPORTER
 		public static function setFromJsonImporter(bool $value)
@@ -191,16 +196,35 @@ class Tool
 		 * salvedad de que un copy() fallido lanzaba una MakerException vacia:
 		 * ahora dice que plantilla y que destino.
 		 *
-		 * @return bool  false si el destino ya existia; no se sobrescribe.
+		 * @return bool  true si se escribio (o se escribiria, en dry-run).
 		 */
 		protected function generate(string $stub, string $destination): bool
 		{
-			if (file_exists($destination)) {
+			if (! is_file($stub)) {
+				throw MakerException::stubNotFound($stub);
+			}
+
+			$exists = file_exists($destination);
+
+			if ($exists && ! Generation::isForced()) {
+				Generation::record('skipped', $destination, $stub, 'ya existe');
+
 				return false;
 			}
 
-			if (! is_file($stub)) {
-				throw MakerException::stubNotFound($stub);
+			// Con --force se regenera, pero nunca sobre algo que se haya
+			// editado a mano: eso es exactamente lo que el manifiesto permite
+			// distinguir. Sin esa guarda, regenerar destruiria trabajo.
+			if ($exists && $this->manifest()->wasCustomised($destination)) {
+				Generation::record('preserved', $destination, $stub, 'editado a mano');
+
+				return false;
+			}
+
+			if (Generation::isDryRun()) {
+				Generation::record($exists ? 'overwrite' : 'create', $destination, $stub);
+
+				return true;
 			}
 
 			$directory = dirname($destination);
@@ -219,7 +243,16 @@ class Tool
 				$this->processFileWithJson($destination);
 			}
 
+			$this->manifest()->record($this->ModelName, $this->namespace, $destination, $stub);
+
+			Generation::record($exists ? 'overwrite' : 'create', $destination, $stub);
+
 			return true;
+		}
+
+		protected function manifest(): Manifest
+		{
+			return $this->manifest ??= new Manifest();
 		}
 
 	// TOOLS

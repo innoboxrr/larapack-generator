@@ -2,6 +2,7 @@
 
 namespace Innoboxrr\LarapackGenerator\Commands;
 
+use Innoboxrr\LarapackGenerator\Commands\Concerns\ReportsGeneration;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputOption;
@@ -14,16 +15,22 @@ use Innoboxrr\LarapackGenerator\Tools\PivotMigration\PivotMigrationTool;
 
 class JsonImporterCommand extends Command
 {
+    use ReportsGeneration;
+
     protected function configure(): void
     {
         $this->setName('larapack:import')
             ->setDescription('Import models and migrations from a JSON file')
             ->addArgument('jsonPath', InputArgument::OPTIONAL, 'The path to the JSON file')
             ->addOption('vue', null, InputOption::VALUE_NONE, 'Include ModelView in commands');
+
+        $this->addGenerationOptions();
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
+        $this->applyGenerationOptions($input);
+
         // Obtener la ruta del archivo JSON o usar una predeterminada
         $jsonPath = $input->getArgument('jsonPath') ?? root_path() . '/laraimport.json';
 
@@ -56,7 +63,6 @@ class JsonImporterCommand extends Command
 
         // Procesar pivotes (si es necesario)
         foreach ($data['pivots'] as $pivot) {
-            sleep(3); // Garantiza timestamps únicos en los nombres de archivo de migración
             $output->writeln("Processing pivot: {$pivot['name']}");
             // Aquí puedes implementar el manejo de los pivotes si es necesario
             $tool = new PivotMigrationTool();
@@ -67,6 +73,8 @@ class JsonImporterCommand extends Command
         Tool::setFromJsonImporter(false);
 
         $output->writeln('<info>JSON import completed successfully</info>');
+        $this->reportGeneration($input, $output);
+
         return Command::SUCCESS;
     }
 
