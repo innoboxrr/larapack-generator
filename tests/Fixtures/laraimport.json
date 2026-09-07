@@ -52,6 +52,22 @@
                     "datatable": true
                 },
                 {
+                    "name": "status",
+                    "type": "string",
+                    "constraint": null,
+                    "default": null,
+                    "nullable": true,
+                    "fillable": false,
+                    "creatable": false,
+                    "updatable": false,
+                    "exports_cols": false,
+                    "cast": null,
+                    "form": true,
+                    "form_component": "NoExisteComponent",
+                    "form_submit": false,
+                    "datatable": false
+                },
+                {
                     "name": "user_id",
                     "type": "foreignId",
                     "constraint": "users",
