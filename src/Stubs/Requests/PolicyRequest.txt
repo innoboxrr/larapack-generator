@@ -29,17 +29,17 @@ class PolicyRequest extends FormRequest
         'forceDelete',
     ];
 
-    protected function prepareForValidation()
+    protected function prepareForValidation(): void
     {
         //
     }
 
-    public function authorize()
+    public function authorize(): bool
     {
         return true;
     }
 
-    public function rules()
+    public function rules(): array
     {
         return [
             'policy' => [
@@ -54,21 +54,21 @@ class PolicyRequest extends FormRequest
         ];
     }
 
-    public function messages()
+    public function messages(): array
     {
         return [
             //
         ];
     }
 
-    public function attributes()
+    public function attributes(): array
     {
         return [
             //
         ];
     }
 
-    protected function passedValidation()
+    protected function passedValidation(): void
     {
         //
     }

@@ -10,12 +10,12 @@ use Illuminate\Foundation\Http\FormRequest;
 class ForceDeleteRequest extends FormRequest
 {
 
-    protected function prepareForValidation()
+    protected function prepareForValidation(): void
     {
         //
     }
 
-    public function authorize()
+    public function authorize(): bool
     {
 
         $camelCaseModelName = PascalCaseModelName::withTrashed()->findOrFail($this->snake_case_model_name_id);
@@ -24,28 +24,28 @@ class ForceDeleteRequest extends FormRequest
 
     }
 
-    public function rules()
+    public function rules(): array
     {
         return [
             'snake_case_model_name_id' => 'required|numeric'
         ];
     }
 
-    public function messages()
+    public function messages(): array
     {
         return [
             //
         ];
     }
 
-    public function attributes()
+    public function attributes(): array
     {
         return [
             //
         ];
     }
 
-    protected function passedValidation()
+    protected function passedValidation(): void
     {
         //
     }

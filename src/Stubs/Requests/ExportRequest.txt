@@ -9,7 +9,7 @@ use Illuminate\Foundation\Http\FormRequest;
 class ExportRequest extends FormRequest
 {
 
-    protected function prepareForValidation()
+    protected function prepareForValidation(): void
     {
         
         $this->merge([
@@ -20,33 +20,33 @@ class ExportRequest extends FormRequest
 
     }
 
-    public function authorize()
+    public function authorize(): bool
     {
         return $this->user()->can('export', PascalCaseModelName::class);
     }
 
-    public function rules()
+    public function rules(): array
     {
         return [
             //
         ];
     }
 
-    public function messages()
+    public function messages(): array
     {
         return [
             //
         ];
     }
 
-    public function attributes()
+    public function attributes(): array
     {
         return [
             //
         ];
     }
 
-    protected function passedValidation()
+    protected function passedValidation(): void
     {
         //
     }

@@ -10,12 +10,12 @@ use Illuminate\Validation\Rule;
 class ShowRequest extends FormRequest
 {
 
-    protected function prepareForValidation()
+    protected function prepareForValidation(): void
     {
         //
     }
 
-    public function authorize()
+    public function authorize(): bool
     {
 
         $camelCaseModelName = PascalCaseModelName::findOrFail($this->snake_case_model_name_id);
@@ -24,7 +24,7 @@ class ShowRequest extends FormRequest
 
     }
 
-    public function rules()
+    public function rules(): array
     {
         return [
             'load_relations' => [
@@ -41,21 +41,21 @@ class ShowRequest extends FormRequest
         ];
     }
 
-    public function messages()
+    public function messages(): array
     {
         return [
             //
         ];
     }
 
-    public function attributes()
+    public function attributes(): array
     {
         return [
             //
         ];
     }
 
-    protected function passedValidation()
+    protected function passedValidation(): void
     {
         //
     }

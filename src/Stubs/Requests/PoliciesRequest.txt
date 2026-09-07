@@ -8,38 +8,38 @@ use Illuminate\Foundation\Http\FormRequest;
 class PoliciesRequest extends FormRequest
 {
 
-    protected function prepareForValidation()
+    protected function prepareForValidation(): void
     {
         //
     }
 
-    public function authorize()
+    public function authorize(): bool
     {
         return true;
     }
 
-    public function rules()
+    public function rules(): array
     {
         return [
             'id' => 'nullable|numeric|exists:Namespace\Models\PascalCaseModelName,id'
         ];
     }
 
-    public function messages()
+    public function messages(): array
     {
         return [
             //
         ];
     }
 
-    public function attributes()
+    public function attributes(): array
     {
         return [
             //
         ];
     }
 
-    protected function passedValidation()
+    protected function passedValidation(): void
     {
         //
     }
@@ -58,17 +58,25 @@ class PoliciesRequest extends FormRequest
             // Agrega aquí más mapeos si es necesario
         ];
 
+        // Métodos que no son acciones del controlador (p. ej. el middleware()
+        // que exige la interfaz HasMiddleware) y por tanto no tienen política.
+        $notActions = [
+            'middleware',
+            'getMiddleware',
+            'callAction',
+        ];
+
         foreach ($methods as $method) {
+
+            if (str_starts_with($method, '__') || in_array($method, $notActions, true)) {
+                continue;
+            }
 
             $policyMethod = $policyMethodMapping[$method] ?? $method; // Obtiene el nombre de la política correspondiente, o el mismo nombre del método si no hay mapeo
 
-            if (method_exists($controllerClass, $method) && is_callable([$controllerClass, $method])) {
-            
-                $result[$method] = $this->user()->can($policyMethod, $model);
-        
-                $result[$policyMethod] = $this->user()->can($policyMethod, $model);
-            
-            }
+            $result[$method] = $this->user()->can($policyMethod, $model);
+
+            $result[$policyMethod] = $this->user()->can($policyMethod, $model);
 
         }
 

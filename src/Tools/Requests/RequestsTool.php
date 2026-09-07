@@ -115,8 +115,8 @@ class RequestsTool extends Tool
         $fileContent = file_get_contents($filePath);
 
         $fileContent = preg_replace(
-            '/public function rules\(\)\s*\{[^}]+\}/s',
-            "public function rules()\n    {\n        return {$formattedRules};\n    }",
+            '/public function rules\(\): array\s*\{[^}]+\}/s',
+            "public function rules(): array\n    {\n        return {$formattedRules};\n    }",
             $fileContent
         );
 

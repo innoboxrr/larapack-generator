@@ -11,38 +11,38 @@ use Innoboxrr\SearchSurge\Search\Builder;
 class IndexRequest extends FormRequest
 {
 
-    protected function prepareForValidation()
+    protected function prepareForValidation(): void
     {
         //
     }
 
-    public function authorize()
+    public function authorize(): bool
     {
         return $this->user()->can('index', PascalCaseModelName::class);
     }
 
-    public function rules()
+    public function rules(): array
     {
         return [
             //
         ];
     }
 
-    public function messages()
+    public function messages(): array
     {
         return [
             //
         ];
     }
 
-    public function attributes()
+    public function attributes(): array
     {
         return [
             //
         ];
     }
 
-    protected function passedValidation()
+    protected function passedValidation(): void
     {
         //
     }
