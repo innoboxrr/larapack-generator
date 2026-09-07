@@ -2,11 +2,19 @@
 
 if(!function_exists('root_path')) {
 	function root_path() {
-        // PENDIENTE: Debe verificar que está instalado en un paquete y no es el paquete per se
 		$ruta = __DIR__;
-        // Busca la raíz de la aplicación
+        // Busca la raíz de la aplicación subiendo directorios hasta dar con el autoloader.
         while (!file_exists($ruta . '/vendor/autoload.php')) {
-            $ruta = dirname($ruta);
+            $padre = dirname($ruta);
+            // dirname() de una raíz ('C:/' o '/') se devuelve a sí mismo: sin este
+            // corte el bucle nunca termina cuando no hay vendor/autoload.php.
+            if ($padre === $ruta) {
+                throw new RuntimeException(
+                    'No se encontró vendor/autoload.php partiendo de ' . __DIR__ . '. '
+                    . 'Ejecuta el generador desde un proyecto con dependencias instaladas.'
+                );
+            }
+            $ruta = $padre;
         }
         return realpath($ruta); 
 	}
@@ -23,9 +31,9 @@ if(!function_exists('app_dir_name')) {
 
 if(!function_exists('stubs_path')) {
     function stubs_path($path) {
-        // Modificar esto de manera dinámica: innoboxrr/larapack-generator        
-        $path = root_path() . '/vendor/innoboxrr/larapack-generator/src/Stubs/' . $path;
-        return $path;
+        // Se resuelve relativo a este archivo (src/Helpers), así funciona tanto
+        // instalado en vendor/ como ejecutando el paquete directamente.
+        return dirname(__DIR__) . '/Stubs/' . $path;
     }
 }
 
