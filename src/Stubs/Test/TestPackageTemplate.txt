@@ -12,7 +12,7 @@ class PascalCaseModelNameEndpointsTest extends TestCase
     use RefreshDatabase,
         WithFaker;
 
-    public function test_snake_case_model_name_policies_endpoint()
+    public function test_snake_case_model_name_policies_endpoint(): void
     {
 
         $camelCaseModelName = \Namespace\Models\PascalCaseModelName::factory()->create();
@@ -32,7 +32,7 @@ class PascalCaseModelNameEndpointsTest extends TestCase
 
     }
 
-    public function test_snake_case_model_name_policy_endpoint()
+    public function test_snake_case_model_name_policy_endpoint(): void
     {
         $headers = [
             'Authorization' => config('test.token'),
@@ -52,7 +52,7 @@ class PascalCaseModelNameEndpointsTest extends TestCase
 
     }
 
-    public function test_snake_case_model_name_index_auth_endpoint()
+    public function test_snake_case_model_name_index_auth_endpoint(): void
     {
 
         $headers = [
@@ -70,7 +70,7 @@ class PascalCaseModelNameEndpointsTest extends TestCase
 
     }
 
-    public function test_snake_case_model_name_index_guest_endpoint()
+    public function test_snake_case_model_name_index_guest_endpoint(): void
     {
 
         $headers = [
@@ -87,7 +87,7 @@ class PascalCaseModelNameEndpointsTest extends TestCase
             
     }
     
-    public function test_snake_case_model_name_show_auth_endpoint()
+    public function test_snake_case_model_name_show_auth_endpoint(): void
     {
 
         $camelCaseModelName = \Namespace\Models\PascalCaseModelName::latest()->first();
@@ -107,7 +107,7 @@ class PascalCaseModelNameEndpointsTest extends TestCase
             
     }
 
-    public function test_snake_case_model_name_show_guest_endpoint()
+    public function test_snake_case_model_name_show_guest_endpoint(): void
     {
 
         $camelCaseModelName = \Namespace\Models\PascalCaseModelName::latest()->first();
@@ -126,7 +126,7 @@ class PascalCaseModelNameEndpointsTest extends TestCase
             
     }
 
-    public function test_snake_case_model_name_create_endpoint()
+    public function test_snake_case_model_name_create_endpoint(): void
     {
 
         $user = \Namespace\Models\User::first();
@@ -144,7 +144,7 @@ class PascalCaseModelNameEndpointsTest extends TestCase
             
     }
 
-    public function test_snake_case_model_name_update_endpoint()
+    public function test_snake_case_model_name_update_endpoint(): void
     {
 
         $camelCaseModelName = \Namespace\Models\PascalCaseModelName::factory()->create();
@@ -165,7 +165,7 @@ class PascalCaseModelNameEndpointsTest extends TestCase
             
     }
 
-    public function test_snake_case_model_name_delete_endpoint()
+    public function test_snake_case_model_name_delete_endpoint(): void
     {
 
         $camelCaseModelName = \Namespace\Models\PascalCaseModelName::latest()->first();
@@ -185,7 +185,7 @@ class PascalCaseModelNameEndpointsTest extends TestCase
             
     }
 
-    public function test_snake_case_model_name_restore_endpoint()
+    public function test_snake_case_model_name_restore_endpoint(): void
     {
 
         $camelCaseModelName = \Namespace\Models\PascalCaseModelName::first();
@@ -205,7 +205,7 @@ class PascalCaseModelNameEndpointsTest extends TestCase
             
     }
 
-    public function test_snake_case_model_name_force_delete_endpoint()
+    public function test_snake_case_model_name_force_delete_endpoint(): void
     {
 
         $camelCaseModelName = \Namespace\Models\PascalCaseModelName::latest()->first();
@@ -225,7 +225,7 @@ class PascalCaseModelNameEndpointsTest extends TestCase
             
     }
 
-    public function test_snake_case_model_name_export_endpoint()
+    public function test_snake_case_model_name_export_endpoint(): void
     {   
 
         $headers = [

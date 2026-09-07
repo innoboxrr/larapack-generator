@@ -97,7 +97,16 @@ class TestTool extends Tool
 
 			$templateFile = $this->testTemplatePath . '/PhpunitTemplate.txt';
 
-			copy($templateFile, $phpunitFile);
+			if(copy($templateFile, $phpunitFile)) {
+
+				// El directorio de cobertura depende de si es paquete (src) o proyecto (app).
+				file_put_contents($phpunitFile, str_replace(
+					'__SOURCE_DIR__',
+					app_dir_name(),
+					file_get_contents($phpunitFile)
+				));
+
+			}
 
 		}
 
