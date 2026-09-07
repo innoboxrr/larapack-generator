@@ -1,6 +1,6 @@
 ---
 name: larapack
-description: Genera y mantiene la arquitectura de una API Laravel con UI en Vue a partir de un laraimport.json declarativo. Úsalo siempre que haya que crear, ampliar o revisar un modelo, un endpoint, un formulario o una vista en un paquete o aplicación que dependa de innoboxrr/larapack-generator, y antes de escribir a mano cualquier controlador, request, policy, migración o módulo Vue.
+description: Genera y mantiene la arquitectura de una API Laravel con UI en Vue o React a partir de un laraimport.json declarativo. Úsalo siempre que haya que crear, ampliar o revisar un modelo, un endpoint, un formulario o una vista en un paquete o aplicación que dependa de innoboxrr/larapack-generator, y antes de escribir a mano cualquier controlador, request, policy, migración o módulo de interfaz.
 ---
 
 # LaraPack
@@ -37,7 +37,7 @@ que puedes comprobar tu propio trabajo sin preguntar.
 2. escribe/edita laraimport.json
 3. larapack:validate                  # falla → corrige el JSON, no el código
 4. larapack:import --dry-run          # mira qué va a tocar
-5. larapack:import                    # genera
+5. larapack:import [--vue] [--react]  # genera
 6. rellena los huecos                 # aquí sí escribes código
 7. larapack:verify                    # falla → algo se salió del contrato
 ```
@@ -161,15 +161,16 @@ database/migrations/*_create_<plural>_table.php
 database/factories/<Model>Factory.php              ← HUECO (datos de prueba)
 tests/Feature/Models/<Model>EndpointsTest.php      ← HUECO
 
-resources/vue/src/models/<kebab>/index.js          contrato del modelo
-resources/vue/src/models/<kebab>/store/index.js    Pinia
-resources/vue/src/models/<kebab>/routes/index.js
-resources/vue/src/models/<kebab>/forms/*.vue       Create, Edit, Filter
-resources/vue/src/models/<kebab>/views/*.vue       Admin, Create, Edit, Show
-resources/vue/src/models/<kebab>/widgets/*.vue     DataTable, ModelCard, ModelProfile
+resources/<ui>/src/models/<kebab>/index.js         contrato del modelo
+resources/<ui>/src/models/<kebab>/store/index.js   Pinia (Vue) / Zustand (React)
+resources/<ui>/src/models/<kebab>/routes/index.js
+resources/<ui>/src/models/<kebab>/forms/*          Create, Edit, Filter
+resources/<ui>/src/models/<kebab>/views/*          Admin, Create, Edit, Show
+resources/<ui>/src/models/<kebab>/widgets/*        DataTable, ModelCard, ModelProfile
 ```
 
-La UI solo se genera con `--vue`.
+La UI solo se genera si la pides: `--vue`, `--react`, o las dos. No son
+excluyentes.
 
 **Los proveedores no los genera el importador.** Una vez por paquete:
 
@@ -247,13 +248,49 @@ El generador es idempotente y **nunca destruye trabajo**:
 Así que ampliar el `laraimport.json` y volver a importar es seguro. Es el flujo
 normal, no una excepción.
 
+## Vue y React
+
+`<ui>` es `vue` o `react`, y lo eliges con `--vue` / `--react`. Los dos
+módulos salen del mismo `laraimport.json` y tienen exactamente la misma
+estructura.
+
+**`models/<kebab>/index.js` es el mismo archivo en los dos.** No una copia: el
+mismo. Son funciones puras y llamadas HTTP, sin nada de un framework de UI —
+`API_ROUTE_PREFIX`, `crudActions()`, `dataTableHead()`, `dataTableSort()` y
+las funciones CRUD. Ahí está el punto entero: si cada framework tuviera su
+contrato, no habría un contrato.
+
+Lo que cambia es sólo la capa de presentación:
+
+| | Vue | React |
+|---|---|---|
+| Componentes | `<script setup>`, `.vue` | funciones, `.jsx` |
+| Enlace de datos | `v-model` | `value` + `onChange(valor)` |
+| Store | Pinia | Zustand, con la misma superficie |
+| Router | vue-router | React Router 7 |
+| Formularios | `innoboxrr-form-elements` | `innoboxrr-react-form-elements` |
+| Tabla | `innoboxrr-vue-datatable` | `innoboxrr-react-datatable` |
+
+Los dos paquetes de formularios exportan **los mismos 29 nombres**, así que el
+`form_component` del `laraimport` vale igual para ambos. Hay un test en cada
+paquete que falla si uno se adelanta al otro.
+
+**Rutas con nombre.** El contrato apunta a las vistas por nombre
+(`params.to.name`). vue-router lo resuelve de fábrica; React Router no, así
+que el agregador del módulo recorre el árbol de rutas y registra los nombres en
+`innoboxrr-react-datatable`. Para navegar desde una vista React usa
+`buildPath('AdminShowPost', { id })`, nunca una ruta escrita a mano.
+
+**Las clases CSS** (`inputClass`, `buttonClass`) viven en
+`resources/<ui>/src/theme.js`, no en un mixin global. Cámbialas ahí.
+
 ## El contrato front ↔ back
 
-El módulo Vue y la API se hablan por cuatro puntos. Si tocas un lado, toca el
-otro.
+El módulo de interfaz y la API se hablan por cuatro puntos. Si tocas un lado,
+toca el otro. Vale igual para Vue y para React: el archivo es el mismo.
 
 **1. El prefijo de rutas.** `API_ROUTE_PREFIX` en
-`resources/vue/src/models/<kebab>/index.js` reconstruye el `->as(...)` del
+`resources/<ui>/src/models/<kebab>/index.js` reconstruye el `->as(...)` del
 `RouteServiceProvider`:
 
 ```
@@ -301,3 +338,8 @@ y se dispara con `actionClicked()`. Una acción con `route: false` invoca
   cargará nunca.
 - **Ampliar la UI creando componentes sueltos.** Los formularios y vistas salen
   del JSON; si falta un input, falta una `prop` con `form: true`.
+- **Tocar `models/<kebab>/index.js` de un solo framework.** Es el mismo archivo
+  en Vue y en React: editarlo en uno los separa, y `larapack:verify` lo dirá.
+- **Escribir una ruta a mano en una vista React.** El contrato navega por
+  nombre; usa `buildPath()`, que resuelve contra donde el anfitrión montó el
+  módulo de verdad.

@@ -92,9 +92,11 @@ Genera todo el entorno de varios modelos a partir de un archivo declarativo:
 
 ```
 php artisan larapack:import /ruta/al/laraimport.json
+php artisan larapack:import --vue --react
 ```
 
-Sin ruta, busca `laraimport.json` en la raiz del proyecto.
+Sin ruta, busca `laraimport.json` en la raiz del proyecto. `--vue` y
+`--react` no son excluyentes: los dos modulos consumen el mismo contrato.
 
 ### El contrato: `larapack:validate` y `larapack:schema`
 
@@ -149,7 +151,8 @@ larapack:full-model              - Crea un entorno completo de modelo.
 larapack:migration               - Crea una nueva migracion.
 larapack:model                   - Crea un nuevo modelo.
 larapack:model-traits            - Crea traits para el modelo.
-larapack:model-view              - Crea la seccion de administracion en Vue.
+larapack:model-view              - Crea el modulo Vue del modelo.
+larapack:react-view              - Crea el modulo React del modelo.
 larapack:observer                - Crea un observer.
 larapack:policy                  - Crea una nueva politica.
 larapack:providers               - Crea todos los proveedores de servicio.
@@ -364,6 +367,65 @@ mano:
 
 `assignments` y `filters` siguen aceptandose por compatibilidad, pero estan
 marcadas como obsoletas en el esquema: el generador no las lee.
+
+## La interfaz: Vue y React
+
+La UI vive **dentro del paquete**, junto al backend que consume, y se publica
+como su propio npm:
+
+```
+packages/<feature>/
+  composer.json                 -> innoboxrr/<feature>          (Laravel API)
+  resources/vue/
+    package.json                -> innoboxrr-<feature>          (npm)
+    src/models/<entidad>/...
+  resources/react/
+    package.json                -> innoboxrr-<feature>-react    (npm)
+    src/models/<entidad>/...
+```
+
+Los dos modulos salen del mismo `laraimport.json` y tienen exactamente la
+misma estructura. Y **`src/models/<entidad>/index.js` es el mismo archivo en
+los dos**: no una copia, el mismo. Son funciones puras y llamadas HTTP, sin
+nada de un framework de UI —`API_ROUTE_PREFIX`, `crudActions()`,
+`dataTableHead()`, `dataTableSort()` y las funciones CRUD—. Ahi esta el punto
+entero de la paridad: si cada framework tuviera su contrato, no habria un
+contrato.
+
+Lo que cambia es solo la capa de presentacion:
+
+| | Vue | React |
+|---|---|---|
+| Componentes | `<script setup>`, `.vue` | funciones, `.jsx` |
+| Enlace de datos | `v-model` | `value` + `onChange(valor)` |
+| Store | Pinia | Zustand, con la misma superficie |
+| Router | vue-router 4 | React Router 7 |
+| Formularios | `innoboxrr-form-elements` | `innoboxrr-react-form-elements` |
+| Tabla | `innoboxrr-vue-datatable` | `innoboxrr-react-datatable` |
+
+Los dos paquetes de formularios exportan **los mismos 29 nombres**, asi que el
+`form_component` del `laraimport` vale igual para los dos. Cada paquete tiene
+un test que falla si uno se adelanta al otro.
+
+El host descubre los modelos por `import.meta.glob`, asi que generar uno nuevo
+no obliga a enumerarlo en ningun sitio.
+
+### El helper `route`
+
+No es Ziggy: es `innoboxrr-route-resolver`, y la cadena completa es
+
+```
+php artisan route:json        (innoboxrr/routes-to-json)
+  -> resources/.../routes.json
+  -> setRoutes() en bootstrap.js
+  -> window.route
+  -> route(API_ROUTE_PREFIX + 'index')
+```
+
+Si anades un endpoint, hay que volver a exportar el `routes.json`.
+
+La aplicacion anfitriona **debe** llamar a `JsonResource::withoutWrapping()` en
+su `AppServiceProvider`; sin eso llega un `data` de mas y la tabla sale vacia.
 
 ## Para un agente (Claude Code, Codex)
 
