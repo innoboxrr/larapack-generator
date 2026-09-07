@@ -14,7 +14,7 @@ class DefaultOperation
         //
     }
 
-    public function handle(RestoreEvent $event)
+    public function handle(RestoreEvent $event): void
     {
         //
     }

@@ -17,23 +17,23 @@ class CreateEvent
 
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
-    public $camelCaseModelName;
-    public $data;
-    public $response;
-    public $locale;
-
-    public function __construct(PascalCaseModelName $camelCaseModelName, array $data, $response, $locale = 'en')
-    {
-        $this->camelCaseModelName = $camelCaseModelName;
-        $this->data = $data;
-        $this->response = $response;
-        $this->locale = $locale;
+    public function __construct(
+        public PascalCaseModelName $camelCaseModelName,
+        public array $data,
+        public mixed $response,
+        public string $locale = 'en',
+    ) {
         App::setLocale($this->locale);
     }
 
-    public function broadcastOn()
+    /**
+     * @return array<int, \Illuminate\Broadcasting\Channel>
+     */
+    public function broadcastOn(): array
     {
-        return new PrivateChannel('channel-name');
+        return [
+            new PrivateChannel('channel-name'),
+        ];
     }
 
 }

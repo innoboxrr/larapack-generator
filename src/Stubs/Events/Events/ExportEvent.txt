@@ -15,20 +15,21 @@ class ExportEvent
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
-    public $data;
-    public $user;
-    public $locale;
-
-    public function __construct(array $data, $user, $locale = 'en')
-    {
-        $this->data = $data;
-        $this->user = $user;
-        $this->locale = $locale;
+    public function __construct(
+        public array $data,
+        public mixed $user,
+        public string $locale = 'en',
+    ) {
     }
 
-    public function broadcastOn()
+    /**
+     * @return array<int, \Illuminate\Broadcasting\Channel>
+     */
+    public function broadcastOn(): array
     {
-        return new PrivateChannel('channel-name');
+        return [
+            new PrivateChannel('channel-name'),
+        ];
     }
     
 }
