@@ -2,17 +2,26 @@
 
 namespace Namespace\Models;
 
+use Illuminate\Database\Eloquent\Attributes\ObservedBy;
+use Illuminate\Database\Eloquent\Attributes\UseFactory;
+use Illuminate\Database\Eloquent\Attributes\UsePolicy;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Innoboxrr\Traits\MetaOperations;
 use Innoboxrr\Traits\ModelAppendsTrait;
+use Namespace\Database\Factories\PascalCaseModelNameFactory;
+use Namespace\Observers\PascalCaseModelNameObserver;
+use Namespace\Policies\PascalCaseModelNamePolicy;
 use Namespace\Models\Traits\Relations\PascalCaseModelNameRelations;
 use Namespace\Models\Traits\Storage\PascalCaseModelNameStorage;
 use Namespace\Models\Traits\Assignments\PascalCaseModelNameAssignment;
 use Namespace\Models\Traits\Operations\PascalCaseModelNameOperations;
 use Namespace\Models\Traits\Mutators\PascalCaseModelNameMutators;
 
+#[ObservedBy(PascalCaseModelNameObserver::class)]
+#[UsePolicy(PascalCaseModelNamePolicy::class)]
+#[UseFactory(PascalCaseModelNameFactory::class)]
 class PascalCaseModelName extends Model
 {
 
@@ -25,7 +34,7 @@ class PascalCaseModelName extends Model
         PascalCaseModelNameAssignment,
         PascalCaseModelNameOperations,
         PascalCaseModelNameMutators;
-        
+
     protected $fillable = [
         //FILLABLE//
     ];
@@ -36,10 +45,6 @@ class PascalCaseModelName extends Model
 
     protected $updatable = [
         //UPDATABLE//
-    ];
-
-    protected $casts = [
-        //CASTS//
     ];
 
     protected $protected_metas = [];
@@ -60,11 +65,16 @@ class PascalCaseModelName extends Model
         //LOADABLECOUNTS//
     ];
 
-    /*
-    protected static function newFactory()
+    /**
+     * Los casts de atributos del modelo.
+     *
+     * @return array<string, string>
+     */
+    protected function casts(): array
     {
-        return \Namespace\Database\Factories\PascalCaseModelNameFactory::new();
+        return [
+            //CASTS//
+        ];
     }
-    */
 
 }
