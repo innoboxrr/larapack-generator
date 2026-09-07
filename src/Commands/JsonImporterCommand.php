@@ -9,6 +9,8 @@ use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Input\ArrayInput;
+use Innoboxrr\LarapackGenerator\Support\Import\ImportDocument;
+use Innoboxrr\LarapackGenerator\Support\Import\SemanticValidator;
 use Innoboxrr\LarapackGenerator\Tools\Tool;
 use Innoboxrr\LarapackGenerator\Commands\MakeFullModelCommand;
 use Innoboxrr\LarapackGenerator\Tools\PivotMigration\PivotMigrationTool;
@@ -31,46 +33,59 @@ class JsonImporterCommand extends Command
     {
         $this->applyGenerationOptions($input);
 
-        // Obtener la ruta del archivo JSON o usar una predeterminada
         $jsonPath = $input->getArgument('jsonPath') ?? root_path() . '/laraimport.json';
 
-        // Verificar si el archivo existe
-        if (!file_exists($jsonPath)) {
-            $output->writeln("<error>File not found at {$jsonPath}</error>");
+        // Se valida antes de tocar el disco. Antes un archivo incompleto no
+        // daba un mensaje sino un TypeError a mitad de la generación, con
+        // parte de los archivos ya escritos.
+        ['document' => $document, 'errors' => $findings] = ImportDocument::fromFile($jsonPath);
+
+        foreach ($findings as $finding) {
+            $output->writeln(sprintf(
+                '  %s <fg=cyan>%s</> %s',
+                $finding['level'] === SemanticValidator::ERROR ? '<fg=red>error</>' : '<comment>aviso</comment>',
+                $finding['path'],
+                $finding['message']
+            ));
+        }
+
+        if ($document === null) {
+            $output->writeln("\n<error>El laraimport no es válido; no se ha generado nada.</error>");
+
             return Command::FAILURE;
         }
 
-        // Leer y decodificar el contenido JSON
-        $jsonContent = file_get_contents($jsonPath);
-        $data = json_decode($jsonContent, true);
-
-        // Validar si el contenido JSON es correcto
-        if (is_null($data)) {
-            $output->writeln("<error>Invalid JSON content. Null returned</error>");
-            return Command::FAILURE;
-        }
-
-        // Establecer la variable global `fromJson` en true
         Tool::setFromJsonImporter(true);
-        Tool::setJsonContent($data);
+        Tool::setJsonContent($document->toArray());
 
-        // Procesar cada modelo
-        foreach ($data['models'] as $model) {
-            $output->writeln("Processing model: {$model['name']}");
-            $metas = $model['metas']  === true;
-            $this->callMakeFullModelCommand($model['name'], $input->getOption('vue'), $metas, $output);
+        try {
+
+            // Los modelos vienen ordenados por sus dependencias, así que las
+            // migraciones quedan en un orden que `migrate` puede ejecutar.
+            foreach ($document->models() as $model) {
+                $output->writeln("Processing model: {$model['name']}");
+
+                $this->callMakeFullModelCommand(
+                    $model['name'],
+                    $input->getOption('vue'),
+                    $model['metas'],
+                    $output
+                );
+            }
+
+            foreach ($document->pivots() as $pivot) {
+                $output->writeln("Processing pivot: {$pivot['name']}");
+
+                (new PivotMigrationTool())->create($pivot['name']);
+            }
+
+        } finally {
+
+            // En un finally: si algo lanza, el flag no puede quedarse activo
+            // para el resto del proceso.
+            Tool::setFromJsonImporter(false);
+
         }
-
-        // Procesar pivotes (si es necesario)
-        foreach ($data['pivots'] as $pivot) {
-            $output->writeln("Processing pivot: {$pivot['name']}");
-            // Aquí puedes implementar el manejo de los pivotes si es necesario
-            $tool = new PivotMigrationTool();
-            $tool->create($pivot['name']);
-        }
-
-        // Limpiar la variable global `fromJson`
-        Tool::setFromJsonImporter(false);
 
         $output->writeln('<info>JSON import completed successfully</info>');
         $this->reportGeneration($input, $output);
