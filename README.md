@@ -89,6 +89,41 @@ php artisan larapack:import /ruta/al/laraimport.json
 
 Sin ruta, busca `laraimport.json` en la raiz del proyecto.
 
+### El contrato: `larapack:validate` y `larapack:schema`
+
+El `laraimport.json` no es un archivo de configuracion: es el contrato del que
+sale toda la arquitectura. Esta descrito en un JSON Schema (draft 2020-12) en
+`schema/laraimport.schema.json`, declarado tambien en
+`extra.larapack.schema` del `composer.json` para que una herramienta externa
+lo encuentre sin conocer la estructura del paquete.
+
+```
+php artisan larapack:validate                 # valida ./laraimport.json
+php artisan larapack:validate ruta.json       # valida el que le digas
+php artisan larapack:validate --format=json   # para un CI o un agente
+php artisan larapack:schema                   # imprime el esquema
+```
+
+`larapack:validate` sale con codigo distinto de cero si el archivo no es
+valido, asi que sirve de puerta antes de generar. Comprueba dos cosas
+distintas:
+
+**Forma**, contra el esquema: tipos de columna y componentes de formulario son
+enums cerrados; `form: true` obliga a declarar `form_component`; `foreignId`
+obliga a declarar `constraint`.
+
+**Coherencia**, mirando el documento entero: modelos o columnas repetidos,
+ciclos de claves foraneas (que no tienen orden de migracion posible), claves
+foraneas a si mismo no anulables, reglas sobre campos que no son columnas,
+relaciones que no resuelven contra ningun modelo, y `UpdateRequest` sin la
+regla del identificador del que dependen `authorize()` y `handle()`.
+
+Los avisos no bloquean. Los errores si: generar con ellos produce codigo que no
+arranca.
+
+El importador ejecuta esta misma validacion antes de escribir nada, de modo que
+un archivo incompleto ya no deja el proyecto a medio generar.
+
 ### Resto de comandos
 
 ```
@@ -181,136 +216,141 @@ No intenta adivinar si una clase "tiene demasiada lógica": esa clase de
 comprobación produce falsos positivos y acaba desactivándose. Sólo verifica lo
 que es determinista.
 
-## Ejemplo de JSON de Importación 
+## Ejemplo de laraimport.json
+
+Solo `models[].name`, `props[].name` y `props[].type` son obligatorios. Todo
+lo demas tiene un valor por defecto que el esquema declara, asi que el archivo
+solo dice lo que decide de verdad:
+
+```json
+{
+    "models": [
+        {
+            "name": "Category",
+            "props": [
+                { "name": "name", "type": "string" }
+            ]
+        }
+    ]
+}
+```
+
+Un modelo completo, con formulario, tabla, relaciones y validacion:
 
 ```json
 {
     "models": [
         {
             "name": "Post",
+            "metas": true,
             "props": [
                 {
                     "name": "title",
                     "type": "string",
-                    "constraint": null,
-                    "default": null,
-                    "nullable": false,
-                    "fillable": true,
-                    "creatable": true,
-                    "updatable": true,
-                    "exports_cols": true,
-                    "cast": null,
                     "form": true,
                     "form_component": "TextInputComponent",
                     "form_submit": true,
-                    "enum": {
-                        "op1": "Option 1",
-                        "op2": "Option 2"
-                    },
                     "datatable": true
+                },
+                {
+                    "name": "status",
+                    "type": "string",
+                    "cast": "string",
+                    "form": true,
+                    "form_component": "SelectInputComponent",
+                    "form_submit": true,
+                    "datatable": true,
+                    "enum": {
+                        "draft": "Borrador",
+                        "published": "Publicado"
+                    }
                 },
                 {
                     "name": "payload",
                     "type": "longText",
-                    "constraint": null,
-                    "default": null,
                     "nullable": true,
-                    "fillable": true,
-                    "creatable": true,
-                    "updatable": true,
-                    "exports_cols": true,
-                    "cast": "json",
-                    "form": false,
-                    "form_component": null,
-                    "form_submit": false,
-                    "enum": {
-                        "op1": "Option 1",
-                        "op2": "Option 2"
-                    },
-                    "datatable": true
+                    "cast": "json"
+                },
+                {
+                    "name": "category_id",
+                    "type": "foreignId",
+                    "constraint": "categories",
+                    "form_submit": true
                 },
                 {
                     "name": "user_id",
                     "type": "foreignId",
                     "constraint": "users",
-                    "default": null,
-                    "nullable": false,
-                    "fillable": true,
-                    "creatable": true,
-                    "updatable": true,
-                    "exports_cols": true,
-                    "cast": null,
-                    "form": false,
-                    "form_component": null,
-                    "form_submit": true,
-                    "enum": {
-                        "op1": "Option 1",
-                        "op2": "Option 2"
-                    },
-                    "datatable": true
+                    "exports_cols": false,
+                    "form_submit": true
                 }
             ],
-            "metas": true,
             "load_relations": [
-                {
-                    "type": "belongsTo",
-                    "namespace": "App\\Models",
-                    "related": "User",
-                    "name": "user"
-                }
+                { "type": "belongsTo", "related": "Category", "name": "category" },
+                { "type": "belongsTo", "related": "User", "name": "user", "namespace": "App\\Models" }
             ],
-            "editable_metas": [],
-            "assignments": [],
-            "filters": [
-                {
-                    "name": "Title",
-                    "mode": "like"
-                }
-            ],
+            "load_counts": [],
+            "editable_metas": ["seo_title"],
             "requests": [
                 {
                     "name": "Create",
                     "rules": {
                         "title": "required|string|max:255",
-                        "payload": "nullable",
+                        "status": ["required", "in:draft,published"],
+                        "category_id": "required|exists:categories,id",
                         "user_id": "required|exists:users,id"
                     }
                 },
                 {
                     "name": "Update",
                     "rules": {
+                        "post_id": "required|numeric",
                         "title": "nullable|string|max:255",
-                        "payload": "nullable",
-                        "user_id": "nullable|exists:users,id"
+                        "status": ["nullable", "in:draft,published"],
+                        "category_id": "nullable|exists:categories,id"
                     }
                 }
-            ],
-            "load_counts": []
+            ]
+        },
+        {
+            "name": "Category",
+            "props": [
+                { "name": "name", "type": "string", "form": true, "form_component": "TextInputComponent", "form_submit": true, "datatable": true }
+            ]
+        },
+        {
+            "name": "Tag",
+            "props": [
+                { "name": "name", "type": "string", "form": true, "form_component": "TextInputComponent", "form_submit": true, "datatable": true }
+            ]
         }
     ],
     "pivots": [
         {
-            "name": "role_user",
+            "name": "post_tag",
             "props": [
-                {
-                    "name": "role_id",
-                    "type": "foreignId",
-                    "constraint": "roles",
-                    "default": null,
-                    "nullable": false
-                },
-                {
-                    "name": "user_id",
-                    "type": "foreignId",
-                    "constraint": "users",
-                    "default": null,
-                    "nullable": false
-                }
+                { "name": "post_id", "type": "foreignId", "constraint": "posts" },
+                { "name": "tag_id", "type": "foreignId", "constraint": "tags" }
             ]
         }
     ]
 }
 ```
+
+Tres detalles que el esquema resuelve solo, y que antes habia que acertar a
+mano:
+
+- **El orden de los modelos no importa.** `Post` depende de `Category` por su
+  clave foranea, asi que la migracion de `categories` se genera primero aunque
+  el modelo este declarado despues.
+- **`Category` no lleva `namespace` en la relacion.** Como se declara en este
+  mismo archivo, vive en el paquete y el `use` generado apunta ahi. `User` no
+  esta, asi que resuelve contra `App\Models`.
+- **Las reglas admiten array.** Es la forma recomendada de Laravel para todo lo
+  que lleve `|` dentro, como un `regex:`.
+
+`assignments` y `filters` siguen aceptandose por compatibilidad, pero estan
+marcadas como obsoletas en el esquema: el generador no las lee.
 
 ## Notas Importantes
 
