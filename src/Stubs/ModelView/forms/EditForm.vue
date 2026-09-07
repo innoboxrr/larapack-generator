@@ -5,7 +5,6 @@
 <!-- Add more inputs -->
 
         <ButtonComponent
-            :custom-class="buttonClass"
             :disabled="disabled"
             :value="t('Update')" />
 
@@ -24,7 +23,6 @@
 //import_more_components//
     } from 'innoboxrr-form-elements'
 
-    import { buttonClass, inputClass } from '../../../theme'
     import { usePascalCaseModelNameStore } from '../store'
 
     const props = defineProps({

@@ -123,8 +123,9 @@ class ReactViewTool extends UiModuleTool
 		$binding = "{$attrIndent}value={form.{$name} ?? ''}\n"
 			. "{$attrIndent}onChange={(value) => setField('{$name}', value)}";
 
-		$common = "{$attrIndent}customClass={inputClass}\n"
-			. "{$attrIndent}name=\"{$name}\"\n"
+		// Sin customClass: la clase sale del tema del paquete, que cada
+		// componente lee por su token.
+		$common = "{$attrIndent}name=\"{$name}\"\n"
 			. "{$attrIndent}label={t('{$label}')}\n";
 
 		// Select y editor necesitan atributos propios; los otros comparten la

@@ -162,6 +162,54 @@ final class GeneratesVueModuleTest extends TestCase
         $this->assertStringNotContainsString("id: 'payload',", $module);
     }
 
+    /**
+     * El codigo generado esperaba `inputClass` y `buttonClass` de un mixin
+     * global que la aplicacion anfitriona tenia que registrar sin que nada lo
+     * dijera: el modulo no se podia montar fuera de esa aplicacion, ni probar.
+     */
+    public function test_no_espera_ninguna_clase_de_un_global(): void
+    {
+        foreach ($this->generatedModuleFiles() as $relative) {
+            $contents = $this->project->read($relative);
+
+            foreach (['inputClass', 'buttonClass'] as $global) {
+                $this->assertStringNotContainsString(
+                    $global,
+                    $contents,
+                    "{$relative} sigue esperando {$global} de un global."
+                );
+            }
+        }
+    }
+
+    public function test_el_tema_del_paquete_se_declara_una_vez(): void
+    {
+        $theme = $this->project->read('resources/vue/src/theme.js');
+
+        $this->assertStringContainsString("import { setTheme } from 'innoboxrr-form-core'", $theme);
+        $this->assertStringContainsString('setTheme({', $theme);
+    }
+
+    /**
+     * Cada control lee su propio token del tema, asi que el formulario no
+     * tiene que saber de que clase es un input.
+     */
+    public function test_los_inputs_generados_no_llevan_clases(): void
+    {
+        $create = $this->project->read(self::MODULE . '/forms/CreateForm.vue');
+
+        $this->assertStringNotContainsString(':custom-class', $create);
+        $this->assertStringContainsString('<TextInputComponent', $create);
+    }
+
+    public function test_el_boton_de_reiniciar_filtros_usa_la_variante_secundaria(): void
+    {
+        $filter = $this->project->read(self::MODULE . '/forms/FilterForm.vue');
+
+        $this->assertStringContainsString('variant="secondary"', $filter);
+        $this->assertStringNotContainsString('bg-gray-400', $filter);
+    }
+
     public function test_el_package_json_del_modulo_es_valido(): void
     {
         $package = json_decode($this->project->read('resources/vue/package.json'), true);

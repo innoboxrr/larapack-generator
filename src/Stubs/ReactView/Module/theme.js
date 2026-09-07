@@ -1,17 +1,28 @@
 /**
- * Las clases CSS que comparten los formularios del modulo.
+ * El aspecto de los formularios de este paquete.
  *
- * Es el mismo archivo que en el modulo Vue, y a proposito: los dos consumen la
- * misma hoja de estilos del anfitrion (UIkit + Tailwind), asi que un input
- * generado para React tiene que verse igual que el de Vue.
+ * Antes las clases del input y del boton se esperaban de un mixin global que la
+ * aplicacion anfitriona tenia que registrar sin que nada lo dijera: el modulo
+ * no se podia montar fuera de esa aplicacion, ni probar.
  *
- * Cambialas aqui y cambian en todos los modelos del paquete.
+ * Ahora es un tema. Se ajusta aqui, una vez, y lo leen todos los componentes de
+ * innoboxrr-react-form-elements en todos los modelos del paquete.
+ *
+ * Los tokens disponibles:
+ *
+ *   envoltorios  field, fieldInner, label, help, helpIcon, error
+ *   controles    input, select, textarea, checkbox, radio, file
+ *   botones      button, buttonSecondary, buttonDanger, buttonLink
+ *
+ * Los valores de fabrica son los de UIkit + Tailwind; solo hace falta declarar
+ * lo que se quiera cambiar.
  */
 
-export const inputClass = 'uk-input uk-form-large uk-border-rounded'
+import { setTheme } from 'innoboxrr-form-core'
 
-export const selectClass = 'uk-select uk-form-large uk-border-rounded'
+export default setTheme({
+    // input: 'form-control',
+    // button: 'btn btn-primary',
+})
 
-export const textareaClass = 'uk-textarea uk-form-large uk-border-rounded'
-
-export const buttonClass = 'uk-button uk-width-1-1 button'
+export { getTheme, setTheme } from 'innoboxrr-form-core'

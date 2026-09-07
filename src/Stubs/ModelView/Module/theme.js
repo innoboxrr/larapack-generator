@@ -1,18 +1,28 @@
 /**
- * Las clases CSS que comparten los formularios del modulo.
+ * El aspecto de los formularios de este paquete.
  *
- * Antes venian de un mixin global que la aplicacion anfitriona tenia que
- * registrar (`inputClass`, `buttonClass`). El codigo generado las usaba sin
- * declararlas en ningun sitio, asi que el modulo no se podia montar fuera de
- * esa aplicacion — ni probar.
+ * Antes las clases del input y del boton se esperaban de un mixin global que la
+ * aplicacion anfitriona tenia que registrar sin que nada lo dijera: el modulo
+ * no se podia montar fuera de esa aplicacion, ni probar.
  *
- * Cambialas aqui y cambian en todos los modelos del paquete.
+ * Ahora es un tema. Se ajusta aqui, una vez, y lo leen todos los componentes de
+ * innoboxrr-form-elements en todos los modelos del paquete.
+ *
+ * Los tokens disponibles:
+ *
+ *   envoltorios  field, fieldInner, label, help, helpIcon, error
+ *   controles    input, select, textarea, checkbox, radio, file
+ *   botones      button, buttonSecondary, buttonDanger, buttonLink
+ *
+ * Los valores de fabrica son los de UIkit + Tailwind; solo hace falta declarar
+ * lo que se quiera cambiar.
  */
 
-export const inputClass = 'uk-input uk-form-large uk-border-rounded'
+import { setTheme } from 'innoboxrr-form-core'
 
-export const selectClass = 'uk-select uk-form-large uk-border-rounded'
+export default setTheme({
+    // input: 'form-control',
+    // button: 'btn btn-primary',
+})
 
-export const textareaClass = 'uk-textarea uk-form-large uk-border-rounded'
-
-export const buttonClass = 'uk-button uk-width-1-1 button'
+export { getTheme, setTheme } from 'innoboxrr-form-core'

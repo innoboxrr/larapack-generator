@@ -6,7 +6,6 @@
 
             <div>
                 <TextInputComponent
-                    :custom-class="inputClass"
                     type="text"
                     name="id"
                     label="ID"
@@ -20,16 +19,14 @@
 
         <div class="uk-flex uk-flex-right uk-child-width-auto@m uk-child-width-1-1@m" uk-grid>
             <div>
-                <button :class="buttonClass">
-                    {{ t('Search') }}
-                </button>
+                <ButtonComponent :value="t('Search')" />
             </div>
             <div>
-                <button
-                    :class="buttonClass + ' bg-gray-400'"
-                    @click.prevent="resetForm">
-                    {{ t('Reset') }}
-                </button>
+                <ButtonComponent
+                    type="button"
+                    variant="secondary"
+                    :value="t('Reset')"
+                    @click="resetForm" />
             </div>
         </div>
 
@@ -42,11 +39,10 @@
     import { reactive } from 'vue'
     import t from 'innoboxrr-i18n'
     import {
+        ButtonComponent,
         TextInputComponent,
 //import_more_components//
     } from 'innoboxrr-form-elements'
-
-    import { buttonClass, inputClass } from '../../../theme'
 
     defineProps({
         formId: {

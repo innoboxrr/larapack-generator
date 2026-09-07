@@ -1,11 +1,10 @@
 import { useState } from 'react'
 import t from 'innoboxrr-i18n'
 import {
+    ButtonComponent,
     TextInputComponent,
 //import_more_components//
 } from 'innoboxrr-react-form-elements'
-
-import { buttonClass, inputClass } from '../../../theme'
 
 const initialState = () => ({
     id: null,
@@ -33,7 +32,6 @@ export default function FilterForm({ formId = 'camelCaseModelNameFilterForm', on
 
                 <div>
                     <TextInputComponent
-                        customClass={inputClass}
                         type="text"
                         name="id"
                         label="ID"
@@ -48,22 +46,19 @@ export default function FilterForm({ formId = 'camelCaseModelNameFilterForm', on
 
             <div className="uk-flex uk-flex-right uk-child-width-auto@m uk-child-width-1-1@m" uk-grid="">
                 <div>
-                    <button type="submit" className={buttonClass}>
-                        {t('Search')}
-                    </button>
+                    <ButtonComponent value={t('Search')} />
                 </div>
                 <div>
-                    <button
+                    <ButtonComponent
                         type="button"
-                        className={`${buttonClass} bg-gray-400`}
+                        variant="secondary"
+                        value={t('Reset')}
                         onClick={() => {
                             const reset = initialState()
 
                             setForm(reset)
                             submit(reset)
-                        }}>
-                        {t('Reset')}
-                    </button>
+                        }} />
                 </div>
             </div>
 

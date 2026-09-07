@@ -115,8 +115,10 @@ class ModelViewTool extends UiModuleTool
 			return "{$tagIndent}<!-- {$name}: declara form_component en el JSON de importacion -->\n";
 		}
 
-		$common = "{$attrIndent}:custom-class=\"inputClass\"\n"
-			. "{$attrIndent}name=\"{$name}\"\n"
+		// Sin :custom-class: la clase sale del tema del paquete, que cada
+		// componente lee por su token. Pasarla aqui obligaba a que el modulo
+		// conociera el aspecto de cada control.
+		$common = "{$attrIndent}name=\"{$name}\"\n"
 			. "{$attrIndent}:label=\"t('{$label}')\"\n";
 
 		// Select y editor necesitan atributos propios; los otros 27

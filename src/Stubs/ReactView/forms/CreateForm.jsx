@@ -7,7 +7,6 @@ import {
 //import_more_components//
 } from 'innoboxrr-react-form-elements'
 
-import { buttonClass, inputClass } from '../../../theme'
 import { usePascalCaseModelNameStore } from '../store'
 
 export default function CreateForm({
@@ -66,7 +65,6 @@ export default function CreateForm({
 {/* Add more inputs */}
 
             <ButtonComponent
-                customClass={buttonClass}
                 disabled={disabled}
                 value={t('Create')} />
 
