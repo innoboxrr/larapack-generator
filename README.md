@@ -25,6 +25,14 @@ cp vendor/<vendor>/<package>/builder.example builder
 
 ## Requerimientos
 
+| Requisito | Versión |
+| --------- | ------- |
+| PHP | ^8.3 |
+| Laravel | ^13.0 |
+| Symfony Console | ^7.4 \|\| ^8.0 |
+| PHPUnit (dev) | ^12.0 \|\| ^13.0 |
+| Orchestra Testbench (dev) | ^11.0 |
+
 1. El paquete supone que el proyecto Laravel tiene por lo menos el modelo `App\Models\User`.
 2. Se recomienda tener configurado AWS S3 para la exportación de archivos. Si no, modifica el parámetro de configuración `export_disk`.
 3. Verifica que el modelo `App\Models\User` tenga el método `isAdmin()`. Si no tienes un sistema de roles, puedes implementar el siguiente método básico:
@@ -37,6 +45,26 @@ public function isAdmin()
 ```
 
 4. La estructura principal del paquete debe estar dentro del directorio `src` para proyectos de paquetes y `app` para aplicaciones Laravel.
+
+## Código generado (Laravel 13)
+
+Los stubs producen código alineado con las convenciones de Laravel 11+/13:
+
+- **Modelos**: los casts se declaran con el método `casts(): array`, y el observer,
+  la política y la factoría se enlazan con los atributos `#[ObservedBy]`,
+  `#[UsePolicy]` y `#[UseFactory]` en lugar de descubrirse por reflexión.
+- **Controladores**: implementan `Illuminate\Routing\Controllers\HasMiddleware`
+  con un método estático `middleware()`, en vez de `$this->middleware()` en el
+  constructor. El controlador base ya no extiende `Illuminate\Routing\Controller`.
+- **Rutas**: usan callables `[FooController::class, 'accion']`, por lo que el
+  `RouteServiceProvider` ya no declara un namespace de controladores.
+- **Proveedores**: extienden `Illuminate\Support\ServiceProvider` directamente;
+  ya no se usan las clases base de `Illuminate\Foundation\Support\Providers`.
+  El `EventServiceProvider` sólo descubre eventos y listeners.
+- **Migraciones, requests, políticas y recursos**: firmas con tipos de retorno
+  (`up(): void`, `rules(): array`, `toArray(Request $request): array`, …).
+- **`phpunit.xml`**: esquema de PHPUnit 12/13 con `cacheDirectory` y las
+  variables de entorno de Laravel 13 (`CACHE_STORE`, `APP_MAINTENANCE_DRIVER`).
 
 ## Comandos Disponibles
 
