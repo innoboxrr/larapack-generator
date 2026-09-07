@@ -3,6 +3,7 @@
 namespace Innoboxrr\LarapackGenerator\Tools\Migration;
 
 use Innoboxrr\LarapackGenerator\Tools\Tool;
+use Innoboxrr\LarapackGenerator\Support\MigrationTimestamp;
 use Innoboxrr\LarapackGenerator\Exceptions\MakerException;
 
 class MigrationTool extends Tool
@@ -25,27 +26,21 @@ class MigrationTool extends Tool
 
 	public function create(string $ModelName)
 	{
-		// Asegurarte de que la zona horaria sea la correcta
-		date_default_timezone_set('UTC');
 		$this->init($ModelName)
 			->setMigrationPath()
 			->setMigrationTemplatePath();
 
-		sleep(2);
-	
-		$migrationFile = $this->migrationPath . '/' . date('Y_m_d_His') . '_create_' . $this->plural_snake_case_model_name . '_table.php';
+		$migrationFile = $this->migrationPath . '/' . MigrationTimestamp::next() . '_create_' . $this->plural_snake_case_model_name . '_table.php';
 		// PENDIENTE: Cambiar esto para que en lugar de esta validación verifique si no existe esta misma clase en las migraciones de la aplicación
 		return $this->generate($this->migrationTemplatePath . '/MigrationTemplate.txt', $migrationFile);
 	}
 
 	public function remove(string $ModelName)
 	{
-		// Asegurarte de que la zona horaria sea la correcta
-		date_default_timezone_set('UTC');
 		$this->init($ModelName)
 			->setMigrationPath()
 			->setMigrationTemplatePath();
-		$migrationFilename = date('Y_m_d_His') . '_drop_' . $this->plural_snake_case_model_name . '_table.php';
+		$migrationFilename = MigrationTimestamp::next() . '_drop_' . $this->plural_snake_case_model_name . '_table.php';
 		$migrationFile = $this->migrationPath . '/' . $migrationFilename;
 		// Solo proceder en caso de los archivos no existan
 		if(!file_exists($migrationFile)) {

@@ -3,6 +3,7 @@
 namespace Innoboxrr\LarapackGenerator\Tools\PivotMigration;
 
 use Innoboxrr\LarapackGenerator\Tools\Tool;
+use Innoboxrr\LarapackGenerator\Support\MigrationTimestamp;
 use Innoboxrr\LarapackGenerator\Exceptions\MakerException;
 
 class PivotMigrationTool extends Tool
@@ -27,11 +28,9 @@ class PivotMigrationTool extends Tool
 	public function create(string $migrationName)
 	{
 		$this->migrationName = $migrationName;
-		// Asegurarte de que la zona horaria sea la correcta
-		date_default_timezone_set('UTC');
 		$this->setMigrationPath()
 			->setPivotMigrationTemplatePath();
-		$migrationFile = $this->migrationPath . '/' . date('Y_m_d_His') . '_create_' . $migrationName . '_table.php';
+		$migrationFile = $this->migrationPath . '/' . MigrationTimestamp::next() . '_create_' . $migrationName . '_table.php';
 		if(!file_exists($migrationFile)) {
 			$templateFile = $this->migrationTemplatePath . '/MigrationTemplate.txt';
 			if(copy($templateFile, $migrationFile)) {
@@ -55,7 +54,7 @@ class PivotMigrationTool extends Tool
 		date_default_timezone_set('UTC');
 		$this->setMigrationPath()
 			->setPivotMigrationTemplatePath();
-		$migrationFilename = date('Y_m_d_His') . '_drop_' . $migrationName . '_table.php';
+		$migrationFilename = MigrationTimestamp::next() . '_drop_' . $migrationName . '_table.php';
 		$migrationFile = $this->migrationPath . '/' . $migrationFilename;
 		// Solo proceder en caso de los archivos no existan
 		if(!file_exists($migrationFile)) {

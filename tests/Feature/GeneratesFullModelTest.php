@@ -96,6 +96,27 @@ final class GeneratesFullModelTest extends TestCase
         $this->assertStringContainsString('public function down(): void', $contents);
     }
 
+    /**
+     * El nombre del archivo decide en que orden corre `php artisan migrate`,
+     * y la tabla de metas tiene una clave foranea a la del modelo. Antes el
+     * orden se conseguia durmiendo dos segundos por migracion; ahora lo
+     * garantiza un contador monotonico.
+     */
+    public function test_la_migracion_de_metas_corre_despues_que_la_del_modelo(): void
+    {
+        $modelo = $this->project->glob('database/migrations/*_create_products_table.php');
+        $metas = $this->project->glob('database/migrations/*_create_product_metas_table.php');
+
+        $this->assertNotNull($modelo);
+        $this->assertNotNull($metas);
+
+        $this->assertLessThan(
+            basename($metas),
+            basename($modelo),
+            'La migracion de metas quedo antes que la del modelo al que apunta.'
+        );
+    }
+
     public function test_los_namespaces_se_sustituyen_por_el_del_proyecto(): void
     {
         $model = $this->project->read('src/Models/Product.php');

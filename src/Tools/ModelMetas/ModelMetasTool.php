@@ -3,6 +3,7 @@
 namespace Innoboxrr\LarapackGenerator\Tools\ModelMetas;
 
 use Innoboxrr\LarapackGenerator\Tools\Tool;
+use Innoboxrr\LarapackGenerator\Support\MigrationTimestamp;
 use Innoboxrr\LarapackGenerator\Exceptions\MakerException;
 
 class ModelMetasTool extends Tool
@@ -72,7 +73,9 @@ class ModelMetasTool extends Tool
 	{
 		date_default_timezone_set('UTC');
 		// Añade 3 segundos a la fecha actual
-		$timestamp = date('Y_m_d_His', strtotime('+3 seconds'));
+		// La migración de metas tiene que correr después de la del modelo,
+		// que ya se pidió antes: el contador lo garantiza sin sumar segundos.
+		$timestamp = MigrationTimestamp::next();
 		
 		$migrationMetasFile = $this->migrationMetasPath . '/' . $timestamp . '_create_' . $this->snake_case_model_name . '_metas_table.php';
 		
@@ -99,7 +102,7 @@ class ModelMetasTool extends Tool
 	private function removeMigrationMetas()
 	{
 		date_default_timezone_set('UTC');
-		$migrationFilename = date('Y_m_d_His') . '_drop_' . $this->snake_case_model_name . '_metas_table.php';
+		$migrationFilename = MigrationTimestamp::next() . '_drop_' . $this->snake_case_model_name . '_metas_table.php';
 		$migrationFile = $this->migrationMetasPath . '/' . $migrationFilename;
 		return $this->generate($this->migrationMetasTemplatePath . '/DropTemplate.txt', $migrationFile);
 	}
