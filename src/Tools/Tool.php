@@ -104,32 +104,56 @@ class Tool
 
 	// REEMPLAZAR NOMBRES
 
+		/**
+		 * Tokens que los stubs usan como marcador, con su valor para el
+		 * modelo actual.
+		 *
+		 * @return array<string, string>
+		 */
+		protected function replacementMap(): array
+		{
+			return [
+				// PLURALES
+				'pluralModelName' => $this->pluralModelName,
+				'plural_snake_case_model_name' => $this->plural_snake_case_model_name,
+				'pluralCamelCaseModelName' => $this->pluralCamelCaseModelName,
+				'PluralPascalCaseModelName' => $this->PluralPascalCaseModelName,
+				'pluralkebabcasemodelname' => $this->pluralkebabcasemodelname,
+				'pluralDotModelName' => $this->pluralDotModelName,
+				// SINGULARES
+				'snake_case_model_name' => $this->snake_case_model_name,
+				'camelCaseModelName' => $this->camelCaseModelName,
+				'PascalCaseModelName' => $this->PascalCaseModelName,
+				'kebabcasemodelname' => $this->kebabcasemodelname,
+				'dotModelName' => $this->dotModelName,
+				'ModelName' => $this->ModelName,
+				// NAMESPACE
+				'Namespace\\' => $this->namespace,
+				'dotNamespace' => $this->dotNamespace,
+				'kebabNamespace' => $this->kebabNamespace,
+				'namespaceWithoutSeparation' => $this->namespaceWithoutSeparation,
+				'lowerNamespace' => $this->lowerNamespace,
+				'slashLowerNamespace' => $this->slashLowerNamespace,
+			];
+		}
+
+		/**
+		 * Sustituye los tokens del stub en una sola pasada.
+		 *
+		 * strtr() con un array prueba las claves de mayor a menor longitud y
+		 * no vuelve a recorrer lo que ya ha sustituido. Eso hace innecesario
+		 * el orden manual que habia aqui (los plurales antes que los
+		 * singulares) e impide que un valor insertado vuelva a coincidir con
+		 * otro token.
+		 */
+		protected function replaceTokens(string $content): string
+		{
+			return strtr($content, $this->replacementMap());
+		}
+
 		protected function replaceData($file)
 		{
-			$content = file_get_contents($file);
-			// EL ORDEN DE REEMPLAZO SI IMPORTA
-			// PLURALES
-			$content = str_replace("pluralModelName", $this->pluralModelName, $content);
-        	$content = str_replace("plural_snake_case_model_name", $this->plural_snake_case_model_name, $content);
-        	$content = str_replace("pluralCamelCaseModelName", $this->pluralCamelCaseModelName, $content);
-        	$content = str_replace("PluralPascalCaseModelName", $this->PluralPascalCaseModelName, $content);
-        	$content = str_replace("pluralkebabcasemodelname", $this->pluralkebabcasemodelname, $content);
-        	$content = str_replace("pluralDotModelName", $this->pluralDotModelName, $content);
-        	// SINGULARES
-        	$content = str_replace("snake_case_model_name", $this->snake_case_model_name, $content);
-        	$content = str_replace("camelCaseModelName", $this->camelCaseModelName, $content);
-        	$content = str_replace("PascalCaseModelName", $this->PascalCaseModelName, $content);
-        	$content = str_replace("kebabcasemodelname", $this->kebabcasemodelname, $content);
-        	$content = str_replace("dotModelName", $this->dotModelName, $content);
-        	$content = str_replace("ModelName", $this->ModelName, $content);
-        	// NAMESPACE
-        	$content = str_replace("Namespace\\", $this->namespace, $content);
-        	$content = str_replace("dotNamespace", $this->dotNamespace, $content);
-        	$content = str_replace("kebabNamespace", $this->kebabNamespace, $content);
-        	$content = str_replace("namespaceWithoutSeparation", $this->namespaceWithoutSeparation, $content);
-        	$content = str_replace("lowerNamespace", $this->lowerNamespace, $content);
-        	$content = str_replace("slashLowerNamespace", $this->slashLowerNamespace, $content);
-        	file_put_contents($file, $content);
+			file_put_contents($file, $this->replaceTokens(file_get_contents($file)));
 		}
 
 		public function addProvidersToComposerJson(array $providers) 
