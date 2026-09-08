@@ -315,8 +315,9 @@ final class Ecosystem
      * Asi que hay tres casos y no dos:
      *
      *   exacta   dice justo la linea base
-     *   ancha    la admite y ademas admite cosas por debajo -> aviso, porque
-     *            eso que admite no se prueba en ningun sitio
+     *   ancha    la admite y ademas admite cosas por debajo -> aviso, no
+     *            error: es legitimo, pero la matriz de CI tiene que cubrir de
+     *            verdad eso que promete
      *   estrecha no la admite -> error, ahi si hay algo roto
      *
      * @return array<int, array<string, mixed>>
@@ -337,7 +338,7 @@ final class Ecosystem
         }
 
         if (! Intervals::isSubsetOf($declaredConstraint, $baselineConstraint)) {
-            return [$this->finding(self::WARNING, $check, $package, "`{$dependency}: {$declared}` admite versiones fuera de la línea base `{$baseline}`, que no se prueban.")];
+            return [$this->finding(self::WARNING, $check, $package, "`{$dependency}: {$declared}` admite versiones fuera de la línea base `{$baseline}`; la matriz de CI tiene que cubrirlas.")];
         }
 
         return [];
