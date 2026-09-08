@@ -253,8 +253,18 @@ final class Ecosystem
 
         // El bump automático etiquetaba en cada push sin correr un solo test:
         // por eso `traits` salió como 2.0.0 sin que nadie lo pidiera.
+        //
+        // Lo que importa no es que el archivo exista, sino de qué cuelga. Un
+        // bump que espera a `workflow_run` y comprueba la conclusión ya tiene
+        // puerta: es peor que el modelo de VERSION —la versión se adivina en
+        // vez de declararse— pero no publica a ciegas, y llamarlo error igual
+        // que al otro caso es como se deja de mirar la lista.
         if (is_file("{$dir}/bump-patch.yml")) {
-            $findings[] = $this->finding(self::ERROR, 'bump-patch', $name, 'Conserva bump-patch.yml, que etiqueta sin pasar por los tests.');
+            $bump = (string) file_get_contents("{$dir}/bump-patch.yml");
+
+            $findings[] = str_contains($bump, 'workflow_run')
+                ? $this->finding(self::WARNING, 'bump-patch', $name, 'Conserva bump-patch.yml: pasa por los tests, pero deriva la versión del último tag en vez de declararla.')
+                : $this->finding(self::ERROR, 'bump-patch', $name, 'Conserva bump-patch.yml colgado de `push`: etiqueta y publica sin esperar a los tests.');
         }
 
         return $findings;

@@ -200,6 +200,39 @@ final class AuditTest extends TestCase
         $this->assertHasCheck('bump-patch', $this->audit($package));
     }
 
+    /**
+     * Un bump que espera a los tests no es el mismo caso.
+     *
+     * `traits`, `search-surge` y `rvoe-manager` ya lo tienen colgado de
+     * `workflow_run` con la conclusion comprobada, asi que no publican a
+     * ciegas. Sigue siendo peor que declarar la version en un archivo —esto la
+     * adivina del ultimo tag—, pero llamarlo error igual que al que publica sin
+     * mirar es como se acaba ignorando la lista entera.
+     */
+    public function test_un_bump_que_espera_a_los_tests_es_un_aviso_y_no_un_error(): void
+    {
+        $package = $this->package('bump-con-puerta', [
+            'name' => 'innoboxrr/bump-con-puerta',
+            'description' => 'x',
+            'license' => 'MIT',
+            'autoload' => ['psr-4' => ['X\\' => 'src/']],
+            'require' => ['php' => '^8.3'],
+        ]);
+
+        $this->withTests($package);
+        $this->withWorkflows($package, ['tests.yml', 'release.yml']);
+
+        file_put_contents(
+            "{$package}/.github/workflows/bump-patch.yml",
+            "name: Bump\non:\n    workflow_run:\n        workflows: ['Tests']\n        types: [completed]\n"
+        );
+
+        $result = $this->audit($package);
+
+        $this->assertSame(0, $result['errors']);
+        $this->assertHasCheck('bump-patch', $result);
+    }
+
     public function test_detecta_la_ausencia_de_tests(): void
     {
         $package = $this->package('sin-tests', [
