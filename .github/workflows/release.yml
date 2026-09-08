@@ -11,4 +11,11 @@ on:
 
 jobs:
     release:
+        # Explicito y no heredado: el reutilizable necesita `contents: write`
+        # para empujar el tag, y un repositorio cuyo permiso por defecto sea de
+        # solo lectura no puede concederselo. Eso no falla el job: falla el
+        # arranque del workflow entero, sin log y sin explicacion.
+        permissions:
+            contents: write
+
         uses: innoboxrr/.github/.github/workflows/php-release.yml@main
