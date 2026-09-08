@@ -27,12 +27,12 @@
         "zustand": "^5.0.0"
     },
     "dependencies": {
-        "innoboxrr-form-core": "^1.0.0",
+        "innoboxrr-form-core": "^2.3.0",
         "innoboxrr-http-request": "^2.0.0",
         "innoboxrr-i18n": "^1.1.0",
         "innoboxrr-js-validator": "^2.0.0",
-        "innoboxrr-react-datatable": "^1.0.0",
-        "innoboxrr-react-form-elements": "^3.0.0",
+        "innoboxrr-react-datatable": "^2.3.0",
+        "innoboxrr-react-form-elements": "^3.3.0",
         "innoboxrr-route-resolver": "^2.0.0"
     },
     "devDependencies": {

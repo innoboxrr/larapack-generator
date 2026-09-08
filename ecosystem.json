@@ -29,6 +29,18 @@
         "innoboxrr/traits": "^2.0",
         "innoboxrr/search-surge": "^3.0"
     },
+    "$comment-internalNpm": "Las versiones que el modulo generado declara. Viven aqui para que no se desfasen en silencio dentro de los stubs: hay un test que compara ambos.",
+    "internalNpm": {
+        "innoboxrr-form-core": "^2.3.0",
+        "innoboxrr-form-elements": "^6.3.0",
+        "innoboxrr-react-form-elements": "^3.3.0",
+        "innoboxrr-vue-datatable": "^2.3.0",
+        "innoboxrr-react-datatable": "^2.3.0",
+        "innoboxrr-http-request": "^2.0.0",
+        "innoboxrr-i18n": "^1.1.0",
+        "innoboxrr-js-validator": "^2.0.0",
+        "innoboxrr-route-resolver": "^2.0.0"
+    },
     "required": {
         "composer": ["name", "description", "license", "autoload"],
         "npm": ["name", "version", "license", "type", "exports", "files", "sideEffects"]
