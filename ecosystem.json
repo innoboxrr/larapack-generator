@@ -25,7 +25,7 @@
         "react": "^19.0.0"
     },
     "internal": {
-        "innoboxrr/larapack-generator": "^6.0",
+        "innoboxrr/larapack-generator": "^7.0",
         "innoboxrr/traits": "^2.0",
         "innoboxrr/search-surge": "^3.0"
     },

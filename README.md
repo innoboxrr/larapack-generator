@@ -166,6 +166,7 @@ larapack:import                  - Genera varios modelos desde un laraimport.
 larapack:validate                - Valida un laraimport sin generar nada.
 larapack:schema                  - Emite el esquema del laraimport.
 larapack:verify                  - Busca desviaciones respecto al manifiesto.
+larapack:audit                   - Comprueba la linea base del ecosistema.
 larapack:skill                   - Instala las instrucciones para un agente.
 
 larapack:remove-full-model       - Elimina todas las entidades de un modelo.
@@ -231,6 +232,26 @@ corregir en lugar de raspar texto:
 No intenta adivinar si una clase "tiene demasiada lógica": esa clase de
 comprobación produce falsos positivos y acaba desactivándose. Sólo verifica lo
 que es determinista.
+
+## La línea base del ecosistema
+
+`larapack:verify` mira un paquete contra su propio manifiesto.
+`larapack:audit` mira un paquete contra las versiones que rigen a todos:
+
+```
+php builder larapack:audit                    # el paquete actual
+php builder larapack:audit packages --all     # todos los de un directorio
+php builder larapack:audit --format=json --strict
+```
+
+Esas versiones viven en un solo archivo, `ecosystem.json`, y no en veintitantos
+`composer.json` que nunca coinciden: PHP, `illuminate/*`, `orchestra/testbench`,
+las dependencias internas de Composer y las de npm que el módulo generado pide.
+El audit comprueba además que el paquete tenga tests de verdad y los workflows
+de publicación, y sale con código distinto de cero si algo no cumple.
+
+Un paquete que no pase el audit no debería publicarse; por eso el `tests.yml`
+del ecosistema lo ejecuta.
 
 ## Ejemplo de laraimport.json
 
@@ -403,12 +424,49 @@ Lo que cambia es solo la capa de presentacion:
 | Formularios | `innoboxrr-form-elements` | `innoboxrr-react-form-elements` |
 | Tabla | `innoboxrr-vue-datatable` | `innoboxrr-react-datatable` |
 
-Los dos paquetes de formularios exportan **los mismos 29 nombres**, asi que el
+Los dos paquetes de formularios exportan **los mismos 30 nombres**, asi que el
 `form_component` del `laraimport` vale igual para los dos. Cada paquete tiene
 un test que falla si uno se adelanta al otro.
 
 El host descubre los modelos por `import.meta.glob`, asi que generar uno nuevo
 no obliga a enumerarlo en ningun sitio.
+
+### El aspecto
+
+El modulo generado **no necesita ningun framework de CSS**. No hay que cargar
+UIkit, ni Tailwind, ni Font Awesome: todo sale de `innoboxrr-form-core`, y
+`resources/<ui>/src/theme.js` lo importa una vez.
+
+```js
+import 'innoboxrr-form-core/styles'
+```
+
+Colores, formas y densidad son variables CSS, asi que cambiar el aspecto de
+todo el paquete no obliga a tocar un solo componente:
+
+```css
+:root {
+    --fe-primary: #7c3aed;
+    --fe-radius: 10px;
+    --fe-density: 0.875;   /* interfaz mas compacta */
+}
+```
+
+El modo oscuro responde a la preferencia del sistema y a un `data-theme="dark"`
+en la raiz. `setTheme` queda para el otro caso: apuntar un token a las clases de
+otro sistema visual, si la aplicacion ya tiene el suyo.
+
+Los iconos se piden **por nombre semantico** —`plus`, `edit`, `delete`, `show`,
+`actions`— y el mapa decide de que coleccion salen. Son mas de 200.000 iconos de
+mas de 150 colecciones bajo un solo esquema:
+
+```js
+setIcons({ plus: 'lucide:plus', delete: 'lucide:trash-2' })
+```
+
+Un nombre de coleccion entero vale donde haga falta uno suelto
+(`<IconComponent name="mdi:home" />`), y un `Resource` de Laravel emite tambien
+el nombre semantico: `'icon' => 'show'`, no `'fa-eye'`.
 
 ### El helper `route`
 
