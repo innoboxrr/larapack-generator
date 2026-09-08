@@ -53,7 +53,7 @@ class PascalCaseModelNameResource extends JsonResource
             'id' => 'view',
             'name' => 'Ver',
             'callback' => 'viewPascalCaseModelName',
-            'icon' => 'fa-eye',
+            'icon' => 'show',
             'route' => true,
             'policy' => false,
             'params' => [
@@ -77,7 +77,7 @@ class PascalCaseModelNameResource extends JsonResource
             'id' => 'update',
             'name' => 'Editar',
             'callback' => 'editPascalCaseModelName',
-            'icon' => 'fa-edit',
+            'icon' => 'edit',
             'route' => true,
             'policy' => false,
             'params' => [
@@ -101,7 +101,7 @@ class PascalCaseModelNameResource extends JsonResource
             'id' => 'delete',
             'name' => 'Eliminar',
             'callback' => 'deleteModel',
-            'icon' => 'fa-trash-alt',
+            'icon' => 'delete',
             'route' => false,
             'policy' => false,
             'params' => [

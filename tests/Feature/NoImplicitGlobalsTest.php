@@ -204,7 +204,10 @@ final class NoImplicitGlobalsTest extends TestCase
         );
 
         foreach ($iterator as $file) {
-            if (in_array($file->getExtension(), ['vue', 'jsx'], true)) {
+            // .txt entra a proposito: las plantillas de PHP tambien emiten
+            // nombres de icono, y mirar solo .vue y .jsx dejo pasar que el
+            // Resource siguiera emitiendo 'fa-eye' despues de la migracion.
+            if (in_array($file->getExtension(), ['vue', 'jsx', 'js', 'txt'], true)) {
                 $files[] = $file->getPathname();
             }
         }
