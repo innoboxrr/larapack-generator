@@ -6,6 +6,7 @@
     "minimum-stability": "stable",
     "prefer-stable": true,
     "require": {
+        "composer/semver": "^3.0",
         "doctrine/inflector": "^2.0",
         "illuminate/support": "^13.0",
         "innoboxrr/search-surge": "^3.0",

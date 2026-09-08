@@ -2,7 +2,10 @@
 
 namespace Innoboxrr\LarapackGenerator\Support;
 
+use Composer\Semver\Intervals;
+use Composer\Semver\VersionParser;
 use RuntimeException;
+use UnexpectedValueException;
 
 /**
  * Las versiones bendecidas del ecosistema, y la comprobación de que un
@@ -121,8 +124,8 @@ final class Ecosystem
         if ($expectedPhp !== null) {
             if (! isset($require['php'])) {
                 $findings[] = $this->finding(self::ERROR, 'php-missing', $name, "No declara `php`. Debe ser `{$expectedPhp}`.");
-            } elseif ($require['php'] !== $expectedPhp) {
-                $findings[] = $this->finding(self::ERROR, 'php-version', $name, "Declara `php: {$require['php']}` y la línea base es `{$expectedPhp}`.");
+            } else {
+                $findings = [...$findings, ...$this->auditConstraint('php-version', $name, 'php', $require['php'], $expectedPhp)];
             }
         }
 
@@ -138,9 +141,7 @@ final class Ecosystem
             }
 
             foreach ($illuminate as $package => $constraint) {
-                if ($constraint !== $expectedIlluminate) {
-                    $findings[] = $this->finding(self::ERROR, 'illuminate-version', $name, "`{$package}: {$constraint}` y la línea base es `{$expectedIlluminate}`.");
-                }
+                $findings = [...$findings, ...$this->auditConstraint('illuminate-version', $name, $package, $constraint, $expectedIlluminate)];
             }
         }
 
@@ -148,17 +149,17 @@ final class Ecosystem
         // ^8.0 a ^11.0 en el árbol, es decir Laravel 9 a 13.
         $expectedTestbench = $rules['laravel']['testbench'] ?? null;
 
-        if ($expectedTestbench !== null
-            && isset($all['orchestra/testbench'])
-            && $all['orchestra/testbench'] !== $expectedTestbench) {
-            $findings[] = $this->finding(self::ERROR, 'testbench-version', $name, "`orchestra/testbench: {$all['orchestra/testbench']}` y la línea base es `{$expectedTestbench}`.");
+        if ($expectedTestbench !== null && isset($all['orchestra/testbench'])) {
+            $findings = [...$findings, ...$this->auditConstraint(
+                'testbench-version', $name, 'orchestra/testbench', $all['orchestra/testbench'], $expectedTestbench
+            )];
         }
 
         // Dependencias internas: es lo que mantiene al ecosistema hablando
         // consigo mismo. Un `larapack-generator: ^5.0` impide instalar el 6.
         foreach ($rules['internal'] ?? [] as $package => $expected) {
-            if (isset($all[$package]) && $all[$package] !== $expected) {
-                $findings[] = $this->finding(self::ERROR, 'internal-version', $name, "`{$package}: {$all[$package]}` y la línea base es `{$expected}`.");
+            if (isset($all[$package])) {
+                $findings = [...$findings, ...$this->auditConstraint('internal-version', $name, $package, $all[$package], $expected)];
             }
         }
 
@@ -204,8 +205,8 @@ final class Ecosystem
         );
 
         foreach ($rules['js'] ?? [] as $package => $expected) {
-            if (isset($deps[$package]) && $deps[$package] !== $expected) {
-                $findings[] = $this->finding(self::ERROR, 'js-version', $name, "`{$package}: {$deps[$package]}` y la línea base es `{$expected}`.");
+            if (isset($deps[$package])) {
+                $findings = [...$findings, ...$this->auditConstraint('js-version', $name, $package, $deps[$package], $expected)];
             }
         }
 
@@ -289,6 +290,47 @@ final class Ecosystem
         $decoded = json_decode((string) file_get_contents($path), true);
 
         return is_array($decoded) ? $decoded : null;
+    }
+
+    /**
+     * Compara una restriccion declarada contra la de la linea base.
+     *
+     * Lo que importa no es que el texto coincida, sino que la restriccion
+     * *admita* la linea base. Una libreria que declara `^12.0 || ^13.0` esta
+     * haciendo lo correcto: dice contra que puede funcionar, no contra que se
+     * construye, y estrecharla a `^13.0` solo le quita a un consumidor de
+     * Laravel 12 la posibilidad de instalarla. Es el mismo razonamiento que ya
+     * deja fuera a las peerDependencies del lado npm.
+     *
+     * Asi que hay tres casos y no dos:
+     *
+     *   exacta   dice justo la linea base
+     *   ancha    la admite y ademas admite cosas por debajo -> aviso, porque
+     *            eso que admite no se prueba en ningun sitio
+     *   estrecha no la admite -> error, ahi si hay algo roto
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function auditConstraint(string $check, string $package, string $dependency, string $declared, string $baseline): array
+    {
+        $parser = new VersionParser();
+
+        try {
+            $declaredConstraint = $parser->parseConstraints($declared);
+            $baselineConstraint = $parser->parseConstraints($baseline);
+        } catch (UnexpectedValueException) {
+            return [$this->finding(self::WARNING, $check, $package, "`{$dependency}: {$declared}` no es una restricción que se pueda leer.")];
+        }
+
+        if (! Intervals::isSubsetOf($baselineConstraint, $declaredConstraint)) {
+            return [$this->finding(self::ERROR, $check, $package, "`{$dependency}: {$declared}` no admite la línea base `{$baseline}`.")];
+        }
+
+        if (! Intervals::isSubsetOf($declaredConstraint, $baselineConstraint)) {
+            return [$this->finding(self::WARNING, $check, $package, "`{$dependency}: {$declared}` admite versiones fuera de la línea base `{$baseline}`, que no se prueban.")];
+        }
+
+        return [];
     }
 
     /**

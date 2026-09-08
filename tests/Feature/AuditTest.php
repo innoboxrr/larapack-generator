@@ -95,6 +95,77 @@ final class AuditTest extends TestCase
         $this->assertHasCheck('testbench-version', $findings);
     }
 
+    /**
+     * Una restriccion mas ancha que la linea base no es un defecto.
+     *
+     * `illuminate/support: ^12.0 || ^13.0` dice contra que puede funcionar la
+     * libreria, no contra que se construye. Estrecharla a `^13.0` no arregla
+     * nada y le quita a un consumidor de Laravel 12 la posibilidad de
+     * instalarla. Es el mismo criterio que ya deja fuera a las
+     * peerDependencies del lado npm.
+     */
+    public function test_una_restriccion_mas_ancha_que_la_linea_base_es_un_aviso_y_no_un_error(): void
+    {
+        $package = $this->package('mas-ancho', [
+            'name' => 'innoboxrr/mas-ancho',
+            'description' => 'x',
+            'license' => 'MIT',
+            'autoload' => ['psr-4' => ['X\\' => 'src/']],
+            'require' => ['php' => '^8.3', 'illuminate/support' => '^12.0 || ^13.0'],
+            'require-dev' => ['orchestra/testbench' => '^10.0 || ^11.0'],
+        ]);
+
+        $this->withTests($package);
+        $this->withWorkflows($package, ['tests.yml', 'release.yml']);
+
+        $result = $this->audit($package);
+
+        $this->assertSame(0, $result['errors'], 'Una restricción más ancha no debería ser un error.');
+        $this->assertGreaterThan(0, $result['warnings'], 'Pero sí un aviso: lo que admite de más no se prueba.');
+    }
+
+    public function test_una_restriccion_que_no_admite_la_linea_base_sigue_siendo_un_error(): void
+    {
+        $package = $this->package('no-admite', [
+            'name' => 'innoboxrr/no-admite',
+            'description' => 'x',
+            'license' => 'MIT',
+            'autoload' => ['psr-4' => ['X\\' => 'src/']],
+            // ^12.0 se queda corto: con la linea base en ^13.0, este paquete
+            // no se puede instalar junto al resto del ecosistema.
+            'require' => ['php' => '^8.3', 'illuminate/support' => '^12.0'],
+        ]);
+
+        $this->withTests($package);
+        $this->withWorkflows($package, ['tests.yml', 'release.yml']);
+
+        $this->assertHasCheck('illuminate-version', $this->audit($package));
+    }
+
+    /**
+     * La restriccion exacta es el caso silencioso: ni error ni aviso.
+     */
+    public function test_la_restriccion_exacta_no_produce_ningun_hallazgo(): void
+    {
+        $package = $this->package('exacto', [
+            'name' => 'innoboxrr/exacto',
+            'description' => 'x',
+            'license' => 'MIT',
+            'autoload' => ['psr-4' => ['X\\' => 'src/']],
+            'require' => ['php' => '^8.3', 'illuminate/support' => '^13.0'],
+            'require-dev' => ['orchestra/testbench' => '^11.0'],
+        ]);
+
+        $this->withTests($package);
+        $this->withWorkflows($package, ['tests.yml', 'release.yml']);
+
+        $result = $this->audit($package);
+
+        $this->assertSame(0, $result['errors']);
+        $this->assertNotHasCheck('illuminate-version', $result);
+        $this->assertNotHasCheck('testbench-version', $result);
+    }
+
     public function test_detecta_una_dependencia_interna_desfasada(): void
     {
         // El caso real: 19 paquetes piden `larapack-generator: ^5.0` cuando
