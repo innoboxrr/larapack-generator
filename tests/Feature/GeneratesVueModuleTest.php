@@ -182,12 +182,20 @@ final class GeneratesVueModuleTest extends TestCase
         }
     }
 
+    /**
+     * El tema es el unico sitio del modulo donde se declara el aspecto: la
+     * hoja de estilos, las clases y el mapa de iconos. Si alguna de las tres
+     * cosas se cae, el modulo se genera igual y el fallo aparece en el
+     * navegador.
+     */
     public function test_el_tema_del_paquete_se_declara_una_vez(): void
     {
         $theme = $this->project->read('resources/vue/src/theme.js');
 
-        $this->assertStringContainsString("import { setTheme } from 'innoboxrr-form-core'", $theme);
+        $this->assertStringContainsString("import 'innoboxrr-form-core/styles'", $theme);
+        $this->assertStringContainsString("from 'innoboxrr-form-core'", $theme);
         $this->assertStringContainsString('setTheme({', $theme);
+        $this->assertStringContainsString('setIcons({', $theme);
     }
 
     /**
