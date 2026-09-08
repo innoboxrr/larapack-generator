@@ -271,7 +271,7 @@ Lo que cambia es sólo la capa de presentación:
 | Formularios | `innoboxrr-form-elements` | `innoboxrr-react-form-elements` |
 | Tabla | `innoboxrr-vue-datatable` | `innoboxrr-react-datatable` |
 
-Los dos paquetes de formularios exportan **los mismos 29 nombres**, así que el
+Los dos paquetes de formularios exportan **los mismos 30 nombres**, así que el
 `form_component` del `laraimport` vale igual para ambos. Hay un test en cada
 paquete que falla si uno se adelanta al otro.
 
@@ -281,19 +281,60 @@ que el agregador del módulo recorre el árbol de rutas y registra los nombres e
 `innoboxrr-react-datatable`. Para navegar desde una vista React usa
 `buildPath('AdminShowPost', { id })`, nunca una ruta escrita a mano.
 
-**El aspecto** sale de un tema, no de clases escritas en cada formulario. Cada
-control lee su token —`input`, `select`, `textarea`, `checkbox`, `radio`,
-`button`—, así que **un formulario generado no lleva ninguna clase CSS**. Para
-cambiar el aspecto de todo el paquete, edita el `setTheme` de
-`resources/<ui>/src/theme.js`:
+**El aspecto no depende de ningún framework de CSS.** El módulo generado no
+necesita UIkit, ni Tailwind, ni Font Awesome: todo sale de
+`innoboxrr-form-core`, y basta con importarlo una vez —el `theme.js` del
+módulo ya lo hace:
+
+```js
+import 'innoboxrr-form-core/styles'
+```
+
+**No añadas clases de ningún framework a un archivo generado.** Si escribes
+`uk-input`, `fa-plus` o `bg-blue-600` en un stub o en una vista generada, has
+vuelto al problema que este sistema resuelve: esas clases venían de paquetes
+que nadie declaraba, así que el módulo sólo se veía bien dentro de la
+aplicación que ya los trajera cargados. Hay tests que fallan si reaparecen.
+
+**Para cambiar colores y formas, redefine variables CSS**, no clases:
+
+```css
+:root {
+    --fe-primary: #7c3aed;
+    --fe-radius: 10px;
+    --fe-density: 0.875;   /* interfaz más compacta */
+}
+```
+
+El modo oscuro ya está resuelto: responde a la preferencia del sistema y a un
+`data-theme="dark"` en la raíz.
+
+**`setTheme` es para otra cosa**: apuntar un token a las clases de otro sistema
+visual, cuando la aplicación ya tiene el suyo.
 
 ```js
 setTheme({ input: 'form-control', button: 'btn btn-primary' })
 ```
 
-Es el mismo tema (`innoboxrr-form-core`) para Vue y para React, así que los dos
-módulos se ven igual. **No añadas `customClass` a un input generado**: eso es
-para el caso puntual, y si lo usas en todos has vuelto al problema.
+Cada control lee su token, así que **un formulario generado no lleva ninguna
+clase CSS**. **No añadas `customClass` a un input generado**: eso es para el
+caso puntual, y si lo usas en todos has vuelto al problema.
+
+**Los iconos se piden por nombre semántico**, nunca por clase. `plus`,
+`download`, `edit`, `delete`, `show`, `actions`, `help`… El mapa decide de qué
+colección salen, y son más de 200.000 iconos de más de 150 colecciones:
+
+```js
+setIcons({ plus: 'lucide:plus', delete: 'lucide:trash-2' })
+```
+
+Donde haga falta uno suelto se pasa el nombre de la colección entero
+—`<IconComponent name="mdi:home" />`— sin darlo de alta. Si emites un icono
+desde un Resource de Laravel, usa también el nombre semántico: `'icon' =>
+'show'`, no `'fa-eye'`.
+
+Es el mismo tema y el mismo mapa (`innoboxrr-form-core`) para Vue y para React,
+así que los dos módulos se ven igual.
 
 ## El contrato front ↔ back
 
