@@ -59,7 +59,7 @@ export const crudActions = () => [
         id: 'create',
         name: t('Create'),
         callback: null,
-        icon: 'fa-plus',
+        icon: 'plus',
         route: true,
         policy: false,
         params: {
@@ -73,7 +73,7 @@ export const crudActions = () => [
         id: 'export',
         name: t('Export'),
         callback: 'exportModel',
-        icon: 'fa-download',
+        icon: 'download',
         route: false,
         policy: false,
         params: {},

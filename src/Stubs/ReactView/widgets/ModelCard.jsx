@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom'
 import { buildPath } from 'innoboxrr-react-datatable'
 import t from 'innoboxrr-i18n'
 
+import { IconComponent } from 'innoboxrr-react-form-elements'
+
 import ActionMenu from '../../../components/ActionMenu.jsx'
 import { usePascalCaseModelNameStore } from '../store'
 
@@ -43,7 +45,7 @@ export default function ModelCard({ camelCaseModelName }) {
             <div className="flex flex-col items-center px-6 pb-8">
 
                 <div className="w-28 h-28 mb-4 rounded-full shadow-md flex items-center justify-center bg-gray-200 dark:bg-gray-600 text-gray-400 text-2xl">
-                    <i className="fas fa-box"></i>
+                    <IconComponent name="box" size={32} />
                 </div>
 
                 <h5 className="text-lg font-semibold text-gray-900 dark:text-white text-center">

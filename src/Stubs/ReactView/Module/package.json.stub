@@ -32,7 +32,7 @@
         "innoboxrr-i18n": "^1.1.0",
         "innoboxrr-js-validator": "^2.0.0",
         "innoboxrr-react-datatable": "^1.0.0",
-        "innoboxrr-react-form-elements": "^2.0.0",
+        "innoboxrr-react-form-elements": "^3.0.0",
         "innoboxrr-route-resolver": "^2.0.0"
     },
     "devDependencies": {

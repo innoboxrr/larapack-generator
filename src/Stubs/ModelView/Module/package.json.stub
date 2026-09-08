@@ -28,7 +28,7 @@
     },
     "dependencies": {
         "innoboxrr-form-core": "^1.0.0",
-        "innoboxrr-form-elements": "^5.0.0",
+        "innoboxrr-form-elements": "^6.0.0",
         "innoboxrr-http-request": "^2.0.0",
         "innoboxrr-i18n": "^1.1.0",
         "innoboxrr-js-validator": "^2.0.0",

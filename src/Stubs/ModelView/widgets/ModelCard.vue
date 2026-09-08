@@ -9,7 +9,7 @@
         <div class="flex flex-col items-center px-6 pb-8">
 
             <div class="w-28 h-28 mb-4 rounded-full shadow-md flex items-center justify-center bg-gray-200 dark:bg-gray-600 text-gray-400 text-2xl">
-                <i class="fas fa-box"></i>
+                <IconComponent name="box" :size="32" />
             </div>
 
             <h5 class="text-lg font-semibold text-gray-900 dark:text-white text-center">
@@ -27,6 +27,8 @@
     import { computed } from 'vue'
     import { useRouter } from 'vue-router'
     import t from 'innoboxrr-i18n'
+
+    import { IconComponent } from 'innoboxrr-form-elements'
 
     import ActionMenu from '../../../components/ActionMenu.vue'
     import { usePascalCaseModelNameStore } from '../store'

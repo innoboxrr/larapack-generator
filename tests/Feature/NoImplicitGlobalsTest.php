@@ -84,6 +84,41 @@ final class NoImplicitGlobalsTest extends TestCase
         $this->assertSame([], $offenders, implode("\n", $offenders));
     }
 
+    public function test_ningun_stub_usa_clases_de_font_awesome(): void
+    {
+        // Font Awesome tampoco lo declaraba ningún package.json: llegaba
+        // porque `uikit-custom-icons` lo exigía y la app lo cargaba por su
+        // cuenta. Los iconos salen ahora del mapa de innoboxrr-form-core, que
+        // resuelve un nombre semántico contra la colección que elija el
+        // proyecto.
+        $offenders = [];
+
+        foreach ($this->stubFiles() as $file) {
+            $contents = $this->withoutComments((string) file_get_contents($file));
+
+            if (preg_match_all('/\bfa[srlbd]?-[a-z0-9-]+/', $contents, $matches)) {
+                $offenders[] = basename(dirname($file)) . '/' . basename($file)
+                    . ': ' . implode(', ', array_unique($matches[0]));
+            }
+        }
+
+        $this->assertSame([], $offenders, implode("\n", $offenders));
+    }
+
+    public function test_los_iconos_se_piden_por_nombre_semantico(): void
+    {
+        // El contrato del modelo es el mismo archivo para Vue y para React, y
+        // es donde se declaran las acciones del CRUD.
+        $contract = $this->read('resources/vue/src/models/post/index.js');
+
+        $this->assertStringContainsString("icon: 'plus'", $contract);
+        $this->assertStringContainsString("icon: 'download'", $contract);
+
+        // Los de SweetAlert no son nuestros: 'warning' es su propio
+        // vocabulario y tiene que seguir llegándole tal cual.
+        $this->assertStringContainsString("icon: 'warning'", $contract);
+    }
+
     public function test_las_dos_ramas_generan_los_componentes_compartidos(): void
     {
         foreach ([
