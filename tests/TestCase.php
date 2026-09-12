@@ -2,6 +2,7 @@
 
 namespace Innoboxrr\LarapackGenerator\Tests;
 
+use Innoboxrr\LarapackGenerator\Support\Declaration;
 use Innoboxrr\LarapackGenerator\Support\Generation;
 use Innoboxrr\LarapackGenerator\Support\MigrationTimestamp;
 use Innoboxrr\LarapackGenerator\Support\ProjectRoot;
@@ -21,6 +22,7 @@ abstract class TestCase extends BaseTestCase
     {
         ProjectRoot::set(null);
         Generation::reset();
+        Declaration::reset();
         MigrationTimestamp::reset();
 
         if (isset($this->project)) {

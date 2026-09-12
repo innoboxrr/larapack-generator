@@ -7,8 +7,10 @@ use Doctrine\Inflector\Inflector;
 use Doctrine\Inflector\NoopWordInflector;
 use Illuminate\Support\Pluralizer;
 use Innoboxrr\LarapackGenerator\Exceptions\MakerException;
+use Innoboxrr\LarapackGenerator\Support\Declaration;
 use Innoboxrr\LarapackGenerator\Support\Generation;
 use Innoboxrr\LarapackGenerator\Support\Manifest;
+use Innoboxrr\LarapackGenerator\Support\StubBlocks;
 
 class Tool
 {	
@@ -237,6 +239,10 @@ class Tool
 				throw MakerException::copyFailed($stub, $destination);
 			}
 
+			// Antes que los tokens: los marcadores tienen que desaparecer
+			// del archivo antes de que nada mas lo lea.
+			$this->applyBlocks($destination);
+
 			$this->replaceData($destination);
 
 			if (self::isFromJsonImporter()) {
@@ -253,6 +259,38 @@ class Tool
 		protected function manifest(): Manifest
 		{
 			return $this->manifest ??= new Manifest();
+		}
+
+	// FORMA DECLARADA
+
+		/**
+		 * Si el modelo que se esta generando tiene la accion. Un modelo del que
+		 * no se ha declarado nada las tiene todas.
+		 */
+		protected function declares(string $action): bool
+		{
+			return Declaration::has($this->ModelName, $action);
+		}
+
+		/**
+		 * Resuelve los bloques @larapack:if del archivo recien copiado.
+		 *
+		 * Se aplica a todo lo que pasa por generate(), venga o no del
+		 * importador: un marcador que llegara al proyecto seria basura en el
+		 * codigo de alguien.
+		 */
+		protected function applyBlocks(string $file): void
+		{
+			$content = file_get_contents($file);
+
+			if (! str_contains($content, '@larapack:')) {
+				return;
+			}
+
+			file_put_contents($file, StubBlocks::apply(
+				$content,
+				fn (string $condition): bool => Declaration::holds($this->ModelName, $condition)
+			));
 		}
 
 	// TOOLS
