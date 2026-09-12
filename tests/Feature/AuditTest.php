@@ -312,6 +312,32 @@ final class AuditTest extends TestCase
         $this->assertSame(0, $result['errors']);
     }
 
+    /**
+     * Composer descarta cada tag cuyo composer.json declara otra version, asi
+     * que un `version` fijo deja invisible cualquier publicacion posterior.
+     * Paso de verdad: seguropro/core se etiqueto 2.0.0 diciendo 1.0.5.
+     */
+    public function test_detecta_el_composer_json_que_fija_su_version(): void
+    {
+        $package = $this->package('con-version', [
+            'name' => 'innoboxrr/con-version',
+            'description' => 'x',
+            'version' => '1.0.5',
+            'license' => 'MIT',
+            'autoload' => ['psr-4' => ['X\\' => 'src/']],
+            'require' => ['php' => '^8.3'],
+        ]);
+
+        $this->withTests($package);
+        $this->withWorkflows($package, ['tests.yml', 'release.yml']);
+
+        $result = $this->audit($package);
+
+        $this->assertHasCheck('composer-version', $result);
+        $this->assertSame(1, $result['errors']);
+        $this->assertStringContainsString('1.0.5', json_encode($result['findings']));
+    }
+
     public function test_detecta_la_ausencia_de_tests(): void
     {
         $package = $this->package('sin-tests', [

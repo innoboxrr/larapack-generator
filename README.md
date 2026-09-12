@@ -256,7 +256,9 @@ Esas versiones viven en un solo archivo, `ecosystem.json`, y no en veintitantos
 `composer.json` que nunca coinciden: PHP, `illuminate/*`, `orchestra/testbench`,
 las dependencias internas de Composer y las de npm que el módulo generado pide.
 El audit comprueba además que el paquete tenga tests de verdad y los workflows
-de publicación, y sale con código distinto de cero si algo no cumple.
+de publicación, y que `composer.json` no fije su propia `version`: Composer
+descarta cada tag que no coincide con ella, así que una publicación nueva
+quedaría invisible. Sale con código distinto de cero si algo no cumple.
 
 Un paquete que no pase el audit no debería publicarse; por eso el `tests.yml`
 del ecosistema lo ejecuta.

@@ -117,6 +117,14 @@ final class Ecosystem
             }
         }
 
+        // Un `version` fijo hace que Composer descarte cada tag que no coincide
+        // con él: seguropro/core se etiquetó 2.0.0 diciendo 1.0.5 y ninguna
+        // aplicación podía pedir la línea nueva. La versión la da el tag.
+        if (isset($composer['version'])) {
+            $version = is_scalar($composer['version']) ? (string) $composer['version'] : '...';
+            $findings[] = $this->finding(self::ERROR, 'composer-version', $name, "composer.json fija `\"version\": \"{$version}\"`. Composer descarta los tags que no coinciden con ella; quítala y deja que la versión salga del tag.");
+        }
+
         // La restricción de PHP. Es la más importante: sin ella Composer da
         // por bueno cualquier intérprete.
         $expectedPhp = $rules['php']['require'] ?? null;
