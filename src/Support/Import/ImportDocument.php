@@ -54,22 +54,34 @@ final class ImportDocument
      */
     public static function fromArray(array $raw): array
     {
+        $exclusive = self::exclusiveRoutes($raw);
         $structural = Schema::validate($raw);
 
-        if ($structural !== []) {
-            return ['document' => null, 'errors' => array_map(
-                fn (array $error): array => [
-                    'level' => SemanticValidator::ERROR,
-                    'path' => $error['path'],
-                    'message' => $error['message'],
-                ],
-                $structural
-            )];
+        if ($exclusive !== [] || $structural !== []) {
+            // El esquema también rechaza `only` junto a `except`, pero con un
+            // mensaje genérico sobre `not` que no dice qué hacer. Se sustituye
+            // por el propio.
+            $explained = array_column($exclusive, 'path');
+
+            return ['document' => null, 'errors' => [
+                ...$exclusive,
+                ...array_map(
+                    fn (array $error): array => [
+                        'level' => SemanticValidator::ERROR,
+                        'path' => $error['path'],
+                        'message' => $error['message'],
+                    ],
+                    array_values(array_filter(
+                        $structural,
+                        fn (array $error): bool => ! in_array($error['path'], $explained, true)
+                    ))
+                ),
+            ]];
         }
 
         $normalised = Defaults::apply($raw);
 
-        $semantic = SemanticValidator::validate($normalised);
+        $semantic = SemanticValidator::validate($normalised, $raw);
 
         $blocking = array_filter($semantic, fn (array $f): bool => $f['level'] === SemanticValidator::ERROR);
 
@@ -91,6 +103,24 @@ final class ImportDocument
         $document['models'] = self::sortByDependencies($document['models']);
 
         $declared = array_column($document['models'], 'name');
+
+        foreach ($document['models'] as $index => $model) {
+            // Las herramientas no leen `routes` ni `immutable`: leen la lista
+            // de acciones que queda, y esa lista sólo se calcula aquí.
+            $document['models'][$index]['actions'] = Actions::resolve($model);
+
+            foreach ($model['props'] as $position => $prop) {
+                if (empty($prop['secret'])) {
+                    continue;
+                }
+
+                // Un secreto que saliera en la exportación o en la tabla ya no
+                // sería un secreto. `exports_cols` vale true por omisión, así
+                // que no basta con validarlo: hay que imponerlo.
+                $document['models'][$index]['props'][$position]['exports_cols'] = false;
+                $document['models'][$index]['props'][$position]['datatable'] = false;
+            }
+        }
 
         foreach ($document['models'] as $index => $model) {
             foreach ($model['load_relations'] as $position => $relation) {
@@ -159,6 +189,31 @@ final class ImportDocument
         }
 
         return $sorted;
+    }
+
+    /**
+     * `only` y `except` a la vez no tienen una lectura única.
+     *
+     * @param  array<string, mixed>  $raw
+     * @return array<int, array{level: string, path: string, message: string}>
+     */
+    private static function exclusiveRoutes(array $raw): array
+    {
+        $errors = [];
+
+        foreach (is_array($raw['models'] ?? null) ? $raw['models'] : [] as $index => $model) {
+            $routes = is_array($model) ? ($model['routes'] ?? null) : null;
+
+            if (is_array($routes) && array_key_exists('only', $routes) && array_key_exists('except', $routes)) {
+                $errors[] = [
+                    'level' => SemanticValidator::ERROR,
+                    'path' => "/models/{$index}/routes",
+                    'message' => 'Declara `only` o `except`, no los dos: juntos no tienen una lectura única. Usa `only` si la lista de lo que queda es más corta.',
+                ];
+            }
+        }
+
+        return $errors;
     }
 
     /**

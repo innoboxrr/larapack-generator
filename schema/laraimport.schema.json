@@ -77,6 +77,32 @@
                     "type": "array",
                     "deprecated": true,
                     "description": "No se usa. FiltersTool genera un conjunto fijo de filtros."
+                },
+                "routes": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "minProperties": 1,
+                    "description": "Qué acciones genera el modelo. Sin esta clave, las diez. Quitar una acción quita todo lo que cuelga de ella: su ruta, su request, su método del controlador, su evento, su test y, en la interfaz, su formulario y su vista.",
+                    "properties": {
+                        "only": {
+                            "type": "array",
+                            "uniqueItems": true,
+                            "items": { "$ref": "#/$defs/routeAction" },
+                            "description": "Sólo estas acciones."
+                        },
+                        "except": {
+                            "type": "array",
+                            "uniqueItems": true,
+                            "items": { "$ref": "#/$defs/routeAction" },
+                            "description": "Todas menos estas."
+                        }
+                    },
+                    "not": { "required": ["only", "except"] }
+                },
+                "immutable": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Una vez creada, la fila no se modifica ni se borra: quita update, delete, restore y forceDelete, y el modelo lanza una excepción si algo lo intenta por otro camino. Crear sigue permitido; si tampoco debe crearse por HTTP, quítalo con routes."
                 }
             }
         },
@@ -137,6 +163,11 @@
                     "minProperties": 1,
                     "additionalProperties": { "type": "string" },
                     "description": "Valor a etiqueta. Convierte el campo en un select."
+                },
+                "secret": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Nunca sale por la API: va a $hidden del modelo y no aparece en exportaciones ni en la tabla. Se puede escribir —el hash de un token, una contraseña— pero no leer. larapack:verify falla si alguien la expone a mano."
                 }
             },
             "allOf": [
@@ -235,6 +266,9 @@
                     }
                 }
             ]
+        },
+        "routeAction": {
+            "enum": ["policies", "policy", "index", "show", "create", "update", "delete", "restore", "forceDelete", "export"]
         },
         "pascalCase": {
             "type": "string",

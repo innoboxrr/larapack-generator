@@ -19,9 +19,12 @@ final class SemanticValidator
 
     /**
      * @param  array<string, mixed>  $document  Ya normalizado con los defaults.
+     * @param  array<string, mixed>  $raw  Tal como se escribió. Hace falta para
+     *                                     distinguir un valor declarado de uno
+     *                                     puesto por omisión.
      * @return array<int, array{level: string, path: string, message: string}>
      */
-    public static function validate(array $document): array
+    public static function validate(array $document, array $raw = []): array
     {
         $models = $document['models'] ?? [];
         $pivots = $document['pivots'] ?? [];
@@ -34,7 +37,176 @@ final class SemanticValidator
             ...self::relations($models),
             ...self::ruleFields($models),
             ...self::enums($models),
+            ...self::routes($models),
+            ...self::secrets($models, $raw['models'] ?? []),
         ];
+    }
+
+    /**
+     * Lo que sólo importa si además se genera el módulo de interfaz.
+     *
+     * Va aparte a propósito. Un paquete que sólo expone una API declara modelos
+     * sin index constantemente, y un aviso que aparece siempre y no hay que
+     * atender es como se deja de leer la lista entera.
+     *
+     * @param  array<string, mixed>  $document
+     * @return array<int, array{level: string, path: string, message: string}>
+     */
+    public static function interface(array $document): array
+    {
+        $findings = [];
+
+        foreach ($document['models'] ?? [] as $index => $model) {
+            $actions = $model['actions'] ?? Actions::resolve($model);
+            $path = "/models/{$index}/routes";
+
+            if (! in_array('index', $actions, true)) {
+                $findings[] = [
+                    'level' => self::WARNING,
+                    'path' => $path,
+                    'message' => "{$model['name']} no tiene index: las vistas cuelgan del índice, así que su módulo de interfaz sólo trae el contrato y el store.",
+                ];
+
+                continue;
+            }
+
+            if (! in_array('policies', $actions, true)) {
+                $findings[] = [
+                    'level' => self::WARNING,
+                    'path' => $path,
+                    'message' => "{$model['name']} tiene index pero no policies: la tabla consulta las políticas para decidir qué acciones ofrece, así que no se generan vistas.",
+                ];
+
+                continue;
+            }
+
+            if (in_array('update', $actions, true) && ! in_array('show', $actions, true)) {
+                $findings[] = [
+                    'level' => self::WARNING,
+                    'path' => $path,
+                    'message' => "{$model['name']} tiene update pero no show: la edición cuelga de la vista de detalle, así que la interfaz no trae formulario de edición.",
+                ];
+            }
+        }
+
+        return $findings;
+    }
+
+    /**
+     * La coherencia entre las acciones que quedan.
+     *
+     * @param  array<int, array<string, mixed>>  $models
+     * @return array<int, array<string, mixed>>
+     */
+    private static function routes(array $models): array
+    {
+        $findings = [];
+
+        foreach ($models as $index => $model) {
+            $actions = Actions::resolve($model);
+            $path = "/models/{$index}/routes";
+
+            // Declarar a la vez que la fila no cambia y que se puede cambiar.
+            // Con `except` o sin `routes` no hay contradicción: immutable
+            // simplemente las quita.
+            if (! empty($model['immutable'])) {
+                $contradicted = array_intersect(Actions::MODIFY, $model['routes']['only'] ?? []);
+
+                if ($contradicted !== []) {
+                    $findings[] = [
+                        'level' => self::ERROR,
+                        'path' => "{$path}/only",
+                        'message' => "{$model['name']} es immutable y declara " . implode(', ', $contradicted) . ': una fila inmutable no se modifica ni se borra.',
+                    ];
+                }
+            }
+
+            // No es error: una fila que borra un proceso en segundo plano y se
+            // restaura desde la API es una forma legítima.
+            if (! in_array('delete', $actions, true)) {
+                $orphans = array_intersect(['restore', 'forceDelete'], $actions);
+
+                if ($orphans !== []) {
+                    $findings[] = [
+                        'level' => self::WARNING,
+                        'path' => $path,
+                        'message' => "{$model['name']} declara " . implode(' y ', $orphans) . ' sin delete: nada de la API puede producir una fila borrada. Es correcto si la borra otro proceso.',
+                    ];
+                }
+            }
+
+            if (in_array('export', $actions, true) && ! in_array('index', $actions, true)) {
+                $findings[] = [
+                    'level' => self::WARNING,
+                    'path' => $path,
+                    'message' => "{$model['name']} declara export sin index: la exportación reutiliza los filtros del índice.",
+                ];
+            }
+
+            $writable = array_intersect(['create', 'update'], $actions) !== [];
+
+            foreach ($model['props'] as $position => $prop) {
+                if (! empty($prop['form']) && ! $writable) {
+                    $findings[] = [
+                        'level' => self::ERROR,
+                        'path' => "/models/{$index}/props/{$position}/form",
+                        'message' => "'{$prop['name']}' va en el formulario, pero {$model['name']} no tiene create ni update: el campo no tiene dónde vivir.",
+                    ];
+                }
+            }
+
+            foreach ($model['requests'] as $position => $request) {
+                $action = strtolower($request['name']);
+
+                if (! in_array($action, $actions, true)) {
+                    $findings[] = [
+                        'level' => self::WARNING,
+                        'path' => "/models/{$index}/requests/{$position}",
+                        'message' => "Reglas para {$request['name']}, pero {$model['name']} no tiene {$action}: no se genera ese request y las reglas no se usan.",
+                    ];
+                }
+            }
+        }
+
+        return $findings;
+    }
+
+    /**
+     * Un secreto que se declara también visible.
+     *
+     * Se mira el documento tal como se escribió: `exports_cols` vale true por
+     * omisión, así que en el normalizado todos los secretos parecerían
+     * contradecirse.
+     *
+     * @param  array<int, array<string, mixed>>  $models
+     * @param  array<int, mixed>  $raw
+     * @return array<int, array<string, mixed>>
+     */
+    private static function secrets(array $models, array $raw): array
+    {
+        $findings = [];
+
+        foreach ($models as $index => $model) {
+            foreach ($model['props'] as $position => $prop) {
+                if (empty($prop['secret'])) {
+                    continue;
+                }
+
+                $written = $raw[$index]['props'][$position] ?? [];
+
+                foreach (['datatable' => 'la tabla', 'exports_cols' => 'la exportación'] as $key => $where) {
+                    if (is_array($written) && ($written[$key] ?? null) === true) {
+                        $findings[] = [
+                            'level' => self::ERROR,
+                            'path' => "/models/{$index}/props/{$position}/{$key}",
+                            'message' => "'{$prop['name']}' es secret y a la vez pide salir en {$where}. Quita una de las dos.",
+                        ];
+                    }
+                }
+            }
+        }
+
+        return $findings;
     }
 
     /**
@@ -280,7 +452,9 @@ final class SemanticValidator
             }
 
             foreach ($model['requests'] as $position => $request) {
-                if ($request['name'] !== 'Update') {
+                // Sin la acción no se genera el request, así que no hay handle()
+                // que necesite el identificador.
+                if ($request['name'] !== 'Update' || ! in_array('update', Actions::resolve($model), true)) {
                     continue;
                 }
 
