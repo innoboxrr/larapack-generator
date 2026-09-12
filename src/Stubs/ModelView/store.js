@@ -10,12 +10,24 @@ import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 
 import {
+    // @larapack:if create
     createModel,
+    // @larapack:endif
+    // @larapack:if delete
     deleteModel,
+    // @larapack:endif
+    // @larapack:if policies
     getPolicies,
+    // @larapack:endif
+    // @larapack:if index
     indexModel,
+    // @larapack:endif
+    // @larapack:if show
     showModel,
+    // @larapack:endif
+    // @larapack:if update
     updateModel,
+    // @larapack:endif
 } from '../index'
 
 export const usePascalCaseModelNameStore = defineStore('dotNamespacesnake_case_model_name', () => {
@@ -52,6 +64,7 @@ export const usePascalCaseModelNameStore = defineStore('dotNamespacesnake_case_m
         }
     }
 
+    // @larapack:if index
     const fetchIndex = (params = {}) => run(async () => {
         // El index devuelve una coleccion paginada de Laravel:
         // { data, links, meta }.
@@ -64,18 +77,24 @@ export const usePascalCaseModelNameStore = defineStore('dotNamespacesnake_case_m
         return items.value
     })
 
+    // @larapack:endif
+    // @larapack:if show
     const fetchOne = (id, loadRelations = [], loadCounts = []) => run(async () => {
         current.value = await showModel(id, loadRelations, loadCounts)
 
         return current.value
     })
 
+    // @larapack:endif
+    // @larapack:if policies
     const fetchPolicies = (id = null) => run(async () => {
         policies.value = await getPolicies(id)
 
         return policies.value
     })
 
+    // @larapack:endif
+    // @larapack:if create
     const create = (data) => run(async () => {
         const created = await createModel(data)
 
@@ -85,6 +104,8 @@ export const usePascalCaseModelNameStore = defineStore('dotNamespacesnake_case_m
         return created
     })
 
+    // @larapack:endif
+    // @larapack:if update
     const update = (id, data) => run(async () => {
         const updated = await updateModel(id, data)
 
@@ -94,6 +115,8 @@ export const usePascalCaseModelNameStore = defineStore('dotNamespacesnake_case_m
         return updated
     })
 
+    // @larapack:endif
+    // @larapack:if delete
     const remove = (id) => run(async () => {
         await deleteModel({ id })
 
@@ -104,6 +127,7 @@ export const usePascalCaseModelNameStore = defineStore('dotNamespacesnake_case_m
         }
     })
 
+    // @larapack:endif
     const reset = () => {
         items.value = []
         meta.value = null
@@ -123,12 +147,24 @@ export const usePascalCaseModelNameStore = defineStore('dotNamespacesnake_case_m
         error,
         isEmpty,
         can,
+        // @larapack:if index
         fetchIndex,
+        // @larapack:endif
+        // @larapack:if show
         fetchOne,
+        // @larapack:endif
+        // @larapack:if policies
         fetchPolicies,
+        // @larapack:endif
+        // @larapack:if create
         create,
+        // @larapack:endif
+        // @larapack:if update
         update,
+        // @larapack:endif
+        // @larapack:if delete
         remove,
+        // @larapack:endif
         reset,
     }
 

@@ -10,12 +10,24 @@
 import { create } from 'zustand'
 
 import {
+    // @larapack:if create
     createModel,
+    // @larapack:endif
+    // @larapack:if delete
     deleteModel,
+    // @larapack:endif
+    // @larapack:if policies
     getPolicies,
+    // @larapack:endif
+    // @larapack:if index
     indexModel,
+    // @larapack:endif
+    // @larapack:if show
     showModel,
+    // @larapack:endif
+    // @larapack:if update
     updateModel,
+    // @larapack:endif
 } from '../index'
 
 export const usePascalCaseModelNameStore = create((set, get) => {
@@ -51,6 +63,7 @@ export const usePascalCaseModelNameStore = create((set, get) => {
          */
         can: (ability) => get().policies[ability] === true,
 
+        // @larapack:if index
         fetchIndex: (params = {}) => run(async () => {
             // El index devuelve una coleccion paginada de Laravel:
             // { data, links, meta }.
@@ -65,6 +78,8 @@ export const usePascalCaseModelNameStore = create((set, get) => {
             return get().items
         }),
 
+        // @larapack:endif
+        // @larapack:if show
         fetchOne: (id, loadRelations = [], loadCounts = []) => run(async () => {
             const current = await showModel(id, loadRelations, loadCounts)
 
@@ -73,6 +88,8 @@ export const usePascalCaseModelNameStore = create((set, get) => {
             return current
         }),
 
+        // @larapack:endif
+        // @larapack:if policies
         fetchPolicies: (id = null) => run(async () => {
             const policies = await getPolicies(id)
 
@@ -81,6 +98,8 @@ export const usePascalCaseModelNameStore = create((set, get) => {
             return policies
         }),
 
+        // @larapack:endif
+        // @larapack:if create
         create: (data) => run(async () => {
             const created = await createModel(data)
 
@@ -89,6 +108,8 @@ export const usePascalCaseModelNameStore = create((set, get) => {
             return created
         }),
 
+        // @larapack:endif
+        // @larapack:if update
         update: (id, data) => run(async () => {
             const updated = await updateModel(id, data)
 
@@ -100,6 +121,8 @@ export const usePascalCaseModelNameStore = create((set, get) => {
             return updated
         }),
 
+        // @larapack:endif
+        // @larapack:if delete
         remove: (id) => run(async () => {
             await deleteModel({ id })
 
@@ -109,6 +132,7 @@ export const usePascalCaseModelNameStore = create((set, get) => {
             }))
         }),
 
+        // @larapack:endif
         reset: () => set({
             items: [],
             meta: null,

@@ -1,7 +1,9 @@
 import { useCallback, useEffect } from 'react'
 import { Outlet, useMatches, useParams } from 'react-router-dom'
 import { buildPath } from 'innoboxrr-react-datatable'
+// @larapack:if update
 import t from 'innoboxrr-i18n'
+// @larapack:endif
 
 import Breadcrumbs from '../../../components/Breadcrumbs.jsx'
 import ModelCard from '../widgets/ModelCard.jsx'
@@ -46,6 +48,7 @@ export default function ShowView() {
         },
     ]
 
+    // @larapack:if update
     if (! isShowView) {
         breadcrumbs.push({
             link: buildPath('AdminEditPascalCaseModelName', { id: camelCaseModelName.id }),
@@ -53,6 +56,7 @@ export default function ShowView() {
         })
     }
 
+    // @larapack:endif
     return (
         <div>
             <Breadcrumbs pages={breadcrumbs} />

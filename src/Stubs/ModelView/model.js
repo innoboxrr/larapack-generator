@@ -55,6 +55,7 @@ export const resetFilters = () => {
  * que ser un export real de este archivo.
  */
 export const crudActions = () => [
+    // @larapack:if create
     {
         id: 'create',
         name: t('Create'),
@@ -69,6 +70,8 @@ export const crudActions = () => [
             },
         },
     },
+    // @larapack:endif
+    // @larapack:if export
     {
         id: 'export',
         name: t('Export'),
@@ -78,6 +81,7 @@ export const crudActions = () => [
         policy: false,
         params: {},
     },
+    // @larapack:endif
 ]
 
 export const dataTableHead = () => [
@@ -105,6 +109,7 @@ export const dataTableSort = () => ({
 })
 
 // PERMISOS
+// @larapack:if policies
 
 export const getPolicies = (modelId = null) => {
     return makeHttpRequest('get', route(API_ROUTE_PREFIX + 'policies'), {
@@ -112,6 +117,8 @@ export const getPolicies = (modelId = null) => {
         id: modelId,
     }, {}, 3, 1500)
 }
+// @larapack:endif
+// @larapack:if policy
 
 export const getPolicy = (policy, modelId = null) => {
     return makeHttpRequest('get', route(API_ROUTE_PREFIX + 'policy'), {
@@ -120,8 +127,10 @@ export const getPolicy = (policy, modelId = null) => {
         id: modelId,
     }, {}, 3, 1500)
 }
+// @larapack:endif
 
 // CRUD
+// @larapack:if index
 
 export const indexModel = (params = {}) => {
     return makeHttpRequest('get', route(API_ROUTE_PREFIX + 'index'), {
@@ -129,6 +138,8 @@ export const indexModel = (params = {}) => {
         ...params,
     }, {}, 3, 1500)
 }
+// @larapack:endif
+// @larapack:if show
 
 export const showModel = (modelId, loadRelations = [], loadCounts = [], data = {}) => {
     return makeHttpRequest('get', route(API_ROUTE_PREFIX + 'show'), {
@@ -139,6 +150,8 @@ export const showModel = (modelId, loadRelations = [], loadCounts = [], data = {
         ...data,
     }, {}, 3, 1500)
 }
+// @larapack:endif
+// @larapack:if create
 
 export const createModel = (data) => {
     return makeHttpRequest('post', route(API_ROUTE_PREFIX + 'create'), {
@@ -146,6 +159,8 @@ export const createModel = (data) => {
         ...data,
     }, {}, 0, 1500)
 }
+// @larapack:endif
+// @larapack:if update
 
 export const updateModel = (modelId, data) => {
     return makeHttpRequest('put', route(API_ROUTE_PREFIX + 'update'), {
@@ -154,6 +169,8 @@ export const updateModel = (modelId, data) => {
         snake_case_model_name_id: modelId,
     }, {}, 0, 1500)
 }
+// @larapack:endif
+// @larapack:if delete
 
 /**
  * La ruta esta registrada como Route::delete. El method spoofing de Laravel
@@ -174,6 +191,8 @@ export const deleteModel = (data) => {
         confirmButtonText: t('Yes, delete'),
     })
 }
+// @larapack:endif
+// @larapack:if restore
 
 export const restoreModel = (data) => {
     return makeHttpRequest('post', route(API_ROUTE_PREFIX + 'restore'), {
@@ -181,6 +200,8 @@ export const restoreModel = (data) => {
         snake_case_model_name_id: data.id,
     }, {}, 0, 1500)
 }
+// @larapack:endif
+// @larapack:if forceDelete
 
 export const forceDeleteModel = (data) => {
     return makeHttpRequest('delete', route(API_ROUTE_PREFIX + 'force.delete'), {
@@ -196,6 +217,8 @@ export const forceDeleteModel = (data) => {
         confirmButtonText: t('Yes, delete permanently'),
     })
 }
+// @larapack:endif
+// @larapack:if export
 
 export const exportModel = (data = {}) => {
     return makeHttpRequest('post', route(API_ROUTE_PREFIX + 'export'), {
@@ -211,3 +234,4 @@ export const exportModel = (data = {}) => {
         confirmButtonText: t('Yes, continue'),
     })
 }
+// @larapack:endif

@@ -36,7 +36,9 @@
     import { RouterView, useRoute, useRouter } from 'vue-router'
 
     import Breadcrumbs from '../../../components/Breadcrumbs.vue'
+    // @larapack:if update
     import t from 'innoboxrr-i18n'
+    // @larapack:endif
 
     import ModelCard from '../widgets/ModelCard.vue'
     import ModelProfile from '../widgets/ModelProfile.vue'
@@ -85,6 +87,7 @@
             title: camelCaseModelName.value.name ?? 'PascalCaseModelName',
         })
 
+        // @larapack:if update
         if (route.name === 'AdminEditPascalCaseModelName') {
             pages.push({
                 link: router.resolve({
@@ -95,6 +98,7 @@
             })
         }
 
+        // @larapack:endif
         return pages
 
     })

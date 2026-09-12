@@ -1,16 +1,22 @@
 import { useMemo } from 'react'
+// @larapack:if delete
 import { useNavigate } from 'react-router-dom'
+// @larapack:endif
 import { buildPath } from 'innoboxrr-react-datatable'
 import t from 'innoboxrr-i18n'
 
 import { IconComponent } from 'innoboxrr-react-form-elements'
 
 import ActionMenu from '../../../components/ActionMenu.jsx'
+// @larapack:if delete
 import { usePascalCaseModelNameStore } from '../store'
+// @larapack:endif
 
 export default function ModelCard({ camelCaseModelName }) {
+    // @larapack:if delete
     const navigate = useNavigate()
     const remove = usePascalCaseModelNameStore((state) => state.remove)
+    // @larapack:endif
 
     const actions = useMemo(() => [
         {
@@ -18,11 +24,14 @@ export default function ModelCard({ camelCaseModelName }) {
             to: buildPath('AdminShowPascalCaseModelName', { id: camelCaseModelName.id }),
             label: t('Show'),
         },
+        // @larapack:if update
         {
             type: 'router',
             to: buildPath('AdminEditPascalCaseModelName', { id: camelCaseModelName.id }),
             label: t('Edit'),
         },
+        // @larapack:endif
+        // @larapack:if delete
         {
             type: 'event',
             action: async () => {
@@ -33,7 +42,13 @@ export default function ModelCard({ camelCaseModelName }) {
             label: t('Delete'),
             danger: true,
         },
+        // @larapack:endif
+    // @larapack:if delete
     ], [camelCaseModelName.id, remove, navigate])
+    // @larapack:endif
+    // @larapack:if !delete
+    ], [camelCaseModelName.id])
+    // @larapack:endif
 
     return (
         <div className="bg-white dark:bg-gray-800 border rounded-lg overflow-hidden dark:border-gray-700">

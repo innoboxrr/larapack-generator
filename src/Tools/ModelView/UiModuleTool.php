@@ -128,6 +128,12 @@ abstract class UiModuleTool extends Tool
 		$created = false;
 
 		foreach ($this->files() as $stub => $destination) {
+			foreach ($this->requiredActions($destination) as $action) {
+				if (! $this->declares($action)) {
+					continue 2;
+				}
+			}
+
 			$created = $this->generate(
 				stubs_path($stub),
 				$this->modulePath() . '/' . $destination
@@ -135,6 +141,29 @@ abstract class UiModuleTool extends Tool
 		}
 
 		return $created;
+	}
+
+	/**
+	 * Las acciones sin las que un archivo del modulo no tiene sentido.
+	 *
+	 * El contrato y el store valen siempre: son llamadas HTTP y estado. Las
+	 * vistas no. Cuelgan del indice, y el indice necesita las politicas,
+	 * porque la tabla las consulta para decidir que acciones ofrece. La
+	 * edicion, ademas, cuelga del detalle: su ruta es hija de la de show.
+	 *
+	 * @return array<int, string>
+	 */
+	protected function requiredActions(string $destination): array
+	{
+		$views = ['index', 'policies'];
+
+		return match (preg_replace('/\.(vue|jsx)$/', '', $destination)) {
+			'routes/index.js', 'views/AdminView', 'widgets/DataTable', 'forms/FilterForm' => $views,
+			'views/ShowView', 'widgets/ModelCard', 'widgets/ModelProfile' => [...$views, 'show'],
+			'views/CreateView', 'forms/CreateForm' => [...$views, 'create'],
+			'views/EditView', 'forms/EditForm' => [...$views, 'show', 'update'],
+			default => [],
+		};
 	}
 
 	/**

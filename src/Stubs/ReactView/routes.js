@@ -21,26 +21,32 @@ export default [
         handle: { title: 'PluralPascalCaseModelName', auth: true },
         lazy: async () => ({ Component: (await import('../views/AdminView.jsx')).default }),
         children: [
+            // @larapack:if create
             {
                 path: 'create',
                 id: 'AdminCreatePascalCaseModelName',
                 handle: { title: 'Crear PluralPascalCaseModelName', auth: true },
                 lazy: async () => ({ Component: (await import('../views/CreateView.jsx')).default }),
             },
+            // @larapack:endif
+            // @larapack:if show
             {
                 path: ':id',
                 id: 'AdminShowPascalCaseModelName',
                 handle: { title: 'Ver PluralPascalCaseModelName', auth: true },
                 lazy: async () => ({ Component: (await import('../views/ShowView.jsx')).default }),
                 children: [
+                    // @larapack:if update
                     {
                         path: 'edit',
                         id: 'AdminEditPascalCaseModelName',
                         handle: { title: 'Editar PluralPascalCaseModelName', auth: true },
                         lazy: async () => ({ Component: (await import('../views/EditView.jsx')).default }),
                     },
+                    // @larapack:endif
                 ],
             },
+            // @larapack:endif
         ],
     },
 ]

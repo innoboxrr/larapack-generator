@@ -25,13 +25,17 @@
 <script setup>
 
     import { computed } from 'vue'
+    // @larapack:if delete
     import { useRouter } from 'vue-router'
+    // @larapack:endif
     import t from 'innoboxrr-i18n'
 
     import { IconComponent } from 'innoboxrr-form-elements'
 
     import ActionMenu from '../../../components/ActionMenu.vue'
+    // @larapack:if delete
     import { usePascalCaseModelNameStore } from '../store'
+    // @larapack:endif
 
     const props = defineProps({
         camelCaseModelName: {
@@ -40,10 +44,15 @@
         },
     })
 
+    // @larapack:if delete
     const router = useRouter()
 
+    // @larapack:endif
+    // @larapack:if delete
     const store = usePascalCaseModelNameStore()
 
+    // @larapack:endif
+    // @larapack:if delete
     const remove = async () => {
 
         await store.remove(props.camelCaseModelName.id)
@@ -52,6 +61,7 @@
 
     }
 
+    // @larapack:endif
     const actions = computed(() => [
         {
             type: 'router',
@@ -61,6 +71,7 @@
             },
             label: t('Show'),
         },
+        // @larapack:if update
         {
             type: 'router',
             to: {
@@ -69,12 +80,15 @@
             },
             label: t('Edit'),
         },
+        // @larapack:endif
+        // @larapack:if delete
         {
             type: 'event',
             action: remove,
             label: t('Delete'),
             danger: true,
         },
+        // @larapack:endif
     ])
 
 </script>

@@ -12,6 +12,7 @@ export default [
 			]
 		},
 		children: [
+			// @larapack:if create
 			{
 				path: 'create',
 				name: "AdminCreatePascalCaseModelName",
@@ -23,6 +24,8 @@ export default [
 					]
 				}
 			},
+			// @larapack:endif
+			// @larapack:if show
 			{
 				path: ':id',
 				name: "AdminShowPascalCaseModelName",
@@ -34,6 +37,7 @@ export default [
 					]
 				},
 				children: [
+					// @larapack:if update
 					{
 						path: 'edit',
 						name: "AdminEditPascalCaseModelName",
@@ -45,8 +49,10 @@ export default [
 							]
 						}
 					},
+					// @larapack:endif
 				]
 			},
+			// @larapack:endif
 		]
 	},
 ]

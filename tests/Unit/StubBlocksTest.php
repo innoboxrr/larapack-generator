@@ -73,6 +73,14 @@ final class StubBlocksTest extends TestCase
         $this->assertSame("a\r\nb\r\nc\r\n", $this->apply($stub, ['x']));
     }
 
+    public function test_la_exclamacion_niega(): void
+    {
+        $stub = "// @larapack:if delete\nlargo\n// @larapack:endif\n// @larapack:if !delete\ncorto\n// @larapack:endif\n";
+
+        $this->assertSame("largo\n", $this->apply($stub, ['delete']));
+        $this->assertSame("corto\n", $this->apply($stub, []));
+    }
+
     public function test_un_endif_sin_if_es_un_error(): void
     {
         $this->expectException(MakerException::class);

@@ -25,11 +25,13 @@ use Innoboxrr\LarapackGenerator\Exceptions\MakerException;
  *
  * `a|b` se cumple si se cumple cualquiera; `a&b`, si se cumplen todas. No se
  * mezclan: una condición que necesite las dos cosas es una señal de que el
- * bloque está en el sitio equivocado.
+ * bloque está en el sitio equivocado. `!a` se cumple si `a` no: es lo que
+ * permite dar una línea alternativa cuando la original nombra algo que la
+ * acción ausente se habría llevado.
  */
 final class StubBlocks
 {
-    private const OPEN = '/@larapack:if\s+([A-Za-z|&]+)/';
+    private const OPEN = '/@larapack:if\s+([A-Za-z|&!]+)/';
 
     private const CLOSE = '/@larapack:endif\b/';
 
@@ -85,7 +87,7 @@ final class StubBlocks
 
         foreach ($matches[1] as $expression) {
             foreach (preg_split('/[|&]/', $expression) as $condition) {
-                $conditions[] = $condition;
+                $conditions[] = ltrim($condition, '!');
             }
         }
 
@@ -116,6 +118,10 @@ final class StubBlocks
         }
 
         $conditions = preg_split('/[|&]/', $expression);
+
+        $holds = static fn (string $condition): bool => str_starts_with($condition, '!')
+            ? ! $holds(substr($condition, 1))
+            : $holds($condition);
 
         if ($all) {
             foreach ($conditions as $condition) {
