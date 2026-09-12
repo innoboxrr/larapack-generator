@@ -262,12 +262,29 @@ final class Ecosystem
         if (is_file("{$dir}/bump-patch.yml")) {
             $bump = (string) file_get_contents("{$dir}/bump-patch.yml");
 
-            $findings[] = str_contains($bump, 'workflow_run')
+            $findings[] = $this->bumpIsGated($bump)
                 ? $this->finding(self::WARNING, 'bump-patch', $name, 'Conserva bump-patch.yml: pasa por los tests, pero deriva la versión del último tag en vez de declararla.')
                 : $this->finding(self::ERROR, 'bump-patch', $name, 'Conserva bump-patch.yml colgado de `push`: etiqueta y publica sin esperar a los tests.');
         }
 
         return $findings;
+    }
+
+    /**
+     * Si el bump espera a la suite.
+     *
+     * Se miran las claves del YAML y no el texto. Buscar `workflow_run` a secas
+     * daba por protegido a rvoe-manager por un comentario que explica por qué
+     * no lo usa, y habría dado por desprotegido a cualquier bump que llamara a
+     * la suite con `needs`, que es la forma que falla cerrada: si los tests son
+     * rojos, el job del tag ni arranca.
+     */
+    private function bumpIsGated(string $yaml): bool
+    {
+        $code = (string) preg_replace('/^\s*#.*$/m', '', $yaml);
+
+        return (bool) preg_match('/^\s*workflow_run\s*:/m', $code)
+            || (bool) preg_match('/^\s*needs\s*:\s*\[?\s*[\'"]?tests\b/m', $code);
     }
 
     /**

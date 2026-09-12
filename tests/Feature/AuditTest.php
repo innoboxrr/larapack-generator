@@ -233,6 +233,59 @@ final class AuditTest extends TestCase
         $this->assertHasCheck('bump-patch', $result);
     }
 
+    /**
+     * `needs: tests` es la otra forma de esperar a la suite, y la que falla
+     * cerrada: si los tests son rojos, el job del tag ni arranca.
+     */
+    public function test_un_bump_que_llama_a_la_suite_con_needs_es_un_aviso(): void
+    {
+        $package = $this->package('bump-con-needs', [
+            'name' => 'innoboxrr/bump-con-needs',
+            'description' => 'x',
+            'license' => 'MIT',
+            'autoload' => ['psr-4' => ['X\\' => 'src/']],
+            'require' => ['php' => '^8.3'],
+        ]);
+
+        $this->withTests($package);
+        $this->withWorkflows($package, ['tests.yml', 'release.yml']);
+
+        file_put_contents(
+            "{$package}/.github/workflows/bump-patch.yml",
+            "name: Bump\non:\n    push:\n        branches: [master]\njobs:\n    tests:\n        uses: ./.github/workflows/tests.yml\n    bump-version:\n        needs: tests\n"
+        );
+
+        $result = $this->audit($package);
+
+        $this->assertSame(0, $result['errors']);
+        $this->assertHasCheck('bump-patch', $result);
+    }
+
+    /**
+     * Un comentario que explica por qué no se usa workflow_run no es una
+     * puerta.
+     */
+    public function test_un_comentario_que_nombra_workflow_run_no_cuenta_como_puerta(): void
+    {
+        $package = $this->package('bump-comentado', [
+            'name' => 'innoboxrr/bump-comentado',
+            'description' => 'x',
+            'license' => 'MIT',
+            'autoload' => ['psr-4' => ['X\\' => 'src/']],
+            'require' => ['php' => '^8.3'],
+        ]);
+
+        $this->withTests($package);
+        $this->withWorkflows($package, ['tests.yml', 'release.yml']);
+
+        file_put_contents(
+            "{$package}/.github/workflows/bump-patch.yml",
+            "name: Bump\n# workflow_run se dispara despues; aqui no se usa.\non:\n    push:\n        branches: [master]\njobs:\n    bump-version:\n        runs-on: ubuntu-latest\n"
+        );
+
+        $this->assertGreaterThan(0, $this->audit($package)['errors']);
+    }
+
     public function test_detecta_la_ausencia_de_tests(): void
     {
         $package = $this->package('sin-tests', [
