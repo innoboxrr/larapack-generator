@@ -22,6 +22,7 @@ class PascalCaseModelNameObserver
     {
         // Remove if laravel-audit is used: $camelCaseModelName->log('created');
     }
+    // @larapack:if update
  
     /**
      * Handle the PascalCaseModelName "updated" event.
@@ -30,6 +31,8 @@ class PascalCaseModelNameObserver
     {
         // Remove if laravel-audit is used: $camelCaseModelName->log('updated');
     }
+    // @larapack:endif
+    // @larapack:if delete
  
     /**
      * Handle the PascalCaseModelName "deleted" event.
@@ -38,6 +41,8 @@ class PascalCaseModelNameObserver
     {
         // Remove if laravel-audit is used: $camelCaseModelName->log('deleted');
     }
+    // @larapack:endif
+    // @larapack:if restore
  
     /**
      * Handle the PascalCaseModelName "restored" event.
@@ -46,6 +51,8 @@ class PascalCaseModelNameObserver
     {
         // Remove if laravel-audit is used: $camelCaseModelName->log('restored');
     }
+    // @larapack:endif
+    // @larapack:if forceDelete
  
     /**
      * Handle the PascalCaseModelName "forceDeleted" event.
@@ -54,4 +61,5 @@ class PascalCaseModelNameObserver
     {
         // Remove if laravel-audit is used: $camelCaseModelName->log('forceDeleted');
     }
+    // @larapack:endif
 }

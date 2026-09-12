@@ -40,6 +40,10 @@ class ControllerTool extends Tool
 
 	public function create(string $ModelName)
 	{
+		if (! $this->init($ModelName)->declaresAnyAction()) {
+			return false;
+		}
+
 		$this->setUp($ModelName);
 		$controllerFile = $this->controllerPath . '/' . $this->PascalCaseModelName . 'Controller.php';
 		return $this->generate($this->controllerTemplatePath . '/ControllerTemplate.txt', $controllerFile);

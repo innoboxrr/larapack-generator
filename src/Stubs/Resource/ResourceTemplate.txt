@@ -34,15 +34,22 @@ class PascalCaseModelNameResource extends JsonResource
 
         // Validaciones individuales por operación
 
+        // @larapack:if show
         $actions[] = $this->view();
 
+        // @larapack:endif
+        // @larapack:if update&show
         $actions[] = $this->edit();
 
+        // @larapack:endif
+        // @larapack:if delete
         $actions[] = $this->delete();
 
+        // @larapack:endif
         return $actions;
 
     }
+    // @larapack:if show
 
     /**
      * @return array<string, mixed>
@@ -67,6 +74,8 @@ class PascalCaseModelNameResource extends JsonResource
             ]
         ];
     }
+    // @larapack:endif
+    // @larapack:if update&show
 
     /**
      * @return array<string, mixed>
@@ -91,6 +100,8 @@ class PascalCaseModelNameResource extends JsonResource
             ]
         ];
     }
+    // @larapack:endif
+    // @larapack:if delete
 
     /**
      * @return array<string, mixed>
@@ -109,4 +120,5 @@ class PascalCaseModelNameResource extends JsonResource
             ]
         ];
     }
+    // @larapack:endif
 }

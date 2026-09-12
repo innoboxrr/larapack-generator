@@ -41,6 +41,10 @@ class ExportTool extends Tool
 	public function create(string $ModelName)
 	{
 
+		if (! $this->init($ModelName)->declares('export')) {
+			return false;
+		}
+
 		$this->setUp($ModelName);
 
 		$exportFile = $this->exportPath . '/' . $this->PluralPascalCaseModelName . 'Exports.php';

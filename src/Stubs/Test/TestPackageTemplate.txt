@@ -12,6 +12,7 @@ class PascalCaseModelNameEndpointsTest extends TestCase
     use RefreshDatabase,
         WithFaker;
 
+    // @larapack:if policies
     public function test_snake_case_model_name_policies_endpoint(): void
     {
 
@@ -32,6 +33,8 @@ class PascalCaseModelNameEndpointsTest extends TestCase
 
     }
 
+    // @larapack:endif
+    // @larapack:if policy
     public function test_snake_case_model_name_policy_endpoint(): void
     {
         $headers = [
@@ -52,6 +55,8 @@ class PascalCaseModelNameEndpointsTest extends TestCase
 
     }
 
+    // @larapack:endif
+    // @larapack:if index
     public function test_snake_case_model_name_index_auth_endpoint(): void
     {
 
@@ -70,6 +75,8 @@ class PascalCaseModelNameEndpointsTest extends TestCase
 
     }
 
+    // @larapack:endif
+    // @larapack:if index
     public function test_snake_case_model_name_index_guest_endpoint(): void
     {
 
@@ -87,6 +94,8 @@ class PascalCaseModelNameEndpointsTest extends TestCase
             
     }
     
+    // @larapack:endif
+    // @larapack:if show
     public function test_snake_case_model_name_show_auth_endpoint(): void
     {
 
@@ -107,6 +116,8 @@ class PascalCaseModelNameEndpointsTest extends TestCase
             
     }
 
+    // @larapack:endif
+    // @larapack:if show
     public function test_snake_case_model_name_show_guest_endpoint(): void
     {
 
@@ -126,6 +137,8 @@ class PascalCaseModelNameEndpointsTest extends TestCase
             
     }
 
+    // @larapack:endif
+    // @larapack:if create
     public function test_snake_case_model_name_create_endpoint(): void
     {
 
@@ -144,6 +157,8 @@ class PascalCaseModelNameEndpointsTest extends TestCase
             
     }
 
+    // @larapack:endif
+    // @larapack:if update
     public function test_snake_case_model_name_update_endpoint(): void
     {
 
@@ -165,6 +180,8 @@ class PascalCaseModelNameEndpointsTest extends TestCase
             
     }
 
+    // @larapack:endif
+    // @larapack:if delete
     public function test_snake_case_model_name_delete_endpoint(): void
     {
 
@@ -185,6 +202,8 @@ class PascalCaseModelNameEndpointsTest extends TestCase
             
     }
 
+    // @larapack:endif
+    // @larapack:if restore
     public function test_snake_case_model_name_restore_endpoint(): void
     {
 
@@ -205,6 +224,8 @@ class PascalCaseModelNameEndpointsTest extends TestCase
             
     }
 
+    // @larapack:endif
+    // @larapack:if forceDelete
     public function test_snake_case_model_name_force_delete_endpoint(): void
     {
 
@@ -225,6 +246,8 @@ class PascalCaseModelNameEndpointsTest extends TestCase
             
     }
 
+    // @larapack:endif
+    // @larapack:if export
     public function test_snake_case_model_name_export_endpoint(): void
     {   
 
@@ -243,4 +266,5 @@ class PascalCaseModelNameEndpointsTest extends TestCase
             
     }
 
+    // @larapack:endif
 }

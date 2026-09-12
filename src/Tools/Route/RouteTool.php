@@ -32,6 +32,10 @@ class RouteTool extends Tool
 	public function create(string $ModelName)
 	{
 
+		if (! $this->init($ModelName)->declaresAnyAction()) {
+			return false;
+		}
+
 		$this->init($ModelName)
 			->setApiRoutepath()
 			->setRouteTemplatePath();

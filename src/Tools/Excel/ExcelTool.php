@@ -41,6 +41,10 @@ class ExcelTool extends Tool
 	public function create(string $ModelName)
 	{
 
+		if (! $this->init($ModelName)->declares('export')) {
+			return false;
+		}
+
 		$this->setUp($ModelName);
 
 		$excelFile = $this->excelPath . '/' . $this->snake_case_model_name . '.blade.php';

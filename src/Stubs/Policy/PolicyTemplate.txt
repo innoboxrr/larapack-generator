@@ -23,50 +23,68 @@ class PascalCaseModelNamePolicy
         return null;
 
     }
+    // @larapack:if index
 
     public function index(User $user): Response|bool
     {
         return false;
     }
+    // @larapack:endif
+    // @larapack:if index
 
     public function viewAny(User $user): Response|bool
     {
         return false;
     }
+    // @larapack:endif
+    // @larapack:if show
 
     public function view(User $user, PascalCaseModelName $camelCaseModelName): Response|bool
     {
         return false;
     }
+    // @larapack:endif
+    // @larapack:if create
 
     public function create(User $user): Response|bool
     {
         return false;
     }
+    // @larapack:endif
+    // @larapack:if update
 
     public function update(User $user, PascalCaseModelName $camelCaseModelName): Response|bool
     {
         return false;
     }
+    // @larapack:endif
+    // @larapack:if delete
 
     public function delete(User $user, PascalCaseModelName $camelCaseModelName): Response|bool
     {
         return false;
     }
+    // @larapack:endif
+    // @larapack:if restore
 
     public function restore(User $user, PascalCaseModelName $camelCaseModelName): Response|bool
     {
         return false;
     }
+    // @larapack:endif
+    // @larapack:if forceDelete
 
     public function forceDelete(User $user, PascalCaseModelName $camelCaseModelName): Response|bool
     {
         return false;
     }
+    // @larapack:endif
+    // @larapack:if export
 
     public function export(User $user): Response|bool
     {
         return false;
     }
+    // @larapack:endif
 
 }

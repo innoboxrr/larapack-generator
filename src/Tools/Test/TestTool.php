@@ -169,6 +169,8 @@ class TestTool extends Tool
 
 			if(copy($templateFile, $testFile)) {
 
+				$this->applyBlocks($testFile);
+
 				$this->replaceData($testFile);
 
 			} else {

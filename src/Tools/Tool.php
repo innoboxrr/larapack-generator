@@ -273,6 +273,15 @@ class Tool
 		}
 
 		/**
+		 * Un modelo sin ninguna accion no tiene controlador ni rutas: un grupo
+		 * `use` vacio ni siquiera compila.
+		 */
+		protected function declaresAnyAction(): bool
+		{
+			return Declaration::of($this->ModelName)['actions'] !== [];
+		}
+
+		/**
 		 * Resuelve los bloques @larapack:if del archivo recien copiado.
 		 *
 		 * Se aplica a todo lo que pasa por generate(), venga o no del

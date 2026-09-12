@@ -7,7 +7,9 @@ use Illuminate\Database\Eloquent\Attributes\UseFactory;
 use Illuminate\Database\Eloquent\Attributes\UsePolicy;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+// @larapack:if delete|restore|forceDelete
 use Illuminate\Database\Eloquent\SoftDeletes;
+// @larapack:endif
 use Innoboxrr\Traits\MetaOperations;
 use Innoboxrr\Traits\ModelAppendsTrait;
 use Namespace\Database\Factories\PascalCaseModelNameFactory;
@@ -26,7 +28,9 @@ class PascalCaseModelName extends Model
 {
 
     use HasFactory,
+        // @larapack:if delete|restore|forceDelete
         SoftDeletes,
+        // @larapack:endif
         MetaOperations,
         ModelAppendsTrait,
         PascalCaseModelNameRelations,

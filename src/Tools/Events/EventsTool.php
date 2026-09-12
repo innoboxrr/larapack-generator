@@ -84,6 +84,10 @@ class EventsTool extends Tool
 	private function createEvents()
 	{	
 		foreach($this->events as $event => $listeners) {
+			if (! $this->declares(lcfirst(substr($event, 0, -strlen('Event'))))) {
+				continue;
+			}
+
 			$this->createEvent($event);
 			foreach($listeners as $listener) {
 				$this->createListener($event, $listener);

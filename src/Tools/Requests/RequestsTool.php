@@ -61,6 +61,10 @@ class RequestsTool extends Tool
             ->setMainRequestsPath();
 
         foreach ($this->requests as $request) {
+            if (! $this->declares(lcfirst(substr($request, 0, -strlen('Request'))))) {
+                continue;
+            }
+
             $this->createRequest($request);
         }
     }

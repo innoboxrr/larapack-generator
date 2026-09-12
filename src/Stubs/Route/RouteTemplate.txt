@@ -2,33 +2,53 @@
 
 use Illuminate\Support\Facades\Route;
 use Namespace\Http\Controllers\PascalCaseModelNameController;
+// @larapack:if policies
 
 Route::get('policies', [PascalCaseModelNameController::class, 'policies'])
 	->name('policies');
+// @larapack:endif
+// @larapack:if policy
 
 Route::get('policy', [PascalCaseModelNameController::class, 'policy'])
 	->name('policy');
+// @larapack:endif
+// @larapack:if index
 
 Route::get('index', [PascalCaseModelNameController::class, 'index'])
 	->name('index');
+// @larapack:endif
+// @larapack:if show
 
 Route::get('show', [PascalCaseModelNameController::class, 'show'])
 	->name('show');
+// @larapack:endif
+// @larapack:if create
 
 Route::post('create', [PascalCaseModelNameController::class, 'create'])
 	->name('create');
+// @larapack:endif
+// @larapack:if update
 
 Route::put('update', [PascalCaseModelNameController::class, 'update'])
 	->name('update');
+// @larapack:endif
+// @larapack:if delete
 
 Route::delete('delete', [PascalCaseModelNameController::class, 'delete'])
 	->name('delete');
+// @larapack:endif
+// @larapack:if restore
 
 Route::post('restore', [PascalCaseModelNameController::class, 'restore'])
 	->name('restore');
+// @larapack:endif
+// @larapack:if forceDelete
 
 Route::delete('force-delete', [PascalCaseModelNameController::class, 'forceDelete'])
 	->name('force.delete');
+// @larapack:endif
+// @larapack:if export
 
 Route::post('export', [PascalCaseModelNameController::class, 'export'])
 	->name('export');
+// @larapack:endif

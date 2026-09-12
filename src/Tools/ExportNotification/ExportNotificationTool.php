@@ -47,6 +47,10 @@ class ExportNotificationTool extends Tool
 	public function create(string $ModelName)
 	{
 
+		if (! $this->init($ModelName)->declares('export')) {
+			return false;
+		}
+
 		$this->init($ModelName)
 			->setExportNotificationPath()
 			->setExportNotificationTemplatePath()

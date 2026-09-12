@@ -15,7 +15,9 @@ return new class extends Migration
             $table->id();
             //EDIT//
             $table->timestamps();
+            // @larapack:if delete|restore|forceDelete
             $table->softDeletes();
+            // @larapack:endif
         });
     }
 
