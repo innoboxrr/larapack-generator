@@ -199,14 +199,22 @@ php artisan larapack:verify --strict          # los avisos cuentan como fallos
 php artisan larapack:verify --format=json
 ```
 
-Comprueba cuatro cosas:
+Comprueba siete cosas:
 
 | Comprobación | Nivel | Qué detecta |
 | --- | --- | --- |
 | `missing-file` | error | Algo que se generó y ya no está |
 | `customised` | info | Editado a mano; no se podrá regenerar sin perderlo |
-| `inconsistent-entity` | aviso | Una entidad sin un componente que todas las demás tienen |
+| `inconsistent-entity` | aviso | Una entidad sin un componente que tienen todas las que declararon su misma forma |
 | `route-prefix` | error | El `API_ROUTE_PREFIX` del módulo JS dejó de cuadrar con el `->as()` del RouteServiceProvider |
+| `route-not-declared` | error | Una ruta, un método del controlador, un request o una vista de una acción que el modelo no declara |
+| `immutable-write` | error | Un camino de escritura en un modelo `immutable`, o su modelo sin la guarda que rechaza modificaciones |
+| `secret-exposed` | error | Una columna `secret` fuera de `$hidden`, en la exportación, en el Resource o en la tabla |
+
+Las tres últimas leen la forma que cada modelo declaró, que el manifiesto guarda
+al generar. `inconsistent-entity` también: un modelo de sólo lectura no tiene
+formulario de edición por diseño, y compararlo con los normales lo marcaría una
+vez por cada pieza que no debe tener.
 
 Devuelve un código de salida distinto de cero si hay errores, así que sirve
 como puerta en CI. La salida en JSON está pensada para que un agente lea qué
@@ -388,6 +396,65 @@ mano:
 
 `assignments` y `filters` siguen aceptandose por compatibilidad, pero estan
 marcadas como obsoletas en el esquema: el generador no las lee.
+
+### Tablas que no se administran desde un formulario
+
+LaraPack genera diez acciones por modelo: `policies`, `policy`, `index`, `show`,
+`create`, `update`, `delete`, `restore`, `forceDelete` y `export`. Es la forma
+correcta para algo que una persona administra desde una pantalla, y la
+equivocada para buena parte de un sistema real: una bitacora solo se agrega, un
+catalogo solo se lee, una concesion se otorga y se revoca pero no se edita, y
+una credencial se lista pero su secreto no sale nunca.
+
+Tres claves lo declaran, y ausentes el modelo tiene las diez de siempre:
+
+```json
+{
+    "models": [
+        {
+            "name": "AuditEvent",
+            "immutable": true,
+            "routes": { "only": ["policies", "index", "show", "export"] },
+            "props": [
+                { "name": "action", "type": "string", "datatable": true },
+                { "name": "payload", "type": "longText", "cast": "json" }
+            ]
+        },
+        {
+            "name": "ApiKey",
+            "routes": { "except": ["update", "restore", "forceDelete"] },
+            "props": [
+                { "name": "label", "type": "string", "form": true, "form_component": "TextInputComponent", "form_submit": true, "datatable": true },
+                { "name": "token_hash", "type": "string", "secret": true }
+            ]
+        }
+    ]
+}
+```
+
+- **`routes`** — `only` o `except`, nunca las dos. Quitar una accion quita todo
+  lo que cuelga de ella: su ruta, su request, su metodo del controlador, su
+  evento, su habilidad en la politica, su test y, en la interfaz, su formulario,
+  su vista y su funcion del contrato. Sin `delete`, `restore` ni `forceDelete`,
+  el modelo tampoco usa `SoftDeletes`.
+- **`immutable`** — una vez creada, la fila no se modifica ni se borra. Quita
+  `update`, `delete`, `restore` y `forceDelete`, y el modelo lanza una excepcion
+  si algo lo intenta por otro camino que no sea HTTP. **Crear sigue
+  permitido**: una fila inmutable nace. Si tampoco debe crearse por la API,
+  quitalo con `routes`.
+- **`secret`** — la columna va a `$hidden` y nunca sale en la exportacion ni en
+  la tabla. Se puede escribir, pero no leer.
+
+Las vistas del modulo de interfaz cuelgan del indice, y el indice necesita
+`policies` porque la tabla las consulta para decidir que acciones ofrece. Sin
+alguna de las dos se generan igualmente el contrato y el store, y
+`larapack:import --vue` lo avisa.
+
+`larapack:full-model` acepta las mismas primitivas para un modelo suelto:
+
+```
+php artisan larapack:full-model AuditEvent --only=policies,index,show --immutable
+```
 
 ## La interfaz: Vue y React
 

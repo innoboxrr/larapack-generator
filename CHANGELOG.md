@@ -1,5 +1,66 @@
 # Changelog
 
+## 7.1.0
+
+Tres claves nuevas en el laraimport para las tablas que no se administran desde
+un formulario. Son retrocompatibles: **un archivo que no las declara genera
+exactamente lo mismo que con la 7.0**, y hay un test que lo comprueba archivo
+por archivo contra una foto tomada antes del cambio.
+
+### El problema
+
+LaraPack genera diez acciones por modelo, que es la forma correcta para algo
+que una persona administra desde una pantalla. Pero una bitácora sólo se
+agrega, un catálogo sólo se lee, una concesión se otorga y se revoca sin
+editarse, y una credencial se lista sin que su secreto salga nunca. Medido en un
+sistema real, 46 de 69 tablas no tenían forma en el generador: se declaraban
+normales y se borraba a mano lo que sobraba, lo que dejaba esos archivos
+marcados como editados para siempre.
+
+### Qué se declara
+
+- **`routes`** (`only` o `except`): qué acciones genera el modelo. Quitar una
+  quita todo lo que cuelga de ella — ruta, request, método del controlador,
+  evento y listeners, habilidad de la política, test de endpoint, exportación, y
+  en la interfaz su formulario, su vista, su entrada en la tabla y su función
+  del contrato. Sin `delete`, `restore` ni `forceDelete`, el modelo deja de usar
+  `SoftDeletes` y la migración deja de crear `deleted_at`.
+- **`immutable`**: la fila no cambia una vez creada. Quita las cuatro
+  escrituras y el modelo registra una guarda en `booted()` que lanza ante
+  cualquier `save()` o `delete()`: quitar la ruta impide entrar por HTTP, pero no
+  que el propio paquete modifique la fila. **Crear sigue permitido**, porque una
+  fila inmutable nace; si tampoco debe crearse por la API, se quita con `routes`.
+- **`secret`**, por propiedad: la columna va a `$hidden` y no sale en la
+  exportación ni en la tabla.
+
+`larapack:full-model` acepta `--only`, `--except` e `--immutable`, y
+`larapack:validate` acepta `--vue` y `--react` para mostrar lo que sólo importa
+si se genera la interfaz.
+
+### `larapack:verify`
+
+- **`route-not-declared`**, **`immutable-write`** y **`secret-exposed`**, las
+  tres con error. Leen la forma que el manifiesto guarda al generar.
+- **`inconsistent-entity`** compara cada modelo sólo con los que declararon su
+  misma forma. Antes, un modelo de sólo lectura habría salido marcado una vez por
+  cada componente que no debe tener.
+
+### Cambios respecto a la propuesta
+
+- `immutable` no quita `create`, por lo dicho arriba.
+- `restore` o `forceDelete` sin `delete` es aviso y no error: una fila que borra
+  un proceso en segundo plano y se restaura desde la API es legítima.
+- `secret` no se excluye del Resource sino que va a `$hidden`: el Resource
+  generado hace `parent::toArray()` y no enumera campos, y `$hidden` protege
+  además cualquier otra serialización.
+- `immutable-write` no busca llamadas a `update()` en todo el paquete. Resolver
+  a qué clase apunta `$x->update()` sin un resolutor de tipos o se deja casos o
+  marca cada llamada del paquete; la guarda del modelo lo garantiza mejor,
+  porque la llamada falla.
+- Las vistas necesitan `index` y `policies`, no sólo `index` o `show`: cuelgan
+  de la ruta del índice, y la tabla consulta las políticas para decidir qué
+  acciones ofrecer.
+
 ## 7.0.0
 
 Salto de mayor: el módulo generado deja de depender de frameworks que nadie

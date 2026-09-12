@@ -97,6 +97,9 @@ Lo que conviene saber sin tener que leer el esquema entero:
 | `editable_metas` | Metas que el update acepta. |
 | `requests[]` | Reglas de `CreateRequest` y `UpdateRequest`. Solo esos dos. |
 | `pivots[]` | Migraciones de tablas pivote, sin modelo. |
+| `routes` | Qué acciones genera el modelo: `only` o `except`. Sin la clave, las diez. |
+| `immutable` | La fila no cambia una vez creada: sin `update`, `delete`, `restore` ni `forceDelete`, y el modelo lanza si algo lo intenta. Crear sigue permitido. |
+| `props[].secret` | Nunca sale por la API: va a `$hidden`, fuera de la exportación y de la tabla. Se escribe, no se lee. |
 
 Tres cosas se resuelven solas — **no intentes arreglarlas a mano**:
 
@@ -107,6 +110,21 @@ Tres cosas se resuelven solas — **no intentes arreglarlas a mano**:
   contra `App\Models`. Solo escribe `namespace` si es ninguna de las dos cosas.
 - **Las reglas admiten array**, que es la forma de Laravel para todo lo que
   lleve `|` dentro, como un `regex:`.
+
+**No todas las tablas se administran desde un formulario.** Una bitácora sólo se
+agrega, un catálogo sólo se lee, una concesión se otorga y se revoca pero no se
+edita. Decláralo con `routes` e `immutable` en lugar de generar las diez
+acciones y borrar lo que sobra: lo borrado a mano queda marcado como editado
+para siempre, `larapack:verify` lo detecta como deriva, y el contrato deja de
+describir el código.
+
+```json
+{ "name": "AuditEvent", "immutable": true, "routes": { "only": ["policies", "index", "show"] }, "props": [ ... ] }
+```
+
+Quitar una acción quita todo lo que cuelga de ella, también en la interfaz. Las
+vistas necesitan `index` y `policies`: sin ellas sólo se generan el contrato y
+el store.
 
 `assignments` y `filters` están marcadas obsoletas en el esquema. No las uses.
 
@@ -123,8 +141,14 @@ distintas y las dos importan:
 - **Coherencia**, mirando el documento entero: modelos o columnas repetidos,
   ciclos de claves foráneas (que no tienen orden de migración posible), claves
   foráneas a sí mismo no anulables, reglas sobre campos que no son columnas,
-  relaciones que no resuelven, y `UpdateRequest` sin la regla del identificador
-  del que dependen su `authorize()` y su `handle()`.
+  relaciones que no resuelven, `UpdateRequest` sin la regla del identificador
+  del que dependen su `authorize()` y su `handle()`, `only` junto a `except`,
+  un modelo `immutable` que pide una escritura, un campo de formulario sin
+  `create` ni `update` donde vivir, y un `secret` que pide salir en la tabla o
+  en la exportación.
+
+Si vas a generar la interfaz, añade `--vue` o `--react`: también avisa de lo que
+las vistas necesitan y el modelo no declara.
 
 **Un error de validación se corrige en el JSON.** Nunca generando igualmente y
 parcheando el resultado.
@@ -228,11 +252,18 @@ generado con su hash. Detecta:
 - **`missing-file`** (error): falta algo que se generó. Regenera.
 - **`customised`** (info): editaste un archivo generado. Puede estar bien — es
   un hueco — o ser deriva.
-- **`inconsistent-entity`** (aviso): un modelo no tiene una pieza que todos los
-  demás sí tienen. Casi siempre es un olvido.
+- **`inconsistent-entity`** (aviso): un modelo no tiene una pieza que tienen
+  todos los que declararon su misma forma. Casi siempre es un olvido.
 - **`route-prefix`** (error): el `API_ROUTE_PREFIX` del módulo Vue no coincide
   con el `->as(...)` del `RouteServiceProvider`. El front está llamando a una
   ruta que no existe.
+- **`route-not-declared`** (error): existe una ruta, un método, un request o una
+  vista de una acción que el modelo no declara. Alguien la escribió a mano:
+  declárala en el JSON o retírala.
+- **`immutable-write`** (error): un modelo `immutable` tiene un camino de
+  escritura, o su modelo perdió la guarda de `booted()`.
+- **`secret-exposed`** (error): una columna `secret` volvió a salir por la API,
+  la exportación o la tabla.
 
 Código distinto de cero = aún no has terminado.
 
@@ -381,6 +412,10 @@ y se dispara con `actionClicked()`. Una acción con `route: false` invoca
   treinta.
 - **Rellenar todas las claves del JSON.** Declara lo que decides; el resto son
   defaults del esquema.
+- **Generar las diez acciones y borrar las que sobran.** Declara `routes` o
+  `immutable`. Lo borrado a mano queda como deriva para siempre.
+- **Exponer un secreto en el Resource "sólo para depurar".** `larapack:verify`
+  falla con `secret-exposed`, y tiene razón.
 - **Corregir el código generado en vez del JSON.** El siguiente `--force` lo
   conservará, sí, pero el contrato y el código ya no dicen lo mismo.
 - **Olvidar `<model>_id` en las reglas de `Update`.** `authorize()` y
