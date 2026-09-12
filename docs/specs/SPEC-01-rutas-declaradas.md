@@ -1,8 +1,8 @@
 # SPEC 01 — Rutas declaradas, `immutable` y `secret`
 
-**Estado:** propuesta, sin implementar.
+**Estado:** implementado en larapack-generator 7.1.0, con las desviaciones que recoge la [sección 8](#8-resolución).
 **Origen:** sesión de arquitectura del núcleo de plataforma (69 modelos, 22 rondas).
-**Depende de:** nada. Se puede implementar hoy y vale por sí sola.
+**Depende de:** se propuso sin dependencias, pero necesitó que el manifiesto guardara la forma declarada de cada modelo: `verify` no recibe el laraimport.
 **Bloquea a:** SPEC 02 (manifiesto de contrato) y a la generación del núcleo.
 
 ---
@@ -160,7 +160,7 @@ Se considera terminado cuando:
 2. Un `laraimport.json` **sin** ninguna de las tres claves genera exactamente lo mismo que antes. Hay un test que lo comprueba archivo por archivo, por hash.
 3. `{"routes": {"only": ["index","show"]}}` genera dos rutas, dos requests, ninguna vista de alta ni de edición, y el `index.js` del módulo no exporta `create` ni `update`.
 4. `{"only": [...], "except": [...]}` en el mismo modelo falla en `larapack:validate` con mensaje claro.
-5. `immutable: true` con `create` en `routes.only` falla en `validate`.
+5. ~~`immutable: true` con `create` en `routes.only` falla en `validate`.~~ Lo que falla es `immutable: true` con `update`, `delete`, `restore` o `forceDelete` en `routes.only`; `create` está permitido (ver sección 8).
 6. Un modelo `immutable` al que se le añade a mano una ruta `PUT` hace fallar `larapack:verify` con `immutable-write`.
 7. Una propiedad `secret` añadida a mano al `Resource` hace fallar `verify` con `secret-exposed`.
 8. `API_ROUTE_PREFIX` y la comprobación `route-prefix` siguen funcionando con rutas parciales.
@@ -180,3 +180,19 @@ Se considera terminado cuando:
 Las tablas que sólo se leen o sólo se agregan no son una rareza: aparecen en cualquier sistema serio. Una póliza, un consentimiento, un movimiento contable, una autorización temporal, un registro de envío.
 
 Cada vez que aparece una hoy, alguien la declara normal y luego borra a mano lo que sobra. Con este cambio, se declara una vez y el generador hace lo correcto siempre — que es la razón de existir de LaraPack, aplicada al caso que hoy se le escapa.
+
+---
+
+## 8. Resolución
+
+Implementado en larapack-generator 7.1.0 (2026-09-12). Lo que se apartó de esta propuesta, y por qué:
+
+- **`immutable` no quita `create`.** Una fila inmutable nace; lo que no hace es cambiar. El ejemplo del consentimiento de la sección 7 lo necesita. Que tampoco se cree por HTTP es otra decisión y se declara con `routes`. Por eso el criterio 5 falla con una escritura en `only`, no con `create`.
+- **`restore` o `forceDelete` sin `delete` es aviso, no error.** Una fila que borra un proceso en segundo plano y se restaura desde la API es legítima.
+- **`secret` va a `$hidden` en lugar de excluirse del Resource.** El Resource generado hace `parent::toArray()` y no enumera campos, así que no había de dónde excluirla. `$hidden` protege además cualquier serialización, no sólo ese Resource.
+- **El modelo inmutable no sobrescribe `update()`, `delete()`, `forceDelete()` ni `restore()`**: registra en `booted()` los eventos `updating` y `deleting`. Sobrescribir `update()` dejaba abierto `$modelo->campo = x; $modelo->save()`; los eventos cubren todo lo que pasa por Eloquent. Lo que ninguna de las dos formas cubre es una actualización masiva desde el query builder, y el modelo generado lo dice.
+- **`immutable-write` no busca llamadas a `update()` o `delete()` por el paquete.** Resolver a qué clase apunta `$x->update()` sin un resolutor de tipos o se deja casos o marca cada llamada; la guarda del modelo lo garantiza mejor, porque la llamada falla.
+- **Las vistas necesitan `index` y `policies`**, no «index o show»: cuelgan de la ruta del índice, y la tabla exige la URL de políticas. La edición cuelga además de la ruta de detalle.
+- **La cascada llegó más lejos que la tabla de la sección 3**: eventos y listeners, habilidades de la política, handlers del observer, tests de endpoint, `SoftDeletes` y `deleted_at` cuando no queda ninguna forma de borrar, y las acciones por fila del Resource.
+- **`inconsistent-entity` compara sólo modelos de la misma forma.** El spec no lo pedía, pero sin eso un modelo de sólo lectura habría salido marcado una vez por cada componente que no debe tener.
+- **El manifiesto de generación guarda la forma declarada** (`models.<Modelo>.declaration`), sólo cuando se aparta de la de siempre: `verify` no recibe el laraimport y no tenía otra forma de saberla. El SPEC 02 puede partir de ahí.
