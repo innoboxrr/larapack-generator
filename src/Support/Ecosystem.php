@@ -133,7 +133,9 @@ final class Ecosystem
         // paquetes legítimamente agnósticos y obligarles a depender del
         // framework sería empeorarlos.
         $expectedIlluminate = $rules['laravel']['illuminate'] ?? null;
-        $illuminate = array_filter($all, fn (string $k): bool => str_starts_with($k, 'illuminate/'), ARRAY_FILTER_USE_KEY);
+        // laravel/framework trae todos los illuminate/*: una aplicacion o un
+        // paquete que lo pide a el ya esta declarando contra que Laravel funciona.
+        $illuminate = array_filter($all, fn (string $k): bool => str_starts_with($k, 'illuminate/') || $k === 'laravel/framework', ARRAY_FILTER_USE_KEY);
 
         if ($expectedIlluminate !== null) {
             if ($illuminate === [] && $this->usesLaravel($directory)) {

@@ -286,6 +286,32 @@ final class AuditTest extends TestCase
         $this->assertGreaterThan(0, $this->audit($package)['errors']);
     }
 
+    /**
+     * laravel/framework contiene todos los illuminate/*, asi que declararlo es
+     * declarar contra que Laravel funciona el paquete.
+     */
+    public function test_laravel_framework_cuenta_como_declarar_illuminate(): void
+    {
+        $package = $this->package('con-framework', [
+            'name' => 'innoboxrr/con-framework',
+            'description' => 'x',
+            'license' => 'MIT',
+            'autoload' => ['psr-4' => ['X\\' => 'src/']],
+            'require' => ['php' => '^8.3', 'laravel/framework' => '^12.0 || ^13.0'],
+        ]);
+
+        mkdir("{$package}/src", 0777, true);
+        file_put_contents("{$package}/src/Provider.php", "<?php\nuse Illuminate\\Support\\ServiceProvider;\n");
+
+        $this->withTests($package);
+        $this->withWorkflows($package, ['tests.yml', 'release.yml']);
+
+        $result = $this->audit($package);
+
+        $this->assertNotHasCheck('illuminate-missing', $result);
+        $this->assertSame(0, $result['errors']);
+    }
+
     public function test_detecta_la_ausencia_de_tests(): void
     {
         $package = $this->package('sin-tests', [
