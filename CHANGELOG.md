@@ -1,5 +1,20 @@
 # Changelog
 
+## 7.2.0
+
+`larapack:audit` detecta el `composer.json` que fija su propia `version`, y lo
+trata como error.
+
+Composer compara ese campo con cada tag del repositorio y descarta los que no
+coinciden. Con el modelo de publicación desde `VERSION`, el tag sale bien pero el
+`composer.json` sigue diciendo la versión vieja, así que la publicación existe en
+GitHub y no existe para Composer. Pasó de verdad: `seguropro/core` se etiquetó
+2.0.0 diciendo 1.0.5, y un `seguropro/core: ^2.0` no resolvía. Veintitrés
+paquetes del ecosistema tenían el campo.
+
+Un paquete que hoy pase el audit con el campo presente dejará de pasarlo al
+actualizar; el arreglo es borrar la línea.
+
 ## 7.1.0
 
 Tres claves nuevas en el laraimport para las tablas que no se administran desde
