@@ -9,6 +9,7 @@ use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Input\ArrayInput;
+use Innoboxrr\LarapackGenerator\Support\Declaration;
 use Innoboxrr\LarapackGenerator\Support\Import\ImportDocument;
 use Innoboxrr\LarapackGenerator\Support\Import\SemanticValidator;
 use Innoboxrr\LarapackGenerator\Tools\Tool;
@@ -41,6 +42,11 @@ class JsonImporterCommand extends Command
         // parte de los archivos ya escritos.
         ['document' => $document, 'errors' => $findings] = ImportDocument::fromFile($jsonPath);
 
+        // Los avisos de interfaz sólo tienen sentido si se genera la interfaz.
+        if ($document !== null && ($input->getOption('vue') || $input->getOption('react'))) {
+            $findings = [...$findings, ...SemanticValidator::interface($document->toArray())];
+        }
+
         foreach ($findings as $finding) {
             $output->writeln(sprintf(
                 '  %s <fg=cyan>%s</> %s',
@@ -58,6 +64,10 @@ class JsonImporterCommand extends Command
 
         Tool::setFromJsonImporter(true);
         Tool::setJsonContent($document->toArray());
+
+        foreach ($document->models() as $model) {
+            Declaration::fromModel($model);
+        }
 
         try {
 
@@ -88,6 +98,7 @@ class JsonImporterCommand extends Command
             // En un finally: si algo lanza, el flag no puede quedarse activo
             // para el resto del proceso.
             Tool::setFromJsonImporter(false);
+            Declaration::reset();
 
         }
 

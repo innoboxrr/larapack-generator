@@ -30,7 +30,9 @@ class ValidateCommand extends Command
             ->setDescription('Valida un laraimport.json contra el esquema y comprueba sus referencias')
             ->addArgument('jsonPath', InputArgument::OPTIONAL, 'Ruta del archivo; por omisión laraimport.json en la raíz')
             ->addOption('format', null, InputOption::VALUE_REQUIRED, 'Formato de salida: txt o json', 'txt')
-            ->addOption('strict', null, InputOption::VALUE_NONE, 'Trata los avisos como errores');
+            ->addOption('strict', null, InputOption::VALUE_NONE, 'Trata los avisos como errores')
+            ->addOption('vue', null, InputOption::VALUE_NONE, 'Comprueba también lo que necesita el módulo Vue')
+            ->addOption('react', null, InputOption::VALUE_NONE, 'Comprueba también lo que necesita el módulo React');
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
@@ -40,6 +42,10 @@ class ValidateCommand extends Command
         $path = $input->getArgument('jsonPath') ?? root_path() . '/laraimport.json';
 
         ['document' => $document, 'errors' => $findings] = ImportDocument::fromFile($path);
+
+        if ($document !== null && ($input->getOption('vue') || $input->getOption('react'))) {
+            $findings = [...$findings, ...SemanticValidator::interface($document->toArray())];
+        }
 
         $errors = $this->count($findings, SemanticValidator::ERROR);
         $warnings = $this->count($findings, SemanticValidator::WARNING);

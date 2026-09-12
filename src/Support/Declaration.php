@@ -113,6 +113,36 @@ final class Declaration
             && $declaration['secret'] === [];
     }
 
+    /**
+     * Lo que hay que anotar en el manifiesto: sólo lo que se aparta de la forma
+     * de siempre.
+     *
+     * Un modelo con las diez acciones no anota nada, así que el manifiesto de
+     * un proyecto que no usa las claves nuevas sale idéntico al de antes, y
+     * uno antiguo se sigue leyendo bien: la ausencia significa las diez.
+     *
+     * @return array<string, mixed>
+     */
+    public static function toManifest(string $model): array
+    {
+        $declaration = self::of($model);
+        $entry = [];
+
+        if (! Actions::isAll($declaration['actions'])) {
+            $entry['actions'] = $declaration['actions'];
+        }
+
+        if ($declaration['immutable']) {
+            $entry['immutable'] = true;
+        }
+
+        if ($declaration['secret'] !== []) {
+            $entry['secret'] = $declaration['secret'];
+        }
+
+        return $entry;
+    }
+
     public static function reset(): void
     {
         self::$models = [];

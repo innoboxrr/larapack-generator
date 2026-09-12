@@ -2,6 +2,8 @@
 
 namespace Innoboxrr\LarapackGenerator\Support;
 
+use Innoboxrr\LarapackGenerator\Support\Import\Actions;
+
 /**
  * Registro de lo que el generador ha producido en un proyecto.
  *
@@ -81,6 +83,47 @@ final class Manifest
         }
 
         $this->write($manifest);
+    }
+
+    /**
+     * Anota la forma que declaró el modelo.
+     *
+     * `verify` no recibe el laraimport, así que sin esto no tendría con qué
+     * distinguir un modelo al que le falta el formulario de edición de uno que
+     * declaró que no se edita. Con una declaración vacía se retira la clave:
+     * es la forma de siempre.
+     *
+     * @param  array<string, mixed>  $declaration
+     */
+    public function declare(string $model, array $declaration): void
+    {
+        $manifest = $this->read();
+
+        if ($declaration === []) {
+            if (! isset($manifest['models'][$model]['declaration'])) {
+                return;
+            }
+
+            unset($manifest['models'][$model]['declaration']);
+        } else {
+            $manifest['models'][$model]['declaration'] = $declaration;
+        }
+
+        $this->write($manifest);
+    }
+
+    /**
+     * @return array{actions: array<int, string>, immutable: bool, secret: array<int, string>}
+     */
+    public function declarationOf(string $model): array
+    {
+        $declared = $this->read()['models'][$model]['declaration'] ?? [];
+
+        return [
+            'actions' => $declared['actions'] ?? Actions::ALL,
+            'immutable' => (bool) ($declared['immutable'] ?? false),
+            'secret' => $declared['secret'] ?? [],
+        ];
     }
 
     public function forget(string $model): void
@@ -220,7 +263,9 @@ final class Manifest
         ksort($manifest['package']['files']);
 
         foreach ($manifest['models'] as &$model) {
-            ksort($model['files']);
+            if (isset($model['files'])) {
+                ksort($model['files']);
+            }
         }
 
         file_put_contents(
