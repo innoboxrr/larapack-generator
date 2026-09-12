@@ -43,6 +43,15 @@ class PascalCaseModelName extends Model
         //FILLABLE//
     ];
 
+    // @larapack:if secret
+    /**
+     * Nunca salen por la API: toArray() las omite, y con él el Resource.
+     */
+    protected $hidden = [
+        //HIDDEN//
+    ];
+
+    // @larapack:endif
     protected $creatable = [
         //CREATABLE//
     ];
@@ -81,4 +90,30 @@ class PascalCaseModelName extends Model
         ];
     }
 
+    // @larapack:if immutable
+    /**
+     * Las filas de PascalCaseModelName no se modifican ni se borran una vez
+     * creadas: el laraimport lo declara con `immutable: true`.
+     *
+     * Quitar las rutas de escritura impide entrar por HTTP, pero no que un
+     * servicio del propio paquete llame a save() o a delete(). Esto sí: todo lo
+     * que pasa por Eloquent dispara uno de estos dos eventos antes de tocar la
+     * base de datos. Es una garantía en ejecución, más fuerte que cualquier
+     * comprobación estática, porque la llamada falla.
+     *
+     * Lo que no cubre es una actualización masiva desde el query builder
+     * —PascalCaseModelName::query()->update([...])—, que no carga modelos ni
+     * dispara eventos.
+     */
+    protected static function booted(): void
+    {
+        $refuse = static function (): never {
+            throw new \LogicException('PascalCaseModelName es inmutable: sus filas no se modifican ni se borran.');
+        };
+
+        static::updating($refuse);
+        static::deleting($refuse);
+    }
+
+    // @larapack:endif
 }

@@ -54,6 +54,7 @@ class ModelTool extends Tool
 
 		// Obtener los valores para los diferentes secciones de la plantilla
 		$fillable = $this->generateListFromProps($model['props'], 'fillable');
+		$hidden = $this->generateListFromProps($model['props'], 'secret');
 		$creatable = $this->generateListFromProps($model['props'], 'creatable');
 		$updatable = $this->generateListFromProps($model['props'], 'updatable');
 		$casts = $this->generateCasts($model['props']);
@@ -64,6 +65,7 @@ class ModelTool extends Tool
 
 		// Reemplazar los marcadores en el archivo del modelo
 		$updatedFileContent = str_replace('//FILLABLE//', $fillable, $fileContent);
+		$updatedFileContent = str_replace('//HIDDEN//', $hidden, $updatedFileContent);
 		$updatedFileContent = str_replace('//CREATABLE//', $creatable, $updatedFileContent);
 		$updatedFileContent = str_replace('//UPDATABLE//', $updatable, $updatedFileContent);
 		$updatedFileContent = str_replace('//CASTS//', $casts, $updatedFileContent);

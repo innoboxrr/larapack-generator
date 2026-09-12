@@ -267,4 +267,40 @@ class PascalCaseModelNameEndpointsTest extends TestCase
     }
 
     // @larapack:endif
+    // @larapack:if immutable
+    public function test_snake_case_model_name_no_expone_rutas_de_escritura(): void
+    {
+
+        foreach (['update', 'delete', 'restore', 'force.delete'] as $action) {
+            $this->assertFalse(
+                \Illuminate\Support\Facades\Route::has('api.dotNamespacesnake_case_model_name.' . $action),
+                "PascalCaseModelName es inmutable y tiene registrada la ruta {$action}."
+            );
+        }
+
+    }
+
+    public function test_snake_case_model_name_no_admite_modificaciones(): void
+    {
+
+        $camelCaseModelName = \Namespace\Models\PascalCaseModelName::factory()->create();
+
+        $this->expectException(\LogicException::class);
+
+        $camelCaseModelName->touch();
+
+    }
+
+    public function test_snake_case_model_name_no_admite_borrarse(): void
+    {
+
+        $camelCaseModelName = \Namespace\Models\PascalCaseModelName::factory()->create();
+
+        $this->expectException(\LogicException::class);
+
+        $camelCaseModelName->delete();
+
+    }
+
+    // @larapack:endif
 }
