@@ -1,5 +1,51 @@
 # Changelog
 
+## 7.7.0
+
+`metas: true` genera un modelo que guarda y lee sus metas de verdad. Antes se
+generaban la tabla y el modelo Meta, y nada más: no había relación `metas()`,
+`updateModelMetas()` y `updatePayload()` salían comentados, `protected_metas` no
+se leía en ningún sitio y `payload` era una columna que el cliente podía
+escribir y que se exportaba.
+
+- **La relación `metas()`** se genera en `Traits/Relations`. Sin ella
+  `MetaOperations` no podía leer ni escribir nada.
+- **Crear y actualizar guardan las metas.** `updateModelMetas()` aplana los grupos
+  anidados del formulario con `RequestFormater` de `innoboxrr/support`
+  (`seo.title` → `seo_title`), guarda las de `editable_metas` y rehace `payload`.
+- **`payload` se construye a partir de las metas** con `buildPayload()`, cuya
+  forma decide cada modelo, y se guarda sin disparar eventos.
+- **`payload` lo escribe el sistema.** Con metas se añade solo si no se declara, y
+  nunca se asigna desde la petición ni se exporta; la factory no lo inventa.
+- **`protected_metas`** es una clave nueva del contrato: metas que sólo escribe
+  el código. El formulario no las toca aunque lleguen.
+- **`larapack:validate` avisa** de metas declaradas sin `metas: true`, de una
+  meta editable y protegida a la vez, y de un `payload` que pide escribirse.
+- **`larapack:full-model --metas`** deja el modelo conectado igual que el
+  importador.
+- **El modelo Meta pasa por el generador**: se anota en el manifiesto y respeta
+  `--dry-run`, `--force` y lo editado a mano.
+- **Quitar un modelo borra su modelo Meta.** Se buscaba otro nombre de archivo, y
+  la migración de borrado no encontraba su plantilla.
+- La migración de metas ya no lleva `softDeletes()`, que el trait no usaba, y su
+  rollback conserva el índice único.
+- El README y el skill explican las metas, `payload`, las metas protegidas y
+  cuándo usar cada cosa.
+
+La suite EndToEnd lo ejecuta en una aplicación Laravel: grupos anidados, una meta
+protegida que llega en la petición, un valor vacío que borra y `payload`.
+
+Necesita `innoboxrr/traits` 2.1, que hace cumplir las metas protegidas, e
+`innoboxrr/support` 2.1, que aplana sin perder los grupos vacíos. El módulo
+generado pide también `innoboxrr-form-core` ^2.8, `innoboxrr-form-elements` ^6.6
+e `innoboxrr-react-form-elements` ^3.6, con el teléfono que sigue el tema.
+
+### Para proyectos existentes
+
+Los traits `Relations`, `Storage` y `Operations` no se reescriben al regenerar: en
+un modelo con metas hay que añadir lo nuevo a mano. Está en la guía de
+actualización del README, «De 7.6 a 7.7».
+
 ## 7.6.0
 
 La interfaz generada habla un solo idioma: el de la aplicación. Antes las vistas
