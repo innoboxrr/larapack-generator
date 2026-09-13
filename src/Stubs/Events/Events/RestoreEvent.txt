@@ -20,9 +20,12 @@ class RestoreEvent
         public PascalCaseModelName $camelCaseModelName,
         public array $data,
         public mixed $response,
-        public string $locale = 'en',
+        public ?string $locale = null,
     ) {
-        App::setLocale($this->locale);
+        // El idioma de quien lanza el evento, para lo que se haga despues con
+        // el. Antes valia 'en' y el constructor llamaba a App::setLocale: cada
+        // alta, edicion o borrado pasaba a ingles el resto de la peticion.
+        $this->locale ??= App::getLocale();
     }
 
     /**

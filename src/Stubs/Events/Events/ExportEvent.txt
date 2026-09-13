@@ -18,8 +18,11 @@ class ExportEvent
     public function __construct(
         public array $data,
         public mixed $user,
-        public string $locale = 'en',
+        public ?string $locale = null,
     ) {
+        // Sin idioma explicito, el de la peticion que pide la exportacion: antes
+        // valia 'en' y el correo salia en ingles para todos.
+        $this->locale ??= App::getLocale();
     }
 
     /**
