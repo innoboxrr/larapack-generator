@@ -1,5 +1,49 @@
 # Changelog
 
+## 7.4.0
+
+`larapack:new` crea un paquete desde cero, listo para generar, probar y publicar:
+
+```
+php vendor/bin/builder larapack:new acme/catalogo
+```
+
+Hasta ahora LaraPack generaba dentro de un proyecto que alguien había montado
+copiando otro paquete, y lo que ese montaje decidía era justo lo que cada paquete
+tenía distinto: la restricción de PHP, las versiones internas, si había tests,
+cómo se publicaba y cómo lo descubría Laravel.
+
+El paquete que sale:
+
+- **Pasa `larapack:audit` sin un solo hallazgo.** El `composer.json` sale de
+  `ecosystem.json`, que gana una sección `generated` con lo que el código
+  generado usa fuera de la línea base: Sanctum y Excel.
+- **Tiene CI desde el primer push**: los `tests.yml` y `release.yml` del
+  ecosistema, `phpunit.xml.dist`, el `TestCase` y un `PackageBootsTest` que
+  comprueba que los proveedores arrancan y las migraciones corren.
+- **Se publica desde `VERSION`**, que empieza en 0.1.0.
+- **Laravel lo descubre solo**: los proveedores quedan en
+  `extra.laravel.providers`.
+- **Un agente encuentra la guía**: instala el skill y deja un `AGENTS.md` que
+  apunta a ella.
+
+No sobrescribe nada y no trabaja sobre un directorio con `composer.json`.
+`--dry-run` construye el paquete en un directorio temporal y dice exactamente
+qué crearía.
+
+La suite EndToEnd parte ahora de `larapack:new`: el paquete que instala y recorre
+es el que obtendría cualquiera empezando desde cero.
+
+### Correcciones
+
+- Volver a ejecutar `larapack:providers` declaraba cada proveedor otra vez en
+  `composer.json`, y Laravel lo registraba dos veces.
+- Con `--dry-run`, `larapack:providers` escribía igualmente en `composer.json` y
+  el generador de tests copiaba `TestCase.php` y `phpunit.xml`. Ahora una
+  simulación no escribe nada, y el informe menciona esos archivos.
+- Si el proyecto tiene `phpunit.xml.dist`, ya no se crea además un
+  `phpunit.xml` que lo tapaba.
+
 ## 7.3.0
 
 Lo generado ya no sólo compila: arranca y funciona. Hasta ahora los tests de
