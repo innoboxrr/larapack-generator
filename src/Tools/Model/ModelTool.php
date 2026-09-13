@@ -56,11 +56,13 @@ class ModelTool extends Tool
         $fileContent = file_get_contents($modelFile);
 
         // Obtener los valores para los diferentes secciones de la plantilla
+        $authenticatable = ! empty($model['authenticatable']);
+
         $fillable = $this->generateListFromProps($model['props'], 'fillable');
-        $hidden = $this->generateListFromProps($model['props'], 'secret');
+        $hidden = $this->generateHidden($model['props'], $authenticatable);
         $creatable = $this->generateListFromProps($model['props'], 'creatable');
         $updatable = $this->generateListFromProps($model['props'], 'updatable');
-        $casts = $this->generateCasts($model['props']);
+        $casts = $this->generateCasts($model['props'], $authenticatable);
         $editableMetas = $this->generateEditableMetas($model['editable_metas']);
         $exportCols = $this->generateExportCols($model['props']);
         $loadableRelations = $this->generateLoadableRelations($model['load_relations']);
@@ -103,13 +105,43 @@ class ModelTool extends Tool
         return implode(', ', $list);
     }
 
-    private function generateCasts(array $props)
+    /**
+     * Las columnas que nunca salen por la API: las secretas y, en un usuario
+     * que inicia sesión, la contraseña y el token de "recordarme" aunque no se
+     * declaren.
+     */
+    private function generateHidden(array $props, bool $authenticatable): string
+    {
+        $hidden = array_column(array_filter($props, fn (array $prop): bool => ! empty($prop['secret'])), 'name');
+
+        if ($authenticatable) {
+            $hidden = [...$hidden, 'password', 'remember_token'];
+        }
+
+        return implode(', ', array_map(fn (string $name): string => "'{$name}'", array_values(array_unique($hidden))));
+    }
+
+    /**
+     * Los casts declarados y, en un usuario que inicia sesión, los que Laravel
+     * espera: la fecha de verificación y la contraseña cifrada al asignarla.
+     */
+    private function generateCasts(array $props, bool $authenticatable = false)
     {
         $casts = [];
 
         foreach ($props as $prop) {
             if (! is_null($prop['cast'])) {
-                $casts[] = "'{$prop['name']}' => '{$prop['cast']}'";
+                $casts[$prop['name']] = "'{$prop['name']}' => '{$prop['cast']}'";
+            }
+        }
+
+        if ($authenticatable) {
+            $names = array_column($props, 'name');
+
+            foreach (['email_verified_at' => 'datetime', 'password' => 'hashed'] as $name => $cast) {
+                if (in_array($name, $names, true) && ! isset($casts[$name])) {
+                    $casts[$name] = "'{$name}' => '{$cast}'";
+                }
             }
         }
 

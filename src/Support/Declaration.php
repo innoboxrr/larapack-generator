@@ -21,10 +21,10 @@ final class Declaration
     /**
      * Las condiciones de los stubs que no son una acción.
      */
-    public const FLAGS = ['immutable', 'secret', 'metas'];
+    public const FLAGS = ['immutable', 'secret', 'metas', 'authenticatable'];
 
     /**
-     * @var array<string, array{actions: array<int, string>, immutable: bool, secret: array<int, string>, metas: bool, display: string}>
+     * @var array<string, array{actions: array<int, string>, immutable: bool, secret: array<int, string>, metas: bool, display: string, authenticatable: bool}>
      */
     private static array $models = [];
 
@@ -32,8 +32,9 @@ final class Declaration
      * @param  array<int, string>  $actions
      * @param  array<int, string>  $secret
      * @param  string  $display  La columna que nombra a un registro en pantalla.
+     * @param  bool  $authenticatable  El modelo es un usuario que inicia sesión.
      */
-    public static function set(string $model, array $actions, bool $immutable = false, array $secret = [], bool $metas = false, string $display = 'name'): void
+    public static function set(string $model, array $actions, bool $immutable = false, array $secret = [], bool $metas = false, string $display = 'name', bool $authenticatable = false): void
     {
         self::$models[$model] = [
             'actions' => array_values(array_intersect(Actions::ALL, $actions)),
@@ -41,6 +42,7 @@ final class Declaration
             'secret' => array_values($secret),
             'metas' => $metas,
             'display' => $display,
+            'authenticatable' => $authenticatable,
         ];
     }
 
@@ -77,7 +79,8 @@ final class Declaration
             ! empty($model['immutable']),
             $secret,
             ! empty($model['metas']),
-            $model['display'] ?? 'name'
+            $model['display'] ?? 'name',
+            ! empty($model['authenticatable'])
         );
     }
 
@@ -85,7 +88,7 @@ final class Declaration
      * Sin laraimport no se conocen las columnas: se nombra por `name`, como
      * siempre.
      *
-     * @return array{actions: array<int, string>, immutable: bool, secret: array<int, string>, metas: bool, display: string}
+     * @return array{actions: array<int, string>, immutable: bool, secret: array<int, string>, metas: bool, display: string, authenticatable: bool}
      */
     public static function of(string $model): array
     {
@@ -95,6 +98,7 @@ final class Declaration
             'secret' => [],
             'metas' => false,
             'display' => 'name',
+            'authenticatable' => false,
         ];
     }
 
@@ -119,6 +123,7 @@ final class Declaration
             $condition === 'immutable' => $declaration['immutable'],
             $condition === 'secret' => $declaration['secret'] !== [],
             $condition === 'metas' => $declaration['metas'],
+            $condition === 'authenticatable' => $declaration['authenticatable'],
             default => throw new MakerException("Condición de stub desconocida: '{$condition}'."),
         };
     }
@@ -133,7 +138,8 @@ final class Declaration
 
         return Actions::isAll($declaration['actions'])
             && ! $declaration['immutable']
-            && $declaration['secret'] === [];
+            && $declaration['secret'] === []
+            && ! $declaration['authenticatable'];
     }
 
     /**
@@ -161,6 +167,10 @@ final class Declaration
 
         if ($declaration['secret'] !== []) {
             $entry['secret'] = $declaration['secret'];
+        }
+
+        if ($declaration['authenticatable']) {
+            $entry['authenticatable'] = true;
         }
 
         return $entry;

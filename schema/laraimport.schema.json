@@ -114,6 +114,11 @@
                     "type": "boolean",
                     "default": false,
                     "description": "Una vez creada, la fila no se modifica ni se borra: quita update, delete, restore y forceDelete, y el modelo lanza una excepción si algo lo intenta por otro camino. Crear sigue permitido; si tampoco debe crearse por HTTP, quítalo con routes."
+                },
+                "authenticatable": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "El modelo es un usuario que inicia sesión, típicamente User: extiende Authenticatable, usa Notifiable y los tokens de Sanctum, oculta password y remember_token, cifra la contraseña y responde isAdmin() con los correos de `auth.admins`. Tiene que declarar email y password; la contraseña no sale en la tabla ni en la exportación."
                 }
             }
         },

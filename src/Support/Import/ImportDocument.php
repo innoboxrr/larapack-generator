@@ -119,6 +119,17 @@ final class ImportDocument
                 $document['models'][$index]['props'][$position]['datatable'] = false;
             }
 
+            // La contraseña de un usuario que inicia sesión, y su token de
+            // "recordarme", tampoco salen nunca, se declaren como se declaren.
+            if (! empty($model['authenticatable'])) {
+                foreach ($document['models'][$index]['props'] as $position => $prop) {
+                    if (in_array($prop['name'], ['password', 'remember_token'], true)) {
+                        $document['models'][$index]['props'][$position]['exports_cols'] = false;
+                        $document['models'][$index]['props'][$position]['datatable'] = false;
+                    }
+                }
+            }
+
             if (! empty($model['metas'])) {
                 $document['models'][$index]['props'] = self::withPayload($document['models'][$index]['props']);
             }

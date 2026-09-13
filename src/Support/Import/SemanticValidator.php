@@ -42,7 +42,40 @@ final class SemanticValidator
             ...self::secrets($models, $raw['models'] ?? []),
             ...self::metas($models, $raw['models'] ?? []),
             ...self::display($models),
+            ...self::authenticatable($models),
         ];
+    }
+
+    /**
+     * Un usuario que inicia sesión necesita con qué entrar: su correo y su
+     * contraseña. Sin ellos el modelo se genera, pero nadie puede usarlo.
+     *
+     * @param  array<int, array<string, mixed>>  $models
+     * @return array<int, array{level: string, path: string, message: string}>
+     */
+    private static function authenticatable(array $models): array
+    {
+        $findings = [];
+
+        foreach ($models as $index => $model) {
+            if (empty($model['authenticatable'])) {
+                continue;
+            }
+
+            $names = array_column($model['props'] ?? [], 'name');
+
+            foreach (['email', 'password'] as $required) {
+                if (! in_array($required, $names, true)) {
+                    $findings[] = [
+                        'level' => self::ERROR,
+                        'path' => "/models/{$index}/props",
+                        'message' => "{$model['name']} es authenticatable y no declara `{$required}`: sin él nadie puede iniciar sesión.",
+                    ];
+                }
+            }
+        }
+
+        return $findings;
     }
 
     /**
