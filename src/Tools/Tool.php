@@ -169,18 +169,21 @@ class Tool
 			file_put_contents($file, $this->replaceTokens(file_get_contents($file)));
 		}
 
-		public function addProvidersToComposerJson(array $providers) 
+		public function addProvidersToComposerJson(array $providers)
 		{
-			if(app_dir_name() == 'src') {
+			// Una simulacion no escribe nada, tampoco composer.json.
+			if(app_dir_name() == 'src' && ! Generation::isDryRun()) {
 				$composerJsonPath = root_path() . '/composer.json';
 			    $composerJsonData = json_decode(file_get_contents($composerJsonPath), true);
 			    if (!isset($composerJsonData['extra']['laravel']['providers'])) {
 			        $composerJsonData['extra']['laravel']['providers'] = [];
 			    }
-			    $composerJsonData['extra']['laravel']['providers'] = array_merge(
+			    // Sin quitar repetidos, volver a ejecutar larapack:providers
+			    // declaraba cada proveedor otra vez y Laravel lo registraba dos.
+			    $composerJsonData['extra']['laravel']['providers'] = array_values(array_unique(array_merge(
 			        $composerJsonData['extra']['laravel']['providers'],
 			        $providers
-			    );
+			    )));
 			    file_put_contents(
 			    	$composerJsonPath, 
 			    	json_encode($composerJsonData, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)
