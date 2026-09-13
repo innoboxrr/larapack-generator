@@ -25,6 +25,8 @@ class RemoveFullModelCommand extends Command
         'Migration',
         'Model',
         'ModelTraits',
+        // Sólo actúa si el modelo tiene su modelo Meta.
+        'ModelMetas',
         'Observer',
         'Policy',
         'Requests',

@@ -6,6 +6,11 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
+/**
+ * Una meta de PascalCaseModelName: una fila `key`/`value` en
+ * snake_case_model_name_metas. No se usa directamente: MetaOperations la lee y
+ * la escribe a través de PascalCaseModelName::metas().
+ */
 class PascalCaseModelNameMeta extends Model
 {
 

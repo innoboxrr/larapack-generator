@@ -54,19 +54,17 @@ class ModelMetasTool extends Tool
 		return true;
 	}
 
+	/**
+	 * Por generate(), como el resto: antes se copiaba a mano, así que no se
+	 * anotaba en el manifiesto, ignoraba --dry-run y --force, y no se protegía
+	 * si se había editado.
+	 */
 	private function createModelMetas()
 	{
-		$modelMetasFile = $this->modelMetasPath . '/' . $this->PascalCaseModelName . 'Meta.php';
-		if(!file_exists($modelMetasFile)) {
-			$templateFile = $this->modelMetasTemplatePath . '/ModelMetasTemplate.txt';
-			if(copy($templateFile, $modelMetasFile)) {
-				$this->replaceData($modelMetasFile);
-			} else {
-				throw MakerException::copyFailed($templateFile, $modelMetasFile);
-			}
-		} else {
-			return false;
-		}
+		return $this->generate(
+			$this->modelMetasTemplatePath . '/ModelMetasTemplate.txt',
+			$this->modelMetasPath . '/' . $this->PascalCaseModelName . 'Meta.php'
+		);
 	}
 
 	private function createMigrationMetas()
@@ -86,16 +84,37 @@ class ModelMetasTool extends Tool
 	{
 		$this->init($ModelName)
 			->setModelMetasPath()
-			->setMigrationMetasPath();
+			->setMigrationMetasPath()
+			// Faltaba: la migración de borrado buscaba su plantilla en una ruta
+			// vacía y quitar un modelo con metas lanzaba "stub no encontrado".
+			->setMigrationMetasTemplatePath();
+
+		// Un modelo que nunca tuvo metas no tiene tabla que borrar: sin esta
+		// comprobación, quitarlo dejaba una migración que borra una tabla que
+		// no existe.
+		if (! file_exists($this->metaModelFile())) {
+			return false;
+		}
 
 		// Eliminar el modelo y crear la migración de eliminación
 		$this->removeModelMetas();
 		$this->removeMigrationMetas();
+
+		return true;
 	}
 
+	private function metaModelFile(): string
+	{
+		return $this->modelMetasPath . '/' . $this->PascalCaseModelName . 'Meta.php';
+	}
+
+	/**
+	 * Se buscaba `<Modelo>ModelMetas.php`, pero el archivo que se crea es
+	 * `<Modelo>Meta.php`: el modelo Meta no se borraba nunca.
+	 */
 	private function removeModelMetas()
 	{
-		$path = $this->modelMetasPath . '/' . $this->PascalCaseModelName . 'ModelMetas.php';
+		$path = $this->metaModelFile();
 		return (file_exists($path)) ? $this->dropFile($path) : false;
 	}
 
