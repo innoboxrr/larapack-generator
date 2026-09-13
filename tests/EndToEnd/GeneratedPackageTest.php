@@ -268,6 +268,49 @@ final class GeneratedPackageTest extends TestCase
     }
 
     /**
+     * El formulario manda grupos anidados; se guardan como metas planas, lo
+     * protegido no se toca desde la petición, un valor vacío borra, y payload
+     * queda con la copia. Nada de esto funcionaba: el modelo no tenía la
+     * relación metas() y el guardado estaba comentado.
+     */
+    public function test_las_metas_se_guardan_desde_el_formulario_y_payload_las_refleja(): void
+    {
+        Sanctum::actingAs($this->user(admin: true));
+
+        $id = $this->postJson($this->route('category', 'create'), [
+            'name' => 'Libros',
+            'seo' => ['title' => 'Libros baratos', 'og' => ['image' => 'libros.png']],
+            'views' => 999,
+            'payload' => ['inventado' => true],
+        ])->assertCreated()->json('id');
+
+        $category = $this->model('Category')::findOrFail($id);
+
+        $this->assertSame('Libros baratos', $category->meta('seo_title'));
+        $this->assertSame('libros.png', $category->meta('seo_og_image'));
+        $this->assertNull($category->meta('views'), 'Una meta protegida se escribió desde la petición.');
+        $this->assertSame(['seo_title' => 'Libros baratos', 'seo_og_image' => 'libros.png'], $category->payload);
+
+        // La protegida la escribe el sistema.
+        $category->setMeta('views', 10)->updatePayload();
+
+        $this->putJson($this->route('category', 'update'), [
+            'category_id' => $id,
+            'seo' => ['title' => '', 'og' => ['image' => 'otra.png']],
+            'views' => 0,
+        ])
+            ->assertOk()
+            ->assertJsonPath('payload.seo_og_image', 'otra.png');
+
+        $category->refresh();
+
+        $this->assertNull($category->meta('seo_title'), 'Vaciar una meta en el formulario no la borró.');
+        $this->assertEquals(10, $category->meta('views'), 'El formulario tocó una meta protegida.');
+        $this->assertSame('otra.png', $category->getPayload('seo_og_image'));
+        $this->assertArrayNotHasKey('seo_title', $category->payload);
+    }
+
+    /**
      * El borrado permanente nace apagado incluso para el administrador, y lo
      * dice la política: el front no ofrece un botón que luego falla.
      * Encenderlo es cosa de la política, no de retocar el modelo.

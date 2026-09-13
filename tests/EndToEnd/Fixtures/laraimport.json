@@ -19,6 +19,9 @@
             "props": [
                 { "name": "name", "type": "string", "datatable": true }
             ],
+            "metas": true,
+            "editable_metas": ["seo_title", "seo_og_image"],
+            "protected_metas": ["views"],
             "load_relations": [
                 { "type": "hasMany", "related": "Product", "name": "products" }
             ]
