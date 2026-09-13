@@ -1,8 +1,8 @@
 {
-    ".larapack/manifest.json": "1ee2af24eff3e64e9df6af8701dabb9d9ee14b259a5708543508269ed50910dc",
+    ".larapack/manifest.json": "a0ac0d673b33daf7899e594b2ed0b8a14813346465088a3ff75d18b39875c7b6",
     "composer.json": "dded2aaddb25ff97b89a8b0e047bfd8284706098a414f9124356b235318c7edb",
-    "database/factories/CategoryFactory.php": "a9e4af5fa0036c1914e1e336d223d16e8759bb1665047b9cdae517e94a830917",
-    "database/factories/PostFactory.php": "5237fe12c5c0b8330b7c98ac3ad225202614e120abe9739b980855b85d12e0a6",
+    "database/factories/CategoryFactory.php": "088a11140f5ec27ef2b0dc5e88074fee459ea0c8f6332d15bb851981cec894fc",
+    "database/factories/PostFactory.php": "ee422906bc1937dc2bbfaecf20954553ea5163c79269e2be66ba08cd3178d825",
     "database/migrations/TIMESTAMP_create_categories_table.php": "9273d2fe3f824bf9d76c05cd05573cb9f05eb6e8464c6812f46570747964092d",
     "database/migrations/TIMESTAMP_create_posts_table.php": "d9d3682ff87d873031721fd2993807c0ff61483b4a017648135e20215887bac6",
     "phpunit.xml": "f6db3f43a1c6534f412241999f60e50566def886338a6cefeb740a67261cb720",
