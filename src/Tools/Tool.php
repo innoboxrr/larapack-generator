@@ -80,10 +80,8 @@ class Tool
 	// INIT
 
 		/**
-		 * 	@var $ModelName: 
-		 *  	- Debe corresponder con el nombre del modelo que se está creando
-		 *   	- Debe estar escrito en PascalCase
-		 **/
+		 * @param  string  $ModelName  El nombre del modelo que se está creando, en PascalCase.
+		 */
 		protected function init(string $ModelName)
 		{
 			$this->inflector = new Inflector(new NoopWordInflector(), new NoopWordInflector());
@@ -182,6 +180,10 @@ class Tool
 		protected function replaceData($file)
 		{
 			file_put_contents($file, $this->replaceTokens(file_get_contents($file)));
+
+			// Toda copia de un stub pasa por aquí, también las que no usan
+			// generate(): así se formatea todo lo generado.
+			Generation::written($file);
 		}
 
 		public function addProvidersToComposerJson(array $providers)

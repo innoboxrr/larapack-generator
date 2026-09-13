@@ -33,13 +33,13 @@ class PackageTool extends Tool
 		'TestsWorkflow.txt' => '.github/workflows/tests.yml',
 		'ReleaseWorkflow.txt' => '.github/workflows/release.yml',
 		'PackageBootsTest.txt' => 'tests/Feature/PackageBootsTest.php',
+		'PintTemplate.txt' => 'pint.json',
+		'PhpstanTemplate.txt' => 'phpstan.neon.dist',
 	];
 
 	private string $composerName = '';
 
 	private string $description = '';
-
-	private string $license = '';
 
 	/**
 	 * El composer.json del paquete, con las versiones de la línea base.
@@ -69,9 +69,12 @@ class PackageTool extends Tool
 		ksort($require);
 
 		// larapack-generator en desarrollo es lo que le da a la CI con qué
-		// auditar el paquete contra la línea base.
+		// auditar el paquete contra la línea base; Pint y Larastan, con qué
+		// comprobar el formato y los tipos.
 		$requireDev = [
 			'innoboxrr/larapack-generator' => $internal['innoboxrr/larapack-generator'],
+			'larastan/larastan' => $rules['dev']['larastan/larastan'],
+			'laravel/pint' => $rules['dev']['laravel/pint'],
 			'orchestra/testbench' => $rules['laravel']['testbench'],
 			'phpunit/phpunit' => $rules['dev']['phpunit/phpunit'],
 		] + ($generated['require-dev'] ?? []);
@@ -107,7 +110,6 @@ class PackageTool extends Tool
 	{
 		$this->composerName = $composerName;
 		$this->description = $description;
-		$this->license = $license;
 
 		$this->init('');
 

@@ -28,7 +28,7 @@ final class NewPackageCommandTest extends TestCase
 
         foreach ([
             'composer.json', '.gitignore', '.gitattributes', 'README.md', 'CHANGELOG.md', 'VERSION', 'LICENSE', 'AGENTS.md',
-            '.github/workflows/tests.yml', '.github/workflows/release.yml', 'phpunit.xml.dist',
+            '.github/workflows/tests.yml', '.github/workflows/release.yml', 'phpunit.xml.dist', 'pint.json', 'phpstan.neon.dist',
             'tests/TestCase.php', 'tests/User.php', 'tests/Feature/PackageBootsTest.php',
             'src/Providers/AppServiceProvider.php', 'src/Providers/AuthServiceProvider.php',
             'src/Providers/EventServiceProvider.php', 'src/Providers/RouteServiceProvider.php',
@@ -55,6 +55,12 @@ final class NewPackageCommandTest extends TestCase
             'Acme\\ShopCatalog\\Providers\\RouteServiceProvider',
         ], $composer['extra']['laravel']['providers']);
         $this->assertArrayNotHasKey('version', $composer, 'La versión la declara VERSION; en composer.json esconde los tags.');
+
+        // La CI del paquete comprueba el formato y los tipos con ellos.
+        $this->assertArrayHasKey('laravel/pint', $composer['require-dev']);
+        $this->assertArrayHasKey('larastan/larastan', $composer['require-dev']);
+        $this->assertStringContainsString('vendor/bin/pint --test', $this->project->read('.github/workflows/tests.yml'));
+        $this->assertStringContainsString('vendor/bin/phpstan analyse', $this->project->read('.github/workflows/tests.yml'));
 
         $this->assertStringContainsString('composer require acme/shop-catalog', $this->project->read('README.md'));
         $this->assertStringContainsString('Copyright (c) ' . date('Y') . ' Acme', $this->project->read('LICENSE'));

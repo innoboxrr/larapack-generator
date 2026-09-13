@@ -49,6 +49,11 @@ final class GeneratedPackageTest extends TestCase
         self::$project = FakeProject::empty();
         $laraimport = self::$project->path . '/laraimport.json';
 
+        // Quien sigue la guía tiene Pint en el vendor del paquete, y el
+        // generador formatea con él. Aquí el paquete no tiene vendor: se usa
+        // el de LaraPack.
+        putenv('LARAPACK_PINT=' . dirname(__DIR__, 2) . '/vendor/laravel/pint/builds/pint');
+
         try {
             foreach ([
                 ['larapack:new', ['name' => 'acme/shop', 'directory' => self::$project->path]],
@@ -69,6 +74,7 @@ final class GeneratedPackageTest extends TestCase
                 }
             }
         } finally {
+            putenv('LARAPACK_PINT');
             ProjectRoot::set(null);
             Generation::reset();
             Declaration::reset();
@@ -474,14 +480,7 @@ final class GeneratedPackageTest extends TestCase
      */
     public function test_los_tests_que_genera_el_paquete_pasan_sin_tocarlos(): void
     {
-        $bootstrap = self::$project->path . '/vendor-autoload.php';
-        $lines = ['<?php', '$loader = require ' . var_export(dirname(__DIR__, 2) . '/vendor/autoload.php', true) . ';'];
-
-        foreach (self::autoload() as $prefix => $directory) {
-            $lines[] = '$loader->addPsr4(' . var_export($prefix, true) . ', ' . var_export(self::$project->path . '/' . $directory, true) . ');';
-        }
-
-        file_put_contents($bootstrap, implode(PHP_EOL, $lines) . PHP_EOL);
+        $bootstrap = $this->autoloadBootstrap();
 
         $process = new Process([
             PHP_BINARY,
@@ -498,7 +497,102 @@ final class GeneratedPackageTest extends TestCase
         $this->assertTrue($process->isSuccessful(), "Los tests generados fallan:\n" . $process->getOutput() . $process->getErrorOutput());
     }
 
+    // CALIDAD
+
+    /**
+     * La CI del paquete corre `pint --test`. Si lo recién generado no pasara,
+     * el primer push de quien lo usa saldría en rojo por algo que no escribió.
+     */
+    public function test_lo_generado_tiene_el_formato_que_exige_su_ci(): void
+    {
+        $paths = array_values(array_filter(
+            ['src', 'database', 'routes', 'config', 'tests'],
+            fn (string $directory): bool => is_dir(self::$project->path . '/' . $directory)
+        ));
+
+        $process = new Process([
+            PHP_BINARY,
+            dirname(__DIR__, 2) . '/vendor/laravel/pint/builds/pint',
+            '--test',
+            '--config', self::$project->path . '/pint.json',
+            ...$paths,
+        ], self::$project->path, null, null, 300);
+
+        $process->run();
+
+        $this->assertTrue($process->isSuccessful(), "Pint encuentra código sin formato en lo generado:\n" . $process->getOutput() . $process->getErrorOutput());
+    }
+
+    /**
+     * Y `phpstan analyse` con el nivel y las rutas del phpstan.neon.dist que
+     * deja larapack:new.
+     */
+    public function test_lo_generado_pasa_el_analisis_de_su_ci(): void
+    {
+        $dist = (string) file_get_contents(self::$project->path . '/phpstan.neon.dist');
+
+        $this->assertMatchesRegularExpression('/level:\s*(\d+)/', $dist);
+        preg_match('/level:\s*(\d+)/', $dist, $level);
+        preg_match_all('/^\s*-\s*(src|database|routes|config|tests)\s*$/m', $dist, $paths);
+
+        $root = str_replace('\\', '/', dirname(__DIR__, 2));
+        $project = str_replace('\\', '/', self::$project->path);
+
+        $config = self::$project->path . '/phpstan.test.neon';
+
+        file_put_contents($config, implode("\n", [
+            'includes:',
+            "    - {$root}/vendor/larastan/larastan/extension.neon",
+            'parameters:',
+            "    level: {$level[1]}",
+            '    tmpDir: ' . $project . '/.phpstan',
+            '    paths:',
+            ...array_map(fn (string $path): string => "        - {$project}/{$path}", $paths[1]),
+            '    databaseMigrationsPath:',
+            "        - {$project}/database/migrations",
+            ...(str_contains($dist, 'parseModelCastsMethod: true') ? ['    parseModelCastsMethod: true'] : []),
+            '    bootstrapFiles:',
+            '        - ' . str_replace('\\', '/', $this->autoloadBootstrap()),
+            '',
+        ]));
+
+        // Desde la raíz de LaraPack: su vendor es el que tiene Larastan y
+        // Testbench, con los que Larastan arranca una aplicación.
+        $process = new Process([
+            PHP_BINARY,
+            ...$this->inheritedExtensions(),
+            dirname(__DIR__, 2) . '/vendor/phpstan/phpstan/phpstan',
+            'analyse',
+            '-c', $config,
+            '--no-progress',
+            '--error-format=raw',
+            '--memory-limit=1G',
+        ], dirname(__DIR__, 2), null, null, 600);
+
+        $process->run();
+
+        $this->assertTrue($process->isSuccessful(), "Larastan encuentra errores en lo generado:\n" . $process->getOutput() . $process->getErrorOutput());
+    }
+
     // AYUDAS
+
+    /**
+     * Lo que haría `composer dump-autoload` en el paquete, para un proceso
+     * aparte: el autoloader de LaraPack más los namespaces del paquete.
+     */
+    private function autoloadBootstrap(): string
+    {
+        $bootstrap = self::$project->path . '/vendor-autoload.php';
+        $lines = ['<?php', '$loader = require ' . var_export(dirname(__DIR__, 2) . '/vendor/autoload.php', true) . ';'];
+
+        foreach (self::autoload() as $prefix => $directory) {
+            $lines[] = '$loader->addPsr4(' . var_export($prefix, true) . ', ' . var_export(self::$project->path . '/' . $directory, true) . ');';
+        }
+
+        file_put_contents($bootstrap, implode(PHP_EOL, $lines) . PHP_EOL);
+
+        return $bootstrap;
+    }
 
     private function user(bool $admin = false): User
     {

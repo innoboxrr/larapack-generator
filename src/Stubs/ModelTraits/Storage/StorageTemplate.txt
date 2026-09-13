@@ -81,12 +81,14 @@ trait PascalCaseModelNameStorage
 
     }
 
+// @larapack:if restore
     public function restoreModel()
     {
 
         $this->restore();
 
     }
+// @larapack:endif
 
     /**
      * Quien puede borrar para siempre lo decide la politica (forceDelete nace

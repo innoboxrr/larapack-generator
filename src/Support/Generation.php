@@ -89,10 +89,33 @@ final class Generation
         return $summary;
     }
 
+    /**
+     * Todo archivo escrito desde un stub en esta ejecución, también los que las
+     * herramientas copian sin pasar por generate() y por eso no salen en el
+     * informe. Es lo que se formatea al terminar.
+     *
+     * @var array<int, string>
+     */
+    private static array $written = [];
+
+    public static function written(string $file): void
+    {
+        self::$written[] = $file;
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    public static function writtenFiles(): array
+    {
+        return array_values(array_unique(self::$written));
+    }
+
     public static function reset(): void
     {
         self::$force = false;
         self::$dryRun = false;
         self::$log = [];
+        self::$written = [];
     }
 }

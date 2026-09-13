@@ -10,8 +10,6 @@ class EventsTool extends Tool
 	private $eventsPath;
 	private $eventsTemplatePath;
 	private $mainEventsPath;
-	private $modelEventsPath;
-	private $modelListenersPath;
 	private $events = [
 		'CreateEvent' => [
 			'DefaultOperation'
@@ -58,7 +56,6 @@ class EventsTool extends Tool
 	{
 		$path = $this->mainEventsPath . '/' . 'Events';
 		if (!file_exists($path)) mkdir($path, 0777, true);
-		$this->modelEventsPath = $path;
 		return $this;
 	}
 
@@ -66,7 +63,6 @@ class EventsTool extends Tool
 	{
 		$path = $this->mainEventsPath . '/' . 'Listeners';
 		if (!file_exists($path)) mkdir($path, 0777, true);
-		$this->modelListenersPath = $path;
 		return $this;
 	}
 

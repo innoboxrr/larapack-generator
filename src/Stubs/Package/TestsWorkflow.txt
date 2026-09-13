@@ -12,3 +12,27 @@ on:
 jobs:
     tests:
         uses: innoboxrr/.github/.github/workflows/php-tests.yml@main
+
+    # El formato y los tipos no dependen de la versión de PHP: basta una vez.
+    # Lo que genera LaraPack sale ya formateado y pasa el análisis, así que un
+    # fallo aquí es algo que se escribió a mano.
+    quality:
+        name: Pint y Larastan
+        runs-on: ubuntu-latest
+
+        steps:
+            - uses: actions/checkout@v5
+
+            - uses: shivammathur/setup-php@v2
+              with:
+                  php-version: '8.4'
+                  coverage: none
+
+            - name: Instalar dependencias
+              run: composer update --prefer-dist --no-interaction --no-progress
+
+            - name: Formato
+              run: vendor/bin/pint --test
+
+            - name: Análisis estático
+              run: vendor/bin/phpstan analyse --no-progress --memory-limit=1G

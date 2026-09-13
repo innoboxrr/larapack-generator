@@ -15,3 +15,26 @@ jobs:
             # firmas distintas en Command::configure(). La matriz existe
             # precisamente para cubrir esa diferencia.
             php-versions: '["8.3", "8.4", "8.5"]'
+
+    # El formato y los tipos no dependen de la versión de PHP: basta una vez.
+    # Es lo mismo que LaraPack pone en la CI de cada paquete que crea.
+    quality:
+        name: Pint y Larastan
+        runs-on: ubuntu-latest
+
+        steps:
+            - uses: actions/checkout@v5
+
+            - uses: shivammathur/setup-php@v2
+              with:
+                  php-version: '8.4'
+                  coverage: none
+
+            - name: Instalar dependencias
+              run: composer update --prefer-dist --no-interaction --no-progress
+
+            - name: Formato
+              run: vendor/bin/pint --test
+
+            - name: Análisis estático
+              run: vendor/bin/phpstan analyse --no-progress --memory-limit=1G

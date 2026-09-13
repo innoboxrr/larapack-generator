@@ -1,0 +1,14 @@
+includes:
+    - vendor/larastan/larastan/extension.neon
+
+parameters:
+    level: 5
+    paths:
+        - src
+        - database
+    # Larastan conoce las columnas de cada modelo leyendo sus migraciones.
+    databaseMigrationsPath:
+        - database/migrations
+    # Los casts van en el método casts(); sin esto Larastan sólo ve que
+    # devuelve un array, y no sabe que payload es un array y no un texto.
+    parseModelCastsMethod: true

@@ -37,7 +37,7 @@ final class Manifest
     ];
 
     /**
-     * @return array{version: int, package: array{namespace: string, files: array<string, array{stub: string, hash: string}>}, models: array<string, array{namespace: string, files: array<string, array{stub: string, hash: string}>}>}
+     * @return array{version: int, package: array{namespace: string, files: array<string, array{stub: string, hash: string}>}, models: array<string, array{namespace: string, files: array<string, array{stub: string, hash: string}>, declaration?: array{actions?: array<int, string>, immutable?: bool, secret?: array<int, string>}}>}
      */
     public function read(): array
     {
@@ -201,6 +201,37 @@ final class Manifest
         }
 
         return true;
+    }
+
+    /**
+     * Vuelve a anotar el hash de archivos que el generador reescribió después
+     * de registrarlos, como al formatearlos.
+     *
+     * @param  array<int, string>  $files
+     */
+    public function rehash(array $files): void
+    {
+        if ($files === []) {
+            return;
+        }
+
+        $manifest = $this->read();
+
+        foreach ($files as $file) {
+            $relative = $this->relative($file);
+
+            if (isset($manifest['package']['files'][$relative])) {
+                $manifest['package']['files'][$relative]['hash'] = $this->hash($file);
+            }
+
+            foreach ($manifest['models'] as $model => $entry) {
+                if (isset($entry['files'][$relative])) {
+                    $manifest['models'][$model]['files'][$relative]['hash'] = $this->hash($file);
+                }
+            }
+        }
+
+        $this->write($manifest);
     }
 
     /**

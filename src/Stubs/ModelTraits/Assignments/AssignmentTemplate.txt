@@ -2,39 +2,40 @@
 
 namespace Namespace\Models\Traits\Assignments;
 
-/* Replace the word "Model" and "model" */
-
+/**
+ * Asignar y quitar registros relacionados a través de una pivote.
+ *
+ * Es un ejemplo, y por eso va comentado: llamaba a una relación `models()` que
+ * ningún modelo tiene, así que usarlo tal cual reventaba. Cambia `models()` por
+ * tu relación belongsToMany y `model_id` por su clave, y descoméntalo.
+ */
 trait PascalCaseModelNameAssignment
 {
-
-	public function assignModel($request)
-	{
-
+    /*
+    public function assignModel($request)
+    {
         $operationResult = $this->models()->syncWithoutDetaching([
             $request->model_id => [
-            	// Pivot values
-            ]
+                // Pivot values
+            ],
         ]);
 
         return response()->json([
-        	'model_id' => $request->model_id,
-        	'snake_case_model_name_id' => $request->snake_case_model_name_id,
-        	'operation' => $operationResult
+            'model_id' => $request->model_id,
+            'snake_case_model_name_id' => $request->snake_case_model_name_id,
+            'operation' => $operationResult,
         ]);
+    }
 
-	}
+    public function deallocateModel($request)
+    {
+        $operationResult = $this->models()->detach($request->model_id);
 
-	public function deallocateModel($request)
-	{
-
-		$operationResult = $this->models()->detach($request->model_id);
-
-		return response()->json([
-        	'model_id' => $request->model_id,
-        	'snake_case_model_name_id' => $request->snake_case_model_name_id,
-        	'operation' => $operationResult
+        return response()->json([
+            'model_id' => $request->model_id,
+            'snake_case_model_name_id' => $request->snake_case_model_name_id,
+            'operation' => $operationResult,
         ]);
-
-	}
-
+    }
+    */
 }

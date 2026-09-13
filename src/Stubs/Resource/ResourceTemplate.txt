@@ -4,7 +4,11 @@ namespace Namespace\Http\Resources\Models;
 
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Namespace\Models\PascalCaseModelName;
 
+/**
+ * @mixin PascalCaseModelName
+ */
 class PascalCaseModelNameResource extends JsonResource
 {
 

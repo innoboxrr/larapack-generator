@@ -2,7 +2,9 @@
 
 namespace Innoboxrr\LarapackGenerator\Commands\Concerns;
 
+use Innoboxrr\LarapackGenerator\Support\Formatter;
 use Innoboxrr\LarapackGenerator\Support\Generation;
+use Innoboxrr\LarapackGenerator\Support\Manifest;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
@@ -43,9 +45,21 @@ trait ReportsGeneration
         $summary = Generation::summary();
         $entries = Generation::log();
 
+        $formatted = Generation::isDryRun() ? 0 : Formatter::format(
+            [
+                ...array_map(
+                    fn (array $entry): string => $entry['file'],
+                    array_filter($entries, fn (array $entry): bool => in_array($entry['action'], ['create', 'overwrite'], true))
+                ),
+                ...Generation::writtenFiles(),
+            ],
+            new Manifest()
+        );
+
         if ($input->getOption('format') === 'json') {
             $output->writeln(json_encode([
                 'dryRun' => Generation::isDryRun(),
+                'formatted' => $formatted,
                 'summary' => $summary,
                 'files' => array_map(fn (array $entry): array => [
                     'action' => $entry['action'],
@@ -81,6 +95,10 @@ trait ReportsGeneration
 
         if ($summary['preserved'] > 0) {
             $output->writeln('  <comment>Los conservados se editaron a mano; --force no los sobrescribe.</comment>');
+        }
+
+        if ($formatted === null) {
+            $output->writeln('  <comment>Pint no está en el proyecto: lo generado queda sin formatear. composer require --dev laravel/pint</comment>');
         }
     }
 
