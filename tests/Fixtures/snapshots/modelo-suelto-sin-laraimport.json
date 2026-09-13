@@ -87,6 +87,7 @@
     "src/Notifications/Product/ExportNotification.php": "e8032d8ff0f1f495fb115d1f2ae86f0e72ba37d2f9160a524620f258d65677e9",
     "src/Observers/ProductObserver.php": "02a81e6ca4aaec404d297cac78e4fffc2e6841ff21fe3cc04ad1328e033e4340",
     "src/Policies/ProductPolicy.php": "6bd7321b0c43da19aa5dd62ef529dc6a92f0d5c54e7f735fdd3c11daa9bce550",
-    "tests/Feature/Models/ProductEndpointsTest.php": "c36e1ed820fd34e7a8c954c856bdb2024900c618e4f3180f082f051cd6d5febf",
-    "tests/TestCase.php": "dd6355e1e3aad74d275753a33a7cb8a31813274a44c5344747389a891873ee7d"
+    "tests/Feature/Models/ProductEndpointsTest.php": "59850a9353fa5d90b5a14c1c53b3487ac3ec0d9fd3e62f772589916c0ada5376",
+    "tests/TestCase.php": "6e467aa0e936a3eeb09e3502bdd9b7e48365d999c0987bc5ba872e592f6c72d3",
+    "tests/User.php": "d823928f7f62ee09ba8a3868f07923ebfc8bf4afd81f7314acc7a9b74f2298e6"
 }

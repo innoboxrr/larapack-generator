@@ -61,6 +61,7 @@ class TestTool extends Tool
 			->setTestUnitPath()
 			->setTestTemplatePath()
 			->createTestCaseClass()
+			->createTestUserClass()
 			->createPhpUnitXmlFile()
 			->addTestNamespaceToComposerJson()
 			->createFeatureTest();
@@ -79,6 +80,29 @@ class TestTool extends Tool
 			if(copy($templateFile, $testCaseFile)) {
 
 				$this->replaceData($testCaseFile);
+
+			}
+
+		}
+
+		return $this;
+
+	}
+
+	/**
+	 * El usuario con que se autentican los tests de un paquete. Una aplicacion
+	 * ya tiene el suyo; un paquete no conoce el de quien lo instale.
+	 */
+	private function createTestUserClass()
+	{
+
+		$userFile = $this->testCasePath . '/User.php';
+
+		if (app_dir_name() == 'src' && ! file_exists($userFile)) {
+
+			if (copy($this->testTemplatePath . '/TestUserTemplate.txt', $userFile)) {
+
+				$this->replaceData($userFile);
 
 			}
 

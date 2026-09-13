@@ -2,34 +2,53 @@
 
 namespace Namespace\Tests\Feature\Models;
 
-use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Foundation\Testing\WithFaker;
+use Illuminate\Support\Facades\Notification;
+use Namespace\Models\PascalCaseModelName;
 use Namespace\Tests\TestCase;
 
+/**
+ * Que cada endpoint de PascalCaseModelName responde como dice el contrato.
+ *
+ * Las rutas se llaman por nombre, igual que el front. La autorizacion no se
+ * prueba aqui: el TestCase la abre. Cuando escribas PascalCaseModelNamePolicy,
+ * pruebala en su propio test.
+ */
 class PascalCaseModelNameEndpointsTest extends TestCase
 {
 
-    use RefreshDatabase,
-        WithFaker;
+    // @larapack:if index
+    public function test_snake_case_model_name_index_requiere_sesion(): void
+    {
 
+        $this->getJson(route('api.dotNamespacesnake_case_model_name.index'))
+            ->assertUnauthorized();
+
+    }
+
+    public function test_snake_case_model_name_index_endpoint(): void
+    {
+
+        $this->signIn();
+
+        $camelCaseModelName = PascalCaseModelName::factory()->create();
+
+        $this->json('GET', route('api.dotNamespacesnake_case_model_name.index'), ['managed' => true])
+            ->assertOk()
+            ->assertJsonFragment(['id' => $camelCaseModelName->id]);
+
+    }
+
+    // @larapack:endif
     // @larapack:if policies
     public function test_snake_case_model_name_policies_endpoint(): void
     {
 
-        $camelCaseModelName = \Namespace\Models\PascalCaseModelName::factory()->create();
-        
-        $headers = [
-            'Authorization' => config('test.token'),
-            'Content-Type' => 'application/json',
-            'Accept' => 'application/json'
-        ];  
+        $this->signIn();
 
-        $payload = [
-            'id' => $camelCaseModelName->id
-        ];
+        $camelCaseModelName = PascalCaseModelName::factory()->create();
 
-        $this->json('GET', '/api/slashLowerNamespacekebabcasemodelname/policies', $payload, $headers)
-            ->assertStatus(200);
+        $this->json('GET', route('api.dotNamespacesnake_case_model_name.policies'), ['id' => $camelCaseModelName->id])
+            ->assertOk();
 
     }
 
@@ -37,104 +56,28 @@ class PascalCaseModelNameEndpointsTest extends TestCase
     // @larapack:if policy
     public function test_snake_case_model_name_policy_endpoint(): void
     {
-        $headers = [
-            'Authorization' => config('test.token'),
-            'Content-Type' => 'application/json',
-            'Accept' => 'application/json'
-        ];  
 
-        $payload = [
-            'policy' => 'index'
-        ];
+        $this->signIn();
 
-        $this->json('GET', '/api/slashLowerNamespacekebabcasemodelname/policy', $payload, $headers)
-            ->assertJsonStructure([
-                'index'
-            ])
-            ->assertStatus(200);
+        $this->json('GET', route('api.dotNamespacesnake_case_model_name.policy'), ['policy' => 'create'])
+            ->assertOk()
+            ->assertJsonStructure(['create']);
 
-    }
-
-    // @larapack:endif
-    // @larapack:if index
-    public function test_snake_case_model_name_index_auth_endpoint(): void
-    {
-
-        $headers = [
-            'Authorization' => config('test.token'),
-            'Content-Type' => 'application/json',
-            'Accept' => 'application/json'
-        ];  
-
-        $payload = [
-            'managed' => true
-        ];
-
-        $this->json('GET', '/api/slashLowerNamespacekebabcasemodelname/index', $payload, $headers)
-            ->assertStatus(200);
-
-    }
-
-    // @larapack:endif
-    // @larapack:if index
-    public function test_snake_case_model_name_index_guest_endpoint(): void
-    {
-
-        $headers = [
-            'Content-Type' => 'application/json',
-            'Accept' => 'application/json'
-        ];  
-
-        $payload = [
-            'managed' => true
-        ];
-
-        $this->json('GET', '/api/slashLowerNamespacekebabcasemodelname/index', $payload, $headers)
-            ->assertStatus(401);
-            
-    }
-    
-    // @larapack:endif
-    // @larapack:if show
-    public function test_snake_case_model_name_show_auth_endpoint(): void
-    {
-
-        $camelCaseModelName = \Namespace\Models\PascalCaseModelName::latest()->first();
-
-        $headers = [
-            'Authorization' => config('test.token'),
-            'Content-Type' => 'application/json',
-            'Accept' => 'application/json'
-        ];  
-
-        $payload = [
-            'snake_case_model_name_id' => $camelCaseModelName->id
-        ];
-
-        $this->json('GET', '/api/slashLowerNamespacekebabcasemodelname/show', $payload, $headers)
-            ->assertStatus(200);
-            
     }
 
     // @larapack:endif
     // @larapack:if show
-    public function test_snake_case_model_name_show_guest_endpoint(): void
+    public function test_snake_case_model_name_show_endpoint(): void
     {
 
-        $camelCaseModelName = \Namespace\Models\PascalCaseModelName::latest()->first();
+        $this->signIn();
 
-        $headers = [
-            'Content-Type' => 'application/json',
-            'Accept' => 'application/json'
-        ];  
+        $camelCaseModelName = PascalCaseModelName::factory()->create();
 
-        $payload = [
-            'snake_case_model_name_id' => $camelCaseModelName->id
-        ];
+        $this->json('GET', route('api.dotNamespacesnake_case_model_name.show'), ['snake_case_model_name_id' => $camelCaseModelName->id])
+            ->assertOk()
+            ->assertJsonPath('id', $camelCaseModelName->id);
 
-        $this->json('GET', '/api/slashLowerNamespacekebabcasemodelname/show', $payload, $headers)
-            ->assertStatus(401);
-            
     }
 
     // @larapack:endif
@@ -142,19 +85,13 @@ class PascalCaseModelNameEndpointsTest extends TestCase
     public function test_snake_case_model_name_create_endpoint(): void
     {
 
-        $user = \Namespace\Models\User::first();
+        $this->signIn();
 
-        $headers = [
-            'Authorization' => config('test.token'),
-            'Content-Type' => 'application/json',
-            'Accept' => 'application/json'
-        ];  
+        $payload = PascalCaseModelName::factory()->make()->getAttributes();
 
-        $payload = \Namespace\Models\PascalCaseModelName::factory()->make()->getAttributes();
+        $this->postJson(route('api.dotNamespacesnake_case_model_name.create'), $payload)
+            ->assertCreated();
 
-        $this->json('POST', '/api/slashLowerNamespacekebabcasemodelname/create', $payload, $headers)
-            ->assertStatus(201);
-            
     }
 
     // @larapack:endif
@@ -162,22 +99,18 @@ class PascalCaseModelNameEndpointsTest extends TestCase
     public function test_snake_case_model_name_update_endpoint(): void
     {
 
-        $camelCaseModelName = \Namespace\Models\PascalCaseModelName::factory()->create();
+        $this->signIn();
 
-        $headers = [
-            'Authorization' => config('test.token'),
-            'Content-Type' => 'application/json',
-            'Accept' => 'application/json'
-        ];  
+        $camelCaseModelName = PascalCaseModelName::factory()->create();
 
         $payload = [
-            ...\Namespace\Models\PascalCaseModelName::factory()->make()->getAttributes(),
-            'snake_case_model_name_id' => $camelCaseModelName->id
+            ...PascalCaseModelName::factory()->make()->getAttributes(),
+            'snake_case_model_name_id' => $camelCaseModelName->id,
         ];
 
-        $this->json('PUT', '/api/slashLowerNamespacekebabcasemodelname/update', $payload, $headers)
-            ->assertStatus(200);
-            
+        $this->putJson(route('api.dotNamespacesnake_case_model_name.update'), $payload)
+            ->assertOk();
+
     }
 
     // @larapack:endif
@@ -185,21 +118,15 @@ class PascalCaseModelNameEndpointsTest extends TestCase
     public function test_snake_case_model_name_delete_endpoint(): void
     {
 
-        $camelCaseModelName = \Namespace\Models\PascalCaseModelName::latest()->first();
+        $this->signIn();
 
-        $headers = [
-            'Authorization' => config('test.token'),
-            'Content-Type' => 'application/json',
-            'Accept' => 'application/json'
-        ];  
+        $camelCaseModelName = PascalCaseModelName::factory()->create();
 
-        $payload = [
-            'snake_case_model_name_id' => $camelCaseModelName->id
-        ];
+        $this->deleteJson(route('api.dotNamespacesnake_case_model_name.delete'), ['snake_case_model_name_id' => $camelCaseModelName->id])
+            ->assertOk();
 
-        $this->json('DELETE', '/api/slashLowerNamespacekebabcasemodelname/delete', $payload, $headers)
-            ->assertStatus(200);
-            
+        $this->assertNull(PascalCaseModelName::find($camelCaseModelName->id));
+
     }
 
     // @larapack:endif
@@ -207,21 +134,16 @@ class PascalCaseModelNameEndpointsTest extends TestCase
     public function test_snake_case_model_name_restore_endpoint(): void
     {
 
-        $camelCaseModelName = \Namespace\Models\PascalCaseModelName::first();
+        $this->signIn();
 
-        $headers = [
-            'Authorization' => config('test.token'),
-            'Content-Type' => 'application/json',
-            'Accept' => 'application/json'
-        ];  
+        $camelCaseModelName = PascalCaseModelName::factory()->create();
+        $camelCaseModelName->delete();
 
-        $payload = [
-            'snake_case_model_name_id' => $camelCaseModelName->id
-        ];
+        $this->postJson(route('api.dotNamespacesnake_case_model_name.restore'), ['snake_case_model_name_id' => $camelCaseModelName->id])
+            ->assertOk();
 
-        $this->json('POST', '/api/slashLowerNamespacekebabcasemodelname/restore', $payload, $headers)
-            ->assertStatus(200);
-            
+        $this->assertNotNull(PascalCaseModelName::find($camelCaseModelName->id));
+
     }
 
     // @larapack:endif
@@ -229,41 +151,31 @@ class PascalCaseModelNameEndpointsTest extends TestCase
     public function test_snake_case_model_name_force_delete_endpoint(): void
     {
 
-        $camelCaseModelName = \Namespace\Models\PascalCaseModelName::latest()->first();
+        $this->signIn();
 
-        $headers = [
-            'Authorization' => config('test.token'),
-            'Content-Type' => 'application/json',
-            'Accept' => 'application/json'
-        ];  
+        $camelCaseModelName = PascalCaseModelName::factory()->create();
 
-        $payload = [
-            'snake_case_model_name_id' => $camelCaseModelName->id
-        ];
+        $this->deleteJson(route('api.dotNamespacesnake_case_model_name.force.delete'), ['snake_case_model_name_id' => $camelCaseModelName->id])
+            ->assertOk();
 
-        $this->json('DELETE', '/api/slashLowerNamespacekebabcasemodelname/force-delete', $payload, $headers)
-            ->assertStatus(403);
-            
+        $this->assertNull(PascalCaseModelName::withTrashed()->find($camelCaseModelName->id));
+
     }
 
     // @larapack:endif
     // @larapack:if export
     public function test_snake_case_model_name_export_endpoint(): void
-    {   
+    {
 
-        $headers = [
-            'Authorization' => config('test.token'),
-            'Content-Type' => 'application/json',
-            'Accept' => 'application/json'
-        ];  
+        Notification::fake();
 
-        $payload = [
-            //
-        ];
+        $user = $this->signIn();
 
-        $this->json('POST', '/api/slashLowerNamespacekebabcasemodelname/export', $payload, $headers)
-            ->assertStatus(200);
-            
+        $this->postJson(route('api.dotNamespacesnake_case_model_name.export'))
+            ->assertOk();
+
+        Notification::assertSentTo($user, \Namespace\Notifications\PascalCaseModelName\ExportNotification::class);
+
     }
 
     // @larapack:endif
@@ -283,18 +195,21 @@ class PascalCaseModelNameEndpointsTest extends TestCase
     public function test_snake_case_model_name_no_admite_modificaciones(): void
     {
 
-        $camelCaseModelName = \Namespace\Models\PascalCaseModelName::factory()->create();
+        $camelCaseModelName = PascalCaseModelName::factory()->create();
 
         $this->expectException(\LogicException::class);
 
-        $camelCaseModelName->touch();
+        // touch() no dispara updating si updated_at no cambia, y dentro del
+        // mismo segundo en que se creo la fila no cambia: el test pasaria o no
+        // segun el reloj.
+        $camelCaseModelName->forceFill(['updated_at' => now()->addMinute()])->save();
 
     }
 
     public function test_snake_case_model_name_no_admite_borrarse(): void
     {
 
-        $camelCaseModelName = \Namespace\Models\PascalCaseModelName::factory()->create();
+        $camelCaseModelName = PascalCaseModelName::factory()->create();
 
         $this->expectException(\LogicException::class);
 

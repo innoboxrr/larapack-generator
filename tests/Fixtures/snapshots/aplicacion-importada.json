@@ -49,5 +49,5 @@
     "resources/views/excel/post.blade.php": "70c55a41b3b9abd92814109a64c89944c9b8baeba111a46af598c1986265c32b",
     "routes/api/models/post.php": "178c71d21d48e6657377b9029b6a585bd9f4bf3112aeba840da9f42104ef26a9",
     "tests/Feature/Models/PostEndpointsTest.php": "d5acc402e24cc52d2111dda49c7c4dafd461f8092849ec517fffd9b6982eed0e",
-    "tests/TestCase.php": "3e2020b645fd343fabaa9f4f89a2597c5e34f89b9f9c15d32fbaadccb507c4b5"
+    "tests/TestCase.php": "fc628e28b2702230a23f0fc62f743bddb8bc9a2cfa2a5383839146bdebc3eddb"
 }

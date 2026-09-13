@@ -115,10 +115,9 @@ final class DeclaredRoutesGenerationTest extends TestCase
         preg_match_all('/public function (test_\w+)\(\)/', $test, $tests);
 
         $this->assertSame([
-            'test_audit_event_index_auth_endpoint',
-            'test_audit_event_index_guest_endpoint',
-            'test_audit_event_show_auth_endpoint',
-            'test_audit_event_show_guest_endpoint',
+            'test_audit_event_index_requiere_sesion',
+            'test_audit_event_index_endpoint',
+            'test_audit_event_show_endpoint',
         ], $tests[1]);
     }
 

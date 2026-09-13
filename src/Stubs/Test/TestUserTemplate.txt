@@ -1,0 +1,24 @@
+<?php
+
+namespace Namespace\Tests;
+
+use Illuminate\Foundation\Auth\User as Authenticatable;
+use Illuminate\Notifications\Notifiable;
+
+/**
+ * El usuario de la aplicacion anfitriona, para los tests del paquete.
+ *
+ * El paquete no conoce el modelo de usuario de quien lo instale, asi que no
+ * puede usarlo. Este tiene lo que el codigo generado espera de el: autenticarse
+ * y recibir notificaciones, como el usuario que trae Laravel.
+ */
+class User extends Authenticatable
+{
+
+    use Notifiable;
+
+    protected $table = 'users';
+
+    protected $guarded = [];
+
+}

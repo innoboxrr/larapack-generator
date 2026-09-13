@@ -89,6 +89,7 @@
     "src/Notifications/Post/ExportNotification.php": "6dd7d2026cc002ba21f3d67dc073157cc423ab46668b92e32b654aab3cd8a4c0",
     "src/Observers/PostObserver.php": "790ee47c1d2b412d23a490b58932a24bd8b23bb4e7806edb3d90edf42a4637ae",
     "src/Policies/PostPolicy.php": "70a2a899045a738c9182e30751d613201f56ce98724078cf3201c9e27f41f5cf",
-    "tests/Feature/Models/PostEndpointsTest.php": "bd427b1ee3ff721a2e6bc83f3e4fee4c00b2634378cc54b3131d3e01382b0fdc",
-    "tests/TestCase.php": "dd6355e1e3aad74d275753a33a7cb8a31813274a44c5344747389a891873ee7d"
+    "tests/Feature/Models/PostEndpointsTest.php": "3f675603f9394ce0493f78f78ed083a159331c5ea4afe608ccdae34572981a2c",
+    "tests/TestCase.php": "6e467aa0e936a3eeb09e3502bdd9b7e48365d999c0987bc5ba872e592f6c72d3",
+    "tests/User.php": "d823928f7f62ee09ba8a3868f07923ebfc8bf4afd81f7314acc7a9b74f2298e6"
 }
