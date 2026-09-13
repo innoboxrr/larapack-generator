@@ -111,6 +111,9 @@ class PascalCaseModelNameResource extends JsonResource
         return [
             'id' => 'delete',
             'name' => __('Delete'),
+            // La tabla lo avisa al terminar; sin esto borrar desde la fila no
+            // decía nada, y desde la ficha sí.
+            'success' => __('Record deleted'),
             'callback' => 'deleteModel',
             'icon' => 'delete',
             'route' => false,

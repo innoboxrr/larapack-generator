@@ -274,6 +274,13 @@ abstract class UiModuleTool extends Tool
 			$columns .= "        value: t('{$label}'),\n";
 			$columns .= "        sortable: true,\n";
 			$columns .= "        html: false,\n";
+
+			// La tabla enseñaba el valor guardado (`published`) en lugar de la
+			// etiqueta que el formulario ya usaba para el mismo campo.
+			if (! empty($prop['enum']) && is_array($prop['enum'])) {
+				$columns .= "        parser: (value) => ({ " . $this->enumLabels($prop['enum']) . " })[value] ?? value,\n";
+			}
+
 			$columns .= "    },\n";
 		}
 
@@ -403,6 +410,22 @@ abstract class UiModuleTool extends Tool
 		$component = $prop['form_component'] ?? null;
 
 		return in_array($component, static::FORM_COMPONENTS, true) ? $component : null;
+	}
+
+	/**
+	 * `'draft': t('Draft'), 'published': t('Published')`
+	 *
+	 * @param  array<string|int, string>  $enum
+	 */
+	protected function enumLabels(array $enum): string
+	{
+		$pairs = [];
+
+		foreach ($enum as $value => $label) {
+			$pairs[] = "'" . $this->escape((string) $value) . "': t('" . $this->escape((string) $label) . "')";
+		}
+
+		return implode(', ', $pairs);
 	}
 
 	protected function label(string $name): string

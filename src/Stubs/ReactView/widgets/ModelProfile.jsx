@@ -3,6 +3,11 @@ import t from 'innoboxrr-i18n'
 
 import { showModel } from '../index'
 
+// La API manda la fecha en ISO; se enseña en el idioma de la página.
+const formatDate = (value) => (value
+    ? new Intl.DateTimeFormat(document.documentElement.lang || undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value))
+    : '')
+
 export default function ModelProfile({ camelCaseModelName = null, camelCaseModelNameId = null }) {
     // La version anterior de Vue asignaba el resultado sobre el prop, lo que
     // Vue prohibe y React ni siquiera permite: el dato cargado vive aparte.
@@ -51,7 +56,7 @@ export default function ModelProfile({ camelCaseModelName = null, camelCaseModel
             <dl className="fe-card-body">
                 <div>
                     <dt className="fe-text-muted fe-text-sm">{t('Created at')}</dt>
-                    <dd>{record.created_at}</dd>
+                    <dd>{formatDate(record.created_at)}</dd>
                 </div>
                 {/* Agrega mas campos aqui segun sea necesario */}
             </dl>

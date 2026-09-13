@@ -18,7 +18,7 @@
         <dl class="fe-card-body">
             <div>
                 <dt class="fe-text-muted fe-text-sm">{{ t('Created at') }}</dt>
-                <dd>{{ record.created_at }}</dd>
+                <dd>{{ formatDate(record.created_at) }}</dd>
             </div>
             <!-- Agrega mas campos aqui segun sea necesario -->
         </dl>
@@ -50,6 +50,11 @@
     const fetched = ref(null)
 
     const record = computed(() => props.camelCaseModelName ?? fetched.value)
+
+    // La API manda la fecha en ISO; se enseña en el idioma de la página.
+    const formatDate = (value) => (value
+        ? new Intl.DateTimeFormat(document.documentElement.lang || undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value))
+        : '')
 
     onMounted(async () => {
 
