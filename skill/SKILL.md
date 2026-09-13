@@ -203,6 +203,26 @@ larapack:providers      # App, Auth, Event y Route service providers
 larapack:config         # archivo de configuración
 ```
 
+`larapack:providers` los declara en `extra.laravel.providers` del
+`composer.json`, así que la aplicación que instala el paquete lo arranca sola:
+migraciones, vistas, configuración, rutas y eventos.
+
+### Lo que el paquete espera de la aplicación
+
+El código generado no conoce la aplicación que lo instala, pero sí da por hecho
+cuatro cosas de ella. Si falta alguna, no es un defecto del paquete:
+
+| Qué | Por qué |
+|---|---|
+| `laravel/sanctum` | Las rutas usan `auth:sanctum`. |
+| Usuario `Notifiable` | La exportación avisa al usuario por notificación. El de Laravel ya lo es. |
+| `isAdmin()` en el usuario, opcional | `before()` de cada Policy deja pasar al administrador. Sin el método nadie lo es y deciden los métodos de la Policy. |
+| `maatwebsite/excel` | Sólo si se usa la exportación. |
+| `JsonResource::withoutWrapping()` | El datatable espera `data`, `meta` y `links` en la raíz. Ver «El contrato front ↔ back». |
+
+Esto no es teórico: la suite de LaraPack genera un paquete, lo instala en una
+aplicación Laravel y recorre su API y sus tests tal como salen.
+
 ## Paso 6: dónde va tu código
 
 Estos son los únicos sitios donde debes escribir. Si tu lógica no cabe en
@@ -216,13 +236,13 @@ salirse.
 | `Traits/Storage/` | Subida y borrado de archivos del modelo. |
 | `Traits/Mutators/` | Accessors y mutators. |
 | `Filters/<Model>/ManagedFilter::canView` | **Quién puede ver qué.** Sin esto el índice lo devuelve todo. |
-| `Policies/<Model>Policy` | Autorización por acción. |
+| `Policies/<Model>Policy` | Autorización por acción. Nace cerrada: sólo pasa el administrador, y ni él borra para siempre hasta que saques `forceDelete` de `$exceptAbilities`. No lo encierres en el modelo: la API de políticas no lo vería y el front ofrecería un botón que falla. |
 | `Requests/*/rules()` | Reglas que no vengan del JSON. Nunca toques nada fuera del array. |
 | `Resources/<Model>Resource` | La forma exacta de la respuesta y su array `actions`. |
 | `Events/*/Listeners/` | Efectos secundarios: notificaciones, colas, integraciones. |
 | `Observers/` | Ciclo de vida del modelo. |
-| `Factories/` | Datos de prueba realistas. |
-| `tests/Feature/` | El comportamiento, no la estructura. |
+| `Factories/` | Datos de prueba realistas. Las generadas ya insertan: cada columna tiene un valor que la base acepta y cada `foreignId` hacia un modelo del archivo usa su factory. |
+| `tests/Feature/` | El comportamiento, no la estructura. Los generados pasan recién generados y prueban que cada endpoint responde, con la autorización abierta en el `TestCase`. Si uno falla, lo rompiste tú. La autorización pruébala aparte, contra la Policy. |
 
 Y una cosa más sobre el modelo: **el modelo es una fachada, no un almacén de
 lógica.** Un método público en `Operations` que orquesta, y el trabajo real en
@@ -311,6 +331,12 @@ paquete que falla si uno se adelanta al otro.
 que el agregador del módulo recorre el árbol de rutas y registra los nombres en
 `innoboxrr-react-datatable`. Para navegar desde una vista React usa
 `buildPath('AdminShowPost', { id })`, nunca una ruta escrita a mano.
+
+**Qué rutas piden sesión lo declara la ruta, no el módulo.** Cada una lleva
+`auth: true` —en `meta` en Vue, en `handle` en React— y es el router del
+anfitrión el que lo lee y redirige. El módulo no importa ningún middleware de la
+aplicación: si lo hiciera, sólo compilaría dentro de la aplicación que lo
+define.
 
 **El aspecto no depende de ningún framework de CSS.** El módulo generado no
 necesita UIkit, ni Tailwind, ni Font Awesome: todo sale de
