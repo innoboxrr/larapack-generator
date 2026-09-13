@@ -2,7 +2,13 @@
 
 namespace Namespace\Models\Traits\Storage;
 
+// @larapack:if metas
+use Innoboxrr\Support\Http\Requests\RequestFormater;
+use Namespace\Models\PascalCaseModelNameMeta;
+// @larapack:endif
+// @larapack:if !metas
 // use Namespace\Models\PascalCaseModelNameMeta;
+// @larapack:endif
 
 trait PascalCaseModelNameStorage
 {
@@ -12,6 +18,10 @@ trait PascalCaseModelNameStorage
 
         $camelCaseModelName = $this->create($request->only($this->creatable));
 
+// @larapack:if metas
+        $camelCaseModelName->updateModelMetas($request);
+
+// @larapack:endif
         return $camelCaseModelName;
 
     }
@@ -21,10 +31,37 @@ trait PascalCaseModelNameStorage
      
         $this->update($request->only($this->updatable));
 
+// @larapack:if metas
+        $this->updateModelMetas($request);
+
+// @larapack:endif
         return $this;
 
     }
 
+// @larapack:if metas
+    /**
+     * Las metas que llegan en la petición.
+     *
+     * Los grupos anidados se aplanan con guion bajo —`seo.title` llega como
+     * `seo_title`— y update_metas guarda sólo las de `$editable_metas` que no
+     * estén en `$protected_metas`. Un valor vacío borra la meta y una clave que
+     * no llega no se toca. Después se rehace `payload`.
+     *
+     * Acepta la request o un arreglo, para poder llamarlo también desde un job.
+     */
+    public function updateModelMetas($request)
+    {
+
+        $data = is_array($request) ? $request : $request->all();
+
+        $this->update_metas(RequestFormater::flatten($data), PascalCaseModelNameMeta::class, 'snake_case_model_name_id')->updatePayload();
+
+        return $this;
+
+    }
+// @larapack:endif
+// @larapack:if !metas
     /*
     public function updateModelMetas($request)
     {
@@ -35,6 +72,7 @@ trait PascalCaseModelNameStorage
 
     }
     */
+// @larapack:endif
 
     public function deleteModel()
     {

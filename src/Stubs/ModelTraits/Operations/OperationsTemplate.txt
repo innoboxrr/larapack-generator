@@ -5,6 +5,40 @@ namespace Namespace\Models\Traits\Operations;
 trait PascalCaseModelNameOperations
 {
 
+// @larapack:if metas
+    /**
+     * La forma de `payload`, la copia en JSON de las metas.
+     *
+     * Por defecto cada meta va con su clave, y las que guardan JSON ya
+     * decodificadas. Dale aquí la estructura que quieras leer después con
+     * getPayload('seo.title'), por ejemplo agrupando `seo_title` y
+     * `seo_description` bajo `seo`.
+     */
+    public function buildPayload(): array
+    {
+
+        return $this->metas()->pluck('value', 'key')
+            ->map(fn ($value) => is_string($value) && json_validate($value) && in_array($value[0] ?? '', ['{', '['], true)
+                ? json_decode($value, true)
+                : $value)
+            ->all();
+
+    }
+
+    /**
+     * Rehace `payload` a partir de las metas. Se guarda sin disparar eventos:
+     * es una copia derivada, no un cambio del registro.
+     */
+    public function updatePayload(): bool
+    {
+
+        $this->payload = $this->buildPayload();
+
+        return $this->saveQuietly();
+
+    }
+// @larapack:endif
+// @larapack:if !metas
     /*
     public function buildPayload()
     {
@@ -22,5 +56,6 @@ trait PascalCaseModelNameOperations
 
     }
     */
+// @larapack:endif
 
 }

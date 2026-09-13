@@ -2,11 +2,25 @@
 
 namespace Namespace\Models\Traits\Relations;
 
+// @larapack:if metas
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Namespace\Models\PascalCaseModelNameMeta;
+// @larapack:endif
 //IMPORTS//
 // use \Znck\Eloquent\Traits\BelongsToThrough; // Docs: https://github.com/staudenmeir/belongs-to-through
 // use \Staudenmeir\EloquentHasManyDeep\HasRelationships; // Docs: https://github.com/staudenmeir/eloquent-has-many-deep
 
 trait PascalCaseModelNameRelations
 {
+// @larapack:if metas
+    /**
+     * Las metas del modelo. MetaOperations las lee y las escribe por aquí.
+     */
+    public function metas(): HasMany
+    {
+        return $this->hasMany(PascalCaseModelNameMeta::class);
+    }
+
+// @larapack:endif
 //EDIT//
 }

@@ -80,6 +80,11 @@ class MakeFullModelCommand extends Command
 
         if ($includeMetas) {
             $commands[] = 'ModelMetas';
+
+            // Los stubs de relaciones, guardado y operaciones leen la condición
+            // `metas`: sin declararla, el modelo Meta se generaba pero nada lo
+            // usaba.
+            Declaration::enableMetas($modelName);
         }
 
         foreach($commands as $command) {

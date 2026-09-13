@@ -21,10 +21,10 @@ final class Declaration
     /**
      * Las condiciones de los stubs que no son una acción.
      */
-    public const FLAGS = ['immutable', 'secret'];
+    public const FLAGS = ['immutable', 'secret', 'metas'];
 
     /**
-     * @var array<string, array{actions: array<int, string>, immutable: bool, secret: array<int, string>}>
+     * @var array<string, array{actions: array<int, string>, immutable: bool, secret: array<int, string>, metas: bool}>
      */
     private static array $models = [];
 
@@ -32,13 +32,26 @@ final class Declaration
      * @param  array<int, string>  $actions
      * @param  array<int, string>  $secret
      */
-    public static function set(string $model, array $actions, bool $immutable = false, array $secret = []): void
+    public static function set(string $model, array $actions, bool $immutable = false, array $secret = [], bool $metas = false): void
     {
         self::$models[$model] = [
             'actions' => array_values(array_intersect(Actions::ALL, $actions)),
             'immutable' => $immutable,
             'secret' => array_values($secret),
+            'metas' => $metas,
         ];
+    }
+
+    /**
+     * `larapack:full-model --metas` sin laraimport: el resto de la forma se
+     * queda como estuviera declarada.
+     */
+    public static function enableMetas(string $model): void
+    {
+        $declaration = self::of($model);
+        $declaration['metas'] = true;
+
+        self::$models[$model] = $declaration;
     }
 
     /**
@@ -60,12 +73,13 @@ final class Declaration
             $model['name'],
             $model['actions'] ?? Actions::resolve($model),
             ! empty($model['immutable']),
-            $secret
+            $secret,
+            ! empty($model['metas'])
         );
     }
 
     /**
-     * @return array{actions: array<int, string>, immutable: bool, secret: array<int, string>}
+     * @return array{actions: array<int, string>, immutable: bool, secret: array<int, string>, metas: bool}
      */
     public static function of(string $model): array
     {
@@ -73,6 +87,7 @@ final class Declaration
             'actions' => Actions::ALL,
             'immutable' => false,
             'secret' => [],
+            'metas' => false,
         ];
     }
 
@@ -96,6 +111,7 @@ final class Declaration
             in_array($condition, Actions::ALL, true) => in_array($condition, $declaration['actions'], true),
             $condition === 'immutable' => $declaration['immutable'],
             $condition === 'secret' => $declaration['secret'] !== [],
+            $condition === 'metas' => $declaration['metas'],
             default => throw new MakerException("Condición de stub desconocida: '{$condition}'."),
         };
     }

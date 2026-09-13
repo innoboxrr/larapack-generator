@@ -97,6 +97,7 @@ class ModelTraitsTool extends Tool
 		if(!file_exists($operationsTraitFile)) {
 			$templateFile = $this->modelTraitsTemplatePath . '/Operations/OperationsTemplate.txt';
 			if(copy($templateFile, $operationsTraitFile)) {
+				$this->applyBlocks($operationsTraitFile);
 				$this->replaceData($operationsTraitFile);
 			} else {
 				throw MakerException::copyFailed($templateFile, $operationsTraitFile);
@@ -111,6 +112,9 @@ class ModelTraitsTool extends Tool
 		if(!file_exists($relationsTraitFile)) {
 			$templateFile = $this->modelTraitsTemplatePath . '/Relations/RelationsTemplate.txt';
 			if(copy($templateFile, $relationsTraitFile)) {
+				// Los traits se copian sin pasar por generate(), así que los
+				// bloques de metas se resuelven aquí.
+				$this->applyBlocks($relationsTraitFile);
 				$this->replaceData($relationsTraitFile);
 				if(self::isFromJsonImporter()) {
 					$this->processRelationsTraitWithJson($relationsTraitFile);
@@ -190,6 +194,7 @@ class ModelTraitsTool extends Tool
 		if(!file_exists($storageTraitFile)) {
 			$templateFile = $this->modelTraitsTemplatePath . '/Storage/StorageTemplate.txt';
 			if(copy($templateFile, $storageTraitFile)) {
+				$this->applyBlocks($storageTraitFile);
 				$this->replaceData($storageTraitFile);
 			} else {
 				throw MakerException::copyFailed($templateFile, $storageTraitFile);
