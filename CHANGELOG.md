@@ -1,5 +1,20 @@
 # Changelog
 
+## 7.5.1
+
+El módulo generado pide `innoboxrr-form-core` ^2.7,
+`innoboxrr-form-elements` ^6.5 e `innoboxrr-react-form-elements` ^3.5. Con
+ellas, los formularios que genera LaraPack se ven igual sin Tailwind en la
+aplicación: las etiquetas, las ayudas, el grupo repetible, la zona de archivos,
+las casillas del código y el avatar salen del tema, en claro y en oscuro. Antes
+una parte de esos campos solo tenía forma si la aplicación compilaba Tailwind, y
+en React la zona de archivos y el código no tenían estilo en ningún caso.
+
+### Para proyectos existentes
+
+No hay que regenerar: basta con subir esas tres dependencias en
+`resources/<ui>/package.json`.
+
 ## 7.5.0
 
 Los módulos Vue y React que genera LaraPack se usan como una aplicación de
