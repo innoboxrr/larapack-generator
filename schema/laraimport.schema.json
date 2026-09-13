@@ -45,11 +45,18 @@
                 "metas": {
                     "type": "boolean",
                     "default": false,
-                    "description": "Genera la tabla y el modelo de metadatos asociados."
+                    "description": "Genera la tabla <modelo>_metas y su modelo Meta, la relación metas(), la columna payload con la copia en JSON, y el guardado de metas al crear y actualizar."
                 },
                 "editable_metas": {
                     "type": "array",
                     "default": [],
+                    "description": "Metas que el formulario puede escribir. Los grupos anidados llegan aplanados con guion bajo: seo.title se guarda como seo_title. Un valor vacío borra la meta.",
+                    "items": { "$ref": "#/$defs/snakeCase" }
+                },
+                "protected_metas": {
+                    "type": "array",
+                    "default": [],
+                    "description": "Metas que solo escribe el sistema, con setMeta() o setMetas(). El formulario no las escribe ni las borra aunque lleguen en la petición o estén en editable_metas.",
                     "items": { "$ref": "#/$defs/snakeCase" }
                 },
                 "load_relations": {

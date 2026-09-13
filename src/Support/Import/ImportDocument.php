@@ -120,6 +120,10 @@ final class ImportDocument
                 $document['models'][$index]['props'][$position]['exports_cols'] = false;
                 $document['models'][$index]['props'][$position]['datatable'] = false;
             }
+
+            if (! empty($model['metas'])) {
+                $document['models'][$index]['props'] = self::withPayload($document['models'][$index]['props']);
+            }
         }
 
         foreach ($document['models'] as $index => $model) {
@@ -137,6 +141,51 @@ final class ImportDocument
         }
 
         return $document;
+    }
+
+    /**
+     * Lo que nunca puede hacer `payload` en un modelo con metas.
+     */
+    public const PAYLOAD_LOCKED = [
+        'fillable' => false,
+        'creatable' => false,
+        'updatable' => false,
+        'exports_cols' => false,
+        'datatable' => false,
+        'form' => false,
+        'form_submit' => false,
+    ];
+
+    /**
+     * `payload` es la copia en JSON de las metas que arma updatePayload(): la
+     * escribe el sistema. Si el laraimport no la declara, se añade; si la
+     * declara, se respeta su tipo y su cast, pero no se puede escribir desde la
+     * petición ni sale en la exportación. Antes era una columna más: el
+     * cliente podía mandarla y pisar la copia.
+     *
+     * @param  array<int, array<string, mixed>>  $props
+     * @return array<int, array<string, mixed>>
+     */
+    private static function withPayload(array $props): array
+    {
+        foreach ($props as $position => $prop) {
+            if ($prop['name'] === 'payload') {
+                $props[$position] = array_merge($prop, self::PAYLOAD_LOCKED);
+
+                return $props;
+            }
+        }
+
+        // Los valores por defecto salen del esquema, como los de cualquier
+        // otra propiedad.
+        $payload = Defaults::apply(['models' => [[
+            'name' => 'Payload',
+            'props' => [['name' => 'payload', 'type' => 'longText', 'nullable' => true, 'cast' => 'array']],
+        ]]])['models'][0]['props'][0];
+
+        $props[] = array_merge($payload, self::PAYLOAD_LOCKED);
+
+        return $props;
     }
 
     /**

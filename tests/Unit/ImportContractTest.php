@@ -67,6 +67,7 @@ final class ImportContractTest extends TestCase
         $this->assertSame([], $model['load_relations']);
         $this->assertSame([], $model['load_counts']);
         $this->assertSame([], $model['editable_metas']);
+        $this->assertSame([], $model['protected_metas']);
         $this->assertSame([], $model['requests']);
 
         $prop = $model['props'][0];

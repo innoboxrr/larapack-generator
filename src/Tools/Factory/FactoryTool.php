@@ -70,7 +70,13 @@ class FactoryTool extends Tool
 		$data = self::getJsonContent();
 		$model = collect($data['models'])->where('name', $this->ModelName)->first();
 		$fileContent = file_get_contents($factoryFile);
-		$definitionContent = $this->generateFactoryDefinition($model['props']);
+		// `payload` lo arma updatePayload() a partir de las metas: una factory
+		// que lo inventara guardaría una copia que no corresponde a nada.
+		$props = empty($model['metas'])
+			? $model['props']
+			: array_values(array_filter($model['props'], fn (array $prop): bool => $prop['name'] !== 'payload'));
+
+		$definitionContent = $this->generateFactoryDefinition($props);
 		$updatedFileContent = str_replace('//EDIT//', $definitionContent, $fileContent);
 		file_put_contents($factoryFile, $updatedFileContent);
 	}

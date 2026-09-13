@@ -39,6 +39,7 @@ final class SemanticValidator
             ...self::enums($models),
             ...self::routes($models),
             ...self::secrets($models, $raw['models'] ?? []),
+            ...self::metas($models, $raw['models'] ?? []),
         ];
     }
 
@@ -164,6 +165,66 @@ final class SemanticValidator
                         'path' => "/models/{$index}/requests/{$position}",
                         'message' => "Reglas para {$request['name']}, pero {$model['name']} no tiene {$action}: no se genera ese request y las reglas no se usan.",
                     ];
+                }
+            }
+        }
+
+        return $findings;
+    }
+
+    /**
+     * Metas declaradas a medias, o un payload que se quiere escribir.
+     *
+     * Son avisos y no errores: el generador ya impone lo correcto, pero quien
+     * lo escribió tiene que saber que lo que pidió no es lo que va a pasar.
+     *
+     * @param  array<int, array<string, mixed>>  $models
+     * @param  array<int, mixed>  $raw
+     * @return array<int, array<string, mixed>>
+     */
+    private static function metas(array $models, array $raw): array
+    {
+        $findings = [];
+
+        foreach ($models as $index => $model) {
+            $editable = $model['editable_metas'] ?? [];
+            $protected = $model['protected_metas'] ?? [];
+
+            if (empty($model['metas'])) {
+                foreach (['editable_metas' => $editable, 'protected_metas' => $protected] as $key => $list) {
+                    if ($list !== []) {
+                        $findings[] = [
+                            'level' => self::WARNING,
+                            'path' => "/models/{$index}/{$key}",
+                            'message' => "'{$model['name']}' declara {$key} pero no metas: true, así que no hay tabla donde guardarlas. Añade metas: true o quita la lista.",
+                        ];
+                    }
+                }
+
+                continue;
+            }
+
+            foreach (array_intersect($editable, $protected) as $meta) {
+                $findings[] = [
+                    'level' => self::WARNING,
+                    'path' => "/models/{$index}/editable_metas",
+                    'message' => "'{$meta}' está en editable_metas y en protected_metas: gana protected y el formulario no la escribe. Quítala de una de las dos.",
+                ];
+            }
+
+            foreach ($raw[$index]['props'] ?? [] as $position => $written) {
+                if (! is_array($written) || ($written['name'] ?? null) !== 'payload') {
+                    continue;
+                }
+
+                foreach (['fillable', 'creatable', 'updatable', 'exports_cols'] as $key) {
+                    if (($written[$key] ?? null) === true) {
+                        $findings[] = [
+                            'level' => self::WARNING,
+                            'path' => "/models/{$index}/props/{$position}/{$key}",
+                            'message' => "'payload' lo rehace updatePayload() a partir de las metas: no se escribe desde la petición ni se exporta, así que {$key}: true se ignora.",
+                        ];
+                    }
                 }
             }
         }

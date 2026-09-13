@@ -70,6 +70,15 @@ class ModelTool extends Tool
 		$updatedFileContent = str_replace('//UPDATABLE//', $updatable, $updatedFileContent);
 		$updatedFileContent = str_replace('//CASTS//', $casts, $updatedFileContent);
 		$updatedFileContent = str_replace('//EDITABLEMETAS//', $editableMetas, $updatedFileContent);
+
+		// Sólo si hay alguna: sin ellas, la línea sale como siempre.
+		if (! empty($model['protected_metas'])) {
+			$updatedFileContent = str_replace(
+				'protected $protected_metas = [];',
+				"protected \$protected_metas = [\n        " . $this->generateEditableMetas($model['protected_metas']) . "\n    ];",
+				$updatedFileContent
+			);
+		}
 		$updatedFileContent = str_replace('//EXPORTCOLS//', $exportCols, $updatedFileContent);
 		$updatedFileContent = str_replace('//LOADABLERELATIONS//', $loadableRelations, $updatedFileContent);
 		$updatedFileContent = str_replace('//LOADABLECOUNTS//', $loadableCounts, $updatedFileContent);

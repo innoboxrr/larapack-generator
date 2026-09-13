@@ -110,10 +110,12 @@ final class JsonImporterTest extends TestCase
     {
         $model = $this->project->read('src/Models/Post.php');
 
-        $this->assertStringContainsString("'title', 'payload', 'published', 'user_id'", $model);
-        // user_id tiene exports_cols false, así que no debe aparecer ahí.
+        // Post tiene metas: payload es la copia que arma updatePayload(), así
+        // que no se asigna desde la petición ni se exporta aunque el laraimport
+        // lo declare. user_id tiene exports_cols false.
+        $this->assertStringContainsString("'title', 'published', 'user_id'", $model);
         $this->assertMatchesRegularExpression(
-            "/\\\$export_cols = \[\s*'title', 'payload', 'published'\s*\]/",
+            "/\\\$export_cols = \[\s*'title', 'published'\s*\]/",
             $model
         );
     }

@@ -94,6 +94,7 @@
                 }
             ],
             "editable_metas": ["seo_title"],
+            "protected_metas": ["views"],
             "assignments": [],
             "filters": [],
             "requests": [
