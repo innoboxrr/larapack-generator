@@ -115,12 +115,12 @@ final class GeneratedDesktopUiTest extends TestCase
         foreach (['vue' => 'vue', 'react' => 'jsx'] as $ui => $extension) {
             $base = "resources/{$ui}/src/models/post";
 
-            $this->assertStringContainsString("notifySuccess(t('Post created'))", $this->read("{$base}/views/AdminView.{$extension}"));
+            $this->assertStringContainsString("notifySuccess(t('Record created'))", $this->read("{$base}/views/AdminView.{$extension}"));
             $this->assertStringContainsString("notifySuccess(t('Changes saved'))", $this->read("{$base}/views/ShowView.{$extension}"));
 
             $card = $this->read("{$base}/widgets/ModelCard.{$extension}");
 
-            $this->assertStringContainsString("notifySuccess(t('Post deleted'))", $card);
+            $this->assertStringContainsString("notifySuccess(t('Record deleted'))", $card);
             $this->assertStringContainsString("'RequestCancelledError'", $card);
         }
     }

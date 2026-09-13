@@ -12,20 +12,26 @@
  *
  * Los componentes se cargan con `lazy` para que este archivo siga siendo JS
  * plano, sin JSX, como su gemelo de Vue.
+ *
+ * `title` es un getter: se traduce cada vez que se lee, con el idioma que la
+ * aplicacion haya elegido, y no al importar este archivo, que puede cargarse
+ * antes de setLocale().
  */
+
+import t from 'innoboxrr-i18n'
 
 export default [
     {
         path: 'kebabcasemodelname',
         id: 'AdminPluralPascalCaseModelName',
-        handle: { title: 'PluralPascalCaseModelName', auth: true },
+        handle: { get title() { return t('PluralModelLabel') }, auth: true },
         lazy: async () => ({ Component: (await import('../views/AdminView.jsx')).default }),
         children: [
             // @larapack:if create
             {
                 path: 'create',
                 id: 'AdminCreatePascalCaseModelName',
-                handle: { title: 'Crear PluralPascalCaseModelName', auth: true },
+                handle: { get title() { return t('Create :name', { name: t('SingularModelLabel') }) }, auth: true },
                 lazy: async () => ({ Component: (await import('../views/CreateView.jsx')).default }),
             },
             // @larapack:endif
@@ -33,14 +39,14 @@ export default [
             {
                 path: ':id',
                 id: 'AdminShowPascalCaseModelName',
-                handle: { title: 'Ver PluralPascalCaseModelName', auth: true },
+                handle: { get title() { return t('SingularModelLabel') }, auth: true },
                 lazy: async () => ({ Component: (await import('../views/ShowView.jsx')).default }),
                 children: [
                     // @larapack:if update
                     {
                         path: 'edit',
                         id: 'AdminEditPascalCaseModelName',
-                        handle: { title: 'Editar PluralPascalCaseModelName', auth: true },
+                        handle: { get title() { return t('Edit :name', { name: t('SingularModelLabel') }) }, auth: true },
                         lazy: async () => ({ Component: (await import('../views/EditView.jsx')).default }),
                     },
                     // @larapack:endif

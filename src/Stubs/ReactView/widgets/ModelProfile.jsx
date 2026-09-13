@@ -44,7 +44,7 @@ export default function ModelProfile({ camelCaseModelName = null, camelCaseModel
 
                 <span className="fe-toolbar-spacer" />
 
-                <span className="fe-badge">ID: {record.id}</span>
+                <span className="fe-badge">{t('ID')}: {record.id}</span>
 
             </header>
 

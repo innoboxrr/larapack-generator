@@ -11,7 +11,7 @@
 
             <span class="fe-toolbar-spacer" />
 
-            <span class="fe-badge">ID: {{ record.id }}</span>
+            <span class="fe-badge">{{ t('ID') }}: {{ record.id }}</span>
 
         </header>
 

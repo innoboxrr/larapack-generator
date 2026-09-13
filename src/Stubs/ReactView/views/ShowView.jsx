@@ -1,11 +1,11 @@
 import { useCallback, useEffect } from 'react'
 import { Outlet, useMatches, useNavigate, useParams } from 'react-router-dom'
 import { buildPath } from 'innoboxrr-react-datatable'
+import t from 'innoboxrr-i18n'
 import { SkeletonComponent } from 'innoboxrr-react-form-elements'
 // @larapack:if update
 import { DrawerComponent } from 'innoboxrr-react-form-elements'
 import { notifySuccess } from 'innoboxrr-form-core'
-import t from 'innoboxrr-i18n'
 // @larapack:endif
 
 import Breadcrumbs from '../../../components/Breadcrumbs.jsx'
@@ -30,7 +30,7 @@ export default function ShowView() {
     const load = useCallback(async () => {
         const loaded = await fetchOne(id)
 
-        document.title = loaded?.name ?? 'PascalCaseModelName'
+        document.title = loaded?.name ?? t('SingularModelLabel')
 
         return loaded
     }, [id, fetchOne])
@@ -56,14 +56,14 @@ export default function ShowView() {
     const breadcrumbs = [
         {
             link: buildPath('AdminPluralPascalCaseModelName'),
-            title: 'PluralPascalCaseModelName',
+            title: t('PluralModelLabel'),
         },
     ]
 
     if (camelCaseModelName) {
         breadcrumbs.push({
             link: buildPath('AdminShowPascalCaseModelName', { id: camelCaseModelName.id }),
-            title: camelCaseModelName.name ?? 'PascalCaseModelName',
+            title: camelCaseModelName.name ?? t('SingularModelLabel'),
         })
     }
 
@@ -105,7 +105,8 @@ export default function ShowView() {
             {/* La edición se abre encima de la ficha, que sigue a la vista. */}
             <DrawerComponent
                 open={isEditing}
-                title={t('Edit')}
+                title={t('Edit :name', { name: t('SingularModelLabel') })}
+                closeLabel={t('Close')}
                 onOpenChange={(open) => open || backToRecord()}>
                 <Outlet context={{ onUpdateData: onUpdated }} />
             </DrawerComponent>

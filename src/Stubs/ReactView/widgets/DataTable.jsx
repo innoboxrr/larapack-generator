@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import DataTable from 'innoboxrr-react-datatable'
 import route from 'innoboxrr-route-resolver'
 
+import { tableLabels } from '../../../i18n.js'
 import FilterForm from '../forms/FilterForm.jsx'
 import * as model from '../index'
 
@@ -46,6 +47,7 @@ export default function PascalCaseModelNameDataTable({
             showTopbar={showTopbar}
             hasActions={hasActions}
             hasFilter={hasFilter}
+            labels={tableLabels()}
             filterForm={<FilterForm onSubmit={setFormFilters} />} />
     )
 }

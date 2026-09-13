@@ -271,7 +271,7 @@ abstract class UiModuleTool extends Tool
 
 			$columns .= "    {\n";
 			$columns .= "        id: '{$prop['name']}',\n";
-			$columns .= "        value: '{$label}',\n";
+			$columns .= "        value: t('{$label}'),\n";
 			$columns .= "        sortable: true,\n";
 			$columns .= "        html: false,\n";
 			$columns .= "    },\n";

@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom'
 import { classFor } from 'innoboxrr-form-core'
 import { IconComponent, MenuComponent } from 'innoboxrr-react-form-elements'
+import t from 'innoboxrr-i18n'
 
 /**
  * Las acciones de un registro, en un menú desplegable.
@@ -15,7 +16,7 @@ import { IconComponent, MenuComponent } from 'innoboxrr-react-form-elements'
  *
  * @param {{ items: Array<Record<string, any>>, label?: string }} props
  */
-export default function ActionMenu({ items, label = 'Acciones' }) {
+export default function ActionMenu({ items, label = t('Actions') }) {
     const navigate = useNavigate()
 
     const menuItems = items.map((item, index) => ({

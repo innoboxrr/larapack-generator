@@ -17,7 +17,8 @@
                  donde lo dejó. -->
             <DrawerComponent
                 :open="isCreating"
-                :title="t('Create PluralPascalCaseModelName')"
+                :title="t('Create :name', { name: t('SingularModelLabel') })"
+                :close-label="t('Close')"
                 @update:open="(open) => open || backToIndex()">
                 <RouterView @update-data="onCreated" />
             </DrawerComponent>
@@ -26,7 +27,9 @@
             <CommandPaletteComponent
                 v-model:open="paletteOpen"
                 :items="commands"
-                :placeholder="t('Search a command')" />
+                :placeholder="t('Search a command')"
+                :empty-text="t('No results')"
+                :label="t('Command palette')" />
 
         </div>
 
@@ -74,7 +77,7 @@
     // @larapack:if create
     const onCreated = () => {
 
-        notifySuccess(t('PascalCaseModelName created'))
+        notifySuccess(t('Record created'))
 
         backToIndex()
 
@@ -88,8 +91,8 @@
         // @larapack:if create
         {
             id: 'create',
-            label: t('Create PluralPascalCaseModelName'),
-            group: 'PluralPascalCaseModelName',
+            label: t('Create :name', { name: t('SingularModelLabel') }),
+            group: t('PluralModelLabel'),
             icon: 'plus',
             action: () => router.push({ name: 'AdminCreatePascalCaseModelName' }),
         },
@@ -97,7 +100,7 @@
         {
             id: 'refresh',
             label: t('Refresh'),
-            group: 'PluralPascalCaseModelName',
+            group: t('PluralModelLabel'),
             icon: 'refresh',
             action: () => table.value?.refresh(),
         },
@@ -106,7 +109,7 @@
     const breadcrumbs = computed(() => [
         {
             link: router.resolve({ name: 'AdminPluralPascalCaseModelName' }).fullPath,
-            title: 'PluralPascalCaseModelName',
+            title: t('PluralModelLabel'),
         },
     ])
 

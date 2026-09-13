@@ -1,6 +1,7 @@
 import { Fragment } from 'react'
 import { Link } from 'react-router-dom'
 import { classFor } from 'innoboxrr-form-core'
+import t from 'innoboxrr-i18n'
 
 /**
  * Las migas de pan del modulo.
@@ -15,7 +16,7 @@ import { classFor } from 'innoboxrr-form-core'
  */
 export default function Breadcrumbs({ pages }) {
     return (
-        <nav className={classFor('breadcrumb')} aria-label="Breadcrumb">
+        <nav className={classFor('breadcrumb')} aria-label={t('Breadcrumb')}>
 
             {pages.map((page, index) => (
                 <Fragment key={page.link ?? page.title}>

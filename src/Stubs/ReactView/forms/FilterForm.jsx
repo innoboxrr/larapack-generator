@@ -34,8 +34,8 @@ export default function FilterForm({ formId = 'camelCaseModelNameFilterForm', on
                     <TextInputComponent
                         type="text"
                         name="id"
-                        label="ID"
-                        placeholder="ID"
+                        label={t('ID')}
+                        placeholder={t('ID')}
                         value={form.id ?? ''}
                         onChange={(value) => setField('id', value)} />
                 </div>

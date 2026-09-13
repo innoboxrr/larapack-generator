@@ -31,7 +31,8 @@
         <!-- La edición se abre encima de la ficha, que sigue a la vista. -->
         <DrawerComponent
             :open="isEditing"
-            :title="t('Edit')"
+            :title="t('Edit :name', { name: t('SingularModelLabel') })"
+            :close-label="t('Close')"
             @update:open="(open) => open || backToRecord()">
             <RouterView @update-data="onUpdated" />
         </DrawerComponent>
@@ -45,11 +46,11 @@
 
     import { computed, onMounted, watch } from 'vue'
     import { RouterView, useRoute, useRouter } from 'vue-router'
+    import t from 'innoboxrr-i18n'
     import { SkeletonComponent } from 'innoboxrr-form-elements'
     // @larapack:if update
     import { DrawerComponent } from 'innoboxrr-form-elements'
     import { notifySuccess } from 'innoboxrr-form-core'
-    import t from 'innoboxrr-i18n'
     // @larapack:endif
 
     import Breadcrumbs from '../../../components/Breadcrumbs.vue'
@@ -77,7 +78,7 @@
 
         const loaded = await store.fetchOne(route.params.id)
 
-        document.title = loaded?.name ?? 'PascalCaseModelName'
+        document.title = loaded?.name ?? t('SingularModelLabel')
 
     }
 
@@ -108,7 +109,7 @@
         const pages = [
             {
                 link: router.resolve({ name: 'AdminPluralPascalCaseModelName' }).fullPath,
-                title: 'PluralPascalCaseModelName',
+                title: t('PluralModelLabel'),
             },
         ]
 
@@ -121,7 +122,7 @@
                 name: 'AdminShowPascalCaseModelName',
                 params: { id: camelCaseModelName.value.id },
             }).fullPath,
-            title: camelCaseModelName.value.name ?? 'PascalCaseModelName',
+            title: camelCaseModelName.value.name ?? t('SingularModelLabel'),
         })
 
         // @larapack:if update

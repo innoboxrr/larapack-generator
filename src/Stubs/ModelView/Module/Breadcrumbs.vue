@@ -1,6 +1,6 @@
 <template>
 
-    <nav :class="classFor('breadcrumb')" aria-label="Breadcrumb">
+    <nav :class="classFor('breadcrumb')" :aria-label="t('Breadcrumb')">
 
         <template v-for="(page, index) in pages" :key="page.link ?? page.title">
 
@@ -39,6 +39,7 @@
 
     import { RouterLink } from 'vue-router'
     import { classFor } from 'innoboxrr-form-core'
+    import t from 'innoboxrr-i18n'
 
     defineProps({
         /** @type {{ link: string, title: string }[]} */

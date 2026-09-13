@@ -32,7 +32,7 @@ export default function AdminView() {
 
     // @larapack:if create
     const onCreated = () => {
-        notifySuccess(t('PascalCaseModelName created'))
+        notifySuccess(t('Record created'))
 
         backToIndex()
 
@@ -45,8 +45,8 @@ export default function AdminView() {
         // @larapack:if create
         {
             id: 'create',
-            label: t('Create PluralPascalCaseModelName'),
-            group: 'PluralPascalCaseModelName',
+            label: t('Create :name', { name: t('SingularModelLabel') }),
+            group: t('PluralModelLabel'),
             icon: 'plus',
             action: () => navigate(buildPath('AdminCreatePascalCaseModelName')),
         },
@@ -54,7 +54,7 @@ export default function AdminView() {
         {
             id: 'refresh',
             label: t('Refresh'),
-            group: 'PluralPascalCaseModelName',
+            group: t('PluralModelLabel'),
             icon: 'refresh',
             action: () => table.current?.refresh(),
         },
@@ -63,7 +63,7 @@ export default function AdminView() {
     const breadcrumbs = [
         {
             link: buildPath('AdminPluralPascalCaseModelName'),
-            title: 'PluralPascalCaseModelName',
+            title: t('PluralModelLabel'),
         },
     ]
 
@@ -82,7 +82,8 @@ export default function AdminView() {
                         con su página, su orden y sus filtros. */}
                     <DrawerComponent
                         open={isCreating}
-                        title={t('Create PluralPascalCaseModelName')}
+                        title={t('Create :name', { name: t('SingularModelLabel') })}
+                        closeLabel={t('Close')}
                         onOpenChange={(open) => open || backToIndex()}>
                         <Outlet context={{ onUpdateData: onCreated }} />
                     </DrawerComponent>
@@ -92,6 +93,8 @@ export default function AdminView() {
                         open={paletteOpen}
                         items={commands}
                         placeholder={t('Search a command')}
+                        emptyText={t('No results')}
+                        label={t('Command palette')}
                         onOpenChange={setPaletteOpen} />
                 </div>
             )}

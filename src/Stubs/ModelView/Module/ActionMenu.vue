@@ -38,6 +38,7 @@
     import { useRouter } from 'vue-router'
     import { classFor } from 'innoboxrr-form-core'
     import { IconComponent, MenuComponent } from 'innoboxrr-form-elements'
+    import t from 'innoboxrr-i18n'
 
     const props = defineProps({
         items: {
@@ -46,7 +47,7 @@
         },
         label: {
             type: String,
-            default: 'Acciones',
+            default: () => t('Actions'),
         },
     })
 

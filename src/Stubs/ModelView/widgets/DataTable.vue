@@ -14,7 +14,8 @@
         :card-wrapper="cardWrapper"
         :show-topbar="showTopbar"
         :has-actions="hasActions"
-        :has-filter="hasFilter">
+        :has-filter="hasFilter"
+        :labels="tableLabels()">
 
         <template #filterForm>
             <FilterForm @submit="updateFormFilters" />
@@ -30,6 +31,7 @@
     import DataTable from 'innoboxrr-vue-datatable'
     import route from 'innoboxrr-route-resolver'
 
+    import { tableLabels } from '../../../i18n.js'
     import FilterForm from '../forms/FilterForm.vue'
     import * as model from '../index'
 

@@ -91,7 +91,7 @@ export const crudActions = () => [
 export const dataTableHead = () => [
     {
         id: 'id',
-        value: 'ID',
+        value: t('ID'),
         sortable: true,
         html: false,
     },

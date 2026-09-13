@@ -11,7 +11,7 @@
             <IconComponent name="box" :size="48" />
 
             <h2 class="fe-mt-sm">
-                {{ camelCaseModelName?.name ?? 'PascalCaseModelName' }}
+                {{ camelCaseModelName?.name ?? t('SingularModelLabel') }}
             </h2>
 
         </div>
@@ -61,7 +61,7 @@
             return
         }
 
-        notifySuccess(t('PascalCaseModelName deleted'))
+        notifySuccess(t('Record deleted'))
 
         router.push({ name: 'AdminPluralPascalCaseModelName' })
 

@@ -8,8 +8,8 @@
                 <TextInputComponent
                     type="text"
                     name="id"
-                    label="ID"
-                    placeholder="ID"
+                    :label="t('ID')"
+                    :placeholder="t('ID')"
                     v-model="form.id" />
             </div>
 
