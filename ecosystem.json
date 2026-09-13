@@ -41,6 +41,18 @@
         "innoboxrr-js-validator": "^2.0.0",
         "innoboxrr-route-resolver": "^2.0.0"
     },
+    "$comment-generated": "Lo que usa el codigo generado y no es de la linea base. larapack:new lo declara desde aqui, y la suite EndToEnd lo instala para probar lo generado.",
+    "generated": {
+        "require": {
+            "laravel/sanctum": "^4.3"
+        },
+        "require-dev": {
+            "maatwebsite/excel": "^4.0"
+        },
+        "suggest": {
+            "maatwebsite/excel": "Necesario para las exportaciones que genera LaraPack (^4.0)."
+        }
+    },
     "required": {
         "composer": ["name", "description", "license", "autoload"],
         "npm": ["name", "version", "license", "type", "exports", "files", "sideEffects"]
