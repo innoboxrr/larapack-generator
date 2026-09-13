@@ -33,41 +33,29 @@ export default function ModelProfile({ camelCaseModelName = null, camelCaseModel
     }
 
     return (
-        <div className="space-y-6">
+        <section className="fe-card">
 
-            <div className="border rounded-xl shadow-sm p-6 bg-white dark:bg-gray-800 dark:border-gray-700">
+            <header className="fe-toolbar">
 
-                <div className="flex justify-between items-center border-b pb-4 mb-6 dark:border-gray-600">
-
-                    <div>
-                        <h2 className="text-2xl font-semibold text-gray-900 dark:text-white">
-                            {t('Details')}
-                        </h2>
-                        <p className="text-sm text-gray-500 dark:text-gray-400">
-                            {t('Additional information')}
-                        </p>
-                    </div>
-
-                    <span className="text-xs px-3 py-1 rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300">
-                        ID: {record.id}
-                    </span>
-
+                <div>
+                    <h2>{t('Details')}</h2>
+                    <p className="fe-text-muted fe-text-sm">{t('Additional information')}</p>
                 </div>
 
-                <dl className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
-                    <div>
-                        <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                            {t('Created at')}
-                        </dt>
-                        <dd className="mt-1 text-sm text-gray-900 dark:text-white">
-                            {record.created_at}
-                        </dd>
-                    </div>
-                    {/* Agrega mas campos aqui segun sea necesario */}
-                </dl>
+                <span className="fe-toolbar-spacer" />
 
-            </div>
+                <span className="fe-badge">ID: {record.id}</span>
 
-        </div>
+            </header>
+
+            <dl className="fe-card-body">
+                <div>
+                    <dt className="fe-text-muted fe-text-sm">{t('Created at')}</dt>
+                    <dd>{record.created_at}</dd>
+                </div>
+                {/* Agrega mas campos aqui segun sea necesario */}
+            </dl>
+
+        </section>
     )
 }

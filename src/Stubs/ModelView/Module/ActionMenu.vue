@@ -1,52 +1,65 @@
 <template>
 
-    <div :class="classFor('actionMenu')">
+    <MenuComponent :items="menuItems" :label="label">
 
-        <template v-for="action in items" :key="action.label">
-
-            <RouterLink
-                v-if="action.type === 'router'"
-                :to="action.to"
-                :class="classFor('actionMenuItem')">{{ action.label }}</RouterLink>
-
+        <template #trigger="{ toggle, loading, triggerProps }">
             <button
-                v-else
                 type="button"
-                :class="classFor(action.danger ? 'actionMenuDanger' : 'actionMenuItem')"
-                @click="action.action">{{ action.label }}</button>
-
+                :class="classFor('iconButton')"
+                v-bind="triggerProps"
+                :disabled="loading"
+                @click="toggle">
+                <IconComponent name="more" :size="16" />
+            </button>
         </template>
 
-    </div>
+    </MenuComponent>
 
 </template>
 
 <script setup>
 
     /**
-     * Las acciones de un registro.
+     * Las acciones de un registro, en un menú desplegable.
      *
      * Antes las vistas Vue las delegaban en un <DropdownButtonComponent> que
-     * no existe en ningun paquete del ecosistema: el codigo generado solo
-     * compilaba si la aplicacion anfitriona lo habia registrado globalmente,
-     * sin que ningun import lo declarara. La rama React, por su parte, pintaba
-     * las mismas acciones en linea con su propio marcado, asi que las dos
-     * ramas divergian en algo que deberia ser identico.
+     * no existe en ningun paquete del ecosistema, y despues se pintaron como
+     * una lista de enlaces siempre abierta. Ahora es el MenuComponent de
+     * innoboxrr-form-elements: se abre con el teclado, se cierra con Escape y
+     * al pulsar fuera, y devuelve el foco al boton.
      *
-     * El contrato de `items` es el mismo que ya usaban ambas:
+     * El contrato de `items` es el mismo en Vue y en React:
      *
-     *     { type: 'router', to, label }
-     *     { type: 'event', action, label, danger? }
+     *     { type: 'router', to, label, icon? }
+     *     { type: 'event', action, label, icon?, danger? }
      */
 
-    import { RouterLink } from 'vue-router'
+    import { computed } from 'vue'
+    import { useRouter } from 'vue-router'
     import { classFor } from 'innoboxrr-form-core'
+    import { IconComponent, MenuComponent } from 'innoboxrr-form-elements'
 
-    defineProps({
+    const props = defineProps({
         items: {
             type: Array,
             required: true,
         },
+        label: {
+            type: String,
+            default: 'Acciones',
+        },
     })
+
+    const router = useRouter()
+
+    const menuItems = computed(() => props.items.map((item, index) => ({
+        id: item.id ?? `${item.label}-${index}`,
+        label: item.label,
+        icon: item.icon,
+        danger: item.danger === true,
+        disabled: item.disabled === true,
+        disabledReason: item.disabledReason,
+        action: item.type === 'router' ? () => router.push(item.to) : item.action,
+    })))
 
 </script>
