@@ -10,22 +10,30 @@ class AppServiceProvider extends ServiceProvider
     public function register(): void
     {
 
-        // $this->mergeConfigFrom(__DIR__ . '/../../config/namespaceWithoutSeparation.php', 'namespaceWithoutSeparation');
+        // La configuracion la genera larapack:config, que puede no haberse
+        // ejecutado todavia: sin el archivo no hay nada que fusionar.
+        if (is_file(__DIR__ . '/../../config/namespaceWithoutSeparation.php')) {
+            $this->mergeConfigFrom(__DIR__ . '/../../config/namespaceWithoutSeparation.php', 'namespaceWithoutSeparation');
+        }
 
     }
 
     public function boot(): void
     {
 
-        // $this->loadMigrationsFrom(__DIR__ . '/../../database/migrations');
+        // Sin esto la aplicacion que instala el paquete no crea sus tablas, y
+        // las vistas de exportacion no se encuentran.
+        $this->loadMigrationsFrom(__DIR__ . '/../../database/migrations');
 
-        // $this->loadViewsFrom(__DIR__.'/../../resources/views', 'namespaceWithoutSeparation');
+        $this->loadViewsFrom(__DIR__ . '/../../resources/views', 'namespaceWithoutSeparation');
 
         if ($this->app->runningInConsole()) {
 
-            // $this->publishes([__DIR__.'/../../resources/views' => resource_path('views/vendor/namespaceWithoutSeparation'),], 'views');
+            $this->publishes([__DIR__ . '/../../resources/views' => resource_path('views/vendor/namespaceWithoutSeparation')], 'views');
 
-            // $this->publishes([__DIR__.'/../../config/namespaceWithoutSeparation.php' => config_path('namespaceWithoutSeparation.php')], 'config');
+            if (is_file(__DIR__ . '/../../config/namespaceWithoutSeparation.php')) {
+                $this->publishes([__DIR__ . '/../../config/namespaceWithoutSeparation.php' => config_path('namespaceWithoutSeparation.php')], 'config');
+            }
 
         }
 
