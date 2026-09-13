@@ -391,10 +391,11 @@ dice lo que se decide de verdad:
 | `props[].datatable` | Columna de la tabla y candidata al orden por defecto. |
 | `props[].enum` | Opciones de un `SelectInputComponent`. |
 | `props[].secret` | Nunca sale por la API: va a `$hidden`, fuera de la exportación y de la tabla. |
-| `metas` | Genera el modelo `<Model>Meta` y sus operaciones. |
+| `metas` | Campos flexibles en la tabla `<modelo>_metas`, con la relación `metas()`, la copia en `payload` y el guardado al crear y actualizar. Ver [Metas y payload](#metas-y-payload). |
 | `load_relations` | Métodos del trait `Relations` y la lista `$loadable_relations`. |
 | `load_counts` | La lista `$loadable_counts`. |
-| `editable_metas` | Metas que acepta la actualización. |
+| `editable_metas` | Metas que el formulario puede escribir. Los grupos anidados llegan aplanados: `seo.title` es `seo_title`. |
+| `protected_metas` | Metas que sólo escribe tu código con `setMeta()`; el formulario no las toca. |
 | `requests[]` | Reglas de `CreateRequest` y `UpdateRequest`. |
 | `pivots[]` | Migraciones de tablas pivote, sin modelo. |
 | `routes` | Qué acciones genera el modelo: `only` o `except`. Sin la clave, las diez. |
@@ -433,12 +434,6 @@ Con formulario, tabla, relaciones y validación:
                     }
                 },
                 {
-                    "name": "payload",
-                    "type": "longText",
-                    "nullable": true,
-                    "cast": "json"
-                },
-                {
                     "name": "category_id",
                     "type": "foreignId",
                     "constraint": "categories",
@@ -457,7 +452,8 @@ Con formulario, tabla, relaciones y validación:
                 { "type": "belongsTo", "related": "User", "name": "user", "namespace": "App\\Models" }
             ],
             "load_counts": [],
-            "editable_metas": ["seo_title"],
+            "editable_metas": ["seo_title", "seo_og_image"],
+            "protected_metas": ["views"],
             "requests": [
                 {
                     "name": "Create",
@@ -518,6 +514,96 @@ Tres cosas que se resuelven solas y no hay que arreglar a mano:
 
 `assignments` y `filters` siguen aceptándose por compatibilidad, pero están
 marcadas como obsoletas en el esquema: el generador no las lee.
+
+### Metas y payload
+
+Hay datos que no merecen una columna: el SEO de un post, preferencias,
+contadores, las respuestas de un formulario que cambia con el tiempo. Con
+`metas: true` el modelo los guarda como filas `key`/`value` en su tabla
+`<modelo>_metas`, y guarda una copia de todos en la columna JSON `payload`, que
+se lee sin consultas.
+
+| Si el dato… | Va en |
+|---|---|
+| se filtra, se ordena, es una clave foránea o necesita un índice | una columna (`props`) |
+| es opcional, cambia de forma o son muchos | una meta |
+| se lee junto con el registro, en la API o en una vista | `payload`, que se arma solo |
+
+**Qué se genera con `metas: true`:**
+
+- la tabla `<modelo>_metas` —`key`, `value`, la clave foránea y un índice único
+  por clave y registro— y el modelo `<Model>Meta`;
+- la relación `metas()`, en `Traits/Relations`;
+- `createModel()` y `updateModel()` llaman a `updateModelMetas($request)`, en
+  `Traits/Storage`;
+- `buildPayload()` y `updatePayload()`, en `Traits/Operations`;
+- la columna `payload` (`longText`, cast `array`). No se asigna desde la
+  petición ni se exporta, aunque la declares: es una copia que rehace el
+  sistema.
+
+**Qué escribe el formulario.** Sólo las claves de `editable_metas` que no estén
+en `protected_metas`. Los grupos anidados se aplanan con guion bajo
+(`RequestFormater` de `innoboxrr/support`), así que un formulario puede mandar:
+
+```php
+[
+    'title' => 'Hola',
+    'seo' => [
+        'title' => 'Hola, mundo',
+        'og' => ['image' => 'portada.png'],
+    ],
+    'views' => 999, // protegida: se ignora
+]
+```
+
+y, con `"editable_metas": ["seo_title", "seo_og_image"]`, quedan las metas
+`seo_title` y `seo_og_image`. Además:
+
+- un valor vacío (`null`, `''`, `[]`) **borra** la meta, y una clave que no llega
+  **no se toca**: para no cambiar una meta, no la mandes;
+- una lista (`['a', 'b']`) se guarda entera, como JSON;
+- después de guardar se rehace `payload`.
+
+**Qué escribe tu código.** Las metas protegidas —contadores, fechas de un
+proceso, lo que calcula el sistema— se escriben con `setMeta()` o `setMetas()`,
+que no pasan por la lista blanca. No refrescan `payload`: llama a
+`updatePayload()` al terminar.
+
+```php
+$post->setMeta('views', $post->meta('views', 0) + 1)->updatePayload();
+```
+
+**Leer.** `$post->getPayload('seo_title')` lee la copia, sin consultas.
+`$post->meta('seo_title')` va a la tabla en cada llamada y devuelve el valor tal
+como se guardó: una lista vuelve como texto JSON. En un listado, lee `payload`.
+
+**La forma de `payload` la decides tú.** Por defecto `buildPayload()` devuelve
+cada meta con su clave. Cámbialo en `Traits/Operations` para leer una estructura:
+
+```php
+public function buildPayload(): array
+{
+    $metas = $this->metas()->pluck('value', 'key');
+
+    return [
+        'seo' => [
+            'title' => $metas['seo_title'] ?? null,
+            'image' => $metas['seo_og_image'] ?? null,
+        ],
+        'views' => (int) ($metas['views'] ?? 0),
+    ];
+}
+```
+
+y después `$post->getPayload('seo.title')`.
+
+**Mantenimiento**, con los comandos de `innoboxrr/traits`:
+
+- `php artisan metas:regpayload "Acme\Blog\Models\Post"` rehace `payload` de
+  todos los registros, o de uno con `--modelId=`. Úsalo después de cambiar
+  `buildPayload()`.
+- `php artisan meta:cleanup` quita claves duplicadas y añade el índice único en
+  tablas de metas creadas sin él. Sólo MySQL.
 
 ### Tablas que no se administran desde un formulario
 
@@ -585,8 +671,8 @@ se escribe a mano:
 ```
 src/Models/<Model>.php                             fillable, casts, whitelists
 src/Models/<Model>Meta.php                         sólo si metas: true
-src/Models/Traits/Relations/<Model>Relations.php   ← hueco
-src/Models/Traits/Operations/<Model>Operations.php ← hueco
+src/Models/Traits/Relations/<Model>Relations.php   ← hueco; metas() si metas: true
+src/Models/Traits/Operations/<Model>Operations.php ← hueco; buildPayload() si metas: true
 src/Models/Traits/Storage/<Model>Storage.php       ← hueco
 src/Models/Traits/Mutators/<Model>Mutators.php     ← hueco
 src/Models/Traits/Assignments/<Model>Assignment.php
@@ -606,6 +692,7 @@ src/Notifications/<Model>/ExportNotification.php
 
 routes/api/models/<kebab>.php
 database/migrations/*_create_<plural>_table.php
+database/migrations/*_create_<model>_metas_table.php sólo si metas: true
 database/factories/<Model>Factory.php              ← hueco (datos de prueba)
 tests/Feature/Models/<Model>EndpointsTest.php      ← hueco
 
@@ -630,7 +717,7 @@ Si una lógica no cabe en ninguno de estos sitios, falta algo en el
 
 | Hueco | Qué va ahí |
 |---|---|
-| `Traits/Operations/` | La lógica de negocio del modelo. Es el sitio por defecto. |
+| `Traits/Operations/` | La lógica de negocio del modelo. Es el sitio por defecto. Con metas, también la forma de `payload` en `buildPayload()`. |
 | `Traits/Relations/` | Relaciones que el JSON no declara (through, morph, condicionales). |
 | `Traits/Storage/` | Subida y borrado de archivos del modelo. |
 | `Traits/Mutators/` | Accessors y mutators. |
@@ -651,7 +738,8 @@ Si una lógica no cabe en ninguno de estos sitios, falta algo en el
 - El controlador: delega en las requests y no tiene lógica.
 - El archivo de rutas: si falta un endpoint, falta en el generador.
 - `$fillable`, `$creatable`, `$updatable`, `$export_cols`, `$loadable_relations`,
-  `$loadable_counts` y `casts()`: salen del JSON.
+  `$loadable_counts`, `$editable_metas`, `$protected_metas` y `casts()`: salen del
+  JSON.
 - Los archivos con marcadores `//RULES//`, `//IMPORTS//` o `//EDIT//`, fuera de
   su marcador.
 - `models/<kebab>/index.js` de un solo framework.
@@ -1073,8 +1161,9 @@ versión hasta la última.
 | 7.3 | Bajo | Nada | [7.3 → 7.4](#de-73-a-74) y siguiente |
 | 7.4 | Medio | Datatables 3.0, avisos y confirmación en la aplicación | [7.4 → 7.5](#de-74-a-75) y siguientes |
 | 7.5.0 | Bajo | Nada; tres dependencias npm | [7.5.0 → 7.5.1](#de-750-a-751) y siguiente |
-| 7.5.1 | Medio | La aplicación carga las traducciones del módulo; algunas claves cambian | [7.5 → 7.6](#de-75-a-76) |
-| 7.6 | — | Estás al día | — |
+| 7.5.1 | Medio | La aplicación carga las traducciones del módulo; algunas claves cambian | [7.5 → 7.6](#de-75-a-76) y siguiente |
+| 7.6 | Medio si usas metas; bajo si no | Metas conectadas; traits y support 2.1 | [7.6 → 7.7](#de-76-a-77) |
+| 7.7 | — | Estás al día | — |
 
 Las notas completas de cada versión están en `CHANGELOG.md`.
 
@@ -1367,6 +1456,55 @@ pantalla enseña la clave en inglés.
 
 **Comprueba en el navegador** con la aplicación en español y en inglés: el
 índice, la tabla con un error, la paleta con Ctrl+K, crear, editar y borrar.
+
+### De 7.6 a 7.7
+
+Lo que se genera con `metas: true` pasa a funcionar: guarda las metas del
+formulario y mantiene `payload`. Un modelo sin metas sale igual que antes.
+
+**Composer**, en el `composer.json` del paquete:
+
+| Paquete | Versión |
+|---|---|
+| `innoboxrr/traits` | `^2.1` |
+| `innoboxrr/support` | `^2.1` (nuevo: aplana los grupos anidados del formulario) |
+
+**npm**, opcional porque llega por `^`: `innoboxrr-form-core` `^2.8.0`,
+`innoboxrr-form-elements` `^6.6.0` e `innoboxrr-react-form-elements` `^3.6.0`. El
+teléfono con selector de país pasa a seguir el tema.
+
+**En el laraimport:**
+
+- Declara `protected_metas` con las metas que sólo escribe tu código.
+- Ya no hace falta declarar `payload`: se añade solo. Si lo declarabas
+  `creatable` o `updatable`, `larapack:validate` avisa y se ignora.
+
+**Regenera y aplica a mano lo de los traits.** `Relations`, `Storage` y
+`Operations` sólo se crean si no existen, así que ni `--force` los reescribe. En
+un modelo con metas:
+
+| Archivo | Qué cambió |
+|---|---|
+| `Traits/Relations/<Model>Relations.php` | La relación `metas()`. Sin ella `meta()` y `setMeta()` fallan. |
+| `Traits/Storage/<Model>Storage.php` | `createModel()` y `updateModel()` llaman a `updateModelMetas()`, que aplana con `RequestFormater` y rehace `payload`. |
+| `Traits/Operations/<Model>Operations.php` | `buildPayload()` y `updatePayload()`, que guarda sin disparar eventos. |
+| `Models/<Model>.php` | `$protected_metas` sale del contrato; `payload` fuera de `$fillable`, `$creatable`, `$updatable` y `$export_cols`. |
+| `database/factories/<Model>Factory.php` | Ya no inventa `payload`. |
+
+Los tres primeros, con el contenido exacto, están en
+[Metas y payload](#metas-y-payload).
+
+**Si ya usabas metas a mano**, `innoboxrr/traits` 2.1 cambia dos cosas:
+
+- `update_metas()` ignora las claves de `$protected_metas`, aunque estén en
+  `$editable_metas`. Si un formulario escribía una de ellas, deja de hacerlo.
+- Un arreglo vacío borra la meta; antes se guardaba como `"[]"`.
+
+**Las migraciones nuevas de metas** ya no llevan `softDeletes()`: el trait borra
+de verdad. Las tablas que ya existen no cambian.
+
+**Comprueba**: crea un registro mandando un grupo anidado, edítalo vaciando una
+meta, y mira `payload` en la respuesta.
 
 ---
 

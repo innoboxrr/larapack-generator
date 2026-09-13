@@ -92,10 +92,11 @@ Lo que conviene saber sin tener que leer el esquema entero:
 | `props[].form_submit` | El campo viaja en el submit. Un `user_id` con `form: false` y `form_submit: true` se convierte en prop del componente. |
 | `props[].datatable` | Columna de la tabla y candidata al orden por defecto. |
 | `props[].enum` | Opciones de un `SelectInputComponent`. En otro componente se ignora y se avisa. |
-| `metas` | Genera el modelo `<Model>Meta` y sus operaciones. |
+| `metas` | Campos flexibles en `<modelo>_metas`, con relación `metas()`, copia en `payload` y guardado al crear y actualizar. Ver «Metas y payload». |
 | `load_relations` | Métodos del trait `Relations` y whitelist `$loadable_relations`. |
 | `load_counts` | Whitelist `$loadable_counts`. |
-| `editable_metas` | Metas que el update acepta. |
+| `editable_metas` | Metas que escribe el formulario, con el nombre ya aplanado (`seo_title`). |
+| `protected_metas` | Metas que sólo escribe tu código; el formulario no las toca. |
 | `requests[]` | Reglas de `CreateRequest` y `UpdateRequest`. Solo esos dos. |
 | `pivots[]` | Migraciones de tablas pivote, sin modelo. |
 | `routes` | Qué acciones genera el modelo: `only` o `except`. Sin la clave, las diez. |
@@ -127,6 +128,28 @@ Quitar una acción quita todo lo que cuelga de ella, también en la interfaz. La
 vistas necesitan `index` y `policies`: sin ellas sólo se generan el contrato y
 el store.
 
+**Metas y payload: campos flexibles sin columna.** Con `metas: true` el modelo
+guarda filas `key`/`value` en `<modelo>_metas` y una copia de todas en la
+columna JSON `payload`. Lo que se genera ya funciona: relación `metas()`,
+guardado al crear y actualizar, y `buildPayload()`/`updatePayload()`. Reglas:
+
+- **Columna o meta.** Lo que se filtra, se ordena, es clave foránea o necesita
+  índice es una columna. Lo opcional, lo que cambia de forma o lo que son muchos
+  campos, una meta. **No crees una columna JSON a mano** para datos flexibles:
+  para eso están las metas y `payload`.
+- **`editable_metas` es lo que escribe el formulario**, y los grupos anidados
+  llegan aplanados con guion bajo: si el formulario manda `seo.og.image`, declara
+  `seo_og_image`.
+- **`protected_metas` es lo que sólo escribe tu código** —contadores, fechas de
+  un proceso—. Se escriben con `setMeta()`/`setMetas()`, y después
+  `updatePayload()`: esos métodos no refrescan la copia.
+- **Un valor vacío borra la meta.** Para no cambiarla, no mandes la clave.
+- **Lee con `getPayload('clave')`**, no con `meta()` en un bucle: `meta()` hace
+  una consulta por llamada y devuelve las listas como texto JSON.
+- **La forma de `payload` se decide en `buildPayload()`** (Operations). Nunca
+  declares `payload` como `creatable` ni `updatable`: es una copia derivada y el
+  generador lo impide igualmente.
+
 `assignments` y `filters` están marcadas obsoletas en el esquema. No las uses.
 
 ## Paso 3: validar
@@ -145,8 +168,9 @@ distintas y las dos importan:
   relaciones que no resuelven, `UpdateRequest` sin la regla del identificador
   del que dependen su `authorize()` y su `handle()`, `only` junto a `except`,
   un modelo `immutable` que pide una escritura, un campo de formulario sin
-  `create` ni `update` donde vivir, y un `secret` que pide salir en la tabla o
-  en la exportación.
+  `create` ni `update` donde vivir, un `secret` que pide salir en la tabla o
+  en la exportación, metas declaradas sin `metas: true`, una meta editable y
+  protegida a la vez, y un `payload` que pide escribirse desde la petición.
 
 Si vas a generar la interfaz, añade `--vue` o `--react`: también avisa de lo que
 las vistas necesitan y el modelo no declara.
@@ -183,6 +207,7 @@ src/Notifications/<Model>/ExportNotification.php
 
 routes/api/models/<kebab>.php                      10 rutas
 database/migrations/*_create_<plural>_table.php
+database/migrations/*_create_<model>_metas_table.php solo si metas: true
 database/factories/<Model>Factory.php              ← HUECO (datos de prueba)
 tests/Feature/Models/<Model>EndpointsTest.php      ← HUECO
 
@@ -242,7 +267,7 @@ salirse.
 
 | Hueco | Qué va ahí |
 |---|---|
-| `Traits/Operations/` | La lógica de negocio del modelo. Es el sitio por defecto. |
+| `Traits/Operations/` | La lógica de negocio del modelo. Es el sitio por defecto. Con metas, también la forma de `payload` en `buildPayload()`. |
 | `Traits/Relations/` | Relaciones que el JSON no declara (through, morph, condicionales). |
 | `Traits/Storage/` | Subida y borrado de archivos del modelo. |
 | `Traits/Mutators/` | Accessors y mutators. |
