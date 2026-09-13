@@ -1,0 +1,41 @@
+{
+    "models": [
+        {
+            "name": "Product",
+            "props": [
+                { "name": "title", "type": "string", "datatable": true },
+                { "name": "price", "type": "decimal" },
+                { "name": "stock", "type": "integer" },
+                { "name": "active", "type": "boolean" },
+                { "name": "notes", "type": "longText", "nullable": true },
+                { "name": "category_id", "type": "foreignId", "constraint": "categories" }
+            ],
+            "load_relations": [
+                { "type": "belongsTo", "related": "Category", "name": "category" }
+            ]
+        },
+        {
+            "name": "Category",
+            "props": [
+                { "name": "name", "type": "string", "datatable": true }
+            ],
+            "load_relations": [
+                { "type": "hasMany", "related": "Product", "name": "products" }
+            ]
+        },
+        {
+            "name": "AuditEntry",
+            "immutable": true,
+            "props": [
+                { "name": "message", "type": "string", "datatable": true }
+            ]
+        },
+        {
+            "name": "ApiKey",
+            "props": [
+                { "name": "label", "type": "string", "datatable": true },
+                { "name": "token_hash", "type": "string", "secret": true }
+            ]
+        }
+    ]
+}
