@@ -78,7 +78,7 @@
 
         const loaded = await store.fetchOne(route.params.id)
 
-        document.title = loaded?.name ?? t('SingularModelLabel')
+        document.title = loaded?.displayPropName ?? t('SingularModelLabel')
 
     }
 
@@ -122,7 +122,7 @@
                 name: 'AdminShowPascalCaseModelName',
                 params: { id: camelCaseModelName.value.id },
             }).fullPath,
-            title: camelCaseModelName.value.name ?? t('SingularModelLabel'),
+            title: camelCaseModelName.value.displayPropName ?? t('SingularModelLabel'),
         })
 
         // @larapack:if update

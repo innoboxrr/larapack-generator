@@ -78,7 +78,7 @@ export default function ModelCard({ camelCaseModelName }) {
                 <IconComponent name="box" size={48} />
 
                 <h2 className="fe-mt-sm">
-                    {camelCaseModelName?.name ?? t('SingularModelLabel')}
+                    {camelCaseModelName?.displayPropName ?? t('SingularModelLabel')}
                 </h2>
 
             </div>

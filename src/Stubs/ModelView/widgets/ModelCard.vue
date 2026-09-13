@@ -11,7 +11,7 @@
             <IconComponent name="box" :size="48" />
 
             <h2 class="fe-mt-sm">
-                {{ camelCaseModelName?.name ?? t('SingularModelLabel') }}
+                {{ camelCaseModelName?.displayPropName ?? t('SingularModelLabel') }}
             </h2>
 
         </div>

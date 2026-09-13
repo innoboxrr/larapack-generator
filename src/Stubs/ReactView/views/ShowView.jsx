@@ -30,7 +30,7 @@ export default function ShowView() {
     const load = useCallback(async () => {
         const loaded = await fetchOne(id)
 
-        document.title = loaded?.name ?? t('SingularModelLabel')
+        document.title = loaded?.displayPropName ?? t('SingularModelLabel')
 
         return loaded
     }, [id, fetchOne])
@@ -63,7 +63,7 @@ export default function ShowView() {
     if (camelCaseModelName) {
         breadcrumbs.push({
             link: buildPath('AdminShowPascalCaseModelName', { id: camelCaseModelName.id }),
-            title: camelCaseModelName.name ?? t('SingularModelLabel'),
+            title: camelCaseModelName.displayPropName ?? t('SingularModelLabel'),
         })
     }
 
