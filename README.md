@@ -818,6 +818,26 @@ setIcons({ plus: 'lucide:plus', delete: 'lucide:trash-2' })
 Un `Resource` de Laravel emite también el nombre semántico: `'icon' => 'show'`,
 no `'fa-eye'`.
 
+### Los textos
+
+Todo texto que se ve es **una clave en inglés** que se traduce al pintarse:
+`t('Create :name', { name: t('Post') })` en el front, `__('Show')` en Laravel.
+Así la pantalla habla un solo idioma, el que elige la aplicación.
+
+- LaraPack escribe `resources/<ui>/src/locales/es.json` y `en.json`, y el
+  módulo los exporta como `translations`. Al volver a generar suma las claves que
+  falten y **nunca toca una traducción escrita**.
+- Los textos propios de LaraPack llegan ya traducidos al español. El nombre del
+  modelo y de sus campos no los puede saber: quedan con `""` en `es.json`, y
+  mientras lo estén se ve la clave.
+- Los títulos de ruta se traducen cuando el router los lee, así que da igual si
+  el módulo se importa antes o después de `setLocale()`.
+- En Laravel, `lang/es.json` del paquete trae las acciones de cada fila y el
+  correo de exportación; la aplicación puede corregirlos en su propio
+  `lang/es.json`.
+- `npm run locale` (`innoboxrr-locale-generator`) recoge las claves de lo que
+  escribas a mano.
+
 ---
 
 ## Montar un paquete en una aplicación
@@ -840,6 +860,7 @@ aplicación:
 | `maatwebsite/excel` | Sólo si se usa la exportación. |
 | `JsonResource::withoutWrapping()` en el `AppServiceProvider` | La tabla espera `data`, `meta` y `links` en la raíz; sin esto sale vacía. |
 | `innoboxrr/routes-to-json` | El front resuelve cada URL por el nombre de la ruta. |
+| El idioma de la petición (`App::setLocale`) | Las acciones de cada fila y el correo de exportación salen en ese idioma. El paquete trae `lang/es.json` y la aplicación puede corregirlo en el suyo. |
 
 ```php
 // app/Providers/AppServiceProvider.php
@@ -875,15 +896,22 @@ import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import { createRouter, createWebHistory } from 'vue-router'
 import { setRoutes } from 'innoboxrr-route-resolver'
+import { addTranslations, setLocale } from 'innoboxrr-i18n'
 
 import 'acme-catalogo/src/theme.js'
-import catalogo, { routes as catalogoRoutes } from 'acme-catalogo'
+import catalogo, { routes as catalogoRoutes, translations as catalogoTranslations } from 'acme-catalogo'
 
 import routes from './routes.json'
 import App from './App.vue'
 import AdminLayout from './AdminLayout.vue'
 
 setRoutes(routes)
+
+// Los textos del módulo primero y los de la aplicación encima, para poder
+// corregirlos. Sin esto la pantalla sale con las claves en inglés.
+addTranslations(catalogoTranslations)
+addTranslations(import.meta.glob('/resources/locales/*.json', { eager: true }))
+setLocale(document.documentElement.lang)
 
 const router = createRouter({
     history: createWebHistory(),
@@ -923,15 +951,20 @@ con el que se montan:
 import { createRoot } from 'react-dom/client'
 import { createBrowserRouter, Outlet, RouterProvider } from 'react-router-dom'
 import { setRoutes } from 'innoboxrr-route-resolver'
+import { addTranslations, setLocale } from 'innoboxrr-i18n'
 import { ConfirmHostComponent, ToastRegionComponent } from 'innoboxrr-react-form-elements'
 
 import 'acme-catalogo-react/src/theme.js'
-import { registerModuleRoutes, routes as catalogoRoutes } from 'acme-catalogo-react'
+import { registerModuleRoutes, routes as catalogoRoutes, translations as catalogoTranslations } from 'acme-catalogo-react'
 
 import routes from './routes.json'
 
 setRoutes(routes)
 registerModuleRoutes('/admin')
+
+addTranslations(catalogoTranslations)
+addTranslations(import.meta.glob('/resources/locales/*.json', { eager: true }))
+setLocale(document.documentElement.lang)
 
 function AdminLayout() {
     // Qué ruta pide sesión lo declara la ruta (`handle.auth`); decide la aplicación.
@@ -1038,9 +1071,10 @@ versión hasta la última.
 | 7.1 | Bajo | `audit` rechaza `version` en `composer.json` | [7.1 → 7.2](#de-71-a-72) y siguientes |
 | 7.2 | Medio | Rutas Vue con `meta.auth`; archivos a regenerar | [7.2 → 7.3](#de-72-a-73) y siguientes |
 | 7.3 | Bajo | Nada | [7.3 → 7.4](#de-73-a-74) y siguiente |
-| 7.4 | Medio | Datatables 3.0, avisos y confirmación en la aplicación | [7.4 → 7.5](#de-74-a-75) y siguiente |
-| 7.5.0 | Bajo | Nada; tres dependencias npm | [7.5.0 → 7.5.1](#de-750-a-751) |
-| 7.5.1 | — | Estás al día | — |
+| 7.4 | Medio | Datatables 3.0, avisos y confirmación en la aplicación | [7.4 → 7.5](#de-74-a-75) y siguientes |
+| 7.5.0 | Bajo | Nada; tres dependencias npm | [7.5.0 → 7.5.1](#de-750-a-751) y siguiente |
+| 7.5.1 | Medio | La aplicación carga las traducciones del módulo; algunas claves cambian | [7.5 → 7.6](#de-75-a-76) |
+| 7.6 | — | Estás al día | — |
 
 Las notas completas de cada versión están en `CHANGELOG.md`.
 
@@ -1271,6 +1305,68 @@ Con ellas los formularios dejan de necesitar Tailwind en la aplicación: las
 etiquetas, el grupo repetible, la zona de archivos, las casillas del código y el
 avatar salen del tema. Si tu aplicación sobrescribía esos campos con clases de
 Tailwind, revisa que sigan viéndose como esperas en claro y en oscuro.
+
+### De 7.5 a 7.6
+
+Lo generado pasa a hablar un solo idioma: el de la aplicación. Todo texto
+visible es una clave en inglés, y LaraPack escribe su traducción al español.
+
+**Dependencias npm** de `resources/<ui>/package.json`:
+
+| Paquete | Versión |
+|---|---|
+| `innoboxrr-i18n` | `^1.2.0` |
+| `innoboxrr-locale-generator` (devDependencies) | `^2.0.0` |
+
+El script `locale` pasa de `npx locale-gen` a `locale-gen`.
+
+**En la aplicación, una vez:** carga las traducciones del módulo antes que las
+tuyas y elige idioma (ver [Montar un paquete](#frontend-con-vue)):
+
+```js
+addTranslations(translations)   // import { translations } from 'tu-modulo'
+addTranslations(import.meta.glob('/resources/locales/*.json', { eager: true }))
+setLocale(document.documentElement.lang)
+```
+
+**Regenera con `--force`.** Los archivos del módulo que ya existían solo se
+reescriben con `--force`, y los que editaste se conservan: en esos, aplica el
+cambio a mano.
+
+| Archivo | Qué cambió |
+|---|---|
+| `src/i18n.js` | Nuevo. Exporta `translations` y los textos de la tabla (`tableLabels()`). |
+| `src/locales/en.json`, `es.json` | Nuevos. LaraPack les suma las claves que falten cada vez que genera y nunca toca una traducción escrita. |
+| `index.js` del módulo | Exporta `translations`. |
+| `models/<kebab>/routes/index.js` | `title` es un getter que traduce al leerse. Antes era español fijo con el nombre de la clase («Editar Products»). |
+| `views/AdminView`, `views/ShowView` | Migas, paleta, drawer y título de pestaña traducidos. |
+| `widgets/DataTable` | Pasa `labels` a la tabla. |
+| `src/components/Breadcrumbs`, `ActionMenu` | Su etiqueta accesible se traduce. |
+| `Http/Resources/Models/<Modelo>Resource.php` | Las acciones de cada fila usan `__()`. |
+| `Notifications/<Modelo>/ExportNotification.php` | Asunto y cuerpo con `__()`; antes el asunto iba en inglés y el cuerpo en español. |
+| `Http/Events/<Modelo>/Events/*` | Toman el idioma de la petición. Antes valían `'en'` y llamaban a `App::setLocale`, así que cada alta, edición o borrado pasaba a inglés el resto de la petición. |
+
+**Claves que cambian.** Si tu aplicación ya traducía las anteriores, muévelas:
+
+| Antes | Ahora |
+|---|---|
+| `Create Posts` | `Create :name`, con `name` = `t('Post')` |
+| `Post created` | `Record created` |
+| `Post deleted` | `Record deleted` |
+
+**En el paquete Laravel:** el proveedor generado carga `lang/` con
+`loadJsonTranslationsFrom`. Si tu `AppServiceProvider` es anterior, añade:
+
+```php
+$this->loadJsonTranslationsFrom(__DIR__ . '/../../lang');
+```
+
+**Traduce lo tuyo.** El nombre del modelo y de sus campos no los puede saber
+LaraPack: quedan en `src/locales/es.json` con `""`, y mientras lo estén la
+pantalla enseña la clave en inglés.
+
+**Comprueba en el navegador** con la aplicación en español y en inglés: el
+índice, la tabla con un error, la paleta con Ctrl+K, crear, editar y borrar.
 
 ---
 

@@ -229,6 +229,7 @@ estas cosas de ella. Si falta alguna, no es un defecto del paquete:
 | `maatwebsite/excel` | Sólo si se usa la exportación. |
 | `JsonResource::withoutWrapping()` | El datatable espera `data`, `meta` y `links` en la raíz. Ver «El contrato front ↔ back». |
 | `ToastRegionComponent` y `ConfirmHostComponent`, montados una vez | Ahí se pintan los avisos tras crear, guardar o borrar y la confirmación antes de borrar o exportar. Sin ellos los avisos no se ven y la confirmación cae en `window.confirm`. |
+| `addTranslations(translations)` del módulo y `setLocale()`, una vez | Todo texto del módulo es una clave en inglés. Sin cargar sus traducciones la pantalla sale en inglés; la aplicación carga las suyas después para poder corregirlas. |
 
 Esto no es teórico: la suite de LaraPack genera un paquete, lo instala en una
 aplicación Laravel y recorre su API y sus tests tal como salen.
@@ -415,6 +416,17 @@ desde un Resource de Laravel, usa también el nombre semántico: `'icon' =>
 
 Es el mismo tema y el mismo mapa (`innoboxrr-form-core`) para Vue y para React,
 así que los dos módulos se ven igual.
+
+**Los textos son claves en inglés, nunca frases fijas.** Todo lo que se ve pasa
+por `t()` de `innoboxrr-i18n` en el front y por `__()` en Laravel, también
+títulos de ruta, migas y etiquetas accesibles. **No escribas español ni inglés
+suelto en una vista**, y no concatenes el nombre del modelo en la clave: usa un
+marcador, `t('Create :name', { name: t('Post') })`, para que la clave se traduzca
+una vez para todos los modelos. LaraPack mantiene `src/locales/es.json` y
+`en.json` al generar y no pisa lo traducido; lo que añadas a mano lo recoge
+`npm run locale`. Los datatables y los componentes traen textos por defecto en
+español: pásales los suyos traducidos (`labels`, `closeLabel`, `emptyText`…),
+como hacen las vistas generadas.
 
 ## El contrato front ↔ back
 
