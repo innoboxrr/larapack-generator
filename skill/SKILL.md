@@ -33,6 +33,7 @@ Siempre en este orden. Cada paso tiene un comando y un código de salida, así
 que puedes comprobar tu propio trabajo sin preguntar.
 
 ```
+0. larapack:new vendor/paquete        # sólo si el paquete aún no existe
 1. larapack:schema                    # descubre el contrato, no lo adivines
 2. escribe/edita laraimport.json
 3. larapack:validate                  # falla → corrige el JSON, no el código
@@ -196,7 +197,15 @@ resources/<ui>/src/models/<kebab>/widgets/*        DataTable, ModelCard, ModelPr
 La UI solo se genera si la pides: `--vue`, `--react`, o las dos. No son
 excluyentes.
 
-**Los proveedores no los genera el importador.** Una vez por paquete:
+**Un paquete nuevo se crea, no se copia de otro.** `larapack:new vendor/paquete`
+deja el `composer.json` con las versiones de la línea base, los proveedores,
+la configuración, `phpunit.xml.dist` con un primer test, los workflows de tests
+y publicación, y esta guía. Pasa `larapack:audit` desde el primer commit. No
+trabaja sobre un directorio que ya tenga `composer.json`, y `--dry-run` dice lo
+que crearía.
+
+**Los proveedores no los genera el importador.** En un paquete creado con
+`larapack:new` ya están; en uno que no, una vez:
 
 ```
 larapack:providers      # App, Auth, Event y Route service providers

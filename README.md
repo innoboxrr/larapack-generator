@@ -33,9 +33,9 @@ cp vendor/<vendor>/<package>/builder.example builder
 | PHPUnit (dev) | ^12.0 \|\| ^13.0 |
 | Orchestra Testbench (dev) | ^11.0 |
 
-1. El paquete supone que el proyecto Laravel tiene por lo menos el modelo `App\Models\User`.
+1. Lo generado no depende de `App\Models\User`: las políticas reciben el usuario de la aplicación sea cual sea su clase. Lo que sí espera de ella (Sanctum, un usuario `Notifiable`, `JsonResource::withoutWrapping()`) está en la guía, `skill/SKILL.md`.
 2. Se recomienda tener configurado AWS S3 para la exportación de archivos. Si no, modifica el parámetro de configuración `export_disk`.
-3. Verifica que el modelo `App\Models\User` tenga el método `isAdmin()`. Si no tienes un sistema de roles, puedes implementar el siguiente método básico:
+3. Si el usuario de la aplicación define `isAdmin()`, las políticas dejan pasar al administrador; si no lo define, deciden sus métodos. Si no tienes un sistema de roles, un método básico:
 
 ```php
 public function isAdmin()
@@ -85,6 +85,22 @@ con un `vendor/autoload.php`: dentro de una aplicacion Laravel eso da la raiz
 correcta, pero con el binario sobre un clon del generador da el propio
 generador. Los generadores aceptan ademas `--force` y `--dry-run`, y todos
 `--format=json`.
+
+### Paquete nuevo: `larapack:new`
+
+```
+php builder larapack:new acme/catalogo
+php builder larapack:new acme/catalogo ruta/destino --namespace="Acme\Catalogo" --description="Catálogo de la tienda"
+```
+
+Crea el paquete listo para generar, probar y publicar: `composer.json` con las
+versiones de `ecosystem.json`, proveedores declarados para el descubrimiento de
+Laravel, configuración, `phpunit.xml.dist` con un primer test, los workflows de
+tests y de publicación desde `VERSION`, README, CHANGELOG, licencia y la guía
+para agentes. Pasa `larapack:audit` sin hallazgos desde el primer commit.
+
+No sobrescribe nada, y no trabaja sobre un directorio que ya tenga
+`composer.json`. `--dry-run` dice exactamente lo que crearía.
 
 ### Importador JSON
 
@@ -162,6 +178,7 @@ larapack:route                   - Crea una nueva ruta.
 larapack:route-service-provider  - Crea un proveedor de servicio de rutas.
 larapack:test                    - Crea una nueva clase de test.
 
+larapack:new                     - Crea un paquete nuevo listo para generar, probar y publicar.
 larapack:import                  - Genera varios modelos desde un laraimport.
 larapack:validate                - Valida un laraimport sin generar nada.
 larapack:schema                  - Emite el esquema del laraimport.
