@@ -1,5 +1,39 @@
 # Changelog
 
+## 7.6.0
+
+La interfaz generada habla un solo idioma: el de la aplicación. Antes las vistas
+usaban claves en inglés que nadie traducía, las rutas y las acciones de cada fila
+venían en español fijo, los datatables también, y la notificación de exportación
+mezclaba los dos, así que la pantalla salía mezclada en cualquier idioma.
+
+- **Todo texto visible es una clave en inglés**: rutas, migas, paleta de
+  comandos, drawer, tabla, menú de acciones, confirmaciones y avisos. Los títulos
+  de ruta se traducen cuando el router los lee, no al importar el módulo.
+- **El módulo trae sus traducciones.** `src/locales/es.json` y `en.json` se
+  generan con los textos de LaraPack ya traducidos al español, y el módulo los
+  exporta como `translations`. Al volver a generar se suman las claves que falten
+  y nunca se toca una traducción escrita.
+- **El nombre del modelo y de sus campos** se escriben como claves legibles
+  («Audit event», no «AuditEvent») y quedan pendientes en `es.json`; mientras lo
+  estén se ve la clave.
+- **Laravel también:** las acciones del Resource y la notificación de
+  exportación usan `__()`, con `lang/es.json` generado y cargado por el proveedor.
+- **Los eventos ya no cambian el idioma de la petición.** Valían `'en'` y
+  llamaban a `App::setLocale`: cada alta, edición o borrado pasaba a inglés el
+  resto de la petición.
+- El script `locale` declara `innoboxrr-locale-generator`; antes llamaba con
+  `npx` a un paquete que no existe con ese nombre.
+
+Necesita `innoboxrr-i18n` 1.2, que suma traducciones de varios orígenes, trata
+una traducción vacía como pendiente y elige el idioma por el nombre del archivo.
+
+### Para proyectos existentes
+
+Regenerar con `--force`, cargar las traducciones del módulo en la aplicación y
+mover las claves que cambian. Todo está en la guía de actualización del README,
+«De 7.5 a 7.6».
+
 ## 7.5.1
 
 El módulo generado pide `innoboxrr-form-core` ^2.7,
