@@ -71,7 +71,7 @@ La regla que se desprende de todo esto guía el resto del documento:
   de la aplicación sea cual sea su clase. Lo que sí espera de la aplicación está
   en [Montar un paquete en una aplicación](#montar-un-paquete-en-una-aplicación).
 - La exportación usa el disco de `export_disk` en la configuración del paquete;
-  por defecto S3.
+  por defecto `local`, que tiene cualquier aplicación.
 - Si el usuario de la aplicación define `isAdmin()`, las políticas dejan pasar al
   administrador; si no lo define, deciden sus métodos. Sin sistema de roles, un
   mínimo:
@@ -562,7 +562,10 @@ y, con `"editable_metas": ["seo_title", "seo_og_image"]`, quedan las metas
 - un valor vacío (`null`, `''`, `[]`) **borra** la meta, y una clave que no llega
   **no se toca**: para no cambiar una meta, no la mandes;
 - una lista (`['a', 'b']`) se guarda entera, como JSON;
-- después de guardar se rehace `payload`.
+- después de guardar se rehace `payload`;
+- **los formularios generados no traen campos para las metas**: añade los inputs
+  a `CreateForm` y `EditForm` con el nombre del grupo (`seo.title`) y mándalos
+  en el envío.
 
 **Qué escribe tu código.** Las metas protegidas —contadores, fechas de un
 proceso, lo que calcula el sistema— se escriben con `setMeta()` o `setMetas()`,
@@ -942,10 +945,10 @@ aplicación:
 
 | Qué | Por qué |
 |---|---|
-| `laravel/sanctum` | Las rutas usan `auth:sanctum`. |
-| Usuario `Notifiable` | La exportación avisa al usuario por notificación. |
+| `laravel/sanctum` (`php artisan install:api`) | Las rutas usan `auth:sanctum`. Comprueba que quedó instalado con `composer show laravel/sanctum`: `install:api` usa el `composer` del PATH y, si falla, no lo dice. |
+| `$middleware->statefulApi()` en `bootstrap/app.php` | El administrador llama a la API con la cookie de sesión. Sin esto, cada petición responde 401. |
+| Usuario `Notifiable` | La exportación avisa al usuario por correo. |
 | `isAdmin()` en el usuario, opcional | `before()` de cada política deja pasar al administrador. |
-| `maatwebsite/excel` | Sólo si se usa la exportación. |
 | `JsonResource::withoutWrapping()` en el `AppServiceProvider` | La tabla espera `data`, `meta` y `links` en la raíz; sin esto sale vacía. |
 | `innoboxrr/routes-to-json` | El front resuelve cada URL por el nombre de la ruta. |
 | El idioma de la petición (`App::setLocale`) | Las acciones de cada fila y el correo de exportación salen en ese idioma. El paquete trae `lang/es.json` y la aplicación puede corregirlo en el suyo. |
@@ -958,7 +961,18 @@ public function boot(): void
 {
     JsonResource::withoutWrapping();
 }
+
+// bootstrap/app.php
+->withMiddleware(function (Middleware $middleware): void {
+    $middleware->statefulApi();
+})
 ```
+
+La exportación funciona recién instalado el paquete: trae `maatwebsite/excel`,
+guarda el archivo en el disco `local` y avisa por correo con un enlace firmado.
+Para avisar también en la base de datos, crea la tabla de notificaciones
+(`php artisan make:notifications-table`) y añade `database` a
+`notification_via` en la configuración del paquete.
 
 El front no escribe URLs: las pide por nombre con `innoboxrr-route-resolver`,
 que no es Ziggy. La cadena es:
@@ -976,7 +990,20 @@ Si se añade un endpoint, hay que volver a exportar `routes.json`.
 
 El módulo se instala como cualquier paquete npm (publicado, o con
 `"file:vendor/acme/catalogo/resources/vue"` mientras se desarrolla). Necesita
-`vue`, `vue-router` y `pinia` en la aplicación.
+`vue`, `vue-router` 4 y `pinia` 3 en la aplicación, y el plugin de Vue en Vite:
+
+```
+npm install vue vue-router@4 pinia@3 @vitejs/plugin-vue
+```
+
+`npm install vue-router pinia` sin versión instala hoy vue-router 5 y Pinia 4,
+que el módulo no declara. Instalado desde una carpeta, conviene decirle a Vite
+que use una sola copia de cada uno:
+
+```js
+// vite.config.js
+resolve: { dedupe: ['vue', 'vue-router', 'pinia'] },
+```
 
 ```js
 // main.js
@@ -1162,8 +1189,9 @@ versión hasta la última.
 | 7.4 | Medio | Datatables 3.0, avisos y confirmación en la aplicación | [7.4 → 7.5](#de-74-a-75) y siguientes |
 | 7.5.0 | Bajo | Nada; tres dependencias npm | [7.5.0 → 7.5.1](#de-750-a-751) y siguiente |
 | 7.5.1 | Medio | La aplicación carga las traducciones del módulo; algunas claves cambian | [7.5 → 7.6](#de-75-a-76) y siguiente |
-| 7.6 | Medio si usas metas; bajo si no | Metas conectadas; traits y support 2.1 | [7.6 → 7.7](#de-76-a-77) |
-| 7.7 | — | Estás al día | — |
+| 7.6 | Medio si usas metas; bajo si no | Metas conectadas; traits y support 2.1 | [7.6 → 7.7](#de-76-a-77) y siguiente |
+| 7.7.0 | Bajo | La exportación trae Excel y usa el disco `local` | [7.7.0 → 7.7.1](#de-770-a-771) |
+| 7.7.1 | — | Estás al día | — |
 
 Las notas completas de cada versión están en `CHANGELOG.md`.
 
@@ -1505,6 +1533,36 @@ de verdad. Las tablas que ya existen no cambian.
 
 **Comprueba**: crea un registro mandando un grupo anidado, edítalo vaciando una
 meta, y mira `payload` en la respuesta.
+
+### De 7.7.0 a 7.7.1
+
+Lo que encontró un piloto en una aplicación Laravel 13 nueva. No cambia el
+contrato.
+
+**Si el administrador sale sin estilos**, añade `src/theme.js` a `sideEffects` en
+`resources/<ui>/package.json`:
+
+```json
+"sideEffects": ["*.css", "*.vue", "src/theme.js"]
+```
+
+(en React, `["*.css", "src/theme.js"]`). Sin él, Vite descarta el import del tema
+y con él la hoja de estilos.
+
+**Si tienes migraciones duplicadas** (`create_<tabla>_table` dos veces con horas
+distintas), borra la más nueva y su entrada en `.larapack/manifest.json`. Volver a
+importar ya no las duplica, y `import --dry-run` ya no escribe nada.
+
+**Exportación**, en el `composer.json` del paquete y en su configuración:
+
+- `maatwebsite/excel` pasa de `require-dev`/`suggest` a `require`;
+- `export_disk` por defecto `local`, y `notification_via` por defecto `['mail']`.
+
+Regenera con `--force` `ExportRequest` y `ExportNotification` si no los editaste:
+avisan con un mensaje claro si falla y enlazan a una descarga firmada.
+
+**En la aplicación**: `$middleware->statefulApi()` en `bootstrap/app.php`, y
+`vue-router@4` con `pinia@3` (ver [Montar un paquete](#frontend-con-vue)).
 
 ---
 

@@ -251,7 +251,8 @@ estas cosas de ella. Si falta alguna, no es un defecto del paquete:
 | `laravel/sanctum` | Las rutas usan `auth:sanctum`. |
 | Usuario `Notifiable` | La exportación avisa al usuario por notificación. El de Laravel ya lo es. |
 | `isAdmin()` en el usuario, opcional | `before()` de cada Policy deja pasar al administrador. Sin el método nadie lo es y deciden los métodos de la Policy. |
-| `maatwebsite/excel` | Sólo si se usa la exportación. |
+| `$middleware->statefulApi()` en `bootstrap/app.php` | El administrador llama a la API con la sesión. Sin esto, cada petición responde 401. |
+| `vue-router` 4 y `pinia` 3 (o `react-router-dom` 7 y `zustand` 5) | Son los que declara el módulo. Sin versión, npm instala hoy majors que no acepta. |
 | `JsonResource::withoutWrapping()` | El datatable espera `data`, `meta` y `links` en la raíz. Ver «El contrato front ↔ back». |
 | `ToastRegionComponent` y `ConfirmHostComponent`, montados una vez | Ahí se pintan los avisos tras crear, guardar o borrar y la confirmación antes de borrar o exportar. Sin ellos los avisos no se ven y la confirmación cae en `window.confirm`. |
 | `addTranslations(translations)` del módulo y `setLocale()`, una vez | Todo texto del módulo es una clave en inglés. Sin cargar sus traducciones la pantalla sale en inglés; la aplicación carga las suyas después para poder corregirlas. |
