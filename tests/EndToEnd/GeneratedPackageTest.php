@@ -22,9 +22,9 @@ use RuntimeException;
 use Symfony\Component\Process\Process;
 
 /**
- * Lo que obtiene quien sigue la guía al pie de la letra: escribe un
- * laraimport, lo valida, genera la API, la interfaz, los proveedores y la
- * configuración, e instala el paquete en una aplicación Laravel.
+ * Lo que obtiene quien sigue la guía al pie de la letra desde cero: crea el
+ * paquete con larapack:new, escribe un laraimport, lo valida, genera la API y
+ * la interfaz, e instala el paquete en una aplicación Laravel.
  *
  * Los demás tests leen lo generado. Este lo ejecuta: migra, llama a las rutas
  * con el nombre que usa el front, autentica, autoriza, crea, lee, modifica y
@@ -45,20 +45,22 @@ final class GeneratedPackageTest extends TestCase
     {
         parent::setUpBeforeClass();
 
-        self::$project = FakeProject::library(self::NS);
+        self::$project = FakeProject::empty();
         $laraimport = self::$project->path . '/laraimport.json';
-
-        copy(__DIR__ . '/Fixtures/laraimport.json', $laraimport);
-
-        ProjectRoot::set(self::$project->path);
 
         try {
             foreach ([
+                ['larapack:new', ['name' => 'acme/shop', 'directory' => self::$project->path]],
                 ['larapack:validate', ['jsonPath' => $laraimport, '--vue' => true, '--react' => true]],
                 ['larapack:import', ['jsonPath' => $laraimport, '--vue' => true, '--react' => true]],
-                ['larapack:providers', []],
-                ['larapack:config', []],
             ] as [$command, $arguments]) {
+                // El laraimport se escribe una vez creado el paquete, como lo
+                // haría quien lo usa.
+                if ($command === 'larapack:validate') {
+                    copy(__DIR__ . '/Fixtures/laraimport.json', $laraimport);
+                    ProjectRoot::set(self::$project->path);
+                }
+
                 [$code, $output] = Larapack::run($command, $arguments);
 
                 if ($code !== 0) {
@@ -144,6 +146,15 @@ final class GeneratedPackageTest extends TestCase
         foreach ($providers as $provider) {
             $this->assertTrue(class_exists($provider), "{$provider} está declarado y no existe.");
         }
+    }
+
+    /**
+     * larapack:new sale de la línea base; generar modelos encima no puede
+     * sacarlo de ella.
+     */
+    public function test_con_sus_modelos_generados_sigue_pasando_la_auditoria(): void
+    {
+        $this->assertSame([], (new \Innoboxrr\LarapackGenerator\Support\Ecosystem())->audit(self::$project->path));
     }
 
     public function test_las_migraciones_crean_las_tablas_declaradas(): void
@@ -365,7 +376,7 @@ final class GeneratedPackageTest extends TestCase
             ...$this->inheritedExtensions(),
             dirname(__DIR__, 2) . '/vendor/phpunit/phpunit/phpunit',
             '--bootstrap', $bootstrap,
-            '--configuration', self::$project->path . '/phpunit.xml',
+            '--configuration', self::$project->path . (is_file(self::$project->path . '/phpunit.xml.dist') ? '/phpunit.xml.dist' : '/phpunit.xml'),
             '--do-not-cache-result',
             '--colors=never',
         ], self::$project->path, null, null, 300);

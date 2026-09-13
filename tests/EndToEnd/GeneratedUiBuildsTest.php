@@ -55,14 +55,19 @@ final class GeneratedUiBuildsTest extends TestCase
             return;
         }
 
-        self::$project = FakeProject::library(self::NS);
+        self::$project = FakeProject::empty();
         $laraimport = self::$project->path . '/laraimport.json';
 
-        copy(__DIR__ . '/Fixtures/laraimport.json', $laraimport);
-
-        ProjectRoot::set(self::$project->path);
-
         try {
+            [$code, $output] = Larapack::run('larapack:new', ['name' => 'acme/shop', 'directory' => self::$project->path]);
+
+            if ($code !== 0) {
+                throw new RuntimeException("larapack:new terminó con {$code}:\n{$output}");
+            }
+
+            copy(__DIR__ . '/Fixtures/laraimport.json', $laraimport);
+            ProjectRoot::set(self::$project->path);
+
             [$code, $output] = Larapack::run('larapack:import', ['jsonPath' => $laraimport, '--vue' => true, '--react' => true]);
 
             if ($code !== 0) {
