@@ -1,0 +1,128 @@
+<?php
+
+namespace Namespace\Http\Requests\PascalCaseModelName;
+
+use Namespace\Models\PascalCaseModelName;
+use Namespace\Http\Resources\Models\PascalCaseModelNameResource;
+use Namespace\Http\Events\PascalCaseModelName\Events\UpdateEvent;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
+use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+
+/**
+ * Cambia unos campos en varios registros de una vez: marcar como publicados los
+ * seleccionados, o editar una celda de la tabla sin abrir el formulario.
+ *
+ * `data` lleva sólo los campos que cambian. Se validan con las reglas de
+ * UpdateRequest, pero cada una sólo cuando el campo llega: un campo que no se
+ * envía no se exige ni se toca. Lo que se guarda lo decide updateModel(), igual
+ * que al editar uno solo: sólo `$updatable` y las metas editables.
+ *
+ * Cada registro pasa por la política de `update`: si alguno no se puede
+ * cambiar, no se cambia ninguno, y todo va en una transacción.
+ */
+class BulkUpdateRequest extends FormRequest
+{
+
+    /**
+     * Cuántos registros admite una sola petición.
+     */
+    public const MAX = 500;
+
+    protected function prepareForValidation(): void
+    {
+        //
+    }
+
+    public function authorize(): bool
+    {
+
+        $ids = $this->ids();
+
+        // Sin ids, o con demasiados, responde la validación con un 422.
+        if ($ids === [] || count($ids) > self::MAX) {
+            return true;
+        }
+
+        $records = PascalCaseModelName::whereKey($ids)->get();
+
+        if ($records->count() !== count($ids)) {
+            throw (new ModelNotFoundException())->setModel(PascalCaseModelName::class, array_values(array_diff($ids, $records->modelKeys())));
+        }
+
+        return $records->every(fn (PascalCaseModelName $record): bool => $this->user()->can('update', $record));
+
+    }
+
+    public function rules(): array
+    {
+
+        $rules = [
+            'ids' => 'required|array|min:1|max:' . self::MAX,
+            'ids.*' => 'integer|distinct',
+            'data' => 'required|array|min:1',
+        ];
+
+        foreach ((new UpdateRequest())->rules() as $field => $rule) {
+            if ($field === 'snake_case_model_name_id') {
+                continue;
+            }
+
+            $rules["data.{$field}"] = is_array($rule) ? ['sometimes', ...$rule] : 'sometimes|' . $rule;
+        }
+
+        return $rules;
+
+    }
+
+    public function messages(): array
+    {
+        return [
+            //
+        ];
+    }
+
+    public function attributes(): array
+    {
+        return [
+            //
+        ];
+    }
+
+    protected function passedValidation(): void
+    {
+        //
+    }
+
+    public function handle()
+    {
+
+        $records = PascalCaseModelName::whereKey($this->ids())->get();
+
+        $data = (array) $this->input('data', []);
+
+        DB::transaction(fn () => $records->each(fn (PascalCaseModelName $record) => $record->updateModel(new Request($data))));
+
+        $records = $records->map(fn (PascalCaseModelName $record) => $record->refresh());
+
+        $response = PascalCaseModelNameResource::collection($records);
+
+        // Los eventos salen cuando el cambio ya es firme.
+        foreach ($records as $record) {
+            event(new UpdateEvent($record, $data, new PascalCaseModelNameResource($record)));
+        }
+
+        return $response;
+
+    }
+
+    /**
+     * @return array<int, int>
+     */
+    private function ids(): array
+    {
+        return array_values(array_unique(array_filter(array_map('intval', (array) $this->input('ids', [])))));
+    }
+
+}

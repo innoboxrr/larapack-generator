@@ -33,7 +33,13 @@ use Namespace\Http\Requests\PascalCaseModelName\{
     ForceDeleteRequest,
     // @larapack:endif
     // @larapack:if export
-    ExportRequest
+    ExportRequest,
+    // @larapack:endif
+    // @larapack:if bulkUpdate
+    BulkUpdateRequest,
+    // @larapack:endif
+    // @larapack:if bulkDelete
+    BulkDeleteRequest,
     // @larapack:endif
 };
 
@@ -116,6 +122,20 @@ class PascalCaseModelNameController extends Controller implements HasMiddleware
     // @larapack:if export
 
     public function export(ExportRequest $request)
+    {
+        return $request->handle();
+    }
+    // @larapack:endif
+    // @larapack:if bulkUpdate
+
+    public function bulkUpdate(BulkUpdateRequest $request)
+    {
+        return $request->handle();
+    }
+    // @larapack:endif
+    // @larapack:if bulkDelete
+
+    public function bulkDelete(BulkDeleteRequest $request)
     {
         return $request->handle();
     }

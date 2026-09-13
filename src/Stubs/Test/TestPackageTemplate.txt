@@ -179,11 +179,47 @@ class PascalCaseModelNameEndpointsTest extends TestCase
     }
 
     // @larapack:endif
+    // @larapack:if bulkUpdate
+    public function test_snake_case_model_name_bulk_update_endpoint(): void
+    {
+
+        $this->signIn();
+
+        $records = PascalCaseModelName::factory()->count(2)->create();
+
+        $data = PascalCaseModelName::factory()->make()->getAttributes();
+
+        if ($data === []) {
+            $this->markTestSkipped('La factory no define campos que cambiar.');
+        }
+
+        $this->putJson(route('api.dotNamespacesnake_case_model_name.bulk.update'), ['ids' => $records->modelKeys(), 'data' => $data])
+            ->assertOk();
+
+    }
+
+    // @larapack:endif
+    // @larapack:if bulkDelete
+    public function test_snake_case_model_name_bulk_delete_endpoint(): void
+    {
+
+        $this->signIn();
+
+        $records = PascalCaseModelName::factory()->count(2)->create();
+
+        $this->deleteJson(route('api.dotNamespacesnake_case_model_name.bulk.delete'), ['ids' => $records->modelKeys()])
+            ->assertOk();
+
+        $this->assertSame(0, PascalCaseModelName::whereKey($records->modelKeys())->count());
+
+    }
+
+    // @larapack:endif
     // @larapack:if immutable
     public function test_snake_case_model_name_no_expone_rutas_de_escritura(): void
     {
 
-        foreach (['update', 'delete', 'restore', 'force.delete'] as $action) {
+        foreach (['update', 'delete', 'restore', 'force.delete', 'bulk.update', 'bulk.delete'] as $action) {
             $this->assertFalse(
                 \Illuminate\Support\Facades\Route::has('api.dotNamespacesnake_case_model_name.' . $action),
                 "PascalCaseModelName es inmutable y tiene registrada la ruta {$action}."

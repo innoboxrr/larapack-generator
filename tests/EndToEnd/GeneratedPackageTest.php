@@ -334,11 +334,60 @@ final class GeneratedPackageTest extends TestCase
         $this->assertDatabaseMissing('products', ['id' => $product->id]);
     }
 
+    /**
+     * Lo que se hace desde la selección de la tabla. Sólo viajan los campos que
+     * cambian —editar una celda manda la suya—, un id que no existe no deja
+     * nada a medias y cada registro pasa por la política.
+     */
+    public function test_un_administrador_cambia_y_borra_varios_registros_de_una_vez(): void
+    {
+        Sanctum::actingAs($this->user(admin: true));
+
+        $ids = $this->model('Product')::factory()->count(3)->create()->modelKeys();
+
+        $this->putJson($this->route('product', 'bulk.update'), ['ids' => $ids, 'data' => ['title' => 'En lote']])
+            ->assertOk();
+
+        $this->assertSame(3, $this->model('Product')::whereKey($ids)->where('title', 'En lote')->count());
+
+        $this->deleteJson($this->route('product', 'bulk.delete'), ['ids' => [...$ids, 999999]])->assertNotFound();
+        $this->assertSame(3, $this->model('Product')::whereKey($ids)->count(), 'Un id inexistente borró los demás.');
+
+        $this->deleteJson($this->route('product', 'bulk.delete'), ['ids' => []])->assertUnprocessable();
+        $this->putJson($this->route('product', 'bulk.update'), ['ids' => $ids, 'data' => []])->assertUnprocessable();
+
+        $this->deleteJson($this->route('product', 'bulk.delete'), ['ids' => $ids])->assertOk();
+
+        foreach ($ids as $id) {
+            $this->assertSoftDeleted('products', ['id' => $id]);
+        }
+    }
+
+    public function test_una_accion_masiva_pasa_por_la_politica_de_cada_registro(): void
+    {
+        $ids = $this->model('Product')::factory()->count(2)->create()->modelKeys();
+
+        Sanctum::actingAs($this->user());
+
+        $this->putJson($this->route('product', 'bulk.update'), ['ids' => $ids, 'data' => ['title' => 'No']])->assertForbidden();
+        $this->deleteJson($this->route('product', 'bulk.delete'), ['ids' => $ids])->assertForbidden();
+
+        $this->getJson($this->route('product', 'policies'))
+            ->assertOk()
+            ->assertJson(['bulkUpdate' => false, 'bulkDelete' => false]);
+
+        Sanctum::actingAs($this->user(admin: true));
+
+        $this->getJson($this->route('product', 'policies'))
+            ->assertOk()
+            ->assertJson(['bulkUpdate' => true, 'bulkDelete' => true]);
+    }
+
     public function test_un_modelo_inmutable_se_crea_pero_no_se_modifica(): void
     {
         Sanctum::actingAs($this->user(admin: true));
 
-        foreach (['update', 'delete', 'restore', 'force.delete'] as $action) {
+        foreach (['update', 'delete', 'restore', 'force.delete', 'bulk.update', 'bulk.delete'] as $action) {
             $this->assertFalse(Route::has($this->prefix('audit-entry') . $action), "AuditEntry es inmutable y expone {$action}.");
         }
 

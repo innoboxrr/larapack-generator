@@ -52,3 +52,13 @@ Route::delete('force-delete', [PascalCaseModelNameController::class, 'forceDelet
 Route::post('export', [PascalCaseModelNameController::class, 'export'])
 	->name('export');
 // @larapack:endif
+// @larapack:if bulkUpdate
+
+Route::put('bulk-update', [PascalCaseModelNameController::class, 'bulkUpdate'])
+	->name('bulk.update');
+// @larapack:endif
+// @larapack:if bulkDelete
+
+Route::delete('bulk-delete', [PascalCaseModelNameController::class, 'bulkDelete'])
+	->name('bulk.delete');
+// @larapack:endif

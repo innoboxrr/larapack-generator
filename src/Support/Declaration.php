@@ -13,7 +13,7 @@ use Innoboxrr\LarapackGenerator\Support\Import\Actions;
  * salen nunca. Lo rellenan el importador, desde el laraimport, y
  * `larapack:full-model`, desde sus opciones.
  *
- * Un modelo del que no se ha declarado nada tiene las diez acciones, no es
+ * Un modelo del que no se ha declarado nada tiene todas las acciones, no es
  * inmutable y no tiene secretos: es exactamente lo que se generaba antes.
  */
 final class Declaration
@@ -140,9 +140,9 @@ final class Declaration
      * Lo que hay que anotar en el manifiesto: sólo lo que se aparta de la forma
      * de siempre.
      *
-     * Un modelo con las diez acciones no anota nada, así que el manifiesto de
+     * Un modelo con todas las acciones no anota nada, así que el manifiesto de
      * un proyecto que no usa las claves nuevas sale idéntico al de antes, y
-     * uno antiguo se sigue leyendo bien: la ausencia significa las diez.
+     * uno antiguo se sigue leyendo bien: la ausencia significa todas.
      *
      * @return array<string, mixed>
      */

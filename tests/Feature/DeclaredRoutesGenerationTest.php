@@ -124,7 +124,7 @@ final class DeclaredRoutesGenerationTest extends TestCase
     public function test_except_quita_solo_lo_que_nombra(): void
     {
         $this->assertSame(
-            ['CreateRequest.php', 'DeleteRequest.php', 'ExportRequest.php', 'IndexRequest.php', 'PoliciesRequest.php', 'PolicyRequest.php', 'ShowRequest.php'],
+            ['BulkDeleteRequest.php', 'CreateRequest.php', 'DeleteRequest.php', 'ExportRequest.php', 'IndexRequest.php', 'PoliciesRequest.php', 'PolicyRequest.php', 'ShowRequest.php'],
             $this->filesIn('src/Http/Requests/Grant')
         );
 
@@ -170,10 +170,10 @@ final class DeclaredRoutesGenerationTest extends TestCase
     /**
      * El modelo normal del mismo archivo no se contagia de los demás.
      */
-    public function test_el_modelo_normal_conserva_sus_diez_acciones(): void
+    public function test_el_modelo_normal_conserva_todas_sus_acciones(): void
     {
-        $this->assertCount(10, $this->filesIn('src/Http/Requests/Post'));
-        $this->assertSame(10, substr_count($this->project->read('routes/api/models/post.php'), '->name('));
+        $this->assertCount(12, $this->filesIn('src/Http/Requests/Post'));
+        $this->assertSame(12, substr_count($this->project->read('routes/api/models/post.php'), '->name('));
         $this->assertStringContainsString('SoftDeletes', $this->project->read('src/Models/Post.php'));
     }
 

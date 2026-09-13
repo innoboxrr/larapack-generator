@@ -279,7 +279,7 @@
             ]
         },
         "routeAction": {
-            "enum": ["policies", "policy", "index", "show", "create", "update", "delete", "restore", "forceDelete", "export"]
+            "enum": ["policies", "policy", "index", "show", "create", "update", "delete", "restore", "forceDelete", "export", "bulkUpdate", "bulkDelete"]
         },
         "pascalCase": {
             "type": "string",

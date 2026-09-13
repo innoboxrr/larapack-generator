@@ -123,6 +123,20 @@ final class SemanticValidator
                 }
             }
 
+            // Una masiva sin su individual se quitaría en silencio: con `only`
+            // alguien la pidió expresamente, así que se le dice.
+            foreach (Actions::REQUIRES as $bulk => $single) {
+                $only = $model['routes']['only'] ?? null;
+
+                if (is_array($only) && in_array($bulk, $only, true) && ! in_array($single, $only, true)) {
+                    $findings[] = [
+                        'level' => self::ERROR,
+                        'path' => "{$path}/only",
+                        'message' => "{$model['name']} declara {$bulk} sin {$single}: la acción masiva usa la política y las reglas de la individual. Añade {$single} o quita {$bulk}.",
+                    ];
+                }
+            }
+
             // No es error: una fila que borra un proceso en segundo plano y se
             // restaura desde la API es una forma legítima.
             if (! in_array('delete', $actions, true)) {

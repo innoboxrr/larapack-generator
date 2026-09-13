@@ -23,7 +23,9 @@ class RequestsTool extends Tool
         'PolicyRequest',
         'RestoreRequest',
         'ShowRequest',
-        'UpdateRequest'
+        'UpdateRequest',
+        'BulkUpdateRequest',
+        'BulkDeleteRequest',
     ];
 
     private function setRequestPath()

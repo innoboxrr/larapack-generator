@@ -55,6 +55,10 @@ class PoliciesRequest extends FormRequest
 
         $policyMethodMapping = [
             'show' => 'view', // Mapea 'show' a 'view'
+            // Las masivas usan la política de la acción individual, registro
+            // a registro.
+            'bulkUpdate' => 'update',
+            'bulkDelete' => 'delete',
             // Agrega aquí más mapeos si es necesario
         ];
 

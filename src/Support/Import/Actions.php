@@ -14,6 +14,9 @@ final class Actions
     /**
      * En el orden en que aparecen en las rutas y en el controlador, que es el
      * orden en que se devuelven siempre.
+     *
+     * Las masivas van al final para que un paquete generado antes sólo gane
+     * líneas al regenerarse, sin que se muevan las que ya tenía.
      */
     public const ALL = [
         'policies',
@@ -26,6 +29,8 @@ final class Actions
         'restore',
         'forceDelete',
         'export',
+        'bulkUpdate',
+        'bulkDelete',
     ];
 
     /**
@@ -41,6 +46,18 @@ final class Actions
         'delete',
         'restore',
         'forceDelete',
+        'bulkUpdate',
+        'bulkDelete',
+    ];
+
+    /**
+     * Una acción masiva es la individual aplicada a varios registros: pasa por
+     * la misma política y, en la actualización, por las mismas reglas. Sin la
+     * individual no tiene de dónde sacarlas.
+     */
+    public const REQUIRES = [
+        'bulkUpdate' => 'update',
+        'bulkDelete' => 'delete',
     ];
 
     /**
@@ -68,6 +85,13 @@ final class Actions
             $actions = array_diff($actions, self::MODIFY);
         }
 
+        // Quitar `delete` con except quita también el borrado masivo.
+        foreach (self::REQUIRES as $bulk => $single) {
+            if (! in_array($single, $actions, true)) {
+                $actions = array_diff($actions, [$bulk]);
+            }
+        }
+
         return array_values(array_intersect(self::ALL, $actions));
     }
 
@@ -84,7 +108,12 @@ final class Actions
      */
     public static function routeName(string $action): string
     {
-        return $action === 'forceDelete' ? 'force.delete' : $action;
+        return match ($action) {
+            'forceDelete' => 'force.delete',
+            'bulkUpdate' => 'bulk.update',
+            'bulkDelete' => 'bulk.delete',
+            default => $action,
+        };
     }
 
     /**
