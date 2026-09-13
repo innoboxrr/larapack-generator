@@ -292,7 +292,10 @@ class PascalCaseModelNameEndpointsTest extends TestCase
 
         $this->expectException(\LogicException::class);
 
-        $camelCaseModelName->touch();
+        // touch() no dispara updating si updated_at no cambia, y dentro del
+        // mismo segundo en que se creo la fila no cambia: el test pasaria o no
+        // segun el reloj.
+        $camelCaseModelName->forceFill(['updated_at' => now()->addMinute()])->save();
 
     }
 
