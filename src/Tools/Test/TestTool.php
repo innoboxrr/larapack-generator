@@ -4,6 +4,7 @@ namespace Innoboxrr\LarapackGenerator\Tools\Test;
 
 use Innoboxrr\LarapackGenerator\Tools\Tool;
 use Innoboxrr\LarapackGenerator\Exceptions\MakerException;
+use Innoboxrr\LarapackGenerator\Support\Generation;
 
 class TestTool extends Tool
 {
@@ -68,20 +69,66 @@ class TestTool extends Tool
 
 	}
 
+	/**
+	 * Lo que un proyecto necesita para tener tests antes de su primer modelo.
+	 */
+	public function createScaffold()
+	{
+
+		$this->init('')
+			->setTestCasePath()
+			->setTestTemplatePath()
+			->createTestCaseClass()
+			->createTestUserClass()
+			->createPhpUnitXmlFile()
+			->addTestNamespaceToComposerJson();
+
+		return $this;
+
+	}
+
+	/**
+	 * Copia una plantilla de test si el destino no existe, respetando la
+	 * simulacion y dejando constancia: antes se copiaba en silencio, tambien con
+	 * --dry-run, y el informe no la mencionaba.
+	 */
+	private function copyOnce(string $template, string $destination): bool
+	{
+
+		if (file_exists($destination)) {
+
+			return false;
+
+		}
+
+		if (Generation::isDryRun()) {
+
+			Generation::record('create', $destination, $template);
+
+			return false;
+
+		}
+
+		if (! copy($template, $destination)) {
+
+			throw MakerException::copyFailed($template, $destination);
+
+		}
+
+		Generation::record('create', $destination, $template);
+
+		return true;
+
+	}
+
 	private function createTestCaseClass()
 	{
 
 		$testCaseFile = $this->testCasePath . '/TestCase.php';
 
-		if(!file_exists($testCaseFile)) {
+		if ($this->copyOnce($this->testTemplatePath . '/TestCaseTemplate.txt', $testCaseFile)) {
 
-			$templateFile = $this->testTemplatePath . '/TestCaseTemplate.txt';
-
-			if(copy($templateFile, $testCaseFile)) {
-
-				$this->replaceData($testCaseFile);
-
-			}
+			$this->replaceData($testCaseFile);
 
 		}
 
@@ -98,13 +145,9 @@ class TestTool extends Tool
 
 		$userFile = $this->testCasePath . '/User.php';
 
-		if (app_dir_name() == 'src' && ! file_exists($userFile)) {
+		if (app_dir_name() == 'src' && $this->copyOnce($this->testTemplatePath . '/TestUserTemplate.txt', $userFile)) {
 
-			if (copy($this->testTemplatePath . '/TestUserTemplate.txt', $userFile)) {
-
-				$this->replaceData($userFile);
-
-			}
+			$this->replaceData($userFile);
 
 		}
 
@@ -117,11 +160,19 @@ class TestTool extends Tool
 
 		$phpunitFile = root_path() . '/phpunit.xml';
 
+		// Un phpunit.xml.dist ya es la configuracion del proyecto; crear ademas
+		// un phpunit.xml la taparia en silencio para quien lo tenga.
+		if (file_exists(root_path() . '/phpunit.xml.dist')) {
+
+			return $this;
+
+		}
+
 		if(!file_exists($phpunitFile)) {
 
 			$templateFile = $this->testTemplatePath . '/PhpunitTemplate.txt';
 
-			if(copy($templateFile, $phpunitFile)) {
+			if($this->copyOnce($templateFile, $phpunitFile)) {
 
 				// El directorio de cobertura depende de si es paquete (src) o proyecto (app).
 				file_put_contents($phpunitFile, str_replace(
