@@ -8,6 +8,8 @@ use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 class ExportNotification extends Notification
 {
@@ -16,27 +18,34 @@ class ExportNotification extends Notification
 
     private string $path;
 
+    private bool $exported = false;
+
     public function __construct(private array $data)
     {
         $this->path = $this->getPath();
     }
 
     /**
+     * Por correo, que en una aplicación nueva ya funciona. El canal `database`
+     * necesita la tabla de notificaciones (`php artisan make:notifications-table`):
+     * añádelo en la configuración del paquete cuando la tengas.
+     *
      * @return array<int, string>
      */
     public function via(object $notifiable): array
     {
-        return config('namespaceWithoutSeparation.notification_via', ['mail', 'database']);
+        return config('namespaceWithoutSeparation.notification_via', ['mail']);
     }
 
     public function toMail(object $notifiable): MailMessage
     {
         $this->createExport();
+
         return (new MailMessage)
                     ->subject($this->getSubject())
                     ->greeting($this->getWellcomeMessage())
                     ->line($this->getBodyMessage())
-                    ->action($this->getActionButton(), $this->getNotificationUrl())
+                    ->action($this->getActionButton(), $this->getDownloadUrl())
                     ->line($this->getFarewallMessage());
     }
 
@@ -45,22 +54,44 @@ class ExportNotification extends Notification
      */
     public function toArray(object $notifiable): array
     {
+        $this->createExport();
+
         return [
-            'action' => $this->getActionUrl(),
+            'action' => $this->getDownloadUrl(),
             'message' => $this->getBodyMessage(),
             'img' => $this->getImg(),
         ];
     }
 
     // CUSTOME METHODS
-    
+
+    /**
+     * Una sola vez aunque la notificación salga por varios canales. Antes el
+     * archivo sólo se creaba al enviar el correo: por `database` se avisaba de
+     * un archivo que no existía.
+     */
     private function createExport(): void
     {
+        if ($this->exported) {
+            return;
+        }
+
         Excel::store(
-            new PluralPascalCaseModelNameExports($this->data), 
-            $this->path, 
-            config('namespaceWithoutSeparation.export_disk', 's3')
+            new PluralPascalCaseModelNameExports($this->data),
+            $this->path,
+            $this->disk()
         );
+
+        $this->exported = true;
+    }
+
+    /**
+     * `local` por defecto: una aplicación nueva lo tiene. Antes era `s3`, que
+     * hay que configurar, así que exportar fallaba recién instalado el paquete.
+     */
+    private function disk(): string
+    {
+        return config('namespaceWithoutSeparation.export_disk', 'local');
     }
 
     private function getSubject(): string
@@ -86,14 +117,21 @@ class ExportNotification extends Notification
         return __('Download');
     }
 
-    private function getNotificationUrl(): string
+    /**
+     * Un enlace firmado que caduca, en el disco que sea. El disco `local` de
+     * Laravel lo sirve, igual que S3. Antes el correo apuntaba a
+     * `/notification/read/{id}`, una ruta que nadie define, y la notificación a
+     * `app.aws_url`, que sólo existe con S3.
+     */
+    private function getDownloadUrl(): string
     {
-        return url('/notification/read/' . $this->id);
-    }
+        $disk = Storage::disk($this->disk());
 
-    private function getActionUrl(): string
-    {
-        return config('app.aws_url') . $this->path;
+        try {
+            return $disk->temporaryUrl($this->path, now()->addDay());
+        } catch (\RuntimeException) {
+            return $disk->url($this->path);
+        }
     }
 
     private function getImg(): string
@@ -106,9 +144,13 @@ class ExportNotification extends Notification
         return __('Thank you for using our application!');
     }
 
+    /**
+     * base64 de microtime() podía llevar `/` y `=`, que en un disco son carpetas
+     * y caracteres raros.
+     */
     private function getPath(): string
     {
-        return 'exports/' . base64_encode(microtime()) . '.xlsx';
+        return 'exports/' . Str::uuid() . '.xlsx';
     }
 
 }

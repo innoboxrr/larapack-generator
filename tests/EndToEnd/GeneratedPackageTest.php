@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
 use Innoboxrr\LarapackGenerator\Support\Declaration;
 use Innoboxrr\LarapackGenerator\Support\Generation;
 use Innoboxrr\LarapackGenerator\Support\MigrationTimestamp;
@@ -371,6 +372,25 @@ final class GeneratedPackageTest extends TestCase
         $this->getJson($this->route('api-key', 'index'))
             ->assertOk()
             ->assertDontSee('sha256:abc');
+    }
+
+    /**
+     * Sin simular la notificación: el archivo se genera de verdad en el disco
+     * por defecto. En una aplicación nueva exportar fallaba, porque Excel no
+     * era dependencia del paquete y el disco era S3.
+     */
+    public function test_la_exportacion_genera_el_archivo_en_el_disco_por_defecto(): void
+    {
+        Storage::fake('local');
+        config(['mail.default' => 'array']);
+
+        Sanctum::actingAs($this->user(admin: true));
+
+        $this->model('Category')::factory()->count(2)->create();
+
+        $this->postJson($this->route('category', 'export'))->assertOk();
+
+        $this->assertCount(1, Storage::disk('local')->files('exports'), 'La exportación no dejó el archivo en el disco local.');
     }
 
     public function test_la_exportacion_avisa_al_usuario_que_la_pidio(): void

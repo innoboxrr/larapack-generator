@@ -44,6 +44,7 @@
     "Show": "Ver",
     "Thank you for using our application!": "¡Gracias por utilizar nuestra aplicación!",
     "The action could not be completed.": "No se pudo completar la acción.",
+    "The export could not be generated.": "No se pudo generar la exportación.",
     "The item could not be deleted": "No se pudo eliminar el registro",
     "The permissions could not be checked.": "No se pudieron comprobar los permisos.",
     "The records could not be loaded.": "No se pudieron cargar los registros.",
