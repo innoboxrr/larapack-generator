@@ -1,5 +1,5 @@
 {
-    ".larapack/manifest.json": "34469221b26f006016e28ff83a03a381e37e0ce1af28f57cce2d35df6e69d6c3",
+    ".larapack/manifest.json": "b1e2dbe88bb9cba8d7becdcf7c23f284406acd42aeb3ae5829aad5987b414477",
     "composer.json": "dded2aaddb25ff97b89a8b0e047bfd8284706098a414f9124356b235318c7edb",
     "database/factories/PostFactory.php": "b3ac8b7128385a2c8eea480edfef216a72da4f8b26a8bba310289fe9918eecdb",
     "database/migrations/TIMESTAMP_create_post_metas_table.php": "96905ecd3dbc80a18440594a4c0bc06f8b4a0f59dd372add3392e6c2d5c960a3",
@@ -34,7 +34,7 @@
     "resources/vue/src/models/post/forms/EditForm.vue": "b5e2224e3fa7650ea87774301f8e49a7595e5af11e74929099be478e3aa946fb",
     "resources/vue/src/models/post/forms/FilterForm.vue": "699f491bf0d0e92c217fda1745f17c3f71ff73f98be0638cdd64529cf8394087",
     "resources/vue/src/models/post/index.js": "82ebc8884e1591d3bac0e3dfadf8ca529b0d37c4ee0bf16148375e65ee7dcf24",
-    "resources/vue/src/models/post/routes/index.js": "deb9b8c566749d2413349e675a959dd2c54cfd7be1ba4a6893bcb1faa991d687",
+    "resources/vue/src/models/post/routes/index.js": "7328593de2ea76e1c32c3acd34e25d514d7fe5cca53220797de8b6c361df08a5",
     "resources/vue/src/models/post/store/index.js": "cca9fd05a0b8cdeb98a37e9eeb9356b6ce68ae2d58175bc91a4f697879ea4e9b",
     "resources/vue/src/models/post/views/AdminView.vue": "f118a44d90b88a5b9f22aff61349fd53203590d40acdeb7cc988dd8cc840ba83",
     "resources/vue/src/models/post/views/CreateView.vue": "c509821593bc151c98acb3d7452a00cc71939b0659d9911d0dde26e34859c4b3",

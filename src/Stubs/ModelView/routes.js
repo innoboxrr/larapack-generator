@@ -1,4 +1,12 @@
-import * as middleware from '@router/middleware'
+/**
+ * Rutas de PascalCaseModelName para vue-router.
+ *
+ * `auth: true` declara que la ruta pide sesion, y es el router de la
+ * aplicacion el que lo lee. El modulo no importa ningun middleware del
+ * anfitrion: antes lo hacia desde '@router/middleware', un alias que solo
+ * existe dentro de la aplicacion que lo define, y fuera de ella el modulo no
+ * compilaba. Es el mismo `auth` que las rutas React llevan en `handle`.
+ */
 
 export default [
 	{
@@ -7,9 +15,7 @@ export default [
 		component: () => import ("./../views/AdminView.vue"),
 		meta: {
 			title: 'PluralPascalCaseModelName',
-			middleware: [
-				middleware.auth
-			]
+			auth: true,
 		},
 		children: [
 			// @larapack:if create
@@ -19,9 +25,7 @@ export default [
 				component: () => import ("./../views/CreateView.vue"),
 				meta: {
 					title: 'Crear PluralPascalCaseModelName',
-					middleware: [
-						middleware.auth
-					]
+					auth: true,
 				}
 			},
 			// @larapack:endif
@@ -32,9 +36,7 @@ export default [
 				component: () => import ("./../views/ShowView.vue"),
 				meta: {
 					title: 'Ver PluralPascalCaseModelName',
-					middleware: [
-						middleware.auth
-					]
+					auth: true,
 				},
 				children: [
 					// @larapack:if update
@@ -44,9 +46,7 @@ export default [
 						component: () => import ("./../views/EditView.vue"),
 						meta: {
 							title: 'Editar PluralPascalCaseModelName',
-							middleware: [
-								middleware.auth
-							]
+							auth: true,
 						}
 					},
 					// @larapack:endif
