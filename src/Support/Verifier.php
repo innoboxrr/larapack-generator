@@ -157,7 +157,10 @@ final class Verifier
         $components = [];
 
         foreach ($models as $model) {
-            $components[$model] = $this->componentsOf($model);
+            // Las metas se declaran por modelo: que una tabla las tenga y otra
+            // no es una decisión, no deriva. Contarlas avisaba en cada paquete
+            // con un solo modelo con metas.
+            $components[$model] = array_values(array_diff($this->componentsOf($model), ['ModelMetas', 'MigrationMetas']));
         }
 
         $findings = [];
