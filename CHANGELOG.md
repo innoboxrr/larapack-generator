@@ -1,5 +1,37 @@
 # Changelog
 
+## 7.7.1
+
+Lo que encontró un piloto: una aplicación Laravel 13 nueva, un paquete creado con
+`larapack:new` y generado siguiendo el README al pie de la letra, recorrido en un
+navegador contra la API real.
+
+- **El administrador salía sin estilos.** El `package.json` del módulo generado no
+  declaraba `src/theme.js` con efectos, y Vite descartaba `import
+  'modulo/src/theme.js'` entero, con la hoja de estilos.
+- **`larapack:import --dry-run` escribía todo** y `--force` no forzaba: importar
+  no pasaba las opciones a cada modelo, y cada modelo las reiniciaba. Los traits,
+  las pivotes, el test y `composer.json` tampoco respetaban la simulación.
+- **Volver a importar duplicaba las migraciones de creación**, porque el nombre
+  lleva la hora; `migrate` y los tests del paquete fallaban con "table already
+  exists". Ahora se reutiliza la que ya existe, también las de metas y pivotes.
+- **`larapack:verify` avisaba en falso** cuando unos modelos tienen metas y otros
+  no.
+- **Exportar funciona recién instalado.** El paquete generado pide
+  `maatwebsite/excel`, guarda en el disco `local`, avisa por correo con un enlace
+  firmado a la descarga, y un fallo enseña un mensaje claro. Antes el usuario veía
+  `Class "Maatwebsite\Excel\Facades\Excel" not found`, el disco era S3 y el enlace
+  apuntaba a una ruta que no existía.
+- **La pantalla:** la ficha enseña la fecha legible, la tabla la etiqueta de un
+  enum en lugar de su valor, y borrar desde la fila avisa.
+- **El README** dice qué versiones de `vue-router` y `pinia` instalar, que hace
+  falta `statefulApi()`, cómo comprobar que Sanctum quedó instalado y que los
+  formularios no traen campos para las metas.
+
+### Para proyectos existentes
+
+Ver «De 7.7.0 a 7.7.1» en la guía de actualización del README.
+
 ## 7.7.0
 
 `metas: true` genera un modelo que guarda y lee sus metas de verdad. Antes se
