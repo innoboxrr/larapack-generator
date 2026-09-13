@@ -58,7 +58,7 @@ class PascalCaseModelNameResource extends JsonResource
     {
         return [
             'id' => 'view',
-            'name' => 'Ver',
+            'name' => __('Show'),
             'callback' => 'viewPascalCaseModelName',
             'icon' => 'show',
             'route' => true,
@@ -84,7 +84,7 @@ class PascalCaseModelNameResource extends JsonResource
     {
         return [
             'id' => 'update',
-            'name' => 'Editar',
+            'name' => __('Edit'),
             'callback' => 'editPascalCaseModelName',
             'icon' => 'edit',
             'route' => true,
@@ -110,7 +110,7 @@ class PascalCaseModelNameResource extends JsonResource
     {
         return [
             'id' => 'delete',
-            'name' => 'Eliminar',
+            'name' => __('Delete'),
             'callback' => 'deleteModel',
             'icon' => 'delete',
             'route' => false,

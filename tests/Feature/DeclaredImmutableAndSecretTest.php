@@ -7,6 +7,8 @@ use Illuminate\Database\Capsule\Manager as Capsule;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Events\Dispatcher;
 use Illuminate\Http\Request;
+use Illuminate\Translation\ArrayLoader;
+use Illuminate\Translation\Translator;
 use Innoboxrr\LarapackGenerator\Tests\Support\FakeProject;
 use Innoboxrr\LarapackGenerator\Tests\TestCase;
 use LogicException;
@@ -24,6 +26,8 @@ final class DeclaredImmutableAndSecretTest extends TestCase
 {
     /** @var (callable(string): void)|null */
     private $autoloader = null;
+
+    private bool $boundTranslator = false;
 
     protected function setUp(): void
     {
@@ -53,6 +57,10 @@ final class DeclaredImmutableAndSecretTest extends TestCase
     {
         if ($this->autoloader !== null) {
             spl_autoload_unregister($this->autoloader);
+        }
+
+        if ($this->boundTranslator) {
+            Container::getInstance()->forgetInstance('translator');
         }
 
         Model::unsetEventDispatcher();
@@ -162,11 +170,21 @@ final class DeclaredImmutableAndSecretTest extends TestCase
         $key = $this->model('ApiKey');
         $key->forceFill(['id' => 7, 'label' => 'ci', 'token_hash' => 'sha256:abc']);
 
+        // El Resource nombra sus acciones con __(). Una aplicación Laravel
+        // siempre registra el traductor; este contenedor mínimo, no.
+        $container = Container::getInstance();
+
+        if (! $container->bound('translator')) {
+            $container->instance('translator', new Translator(new ArrayLoader(), 'en'));
+            $this->boundTranslator = true;
+        }
+
         $resourceClass = 'Acme\\Ledger\\Http\\Resources\\Models\\ApiKeyResource';
         $payload = (new $resourceClass($key))->toArray(Request::create('/'));
 
         $this->assertSame('ci', $payload['label']);
         $this->assertArrayNotHasKey('token_hash', $payload);
+        $this->assertSame(['Show', 'Edit', 'Delete'], array_column($payload['actions'], 'name'));
 
         // Y se sigue pudiendo escribir.
         $this->assertSame('sha256:abc', $key->token_hash);

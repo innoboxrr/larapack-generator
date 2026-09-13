@@ -2,6 +2,7 @@
 
 namespace Innoboxrr\LarapackGenerator\Tools\Resource;
 
+use Innoboxrr\LarapackGenerator\Support\Translations;
 use Innoboxrr\LarapackGenerator\Tools\Tool;
 
 class ResourceTool extends Tool
@@ -38,7 +39,12 @@ class ResourceTool extends Tool
 
 		$resourceFile = $this->resourcePath . '/' . $this->PascalCaseModelName . 'Resource.php';
 
-		return $this->generate($this->resourceTemplatePath . '/ResourceTemplate.txt', $resourceFile);
+		$created = $this->generate($this->resourceTemplatePath . '/ResourceTemplate.txt', $resourceFile);
+
+		// Los nombres de las acciones que la tabla enseña en cada fila.
+		Translations::sync(root_path() . '/lang', [$resourceFile], Translations::BACKEND, ['es']);
+
+		return $created;
 
 	}
 

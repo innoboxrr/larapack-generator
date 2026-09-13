@@ -65,22 +65,25 @@ class ExportNotification extends Notification
 
     private function getSubject(): string
     {
-        return config('app.name') . ' | PascalCaseModelName export notification';
+        // El asunto iba en inglés y el cuerpo en español, con independencia del
+        // idioma de quien pidió la exportación. Ahora todo sale del idioma de
+        // la notificación, que el listener fija con el del evento.
+        return config('app.name') . ' | ' . __('Export of :name', ['name' => __('PluralModelLabel')]);
     }
 
     private function getWellcomeMessage(): string
     {
-        return 'Hola';
+        return __('Hello');
     }
 
     private function getBodyMessage(): string
     {
-        return 'Da clic para descargar el archivo. Después de 24 horas será eliminado.';
+        return __('Click to download the file. It will be deleted after 24 hours.');
     }
 
     private function getActionButton(): string
     {
-        return 'Descargar';
+        return __('Download');
     }
 
     private function getNotificationUrl(): string
@@ -100,7 +103,7 @@ class ExportNotification extends Notification
 
     private function getFarewallMessage(): string
     {
-        return '¡Gracias por utilizar nuestra aplicación!';
+        return __('Thank you for using our application!');
     }
 
     private function getPath(): string

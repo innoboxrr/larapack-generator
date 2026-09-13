@@ -2,6 +2,7 @@
 
 namespace Innoboxrr\LarapackGenerator\Tools\ExportNotification;
 
+use Innoboxrr\LarapackGenerator\Support\Translations;
 use Innoboxrr\LarapackGenerator\Tools\Tool;
 
 class ExportNotificationTool extends Tool
@@ -58,7 +59,11 @@ class ExportNotificationTool extends Tool
 
 		$exportNotificationFile = $this->modelExportNotificationPath . '/' . 'ExportNotification.php';
 
-		return $this->generate($this->exportNotificationTemplatePath . '/ExportNotificationTemplate.txt', $exportNotificationFile);
+		$created = $this->generate($this->exportNotificationTemplatePath . '/ExportNotificationTemplate.txt', $exportNotificationFile);
+
+		Translations::sync(root_path() . '/lang', [$exportNotificationFile], Translations::BACKEND, ['es']);
+
+		return $created;
 
 	}
 
