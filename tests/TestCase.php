@@ -7,10 +7,8 @@ use Innoboxrr\LarapackGenerator\Support\Generation;
 use Innoboxrr\LarapackGenerator\Support\MigrationTimestamp;
 use Innoboxrr\LarapackGenerator\Support\ProjectRoot;
 use Innoboxrr\LarapackGenerator\Tests\Support\FakeProject;
+use Innoboxrr\LarapackGenerator\Tests\Support\Larapack;
 use PHPUnit\Framework\TestCase as BaseTestCase;
-use Symfony\Component\Console\Application;
-use Symfony\Component\Console\Input\ArrayInput;
-use Symfony\Component\Console\Output\BufferedOutput;
 
 abstract class TestCase extends BaseTestCase
 {
@@ -46,29 +44,13 @@ abstract class TestCase extends BaseTestCase
 
     /**
      * Ejecuta un comando del generador igual que lo haría el binario
-     * `builder`: registrando todos los comandos en una Application.
+     * `builder`. Ver Support\Larapack.
      *
      * @param  array<string, mixed>  $arguments
      */
     protected function runCommand(string $name, array $arguments = []): int
     {
-        $application = new Application('larapack-generator-tests');
-        $application->setAutoExit(false);
-        $application->setCatchExceptions(false);
-
-        foreach (glob(dirname(__DIR__) . '/src/Commands/*Command.php') as $file) {
-            $class = 'Innoboxrr\\LarapackGenerator\\Commands\\' . basename($file, '.php');
-            $application->addCommand(new $class());
-        }
-
-        $output = new BufferedOutput();
-
-        $exitCode = $application->run(
-            new ArrayInput(['command' => $name] + $arguments),
-            $output
-        );
-
-        $this->lastOutput = $output->fetch();
+        [$exitCode, $this->lastOutput] = Larapack::run($name, $arguments);
 
         return $exitCode;
     }
