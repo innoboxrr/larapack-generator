@@ -312,16 +312,46 @@ final class GeneratesReactModuleTest extends TestCase
         $this->assertSame([], $errors, "JSX generado con errores de sintaxis:\n" . implode("\n", $errors));
     }
 
+    /**
+     * El esbuild del monorepo si está a mano. En CI sólo se clona LaraPack y
+     * no había ninguno, así que el test se saltaba siempre justo donde tenía
+     * que proteger: ahora se instala una vez en un directorio temporal, como
+     * la cadena de GeneratedUiBuildsTest. Sin npm no hay con qué.
+     */
     private function esbuild(): ?string
     {
-        $candidates = [
-            dirname(__DIR__, 4) . '/npm/react-form-elements/node_modules/.bin/esbuild.cmd',
-            dirname(__DIR__, 4) . '/npm/react-form-elements/node_modules/.bin/esbuild',
+        $binaries = DIRECTORY_SEPARATOR === '\\' ? ['esbuild.cmd', 'esbuild'] : ['esbuild'];
+        $directories = [
+            dirname(__DIR__, 4) . '/npm/react-form-elements/node_modules/.bin',
+            sys_get_temp_dir() . '/larapack-esbuild/node_modules/.bin',
         ];
 
-        foreach ($candidates as $candidate) {
-            if (is_file($candidate)) {
-                return $candidate;
+        foreach ($directories as $directory) {
+            foreach ($binaries as $binary) {
+                if (is_file("{$directory}/{$binary}")) {
+                    return "{$directory}/{$binary}";
+                }
+            }
+        }
+
+        if (getenv('LARAPACK_SKIP_UI_BUILD')) {
+            return null;
+        }
+
+        $install = sys_get_temp_dir() . '/larapack-esbuild';
+
+        if (! is_dir($install)) {
+            mkdir($install, 0777, true);
+        }
+
+        file_put_contents($install . '/package.json', '{"private": true}');
+
+        $process = \Symfony\Component\Process\Process::fromShellCommandline('npm install --no-audit --no-fund esbuild@^0.25', $install, null, null, 300);
+        $process->run();
+
+        foreach ($binaries as $binary) {
+            if ($process->isSuccessful() && is_file("{$install}/node_modules/.bin/{$binary}")) {
+                return "{$install}/node_modules/.bin/{$binary}";
             }
         }
 
