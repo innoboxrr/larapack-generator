@@ -1,5 +1,5 @@
 {
-    ".larapack/manifest.json": "68e9f93270de3072739bfcf8b553d94ae1789c7c3d55599382814075b511d5ea",
+    ".larapack/manifest.json": "82fc3fd4b8b10cd78df10f940aad82c7a67de6793c8d92396fc70e4adcb46936",
     "composer.json": "dded2aaddb25ff97b89a8b0e047bfd8284706098a414f9124356b235318c7edb",
     "database/factories/PostFactory.php": "12b300b10c3238d4fb1c3522fbfef5d224d6c1522e88e1395146b8639e5651cc",
     "database/migrations/TIMESTAMP_create_post_metas_table.php": "96905ecd3dbc80a18440594a4c0bc06f8b4a0f59dd372add3392e6c2d5c960a3",
@@ -85,10 +85,10 @@
     "src/Models/Traits/Mutators/PostMutators.php": "17c93a65479dfa63a7e3bb5cbebe8ae67ffcf3bc7f76f5cd495caba2d2b804b3",
     "src/Models/Traits/Operations/PostOperations.php": "d388abf51039068a8cdb92a3cf02c0079a9df7554feaba5b18d573ee4399ab83",
     "src/Models/Traits/Relations/PostRelations.php": "0bce5142547d142e420ae18b523668e0207056c265322d4e0e3a3b3e179f7dea",
-    "src/Models/Traits/Storage/PostStorage.php": "e5b23514882f4251905a151d82a5441a0aed128cde03dae02ac1afc569be048f",
+    "src/Models/Traits/Storage/PostStorage.php": "dc34205f55e59a126090b98eb42bdf867c7a93d6b1c8911074c6f0d26b0adc47",
     "src/Notifications/Post/ExportNotification.php": "6dd7d2026cc002ba21f3d67dc073157cc423ab46668b92e32b654aab3cd8a4c0",
     "src/Observers/PostObserver.php": "790ee47c1d2b412d23a490b58932a24bd8b23bb4e7806edb3d90edf42a4637ae",
-    "src/Policies/PostPolicy.php": "edb5383d61d2926af8ec967230b94a4e665b159e4da6049f90a2d409c29a6290",
+    "src/Policies/PostPolicy.php": "70a2a899045a738c9182e30751d613201f56ce98724078cf3201c9e27f41f5cf",
     "tests/Feature/Models/PostEndpointsTest.php": "bd427b1ee3ff721a2e6bc83f3e4fee4c00b2634378cc54b3131d3e01382b0fdc",
     "tests/TestCase.php": "dd6355e1e3aad74d275753a33a7cb8a31813274a44c5344747389a891873ee7d"
 }

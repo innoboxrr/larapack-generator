@@ -1,5 +1,5 @@
 {
-    ".larapack/manifest.json": "b154c154505f5c8ff321e86e3d1f495998bcf3e5bec86b8ddab39476f03b719e",
+    ".larapack/manifest.json": "6ab622fe5f7449f3b6a03590f81d4d40062d1e16c5f69acec0d623805c598b2d",
     "composer.json": "dded2aaddb25ff97b89a8b0e047bfd8284706098a414f9124356b235318c7edb",
     "database/factories/ProductFactory.php": "0806ba1ba14cfe478dd6233d4d816f22c269cced3194a01cb9c2ffc95f9350b9",
     "database/migrations/TIMESTAMP_create_products_table.php": "f7a5e2cfbcaede43542bce452619a19f9a96e6d62d7c15f791f51618de0e4972",
@@ -83,10 +83,10 @@
     "src/Models/Traits/Mutators/ProductMutators.php": "09ba272713806114c4b8ddabc6e10265c45db6a17b58533dc34b829221a4608f",
     "src/Models/Traits/Operations/ProductOperations.php": "690d214ae7258c8b6cdc4709524dac5aeae579aac406414fdcf4359cd4751f4d",
     "src/Models/Traits/Relations/ProductRelations.php": "42edd57795a9be4e4eec284accc5d6bf4c618b50e94165add22dc5f28f68534e",
-    "src/Models/Traits/Storage/ProductStorage.php": "1a57eb0170eb4d4e93734b6b06956461df8fd25383ed0191a35afa38bd01522a",
+    "src/Models/Traits/Storage/ProductStorage.php": "a20c2efb4f43f675e47dbde6957099ad90795a3a624095ffb7de96529e3e020f",
     "src/Notifications/Product/ExportNotification.php": "e8032d8ff0f1f495fb115d1f2ae86f0e72ba37d2f9160a524620f258d65677e9",
     "src/Observers/ProductObserver.php": "02a81e6ca4aaec404d297cac78e4fffc2e6841ff21fe3cc04ad1328e033e4340",
-    "src/Policies/ProductPolicy.php": "48a475de4e0890b00afe919fb0b37df47db0ce1c971c6ee04bf05fe09641703d",
+    "src/Policies/ProductPolicy.php": "6bd7321b0c43da19aa5dd62ef529dc6a92f0d5c54e7f735fdd3c11daa9bce550",
     "tests/Feature/Models/ProductEndpointsTest.php": "c36e1ed820fd34e7a8c954c856bdb2024900c618e4f3180f082f051cd6d5febf",
     "tests/TestCase.php": "dd6355e1e3aad74d275753a33a7cb8a31813274a44c5344747389a891873ee7d"
 }
