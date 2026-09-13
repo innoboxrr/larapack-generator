@@ -18,6 +18,7 @@
         "engines": ">=20",
         "ci": "22"
     },
+    "$comment-js": "La cadena de pruebas de los paquetes npm. Sigue en Vite 7 y Vitest 3: Vitest 4 con Vite 8.3 no se instala con npm 10, el de Node 20 y 22 en la CI. El modulo generado ya pide Vite 8, el de Laravel 13, porque no instala Vitest.",
     "js": {
         "vite": "^7.1.0",
         "vitest": "^3.0.0",
@@ -33,10 +34,10 @@
     "$comment-internalNpm": "Las versiones que el modulo generado declara. Viven aqui para que no se desfasen en silencio dentro de los stubs: hay un test que compara ambos.",
     "internalNpm": {
         "innoboxrr-form-core": "^2.8.0",
-        "innoboxrr-form-elements": "^6.6.0",
-        "innoboxrr-react-form-elements": "^3.6.0",
-        "innoboxrr-vue-datatable": "^3.0.0",
-        "innoboxrr-react-datatable": "^3.0.0",
+        "innoboxrr-form-elements": "^6.7.0",
+        "innoboxrr-react-form-elements": "^3.7.0",
+        "innoboxrr-vue-datatable": "^3.1.0",
+        "innoboxrr-react-datatable": "^3.1.0",
         "innoboxrr-http-request": "^2.0.0",
         "innoboxrr-i18n": "^1.2.0",
         "innoboxrr-locale-generator": "^2.0.0",

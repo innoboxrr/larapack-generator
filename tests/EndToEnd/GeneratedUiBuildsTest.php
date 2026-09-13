@@ -37,9 +37,9 @@ final class GeneratedUiBuildsTest extends TestCase
      * Lo que necesita vite para compilar cada módulo, y nada más.
      */
     private const TOOLCHAIN = [
-        'vite' => '^7.1.0',
+        'vite' => '^8.0.0',
         '@vitejs/plugin-vue' => '^6.0.0',
-        '@vitejs/plugin-react' => '^5.0.0',
+        '@vitejs/plugin-react' => '^6.0.0',
         'vue' => '^3.5.0',
         'react' => '^19.0.0',
         'react-dom' => '^19.0.0',
