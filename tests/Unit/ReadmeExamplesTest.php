@@ -35,15 +35,15 @@ final class ReadmeExamplesTest extends TestCase
     }
 
     /**
-     * Los bloques ```json que van bajo el titulo del ejemplo. Los anteriores
-     * son salidas de comandos, no laraimports.
+     * Los bloques ```json de la sección del contrato. Los de otras secciones
+     * son salidas de comandos o fragmentos, no laraimports completos.
      *
      * @return array<int, string>
      */
     private function examples(): array
     {
         $readme = file_get_contents(dirname(__DIR__, 2) . '/README.md');
-        $start = strpos($readme, '## Ejemplo de laraimport.json');
+        $start = strpos($readme, '## El contrato: laraimport.json');
 
         $this->assertNotFalse($start, 'El README ya no tiene la sección de ejemplos.');
 
