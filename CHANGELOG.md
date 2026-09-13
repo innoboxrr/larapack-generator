@@ -1,5 +1,25 @@
 # Changelog
 
+## 7.8.0
+
+La interfaz generada nombra a cada registro por su columna. La ficha, las migas y
+el título de la pestaña leían siempre `.name`: un modelo sin esa columna —un
+producto con `title`, un pedido con `number`— se enseñaba con el nombre del
+modelo en lugar del registro, como pasó en el piloto.
+
+- **Clave nueva y opcional del contrato: `display`**, la columna que nombra al
+  registro.
+- **Sin declararla se elige sola**: `name`, luego `title`, luego la primera
+  columna de texto que no sea secreta (antes las que salen en la tabla), y `id`
+  si no hay ninguna.
+- **`larapack:validate` rechaza** un `display` que no es una columna o que es
+  `secret`, porque nunca saldría por la API.
+- Un modelo con `name`, o generado sin laraimport, sale igual que antes.
+
+### Para proyectos existentes
+
+Ver «De 7.7 a 7.8» en la guía de actualización del README.
+
 ## 7.7.1
 
 Lo que encontró un piloto: una aplicación Laravel 13 nueva, un paquete creado con
