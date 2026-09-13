@@ -2,6 +2,7 @@
 
 namespace Innoboxrr\LarapackGenerator\Tools\ModelView;
 
+use Innoboxrr\LarapackGenerator\Support\Translations;
 use Innoboxrr\LarapackGenerator\Tools\Tool;
 
 /**
@@ -140,7 +141,27 @@ abstract class UiModuleTool extends Tool
 			) || $created;
 		}
 
+		$this->syncTranslations();
+
 		return $created;
+	}
+
+	/**
+	 * Suma a src/locales las claves que usa el modulo. Se recorre todo src y no
+	 * solo el modelo: las rutas, las migas y los textos de la tabla tambien son
+	 * del modulo. Corre aunque no se haya escrito nada, para que un proyecto
+	 * que actualiza LaraPack reciba las claves nuevas.
+	 */
+	protected function syncTranslations(): void
+	{
+		$source = $this->packagePath() . '/src';
+
+		Translations::sync(
+			$source . '/locales',
+			Translations::sourcesIn($source, ['js', 'jsx', 'vue']),
+			Translations::FRONTEND,
+			['en', 'es']
+		);
 	}
 
 	/**

@@ -120,9 +120,12 @@ final class GeneratedModuleDependenciesTest extends TestCase
     {
         $decoded = json_decode($this->read($manifest), true);
 
+        // devDependencies también: `npm run locale` usa locale-gen, y un
+        // generador de claves desfasado escribe archivos que i18n no entiende.
         return array_merge(
             $decoded['dependencies'] ?? [],
             $decoded['peerDependencies'] ?? [],
+            $decoded['devDependencies'] ?? [],
         );
     }
 

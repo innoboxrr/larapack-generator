@@ -6,6 +6,7 @@ namespace Innoboxrr\LarapackGenerator\Tools;
 use Doctrine\Inflector\Inflector; 
 use Doctrine\Inflector\NoopWordInflector;
 use Illuminate\Support\Pluralizer;
+use Illuminate\Support\Str;
 use Innoboxrr\LarapackGenerator\Exceptions\MakerException;
 use Innoboxrr\LarapackGenerator\Support\Declaration;
 use Innoboxrr\LarapackGenerator\Support\Generation;
@@ -43,6 +44,8 @@ class Tool
 		protected $PluralPascalCaseModelName;
 		protected $pluralkebabcasemodelname;
 		protected $pluralDotModelName;
+		protected $SingularModelLabel;
+		protected $PluralModelLabel;
 
 	// MANIFIESTO
 		protected ?Manifest $manifest = null;
@@ -112,6 +115,13 @@ class Tool
 			$this->PluralPascalCaseModelName = Pluralizer::plural($this->PascalCaseModelName);
 			$this->pluralkebabcasemodelname = Pluralizer::plural($this->kebabcasemodelname);
 			$this->pluralDotModelName = Pluralizer::plural($this->dotModelName);
+
+			// El nombre que se lee en pantalla, y que es la clave de traducción:
+			// "Audit event", no "AuditEvent". La interfaz lo pintaba con el
+			// nombre de la clase, y no se podía traducir.
+			$words = ucfirst(mb_strtolower(Str::headline($this->PascalCaseModelName)));
+			$this->SingularModelLabel = $words;
+			$this->PluralModelLabel = Pluralizer::plural($words);
 		}
 
 	// REEMPLAZAR NOMBRES
@@ -125,6 +135,9 @@ class Tool
 		protected function replacementMap(): array
 		{
 			return [
+				// EN PANTALLA
+				'SingularModelLabel' => (string) $this->SingularModelLabel,
+				'PluralModelLabel' => (string) $this->PluralModelLabel,
 				// PLURALES
 				'pluralModelName' => $this->pluralModelName,
 				'plural_snake_case_model_name' => $this->plural_snake_case_model_name,

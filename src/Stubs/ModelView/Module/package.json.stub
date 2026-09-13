@@ -18,7 +18,7 @@
     ],
     "scripts": {
         "build": "vite build",
-        "locale": "npx locale-gen"
+        "locale": "locale-gen"
     },
     "license": "MIT",
     "peerDependencies": {
@@ -30,13 +30,14 @@
         "innoboxrr-form-core": "^2.7.0",
         "innoboxrr-form-elements": "^6.5.0",
         "innoboxrr-http-request": "^2.0.0",
-        "innoboxrr-i18n": "^1.1.0",
+        "innoboxrr-i18n": "^1.2.0",
         "innoboxrr-js-validator": "^2.0.0",
         "innoboxrr-route-resolver": "^2.0.0",
         "innoboxrr-vue-datatable": "^3.0.0"
     },
     "devDependencies": {
         "@vitejs/plugin-vue": "^6.0.0",
+        "innoboxrr-locale-generator": "^2.0.0",
         "vite": "^7.1.0"
     }
 }

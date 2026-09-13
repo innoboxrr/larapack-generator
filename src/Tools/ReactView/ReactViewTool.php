@@ -57,6 +57,7 @@ class ReactViewTool extends UiModuleTool
 			'ReactView/Module/index.js' => 'index.js',
 			'ReactView/Module/routes.js' => 'src/routes/index.js',
 			'ReactView/Module/theme.js' => 'src/theme.js',
+			'ModelView/Module/i18n.js' => 'src/i18n.js',
 			'ReactView/Module/Breadcrumbs.jsx' => 'src/components/Breadcrumbs.jsx',
 			'ReactView/Module/ActionMenu.jsx' => 'src/components/ActionMenu.jsx',
 		];

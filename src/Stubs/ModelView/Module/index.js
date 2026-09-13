@@ -1,10 +1,12 @@
 /**
  * Punto de entrada del modulo packageName.
  *
- * El anfitrion monta las rutas y, si quiere, instala el plugin:
+ * El anfitrion carga sus textos, monta las rutas y, si quiere, instala el
+ * plugin:
  *
- *     import module, { routes } from 'packageName'
+ *     import module, { routes, translations } from 'packageName'
  *
+ *     addTranslations(translations)
  *     app.use(module)
  *     router.addRoute({ path: '/admin', children: routes })
  */
@@ -12,6 +14,8 @@
 import moduleRoutes from './src/routes'
 
 export const routes = moduleRoutes
+
+export { translations } from './src/i18n.js'
 
 export default {
     install(app, options = {}) {

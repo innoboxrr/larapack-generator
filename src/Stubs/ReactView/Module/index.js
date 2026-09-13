@@ -1,11 +1,12 @@
 /**
  * Punto de entrada del modulo packageName (React).
  *
- * El anfitrion registra los nombres de ruta con el mismo prefijo con el que
- * monta las rutas, y ya:
+ * El anfitrion carga sus textos y registra los nombres de ruta con el mismo
+ * prefijo con el que monta las rutas, y ya:
  *
- *     import { routes, registerModuleRoutes } from 'packageName'
+ *     import { routes, registerModuleRoutes, translations } from 'packageName'
  *
+ *     addTranslations(translations)
  *     registerModuleRoutes('/admin')
  *     createBrowserRouter([{ path: '/admin', children: routes }])
  *
@@ -21,5 +22,7 @@ export const routes = moduleRoutes
 export const registerModuleRoutes = register
 
 export { routeNamesOf }
+
+export { translations } from './src/i18n.js'
 
 export default routes
