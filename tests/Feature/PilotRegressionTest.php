@@ -57,7 +57,7 @@ final class PilotRegressionTest extends TestCase
 
         $this->useProject(FakeProject::library('Acme\\Catalogo\\'));
 
-        file_put_contents($this->project->path . '/laraimport.json', json_encode(self::DOCUMENT));
+        file_put_contents($this->project->path.'/laraimport.json', json_encode(self::DOCUMENT));
     }
 
     /**
@@ -67,8 +67,8 @@ final class PilotRegressionTest extends TestCase
     {
         $this->assertSame(
             Command::SUCCESS,
-            $this->runCommand('larapack:import', ['jsonPath' => $this->project->path . '/laraimport.json', '--vue' => true, ...$options]),
-            "larapack:import terminó con error:\n" . $this->lastOutput
+            $this->runCommand('larapack:import', ['jsonPath' => $this->project->path.'/laraimport.json', '--vue' => true, ...$options]),
+            "larapack:import terminó con error:\n".$this->lastOutput
         );
     }
 
@@ -81,7 +81,7 @@ final class PilotRegressionTest extends TestCase
      */
     public function test_simular_no_escribe_nada(): void
     {
-        $composer = (string) file_get_contents($this->project->path . '/composer.json');
+        $composer = (string) file_get_contents($this->project->path.'/composer.json');
 
         $this->import(['--dry-run' => true]);
 
@@ -94,11 +94,11 @@ final class PilotRegressionTest extends TestCase
             'resources/vue/src/models/product/index.js',
             '.larapack/manifest.json',
         ] as $file) {
-            $this->assertFileDoesNotExist($this->project->path . '/' . $file, "La simulación escribió {$file}.");
+            $this->assertFileDoesNotExist($this->project->path.'/'.$file, "La simulación escribió {$file}.");
         }
 
-        $this->assertSame([], glob($this->project->path . '/database/migrations/*.php') ?: []);
-        $this->assertSame($composer, (string) file_get_contents($this->project->path . '/composer.json'), 'La simulación cambió composer.json.');
+        $this->assertSame([], glob($this->project->path.'/database/migrations/*.php') ?: []);
+        $this->assertSame($composer, (string) file_get_contents($this->project->path.'/composer.json'), 'La simulación cambió composer.json.');
         $this->assertStringContainsString('src/Models/Traits/Storage/ProductStorage.php', $this->lastOutput, 'La simulación no dice que crearía los traits.');
     }
 
@@ -116,7 +116,7 @@ final class PilotRegressionTest extends TestCase
         foreach (['create_categories_table', 'create_products_table', 'create_product_metas_table', 'create_category_product_table'] as $migration) {
             $this->assertCount(
                 1,
-                glob($this->project->path . "/database/migrations/*_{$migration}.php") ?: [],
+                glob($this->project->path."/database/migrations/*_{$migration}.php") ?: [],
                 "Hay más de una migración {$migration}."
             );
         }
@@ -127,7 +127,7 @@ final class PilotRegressionTest extends TestCase
         $this->import();
         $this->import(['--force' => true]);
 
-        $this->assertMatchesRegularExpression('/\b([1-9]\d*) regenerados/', $this->lastOutput, "--force no regeneró nada:\n" . $this->lastOutput);
+        $this->assertMatchesRegularExpression('/\b([1-9]\d*) regenerados/', $this->lastOutput, "--force no regeneró nada:\n".$this->lastOutput);
     }
 
     /**

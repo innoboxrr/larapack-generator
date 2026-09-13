@@ -42,8 +42,8 @@ final class GeneratedLanguageTest extends TestCase
 
         $stubs = stubs_path('');
         $keys = [
-            ...Translations::keysIn(Translations::sourcesIn($stubs . 'ModelView', ['js', 'jsx', 'vue']), Translations::FRONTEND),
-            ...Translations::keysIn(Translations::sourcesIn($stubs . 'ReactView', ['js', 'jsx', 'vue']), Translations::FRONTEND),
+            ...Translations::keysIn(Translations::sourcesIn($stubs.'ModelView', ['js', 'jsx', 'vue']), Translations::FRONTEND),
+            ...Translations::keysIn(Translations::sourcesIn($stubs.'ReactView', ['js', 'jsx', 'vue']), Translations::FRONTEND),
             ...Translations::keysIn(Translations::sourcesIn($stubs, ['txt']), Translations::BACKEND),
         ];
 
@@ -53,7 +53,7 @@ final class GeneratedLanguageTest extends TestCase
         )));
 
         $this->assertNotSame([], $keys, 'No se encontró ninguna clave en los stubs: la extracción no está leyendo nada.');
-        $this->assertSame([], $missing, "Claves sin traducir en Stubs/Locales/es.json:\n" . implode("\n", $missing));
+        $this->assertSame([], $missing, "Claves sin traducir en Stubs/Locales/es.json:\n".implode("\n", $missing));
     }
 
     public function test_el_modulo_trae_sus_traducciones(): void
@@ -88,7 +88,7 @@ final class GeneratedLanguageTest extends TestCase
         $translations['Post'] = 'Entrada';
         $translations['Create'] = 'Nueva';
 
-        file_put_contents($this->project->path . '/' . $path, json_encode($translations, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+        file_put_contents($this->project->path.'/'.$path, json_encode($translations, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
 
         $this->import();
 
@@ -136,12 +136,12 @@ final class GeneratedLanguageTest extends TestCase
         $offenders = [];
 
         foreach (['vue', 'react'] as $ui) {
-            foreach (Translations::sourcesIn($this->project->path . "/resources/{$ui}/src", ['js', 'jsx', 'vue']) as $file) {
+            foreach (Translations::sourcesIn($this->project->path."/resources/{$ui}/src", ['js', 'jsx', 'vue']) as $file) {
                 $contents = (string) file_get_contents($file);
 
                 foreach (["'Crear ", "'Ver ", "'Editar ", "'Acciones'", 'aria-label="Breadcrumb"', "title: 'Posts'", "group: 'Posts'", "?? 'Post'"] as $literal) {
                     if (str_contains($contents, $literal)) {
-                        $offenders[] = basename($file) . ": {$literal}";
+                        $offenders[] = basename($file).": {$literal}";
                     }
                 }
             }
@@ -185,11 +185,11 @@ final class GeneratedLanguageTest extends TestCase
         $this->assertSame(
             Command::SUCCESS,
             $this->runCommand('larapack:import', [
-                'jsonPath' => dirname(__DIR__) . '/Fixtures/laraimport.json',
+                'jsonPath' => dirname(__DIR__).'/Fixtures/laraimport.json',
                 '--vue' => true,
                 '--react' => true,
             ]),
-            "larapack:import --vue --react terminó con error:\n" . $this->lastOutput
+            "larapack:import --vue --react terminó con error:\n".$this->lastOutput
         );
     }
 
@@ -207,7 +207,7 @@ final class GeneratedLanguageTest extends TestCase
 
     private function read(string $relative): string
     {
-        $path = $this->project->path . '/' . $relative;
+        $path = $this->project->path.'/'.$relative;
 
         $this->assertFileExists($path);
 

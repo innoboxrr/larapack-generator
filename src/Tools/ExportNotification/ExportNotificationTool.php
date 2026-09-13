@@ -7,76 +7,76 @@ use Innoboxrr\LarapackGenerator\Tools\Tool;
 
 class ExportNotificationTool extends Tool
 {
+    protected $exportNotificationPath;
 
-	protected $exportNotificationPath;
+    protected $exportNotificationTemplatePath;
 
-	protected $exportNotificationTemplatePath;
+    protected $modelExportNotificationPath;
 
-	protected $modelExportNotificationPath;
+    private function setExportNotificationPath()
+    {
 
-	private function setExportNotificationPath()
-	{
+        $this->exportNotificationPath = get_path(app_dir_name().'/Notifications');
 
-		$this->exportNotificationPath = get_path(app_dir_name() . '/Notifications');
+        return $this;
 
-		return $this;
+    }
 
-	}
+    private function setExportNotificationTemplatePath()
+    {
 
-	private function setExportNotificationTemplatePath()
-	{
+        $this->exportNotificationTemplatePath = stubs_path('ExportNotification');
 
-		$this->exportNotificationTemplatePath = stubs_path('ExportNotification');
+        return $this;
 
-		return $this;
+    }
 
-	}
+    protected function setModelExportNotificationPath()
+    {
 
-	protected function setModelExportNotificationPath()
-	{
+        $path = $this->exportNotificationPath.'/'.$this->PascalCaseModelName;
 
-		$path = $this->exportNotificationPath . '/' . $this->PascalCaseModelName;
+        if (! file_exists($path)) {
+            mkdir($path, 0777, true);
+        }
 
-		if (!file_exists($path)) mkdir($path, 0777, true);
+        $this->modelExportNotificationPath = $path;
 
-		$this->modelExportNotificationPath = $path;
+        return $this;
 
-		return $this;
+    }
 
-	}
+    public function create(string $ModelName)
+    {
 
-	public function create(string $ModelName)
-	{
+        if (! $this->init($ModelName)->declares('export')) {
+            return false;
+        }
 
-		if (! $this->init($ModelName)->declares('export')) {
-			return false;
-		}
+        $this->init($ModelName)
+            ->setExportNotificationPath()
+            ->setExportNotificationTemplatePath()
+            ->setModelExportNotificationPath();
 
-		$this->init($ModelName)
-			->setExportNotificationPath()
-			->setExportNotificationTemplatePath()
-			->setModelExportNotificationPath();
+        $exportNotificationFile = $this->modelExportNotificationPath.'/'.'ExportNotification.php';
 
-		$exportNotificationFile = $this->modelExportNotificationPath . '/' . 'ExportNotification.php';
+        $created = $this->generate($this->exportNotificationTemplatePath.'/ExportNotificationTemplate.txt', $exportNotificationFile);
 
-		$created = $this->generate($this->exportNotificationTemplatePath . '/ExportNotificationTemplate.txt', $exportNotificationFile);
+        Translations::sync(root_path().'/lang', [$exportNotificationFile], Translations::BACKEND, ['es']);
 
-		Translations::sync(root_path() . '/lang', [$exportNotificationFile], Translations::BACKEND, ['es']);
+        return $created;
 
-		return $created;
+    }
 
-	}
+    public function remove(string $ModelName)
+    {
 
-	public function remove(string $ModelName)
-	{
+        $this->init($ModelName)
+            ->setExportNotificationPath();
 
-		$this->init($ModelName)
-			->setExportNotificationPath();
+        $path = $this->exportNotificationPath.'/'.$this->PascalCaseModelName;
 
-		$path = $this->exportNotificationPath . '/' . $this->PascalCaseModelName;
+        return (file_exists($path)) ? $this->dropDir($path) : false;
 
-		return (file_exists($path)) ? $this->dropDir($path) : false;
-
-	}
-
+    }
 }

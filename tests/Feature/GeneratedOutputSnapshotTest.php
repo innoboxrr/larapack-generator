@@ -30,21 +30,21 @@ final class GeneratedOutputSnapshotTest extends TestCase
      */
     public static function scenarios(): array
     {
-        $fixtures = dirname(__DIR__) . '/Fixtures';
+        $fixtures = dirname(__DIR__).'/Fixtures';
 
         return [
             'paquete importado con vue y react' => ['library', 'larapack:import', [
-                'jsonPath' => $fixtures . '/laraimport.json',
+                'jsonPath' => $fixtures.'/laraimport.json',
                 '--vue' => true,
                 '--react' => true,
             ]],
             'paquete con relaciones' => ['library', 'larapack:import', [
-                'jsonPath' => $fixtures . '/laraimport-relations.json',
+                'jsonPath' => $fixtures.'/laraimport-relations.json',
                 '--vue' => true,
                 '--react' => true,
             ]],
             'aplicacion importada' => ['application', 'larapack:import', [
-                'jsonPath' => $fixtures . '/laraimport.json',
+                'jsonPath' => $fixtures.'/laraimport.json',
             ]],
             'modelo suelto sin laraimport' => ['library', 'larapack:full-model', [
                 'name' => 'Product',
@@ -67,7 +67,7 @@ final class GeneratedOutputSnapshotTest extends TestCase
         $this->assertSame(
             Command::SUCCESS,
             $this->runCommand($command, $arguments),
-            "{$command} terminó con error:\n" . $this->lastOutput
+            "{$command} terminó con error:\n".$this->lastOutput
         );
 
         $actual = $this->hashes();
@@ -78,7 +78,7 @@ final class GeneratedOutputSnapshotTest extends TestCase
                 mkdir(dirname($snapshot), 0777, true);
             }
 
-            file_put_contents($snapshot, json_encode($actual, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n");
+            file_put_contents($snapshot, json_encode($actual, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)."\n");
 
             $this->markTestSkipped("Foto reescrita: {$snapshot}");
         }
@@ -159,6 +159,6 @@ final class GeneratedOutputSnapshotTest extends TestCase
     {
         $slug = trim((string) preg_replace('/[^a-z0-9]+/', '-', strtolower((string) $scenario)), '-');
 
-        return dirname(__DIR__) . "/Fixtures/snapshots/{$slug}.json";
+        return dirname(__DIR__)."/Fixtures/snapshots/{$slug}.json";
     }
 }

@@ -56,7 +56,7 @@ final class GeneratedUiBuildsTest extends TestCase
         }
 
         self::$project = FakeProject::empty();
-        $laraimport = self::$project->path . '/laraimport.json';
+        $laraimport = self::$project->path.'/laraimport.json';
 
         try {
             [$code, $output] = Larapack::run('larapack:new', ['name' => 'acme/shop', 'directory' => self::$project->path]);
@@ -65,7 +65,7 @@ final class GeneratedUiBuildsTest extends TestCase
                 throw new RuntimeException("larapack:new terminó con {$code}:\n{$output}");
             }
 
-            copy(__DIR__ . '/Fixtures/laraimport.json', $laraimport);
+            copy(__DIR__.'/Fixtures/laraimport.json', $laraimport);
             ProjectRoot::set(self::$project->path);
 
             [$code, $output] = Larapack::run('larapack:import', ['jsonPath' => $laraimport, '--vue' => true, '--react' => true]);
@@ -114,11 +114,11 @@ final class GeneratedUiBuildsTest extends TestCase
         // Dentro del directorio de la cadena: Node resuelve vite y los plugins
         // subiendo por los padres, sin enlaces simbólicos, que en Windows piden
         // permisos.
-        $module = $toolchain . '/modules/' . $ui . '-' . bin2hex(random_bytes(4));
-        self::copyTree(self::$project->path . "/resources/{$ui}", $module);
+        $module = $toolchain.'/modules/'.$ui.'-'.bin2hex(random_bytes(4));
+        self::copyTree(self::$project->path."/resources/{$ui}", $module);
 
         $process = new Process(
-            ['node', $toolchain . '/node_modules/vite/bin/vite.js', 'build', '--logLevel', 'warn'],
+            ['node', $toolchain.'/node_modules/vite/bin/vite.js', 'build', '--logLevel', 'warn'],
             $module,
             ['NO_COLOR' => '1'],
             null,
@@ -127,11 +127,11 @@ final class GeneratedUiBuildsTest extends TestCase
 
         $process->run();
 
-        $output = $process->getOutput() . $process->getErrorOutput();
+        $output = $process->getOutput().$process->getErrorOutput();
 
         try {
             $this->assertTrue($process->isSuccessful(), "El módulo {$ui} generado no compila:\n{$output}");
-            $this->assertFileExists($module . '/dist/index.js', "vite terminó sin producir dist/index.js:\n{$output}");
+            $this->assertFileExists($module.'/dist/index.js', "vite terminó sin producir dist/index.js:\n{$output}");
         } finally {
             self::removeTree($module);
         }
@@ -150,9 +150,9 @@ final class GeneratedUiBuildsTest extends TestCase
      */
     private static function toolchain(): string
     {
-        $directory = sys_get_temp_dir() . '/larapack-ui-toolchain-' . substr(sha1((string) json_encode(self::TOOLCHAIN)), 0, 12);
+        $directory = sys_get_temp_dir().'/larapack-ui-toolchain-'.substr(sha1((string) json_encode(self::TOOLCHAIN)), 0, 12);
 
-        if (is_file($directory . '/node_modules/vite/bin/vite.js')) {
+        if (is_file($directory.'/node_modules/vite/bin/vite.js')) {
             return $directory;
         }
 
@@ -160,7 +160,7 @@ final class GeneratedUiBuildsTest extends TestCase
             throw new RuntimeException("No se pudo crear {$directory}");
         }
 
-        file_put_contents($directory . '/package.json', json_encode([
+        file_put_contents($directory.'/package.json', json_encode([
             'name' => 'larapack-ui-toolchain',
             'private' => true,
             'type' => 'module',
@@ -171,7 +171,7 @@ final class GeneratedUiBuildsTest extends TestCase
         $install->run();
 
         if (! $install->isSuccessful()) {
-            throw new RuntimeException("npm install falló en {$directory}:\n" . $install->getOutput() . $install->getErrorOutput());
+            throw new RuntimeException("npm install falló en {$directory}:\n".$install->getOutput().$install->getErrorOutput());
         }
 
         return $directory;
@@ -187,7 +187,7 @@ final class GeneratedUiBuildsTest extends TestCase
         mkdir($to, 0777, true);
 
         foreach ($iterator as $item) {
-            $target = $to . '/' . substr(str_replace('\\', '/', $item->getPathname()), strlen(str_replace('\\', '/', $from)) + 1);
+            $target = $to.'/'.substr(str_replace('\\', '/', $item->getPathname()), strlen(str_replace('\\', '/', $from)) + 1);
 
             $item->isDir() ? @mkdir($target, 0777, true) : copy($item->getPathname(), $target);
         }
@@ -204,7 +204,7 @@ final class GeneratedUiBuildsTest extends TestCase
                 continue;
             }
 
-            $path = $directory . '/' . $entry;
+            $path = $directory.'/'.$entry;
 
             is_dir($path) ? self::removeTree($path) : @unlink($path);
         }

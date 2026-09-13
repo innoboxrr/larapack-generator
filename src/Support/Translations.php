@@ -38,7 +38,7 @@ final class Translations
         }
 
         foreach ($languages as $language) {
-            self::syncLanguage($directory . '/' . $language . '.json', $language, $keys, $function);
+            self::syncLanguage($directory.'/'.$language.'.json', $language, $keys, $function);
         }
     }
 
@@ -86,8 +86,8 @@ final class Translations
      */
     public static function keysIn(array $files, string $function): array
     {
-        $pattern = '/(?<![\w$.>:])' . preg_quote($function, '/')
-            . '\(\s*([\'"])((?:(?!\1)[^\\\\]|\\\\.)*)\1\s*[,)]/s';
+        $pattern = '/(?<![\w$.>:])'.preg_quote($function, '/')
+            .'\(\s*([\'"])((?:(?!\1)[^\\\\]|\\\\.)*)\1\s*[,)]/s';
 
         $keys = [];
 
@@ -165,7 +165,7 @@ final class Translations
 
         file_put_contents(
             $path,
-            json_encode((object) $merged, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . "\n"
+            json_encode((object) $merged, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)."\n"
         );
 
         Generation::record($exists ? 'overwrite' : 'create', $path, $stub);

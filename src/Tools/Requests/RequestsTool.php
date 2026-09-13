@@ -6,7 +6,6 @@ use Innoboxrr\LarapackGenerator\Tools\Tool;
 
 class RequestsTool extends Tool
 {
-
     protected $requestPath;
 
     protected $requestsTemplatePath;
@@ -30,29 +29,34 @@ class RequestsTool extends Tool
 
     private function setRequestPath()
     {
-        $this->requestPath = get_path(app_dir_name() . '/Http/Requests');
+        $this->requestPath = get_path(app_dir_name().'/Http/Requests');
+
         return $this;
     }
 
     private function setRequestsTemplatePath()
     {
         $this->requestsTemplatePath = stubs_path('Requests');
+
         return $this;
     }
 
     protected function setMainRequestsPath()
     {
-        $path = $this->requestPath . '/' . $this->PascalCaseModelName;
-        if (!file_exists($path)) mkdir($path, 0777, true);
+        $path = $this->requestPath.'/'.$this->PascalCaseModelName;
+        if (! file_exists($path)) {
+            mkdir($path, 0777, true);
+        }
         $this->mainRequestsPath = $path;
+
         return $this;
     }
 
     protected function createRequest($requestName)
     {
-        $requestFile = $this->mainRequestsPath . '/' . $requestName . '.php';
+        $requestFile = $this->mainRequestsPath.'/'.$requestName.'.php';
 
-        return $this->generate($this->requestsTemplatePath . '/' . $requestName . '.txt', $requestFile);
+        return $this->generate($this->requestsTemplatePath.'/'.$requestName.'.txt', $requestFile);
     }
 
     public function create(string $ModelName)
@@ -76,7 +80,7 @@ class RequestsTool extends Tool
         $this->init($ModelName)
             ->setRequestPath();
 
-        $path = $this->requestPath . '/' . $this->PascalCaseModelName;
+        $path = $this->requestPath.'/'.$this->PascalCaseModelName;
 
         return (file_exists($path)) ? $this->dropDir($path) : false;
     }
@@ -96,15 +100,21 @@ class RequestsTool extends Tool
      */
     protected function processFileWithJson($filePath)
     {
-        if (!in_array(basename($filePath), ['CreateRequest.php', 'UpdateRequest.php'])) return;
+        if (! in_array(basename($filePath), ['CreateRequest.php', 'UpdateRequest.php'])) {
+            return;
+        }
 
         $data = self::getJsonContent();
         $model = collect($data['models'])->where('name', $this->ModelName)->first();
-        if (!$model) return;
+        if (! $model) {
+            return;
+        }
 
         $requestType = str_contains(basename($filePath), 'CreateRequest') ? 'Create' : 'Update';
         $requestData = collect($model['requests'] ?? [])->firstWhere('name', $requestType);
-        if (!$requestData) return;
+        if (! $requestData) {
+            return;
+        }
 
         $rules = isset($requestData['rules']) && is_array($requestData['rules']) ? $requestData['rules'] : [];
 
@@ -113,12 +123,12 @@ class RequestsTool extends Tool
         // El stub de Update trae la regla del identificador por defecto, para
         // que el archivo sea correcto aunque nadie lo importe. Si el JSON
         // declara esa misma clave, manda la del JSON y la del stub sobra.
-        $idKey = $this->snake_case_model_name . '_id';
+        $idKey = $this->snake_case_model_name.'_id';
 
         if (array_key_exists($idKey, $rules)) {
             // \R para no depender del fin de linea: los stubs estan en CRLF.
             $fileContent = preg_replace(
-                '/^[ \t]*' . preg_quote("'{$idKey}' => 'required|numeric',", '/') . '\R/m',
+                '/^[ \t]*'.preg_quote("'{$idKey}' => 'required|numeric',", '/').'\R/m',
                 '',
                 $fileContent
             );
@@ -141,7 +151,7 @@ class RequestsTool extends Tool
         $lines = [];
 
         foreach ($rules as $field => $rule) {
-            $lines[] = $this->export($field) . ' => ' . $this->export($rule) . ',';
+            $lines[] = $this->export($field).' => '.$this->export($rule).',';
         }
 
         // Sin reglas se deja el comentario del stub: el array queda vacio
@@ -158,10 +168,9 @@ class RequestsTool extends Tool
     private function export($value): string
     {
         if (is_array($value)) {
-            return '[' . implode(', ', array_map(fn ($item): string => $this->export($item), $value)) . ']';
+            return '['.implode(', ', array_map(fn ($item): string => $this->export($item), $value)).']';
         }
 
         return var_export((string) $value, true);
     }
-
 }

@@ -17,9 +17,9 @@ final class JsonImporterTest extends TestCase
         $this->assertSame(
             Command::SUCCESS,
             $this->runCommand('larapack:import', [
-                'jsonPath' => dirname(__DIR__) . '/Fixtures/laraimport.json',
+                'jsonPath' => dirname(__DIR__).'/Fixtures/laraimport.json',
             ]),
-            "larapack:import terminó con error:\n" . $this->lastOutput
+            "larapack:import terminó con error:\n".$this->lastOutput
         );
     }
 

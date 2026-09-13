@@ -23,9 +23,9 @@ final class ResolvesRelationNamespacesTest extends TestCase
         $this->assertSame(
             Command::SUCCESS,
             $this->runCommand('larapack:import', [
-                'jsonPath' => dirname(__DIR__) . '/Fixtures/laraimport-relations.json',
+                'jsonPath' => dirname(__DIR__).'/Fixtures/laraimport-relations.json',
             ]),
-            "larapack:import terminó con error:\n" . $this->lastOutput
+            "larapack:import terminó con error:\n".$this->lastOutput
         );
     }
 

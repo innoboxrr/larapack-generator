@@ -6,62 +6,60 @@ use Innoboxrr\LarapackGenerator\Tools\Tool;
 
 class ExcelTool extends Tool
 {
+    protected $excelPath;
 
-	protected $excelPath;
+    protected $excelTemplatePath;
 
-	protected $excelTemplatePath;
+    private function setExcelPath()
+    {
 
-	private function setExcelPath()
-	{
+        $this->excelPath = get_path('resources/views/excel');
 
-		$this->excelPath = get_path('resources/views/excel');
+        return $this;
 
-		return $this;
+    }
 
-	}
+    private function setExcelTemplatePath()
+    {
 
-	private function setExcelTemplatePath()
-	{
+        $this->excelTemplatePath = stubs_path('Excel');
 
-		$this->excelTemplatePath = stubs_path('Excel');
+        return $this;
 
-		return $this;
+    }
 
-	}
+    private function setUp(string $ModelName)
+    {
 
-	private function setUp(string $ModelName)
-	{
+        $this->init($ModelName)
+            ->setExcelPath()
+            ->setExcelTemplatePath();
 
-		$this->init($ModelName)
-			->setExcelPath()
-			->setExcelTemplatePath();
+    }
 
-	}
+    public function create(string $ModelName)
+    {
 
-	public function create(string $ModelName)
-	{
+        if (! $this->init($ModelName)->declares('export')) {
+            return false;
+        }
 
-		if (! $this->init($ModelName)->declares('export')) {
-			return false;
-		}
+        $this->setUp($ModelName);
 
-		$this->setUp($ModelName);
+        $excelFile = $this->excelPath.'/'.$this->snake_case_model_name.'.blade.php';
 
-		$excelFile = $this->excelPath . '/' . $this->snake_case_model_name . '.blade.php';
+        return $this->generate($this->excelTemplatePath.'/ExcelTemplate.txt', $excelFile);
 
-		return $this->generate($this->excelTemplatePath . '/ExcelTemplate.txt', $excelFile);
+    }
 
-	}
+    public function remove(string $ModelName)
+    {
 
-	public function remove(string $ModelName)
-	{
+        $this->setUp($ModelName);
 
-		$this->setUp($ModelName);
+        $path = $this->excelPath.'/'.$this->snake_case_model_name.'.blade.php';
 
-		$path = $this->excelPath . '/' . $this->snake_case_model_name . '.blade.php';
+        return (file_exists($path)) ? $this->dropFile($path) : false;
 
-		return (file_exists($path)) ? $this->dropFile($path) : false;
-		
-	}
-
+    }
 }

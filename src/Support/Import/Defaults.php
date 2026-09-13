@@ -27,10 +27,8 @@ final class Defaults
     }
 
     /**
-     * @param  mixed  $value
      * @param  array<string, mixed>  $schema
      * @param  array<string, mixed>  $root
-     * @return mixed
      */
     private static function fill(mixed $value, array $schema, array $root): mixed
     {

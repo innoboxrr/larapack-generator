@@ -42,6 +42,7 @@ final class ProjectRoot
      * el callback lance.
      *
      * @template T
+     *
      * @param  callable(): T  $callback
      * @return T
      */
@@ -67,16 +68,16 @@ final class ProjectRoot
     {
         $path = dirname(__DIR__, 2);
 
-        while (! file_exists($path . '/vendor/autoload.php')) {
+        while (! file_exists($path.'/vendor/autoload.php')) {
             $parent = dirname($path);
 
             // dirname() de una raíz ('D:/' o '/') se devuelve a sí mismo: sin
             // este corte el bucle nunca termina si no hay autoloader arriba.
             if ($parent === $path) {
                 throw new RuntimeException(
-                    'No se encontró vendor/autoload.php partiendo de ' . dirname(__DIR__, 2) . '. '
-                    . 'Ejecuta el generador desde un proyecto con dependencias instaladas, '
-                    . 'o fija la raíz con ProjectRoot::set().'
+                    'No se encontró vendor/autoload.php partiendo de '.dirname(__DIR__, 2).'. '
+                    .'Ejecuta el generador desde un proyecto con dependencias instaladas, '
+                    .'o fija la raíz con ProjectRoot::set().'
                 );
             }
 

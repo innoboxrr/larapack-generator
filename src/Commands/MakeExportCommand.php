@@ -3,25 +3,22 @@
 namespace Innoboxrr\LarapackGenerator\Commands;
 
 use Innoboxrr\LarapackGenerator\Commands\Concerns\ReportsGeneration;
+use Innoboxrr\LarapackGenerator\Tools\Export\ExportTool;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
-use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
-use Innoboxrr\LarapackGenerator\Tools\Export\ExportTool;
 
 class MakeExportCommand extends Command
 {
     use ReportsGeneration;
 
-    
     protected function configure(): void
     {
 
         $this->setName('larapack:export')
             ->setDescription('Create a new export class')
             ->addArgument('name', InputArgument::REQUIRED, 'The name of the model class');
-
 
         $this->addGenerationOptions();
     }
@@ -30,18 +27,15 @@ class MakeExportCommand extends Command
     {
         $this->applyGenerationOptions($input);
 
-
         $modelName = $input->getArgument('name');
 
-        $maker = new ExportTool();
+        $maker = new ExportTool;
 
         $maker->create($modelName);
 
         $this->reportGeneration($input, $output);
 
-
         return Command::SUCCESS;
 
     }
-
 }

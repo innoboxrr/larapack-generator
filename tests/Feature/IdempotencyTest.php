@@ -49,7 +49,7 @@ final class IdempotencyTest extends TestCase
     {
         $this->generate();
 
-        file_put_contents($this->project->path . '/' . self::MODEL, '<?php // mio');
+        file_put_contents($this->project->path.'/'.self::MODEL, '<?php // mio');
 
         $this->generate();
 
@@ -81,7 +81,7 @@ final class IdempotencyTest extends TestCase
 
         $mio = "<?php\n// logica de negocio que escribi yo\n";
 
-        file_put_contents($this->project->path . '/' . self::MODEL, $mio);
+        file_put_contents($this->project->path.'/'.self::MODEL, $mio);
 
         $this->generate(['--force' => true]);
 
@@ -106,7 +106,7 @@ final class IdempotencyTest extends TestCase
 
         $report = json_decode($this->lastOutput, true);
 
-        $this->assertIsArray($report, "La salida no era JSON:\n" . $this->lastOutput);
+        $this->assertIsArray($report, "La salida no era JSON:\n".$this->lastOutput);
         $this->assertFalse($report['dryRun']);
         $this->assertSame(1, $report['summary']['create']);
 
@@ -123,7 +123,7 @@ final class IdempotencyTest extends TestCase
 
         $manifest = new Manifest($this->project->path);
 
-        $generado = $this->project->path . '/' . self::MODEL;
+        $generado = $this->project->path.'/'.self::MODEL;
 
         $this->assertFalse($manifest->wasCustomised($generado));
 
@@ -133,7 +133,7 @@ final class IdempotencyTest extends TestCase
 
         // Un archivo que el generador nunca escribio es del proyecto: no se
         // toca aunque venga --force.
-        $ajeno = $this->project->path . '/src/Models/Otro.php';
+        $ajeno = $this->project->path.'/src/Models/Otro.php';
 
         file_put_contents($ajeno, '<?php');
 

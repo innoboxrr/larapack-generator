@@ -63,7 +63,7 @@ final class TargetsProjectTest extends TestCase
     public function test_una_raiz_inexistente_falla_en_vez_de_generar_en_otro_sitio(): void
     {
         try {
-            $this->runCommand('larapack:model', ['name' => 'Post', '--root' => $this->otro->path . '/no-existe']);
+            $this->runCommand('larapack:model', ['name' => 'Post', '--root' => $this->otro->path.'/no-existe']);
 
             $this->fail('Se esperaba que una raíz inexistente abortara el comando.');
         } catch (RuntimeException $exception) {

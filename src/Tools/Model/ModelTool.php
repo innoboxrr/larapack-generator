@@ -6,152 +6,153 @@ use Innoboxrr\LarapackGenerator\Tools\Tool;
 
 class ModelTool extends Tool
 {
+    protected $modelPath;
 
-	protected $modelPath;
+    protected $modelTemplatePath;
 
-	protected $modelTemplatePath;
+    private function setModelPath()
+    {
+        $this->modelPath = get_path(app_dir_name().'/Models');
 
-	private function setModelPath()
-	{
-		$this->modelPath = get_path(app_dir_name() . '/Models');
-		return $this;
-	}
+        return $this;
+    }
 
-	private function setModelTemplatePath()
-	{
-		$this->modelTemplatePath = stubs_path('Model');
-		return $this;
-	}
+    private function setModelTemplatePath()
+    {
+        $this->modelTemplatePath = stubs_path('Model');
 
-	public function create(string $ModelName)
-	{
-		$this->init($ModelName)
-			->setModelPath()
-			->setModelTemplatePath();
+        return $this;
+    }
 
-		$modelFile = $this->modelPath . '/' . $this->PascalCaseModelName . '.php';
-		return $this->generate($this->modelTemplatePath . '/ModelTemplate.txt', $modelFile);
-	}
+    public function create(string $ModelName)
+    {
+        $this->init($ModelName)
+            ->setModelPath()
+            ->setModelTemplatePath();
 
-	public function remove(string $ModelName)
-	{
-		$this->init($ModelName)
-			->setModelPath();
-		$path = $this->modelPath . '/' . $this->PascalCaseModelName . '.php';
-		return (file_exists($path)) ? $this->dropFile($path) : false;
-	}
+        $modelFile = $this->modelPath.'/'.$this->PascalCaseModelName.'.php';
 
-	protected function processFileWithJson($modelFile)
-	{
-		// Obtener el contenido JSON
-		$data = self::getJsonContent();
+        return $this->generate($this->modelTemplatePath.'/ModelTemplate.txt', $modelFile);
+    }
 
-		// Recuperar la información del modelo
-		$model = collect($data['models'])->where('name', $this->ModelName)->first();
+    public function remove(string $ModelName)
+    {
+        $this->init($ModelName)
+            ->setModelPath();
+        $path = $this->modelPath.'/'.$this->PascalCaseModelName.'.php';
 
-		// Recuperar el contenido del archivo del modelo
-		$fileContent = file_get_contents($modelFile);
+        return (file_exists($path)) ? $this->dropFile($path) : false;
+    }
 
-		// Obtener los valores para los diferentes secciones de la plantilla
-		$fillable = $this->generateListFromProps($model['props'], 'fillable');
-		$hidden = $this->generateListFromProps($model['props'], 'secret');
-		$creatable = $this->generateListFromProps($model['props'], 'creatable');
-		$updatable = $this->generateListFromProps($model['props'], 'updatable');
-		$casts = $this->generateCasts($model['props']);
-		$editableMetas = $this->generateEditableMetas($model['editable_metas']);
-		$exportCols = $this->generateExportCols($model['props']);
-		$loadableRelations = $this->generateLoadableRelations($model['load_relations']);
-		$loadableCounts = $this->generateLoadableCounts($model['load_counts']);
+    protected function processFileWithJson($modelFile)
+    {
+        // Obtener el contenido JSON
+        $data = self::getJsonContent();
 
-		// Reemplazar los marcadores en el archivo del modelo
-		$updatedFileContent = str_replace('//FILLABLE//', $fillable, $fileContent);
-		$updatedFileContent = str_replace('//HIDDEN//', $hidden, $updatedFileContent);
-		$updatedFileContent = str_replace('//CREATABLE//', $creatable, $updatedFileContent);
-		$updatedFileContent = str_replace('//UPDATABLE//', $updatable, $updatedFileContent);
-		$updatedFileContent = str_replace('//CASTS//', $casts, $updatedFileContent);
-		$updatedFileContent = str_replace('//EDITABLEMETAS//', $editableMetas, $updatedFileContent);
+        // Recuperar la información del modelo
+        $model = collect($data['models'])->where('name', $this->ModelName)->first();
 
-		// Sólo si hay alguna: sin ellas, la línea sale como siempre.
-		if (! empty($model['protected_metas'])) {
-			$updatedFileContent = str_replace(
-				'protected $protected_metas = [];',
-				"protected \$protected_metas = [\n        " . $this->generateEditableMetas($model['protected_metas']) . "\n    ];",
-				$updatedFileContent
-			);
-		}
-		$updatedFileContent = str_replace('//EXPORTCOLS//', $exportCols, $updatedFileContent);
-		$updatedFileContent = str_replace('//LOADABLERELATIONS//', $loadableRelations, $updatedFileContent);
-		$updatedFileContent = str_replace('//LOADABLECOUNTS//', $loadableCounts, $updatedFileContent);
+        // Recuperar el contenido del archivo del modelo
+        $fileContent = file_get_contents($modelFile);
 
-		// Guardar el archivo de nuevo con las modificaciones
-		file_put_contents($modelFile, $updatedFileContent);
-	}
+        // Obtener los valores para los diferentes secciones de la plantilla
+        $fillable = $this->generateListFromProps($model['props'], 'fillable');
+        $hidden = $this->generateListFromProps($model['props'], 'secret');
+        $creatable = $this->generateListFromProps($model['props'], 'creatable');
+        $updatable = $this->generateListFromProps($model['props'], 'updatable');
+        $casts = $this->generateCasts($model['props']);
+        $editableMetas = $this->generateEditableMetas($model['editable_metas']);
+        $exportCols = $this->generateExportCols($model['props']);
+        $loadableRelations = $this->generateLoadableRelations($model['load_relations']);
+        $loadableCounts = $this->generateLoadableCounts($model['load_counts']);
 
-	private function generateListFromProps(array $props, $field)
-	{
-		$list = [];
+        // Reemplazar los marcadores en el archivo del modelo
+        $updatedFileContent = str_replace('//FILLABLE//', $fillable, $fileContent);
+        $updatedFileContent = str_replace('//HIDDEN//', $hidden, $updatedFileContent);
+        $updatedFileContent = str_replace('//CREATABLE//', $creatable, $updatedFileContent);
+        $updatedFileContent = str_replace('//UPDATABLE//', $updatable, $updatedFileContent);
+        $updatedFileContent = str_replace('//CASTS//', $casts, $updatedFileContent);
+        $updatedFileContent = str_replace('//EDITABLEMETAS//', $editableMetas, $updatedFileContent);
 
-		foreach ($props as $prop) {
-			if ($prop[$field]) {
-				$list[] = "'{$prop['name']}'";
-			}
-		}
+        // Sólo si hay alguna: sin ellas, la línea sale como siempre.
+        if (! empty($model['protected_metas'])) {
+            $updatedFileContent = str_replace(
+                'protected $protected_metas = [];',
+                "protected \$protected_metas = [\n        ".$this->generateEditableMetas($model['protected_metas'])."\n    ];",
+                $updatedFileContent
+            );
+        }
+        $updatedFileContent = str_replace('//EXPORTCOLS//', $exportCols, $updatedFileContent);
+        $updatedFileContent = str_replace('//LOADABLERELATIONS//', $loadableRelations, $updatedFileContent);
+        $updatedFileContent = str_replace('//LOADABLECOUNTS//', $loadableCounts, $updatedFileContent);
 
-		return implode(', ', $list);
-	}
+        // Guardar el archivo de nuevo con las modificaciones
+        file_put_contents($modelFile, $updatedFileContent);
+    }
 
-	private function generateCasts(array $props)
-	{
-		$casts = [];
+    private function generateListFromProps(array $props, $field)
+    {
+        $list = [];
 
-		foreach ($props as $prop) {
-			if (!is_null($prop['cast'])) {
-				$casts[] = "'{$prop['name']}' => '{$prop['cast']}'";
-			}
-		}
+        foreach ($props as $prop) {
+            if ($prop[$field]) {
+                $list[] = "'{$prop['name']}'";
+            }
+        }
 
-		return implode(', ', $casts);
-	}
+        return implode(', ', $list);
+    }
 
-	private function generateEditableMetas(array $editableMetas)
-	{
-		if (empty($editableMetas)) {
-			return '';
-		}
+    private function generateCasts(array $props)
+    {
+        $casts = [];
 
-		return implode(', ', array_map(fn($meta) => "'{$meta}'", $editableMetas));
-	}
+        foreach ($props as $prop) {
+            if (! is_null($prop['cast'])) {
+                $casts[] = "'{$prop['name']}' => '{$prop['cast']}'";
+            }
+        }
 
-	private function generateExportCols(array $props)
-	{
-		$exportCols = [];
+        return implode(', ', $casts);
+    }
 
-		foreach ($props as $prop) {
-			if ($prop['exports_cols']) {
-				$exportCols[] = "'{$prop['name']}'";
-			}
-		}
+    private function generateEditableMetas(array $editableMetas)
+    {
+        if (empty($editableMetas)) {
+            return '';
+        }
 
-		return implode(', ', $exportCols);
-	}
+        return implode(', ', array_map(fn ($meta) => "'{$meta}'", $editableMetas));
+    }
 
-	private function generateLoadableRelations(array $loadRelations)
-	{
-		if (empty($loadRelations)) {
-			return '';
-		}
+    private function generateExportCols(array $props)
+    {
+        $exportCols = [];
 
-		return implode(', ', array_map(fn($relation) => "'{$relation['name']}'", $loadRelations));
-	}
+        foreach ($props as $prop) {
+            if ($prop['exports_cols']) {
+                $exportCols[] = "'{$prop['name']}'";
+            }
+        }
 
-	private function generateLoadableCounts(array $loadCounts)
-	{
-		if (empty($loadCounts)) {
-			return '';
-		}
+        return implode(', ', $exportCols);
+    }
 
-		return implode(', ', array_map(fn($count) => "'{$count}'", $loadCounts));
-	}
+    private function generateLoadableRelations(array $loadRelations)
+    {
+        if (empty($loadRelations)) {
+            return '';
+        }
 
+        return implode(', ', array_map(fn ($relation) => "'{$relation['name']}'", $loadRelations));
+    }
 
+    private function generateLoadableCounts(array $loadCounts)
+    {
+        if (empty($loadCounts)) {
+            return '';
+        }
+
+        return implode(', ', array_map(fn ($count) => "'{$count}'", $loadCounts));
+    }
 }

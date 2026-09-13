@@ -24,7 +24,7 @@ final class Skill
 
     public static function path(): string
     {
-        $path = realpath(__DIR__ . self::RELATIVE_PATH);
+        $path = realpath(__DIR__.self::RELATIVE_PATH);
 
         if ($path === false) {
             throw new RuntimeException('No se encontró skill/SKILL.md en el paquete.');
@@ -83,6 +83,6 @@ final class Skill
         $isAbsolute = str_starts_with($normalised, '/')
             || preg_match('/^[A-Za-z]:\//', $normalised) === 1;
 
-        return $isAbsolute ? $normalised : root_path() . '/' . ltrim($normalised, '/');
+        return $isAbsolute ? $normalised : root_path().'/'.ltrim($normalised, '/');
     }
 }

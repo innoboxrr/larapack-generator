@@ -39,7 +39,7 @@ class ValidateCommand extends Command
     {
         $this->applyRootOption($input);
 
-        $path = $input->getArgument('jsonPath') ?? root_path() . '/laraimport.json';
+        $path = $input->getArgument('jsonPath') ?? root_path().'/laraimport.json';
 
         ['document' => $document, 'errors' => $findings] = ImportDocument::fromFile($path);
 

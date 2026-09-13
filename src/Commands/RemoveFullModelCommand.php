@@ -5,13 +5,12 @@ namespace Innoboxrr\LarapackGenerator\Commands;
 use Innoboxrr\LarapackGenerator\Commands\Concerns\TargetsProject;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
-use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Input\InputInterface;
+use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 
 class RemoveFullModelCommand extends Command
 {
-
     use TargetsProject;
 
     protected $commands = [
@@ -32,7 +31,7 @@ class RemoveFullModelCommand extends Command
         'Requests',
         'Resource',
         'Route',
-        'Test'
+        'Test',
     ];
 
     protected function configure(): void
@@ -66,13 +65,13 @@ class RemoveFullModelCommand extends Command
         // Se iteraba $this->commands en vez de $commands, asi que --vue nunca
         // llegaba a borrar el modulo generado.
         foreach ($commands as $command) {
-            $className = '\Innoboxrr\LarapackGenerator\Tools\\' . $command . '\\' . $command . 'Tool';
+            $className = '\Innoboxrr\LarapackGenerator\Tools\\'.$command.'\\'.$command.'Tool';
             if (class_exists($className)) {
                 $class = new \ReflectionClass($className);
                 ($class->newInstance())->remove($modelName);
             }
         }
+
         return Command::SUCCESS;
     }
-
 }

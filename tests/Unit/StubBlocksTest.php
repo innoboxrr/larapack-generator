@@ -112,7 +112,7 @@ final class StubBlocksTest extends TestCase
         $problems = [];
 
         $iterator = new \RecursiveIteratorIterator(
-            new \RecursiveDirectoryIterator(dirname(__DIR__, 2) . '/src/Stubs', \FilesystemIterator::SKIP_DOTS)
+            new \RecursiveDirectoryIterator(dirname(__DIR__, 2).'/src/Stubs', \FilesystemIterator::SKIP_DOTS)
         );
 
         foreach ($iterator as $file) {

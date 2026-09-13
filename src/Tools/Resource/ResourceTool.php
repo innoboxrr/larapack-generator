@@ -7,57 +7,55 @@ use Innoboxrr\LarapackGenerator\Tools\Tool;
 
 class ResourceTool extends Tool
 {
+    protected $resourcePath;
 
-	protected $resourcePath;
+    protected $resourceTemplatePath;
 
-	protected $resourceTemplatePath;
+    private function setResourcePath()
+    {
 
-	private function setResourcePath()
-	{
+        $this->resourcePath = get_path(app_dir_name().'/Http/Resources/Models');
 
-		$this->resourcePath = get_path(app_dir_name() . '/Http/Resources/Models');
+        return $this;
 
-		return $this;
+    }
 
-	}
+    private function setResourceTemplatePath()
+    {
 
-	private function setResourceTemplatePath()
-	{
+        $this->resourceTemplatePath = stubs_path('Resource');
 
-		$this->resourceTemplatePath = stubs_path('Resource');
+        return $this;
 
-		return $this;
+    }
 
-	}
+    public function create(string $ModelName)
+    {
 
-	public function create(string $ModelName)
-	{
+        $this->init($ModelName)
+            ->setResourcePath()
+            ->setResourceTemplatePath();
 
-		$this->init($ModelName)
-			->setResourcePath()
-			->setResourceTemplatePath();
+        $resourceFile = $this->resourcePath.'/'.$this->PascalCaseModelName.'Resource.php';
 
-		$resourceFile = $this->resourcePath . '/' . $this->PascalCaseModelName . 'Resource.php';
+        $created = $this->generate($this->resourceTemplatePath.'/ResourceTemplate.txt', $resourceFile);
 
-		$created = $this->generate($this->resourceTemplatePath . '/ResourceTemplate.txt', $resourceFile);
+        // Los nombres de las acciones que la tabla enseña en cada fila.
+        Translations::sync(root_path().'/lang', [$resourceFile], Translations::BACKEND, ['es']);
 
-		// Los nombres de las acciones que la tabla enseña en cada fila.
-		Translations::sync(root_path() . '/lang', [$resourceFile], Translations::BACKEND, ['es']);
+        return $created;
 
-		return $created;
+    }
 
-	}
+    public function remove(string $ModelName)
+    {
 
-	public function remove(string $ModelName)
-	{
+        $this->init($ModelName)
+            ->setResourcePath();
 
-		$this->init($ModelName)
-			->setResourcePath();
+        $path = $this->resourcePath.'/'.$this->PascalCaseModelName.'Resource.php';
 
-		$path = $this->resourcePath . '/' . $this->PascalCaseModelName . 'Resource.php';
+        return (file_exists($path)) ? $this->dropFile($path) : false;
 
-		return (file_exists($path)) ? $this->dropFile($path) : false;
-
-	}
-
+    }
 }

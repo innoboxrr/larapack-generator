@@ -6,41 +6,39 @@ use Innoboxrr\LarapackGenerator\Tools\Tool;
 
 class AppServiceProviderTool extends Tool
 {
+    protected $appServiceProviderPath;
 
-	protected $appServiceProviderPath;
+    protected $appServiceProviderTemplatePath;
 
-	protected $appServiceProviderTemplatePath;
+    private function setAppServiceProviderPath()
+    {
 
-	private function setAppServiceProviderPath()
-	{
+        $this->appServiceProviderPath = get_path(app_dir_name().'/Providers');
 
-		$this->appServiceProviderPath = get_path(app_dir_name() . '/Providers');
+        return $this;
 
-		return $this;
+    }
 
-	}
+    private function setAppServiceProviderTemplatePath()
+    {
 
-	private function setAppServiceProviderTemplatePath()
-	{
+        $this->appServiceProviderTemplatePath = stubs_path('Providers');
 
-		$this->appServiceProviderTemplatePath = stubs_path('Providers');
+        return $this;
 
-		return $this;
+    }
 
-	}
+    public function create()
+    {
 
-	public function create()
-	{
+        $this->init('')
+            ->setAppServiceProviderPath()
+            ->setAppServiceProviderTemplatePath()
+            ->addProvidersToComposerJson([$this->namespace.'Providers\AppServiceProvider']);
 
-		$this->init('')
-			->setAppServiceProviderPath()
-			->setAppServiceProviderTemplatePath()
-			->addProvidersToComposerJson([$this->namespace . 'Providers\AppServiceProvider']);
+        $appServiceProviderFile = $this->appServiceProviderPath.'/AppServiceProvider.php';
 
-		$appServiceProviderFile = $this->appServiceProviderPath . '/AppServiceProvider.php';
+        return $this->generate($this->appServiceProviderTemplatePath.'/AppServiceProviderTemplate.txt', $appServiceProviderFile);
 
-		return $this->generate($this->appServiceProviderTemplatePath . '/AppServiceProviderTemplate.txt', $appServiceProviderFile);
-
-	}
-
+    }
 }

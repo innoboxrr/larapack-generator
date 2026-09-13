@@ -21,13 +21,11 @@ final class Manifest
 
     private const RELATIVE_PATH = '.larapack/manifest.json';
 
-    public function __construct(private ?string $root = null)
-    {
-    }
+    public function __construct(private ?string $root = null) {}
 
     public function path(): string
     {
-        return ($this->root ?? root_path()) . '/' . self::RELATIVE_PATH;
+        return ($this->root ?? root_path()).'/'.self::RELATIVE_PATH;
     }
 
     private const EMPTY = [
@@ -243,12 +241,12 @@ final class Manifest
     {
         $manifest = $this->read();
 
-        return [$manifest["package"], ...array_values($manifest["models"])];
+        return [$manifest['package'], ...array_values($manifest['models'])];
     }
 
     public function absolute(string $relative): string
     {
-        return ($this->root ?? root_path()) . '/' . $relative;
+        return ($this->root ?? root_path()).'/'.$relative;
     }
 
     public function hash(string $file): string
@@ -263,7 +261,7 @@ final class Manifest
         $root = str_replace('\\', '/', $this->root ?? root_path());
         $file = str_replace('\\', '/', $file);
 
-        return str_starts_with($file, $root . '/') ? substr($file, strlen($root) + 1) : $file;
+        return str_starts_with($file, $root.'/') ? substr($file, strlen($root) + 1) : $file;
     }
 
     /**
@@ -301,7 +299,7 @@ final class Manifest
 
         file_put_contents(
             $this->path(),
-            json_encode($manifest, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n"
+            json_encode($manifest, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)."\n"
         );
     }
 }

@@ -6,41 +6,39 @@ use Innoboxrr\LarapackGenerator\Tools\Tool;
 
 class EventServiceProviderTool extends Tool
 {
+    protected $eventServiceProviderPath;
 
-	protected $eventServiceProviderPath;
+    protected $eventServiceProviderTemplatePath;
 
-	protected $eventServiceProviderTemplatePath;
+    private function setEventServiceProviderPath()
+    {
 
-	private function setEventServiceProviderPath()
-	{
+        $this->eventServiceProviderPath = get_path(app_dir_name().'/Providers');
 
-		$this->eventServiceProviderPath = get_path(app_dir_name() . '/Providers');
+        return $this;
 
-		return $this;
+    }
 
-	}
+    private function setEventServiceProviderTemplatePath()
+    {
 
-	private function setEventServiceProviderTemplatePath()
-	{
+        $this->eventServiceProviderTemplatePath = stubs_path('Providers');
 
-		$this->eventServiceProviderTemplatePath = stubs_path('Providers');
+        return $this;
 
-		return $this;
+    }
 
-	}
+    public function create()
+    {
 
-	public function create()
-	{
+        $this->init('')
+            ->setEventServiceProviderPath()
+            ->setEventServiceProviderTemplatePath()
+            ->addProvidersToComposerJson([$this->namespace.'Providers\EventServiceProvider']);
 
-		$this->init('')
-			->setEventServiceProviderPath()
-			->setEventServiceProviderTemplatePath()
-			->addProvidersToComposerJson([$this->namespace . 'Providers\EventServiceProvider']);
+        $eventServiceProviderFile = $this->eventServiceProviderPath.'/EventServiceProvider.php';
 
-		$eventServiceProviderFile = $this->eventServiceProviderPath . '/EventServiceProvider.php';
+        return $this->generate($this->eventServiceProviderTemplatePath.'/EventServiceProviderTemplate.txt', $eventServiceProviderFile);
 
-		return $this->generate($this->eventServiceProviderTemplatePath . '/EventServiceProviderTemplate.txt', $eventServiceProviderFile);
-
-	}
-
+    }
 }

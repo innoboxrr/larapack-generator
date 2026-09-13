@@ -26,7 +26,7 @@ class MakeReactViewCommand extends Command
     {
         $this->applyGenerationOptions($input);
 
-        (new ReactViewTool())->create($input->getArgument('name'));
+        (new ReactViewTool)->create($input->getArgument('name'));
 
         $this->reportGeneration($input, $output);
 

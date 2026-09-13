@@ -6,62 +6,60 @@ use Innoboxrr\LarapackGenerator\Tools\Tool;
 
 class ExportTool extends Tool
 {
+    protected $exportPath;
 
-	protected $exportPath;
+    protected $exportTemplatePath;
 
-	protected $exportTemplatePath;
+    private function setExportPath()
+    {
 
-	private function setExportPath()
-	{
+        $this->exportPath = get_path(app_dir_name().'/Exports');
 
-		$this->exportPath = get_path(app_dir_name() . '/Exports');
+        return $this;
 
-		return $this;
+    }
 
-	}
+    private function setExportTemplatePath()
+    {
 
-	private function setExportTemplatePath()
-	{
+        $this->exportTemplatePath = stubs_path('Export');
 
-		$this->exportTemplatePath = stubs_path('Export');
+        return $this;
 
-		return $this;
+    }
 
-	}
+    private function setUp(string $ModelName)
+    {
 
-	private function setUp(string $ModelName)
-	{
+        $this->init($ModelName)
+            ->setExportPath()
+            ->setExportTemplatePath();
 
-		$this->init($ModelName)
-			->setExportPath()
-			->setExportTemplatePath();
+    }
 
-	}
+    public function create(string $ModelName)
+    {
 
-	public function create(string $ModelName)
-	{
+        if (! $this->init($ModelName)->declares('export')) {
+            return false;
+        }
 
-		if (! $this->init($ModelName)->declares('export')) {
-			return false;
-		}
+        $this->setUp($ModelName);
 
-		$this->setUp($ModelName);
+        $exportFile = $this->exportPath.'/'.$this->PluralPascalCaseModelName.'Exports.php';
 
-		$exportFile = $this->exportPath . '/' . $this->PluralPascalCaseModelName . 'Exports.php';
+        return $this->generate($this->exportTemplatePath.'/ExportTemplate.txt', $exportFile);
 
-		return $this->generate($this->exportTemplatePath . '/ExportTemplate.txt', $exportFile);
+    }
 
-	}
+    public function remove(string $ModelName)
+    {
 
-	public function remove(string $ModelName)
-	{
+        $this->setUp($ModelName);
 
-		$this->setUp($ModelName);
+        $path = $this->exportPath.'/'.$this->PluralPascalCaseModelName.'Exports.php';
 
-		$path = $this->exportPath . '/' . $this->PluralPascalCaseModelName . 'Exports.php';
+        return (file_exists($path)) ? $this->dropFile($path) : false;
 
-		return (file_exists($path)) ? $this->dropFile($path) : false;
-		
-	}
-
+    }
 }

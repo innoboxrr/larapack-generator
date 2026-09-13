@@ -3,6 +3,7 @@
 namespace Innoboxrr\LarapackGenerator\Tests\EndToEnd;
 
 use Composer\Autoload\ClassLoader;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Notification;
@@ -10,6 +11,7 @@ use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Innoboxrr\LarapackGenerator\Support\Declaration;
+use Innoboxrr\LarapackGenerator\Support\Ecosystem;
 use Innoboxrr\LarapackGenerator\Support\Generation;
 use Innoboxrr\LarapackGenerator\Support\MigrationTimestamp;
 use Innoboxrr\LarapackGenerator\Support\ProjectRoot;
@@ -17,7 +19,9 @@ use Innoboxrr\LarapackGenerator\Tests\EndToEnd\Fixtures\User;
 use Innoboxrr\LarapackGenerator\Tests\Support\FakeProject;
 use Innoboxrr\LarapackGenerator\Tests\Support\Larapack;
 use Laravel\Sanctum\Sanctum;
+use Laravel\Sanctum\SanctumServiceProvider;
 use LogicException;
+use Maatwebsite\Excel\ExcelServiceProvider;
 use Orchestra\Testbench\TestCase;
 use RuntimeException;
 use Symfony\Component\Process\Process;
@@ -47,12 +51,12 @@ final class GeneratedPackageTest extends TestCase
         parent::setUpBeforeClass();
 
         self::$project = FakeProject::empty();
-        $laraimport = self::$project->path . '/laraimport.json';
+        $laraimport = self::$project->path.'/laraimport.json';
 
         // Quien sigue la guía tiene Pint en el vendor del paquete, y el
         // generador formatea con él. Aquí el paquete no tiene vendor: se usa
         // el de LaraPack.
-        putenv('LARAPACK_PINT=' . dirname(__DIR__, 2) . '/vendor/laravel/pint/builds/pint');
+        putenv('LARAPACK_PINT='.dirname(__DIR__, 2).'/vendor/laravel/pint/builds/pint');
 
         try {
             foreach ([
@@ -63,7 +67,7 @@ final class GeneratedPackageTest extends TestCase
                 // El laraimport se escribe una vez creado el paquete, como lo
                 // haría quien lo usa.
                 if ($command === 'larapack:validate') {
-                    copy(__DIR__ . '/Fixtures/laraimport.json', $laraimport);
+                    copy(__DIR__.'/Fixtures/laraimport.json', $laraimport);
                     ProjectRoot::set(self::$project->path);
                 }
 
@@ -86,7 +90,7 @@ final class GeneratedPackageTest extends TestCase
         $loader = array_values(ClassLoader::getRegisteredLoaders())[0];
 
         foreach (self::autoload() as $prefix => $directory) {
-            $loader->addPsr4($prefix, self::$project->path . '/' . $directory);
+            $loader->addPsr4($prefix, self::$project->path.'/'.$directory);
         }
     }
 
@@ -114,8 +118,8 @@ final class GeneratedPackageTest extends TestCase
     protected function getPackageProviders($app): array
     {
         return [
-            \Laravel\Sanctum\SanctumServiceProvider::class,
-            \Maatwebsite\Excel\ExcelServiceProvider::class,
+            SanctumServiceProvider::class,
+            ExcelServiceProvider::class,
             ...(self::composer()['extra']['laravel']['providers'] ?? []),
         ];
     }
@@ -161,7 +165,7 @@ final class GeneratedPackageTest extends TestCase
      */
     public function test_con_sus_modelos_generados_sigue_pasando_la_auditoria(): void
     {
-        $this->assertSame([], (new \Innoboxrr\LarapackGenerator\Support\Ecosystem())->audit(self::$project->path));
+        $this->assertSame([], (new Ecosystem)->audit(self::$project->path));
     }
 
     public function test_las_migraciones_crean_las_tablas_declaradas(): void
@@ -186,7 +190,7 @@ final class GeneratedPackageTest extends TestCase
     public function test_cada_ruta_que_llama_el_front_existe(): void
     {
         foreach (['vue', 'react'] as $ui) {
-            foreach (glob(self::$project->path . "/resources/{$ui}/src/models/*/index.js") as $contract) {
+            foreach (glob(self::$project->path."/resources/{$ui}/src/models/*/index.js") as $contract) {
                 $source = (string) file_get_contents($contract);
 
                 $this->assertMatchesRegularExpression("/API_ROUTE_PREFIX = '([^']+)'/", $source);
@@ -197,7 +201,7 @@ final class GeneratedPackageTest extends TestCase
 
                 foreach ($actions[1] as $action) {
                     $this->assertTrue(
-                        Route::has($prefix[1] . $action),
+                        Route::has($prefix[1].$action),
                         "El contrato {$ui} llama a {$prefix[1]}{$action}, que no existe."
                     );
                 }
@@ -394,7 +398,7 @@ final class GeneratedPackageTest extends TestCase
         Sanctum::actingAs($this->user(admin: true));
 
         foreach (['update', 'delete', 'restore', 'force.delete', 'bulk.update', 'bulk.delete'] as $action) {
-            $this->assertFalse(Route::has($this->prefix('audit-entry') . $action), "AuditEntry es inmutable y expone {$action}.");
+            $this->assertFalse(Route::has($this->prefix('audit-entry').$action), "AuditEntry es inmutable y expone {$action}.");
         }
 
         $id = $this->postJson($this->route('audit-entry', 'create'), ['message' => 'alta'])
@@ -459,7 +463,7 @@ final class GeneratedPackageTest extends TestCase
 
         $this->postJson($this->route('category', 'export'))->assertOk();
 
-        Notification::assertSentTo($admin, self::NS . 'Notifications\\Category\\ExportNotification');
+        Notification::assertSentTo($admin, self::NS.'Notifications\\Category\\ExportNotification');
     }
 
     // LA GUÍA
@@ -485,16 +489,16 @@ final class GeneratedPackageTest extends TestCase
         $process = new Process([
             PHP_BINARY,
             ...$this->inheritedExtensions(),
-            dirname(__DIR__, 2) . '/vendor/phpunit/phpunit/phpunit',
+            dirname(__DIR__, 2).'/vendor/phpunit/phpunit/phpunit',
             '--bootstrap', $bootstrap,
-            '--configuration', self::$project->path . (is_file(self::$project->path . '/phpunit.xml.dist') ? '/phpunit.xml.dist' : '/phpunit.xml'),
+            '--configuration', self::$project->path.(is_file(self::$project->path.'/phpunit.xml.dist') ? '/phpunit.xml.dist' : '/phpunit.xml'),
             '--do-not-cache-result',
             '--colors=never',
         ], self::$project->path, null, null, 300);
 
         $process->run();
 
-        $this->assertTrue($process->isSuccessful(), "Los tests generados fallan:\n" . $process->getOutput() . $process->getErrorOutput());
+        $this->assertTrue($process->isSuccessful(), "Los tests generados fallan:\n".$process->getOutput().$process->getErrorOutput());
     }
 
     // CALIDAD
@@ -507,20 +511,20 @@ final class GeneratedPackageTest extends TestCase
     {
         $paths = array_values(array_filter(
             ['src', 'database', 'routes', 'config', 'tests'],
-            fn (string $directory): bool => is_dir(self::$project->path . '/' . $directory)
+            fn (string $directory): bool => is_dir(self::$project->path.'/'.$directory)
         ));
 
         $process = new Process([
             PHP_BINARY,
-            dirname(__DIR__, 2) . '/vendor/laravel/pint/builds/pint',
+            dirname(__DIR__, 2).'/vendor/laravel/pint/builds/pint',
             '--test',
-            '--config', self::$project->path . '/pint.json',
+            '--config', self::$project->path.'/pint.json',
             ...$paths,
         ], self::$project->path, null, null, 300);
 
         $process->run();
 
-        $this->assertTrue($process->isSuccessful(), "Pint encuentra código sin formato en lo generado:\n" . $process->getOutput() . $process->getErrorOutput());
+        $this->assertTrue($process->isSuccessful(), "Pint encuentra código sin formato en lo generado:\n".$process->getOutput().$process->getErrorOutput());
     }
 
     /**
@@ -529,7 +533,7 @@ final class GeneratedPackageTest extends TestCase
      */
     public function test_lo_generado_pasa_el_analisis_de_su_ci(): void
     {
-        $dist = (string) file_get_contents(self::$project->path . '/phpstan.neon.dist');
+        $dist = (string) file_get_contents(self::$project->path.'/phpstan.neon.dist');
 
         $this->assertMatchesRegularExpression('/level:\s*(\d+)/', $dist);
         preg_match('/level:\s*(\d+)/', $dist, $level);
@@ -538,21 +542,21 @@ final class GeneratedPackageTest extends TestCase
         $root = str_replace('\\', '/', dirname(__DIR__, 2));
         $project = str_replace('\\', '/', self::$project->path);
 
-        $config = self::$project->path . '/phpstan.test.neon';
+        $config = self::$project->path.'/phpstan.test.neon';
 
         file_put_contents($config, implode("\n", [
             'includes:',
             "    - {$root}/vendor/larastan/larastan/extension.neon",
             'parameters:',
             "    level: {$level[1]}",
-            '    tmpDir: ' . $project . '/.phpstan',
+            '    tmpDir: '.$project.'/.phpstan',
             '    paths:',
             ...array_map(fn (string $path): string => "        - {$project}/{$path}", $paths[1]),
             '    databaseMigrationsPath:',
             "        - {$project}/database/migrations",
             ...(str_contains($dist, 'parseModelCastsMethod: true') ? ['    parseModelCastsMethod: true'] : []),
             '    bootstrapFiles:',
-            '        - ' . str_replace('\\', '/', $this->autoloadBootstrap()),
+            '        - '.str_replace('\\', '/', $this->autoloadBootstrap()),
             '',
         ]));
 
@@ -561,7 +565,7 @@ final class GeneratedPackageTest extends TestCase
         $process = new Process([
             PHP_BINARY,
             ...$this->inheritedExtensions(),
-            dirname(__DIR__, 2) . '/vendor/phpstan/phpstan/phpstan',
+            dirname(__DIR__, 2).'/vendor/phpstan/phpstan/phpstan',
             'analyse',
             '-c', $config,
             '--no-progress',
@@ -571,7 +575,7 @@ final class GeneratedPackageTest extends TestCase
 
         $process->run();
 
-        $this->assertTrue($process->isSuccessful(), "Larastan encuentra errores en lo generado:\n" . $process->getOutput() . $process->getErrorOutput());
+        $this->assertTrue($process->isSuccessful(), "Larastan encuentra errores en lo generado:\n".$process->getOutput().$process->getErrorOutput());
     }
 
     // AYUDAS
@@ -582,14 +586,14 @@ final class GeneratedPackageTest extends TestCase
      */
     private function autoloadBootstrap(): string
     {
-        $bootstrap = self::$project->path . '/vendor-autoload.php';
-        $lines = ['<?php', '$loader = require ' . var_export(dirname(__DIR__, 2) . '/vendor/autoload.php', true) . ';'];
+        $bootstrap = self::$project->path.'/vendor-autoload.php';
+        $lines = ['<?php', '$loader = require '.var_export(dirname(__DIR__, 2).'/vendor/autoload.php', true).';'];
 
         foreach (self::autoload() as $prefix => $directory) {
-            $lines[] = '$loader->addPsr4(' . var_export($prefix, true) . ', ' . var_export(self::$project->path . '/' . $directory, true) . ');';
+            $lines[] = '$loader->addPsr4('.var_export($prefix, true).', '.var_export(self::$project->path.'/'.$directory, true).');';
         }
 
-        file_put_contents($bootstrap, implode(PHP_EOL, $lines) . PHP_EOL);
+        file_put_contents($bootstrap, implode(PHP_EOL, $lines).PHP_EOL);
 
         return $bootstrap;
     }
@@ -601,17 +605,17 @@ final class GeneratedPackageTest extends TestCase
 
         return User::forceCreate([
             'name' => $admin ? 'Ana' : 'Luis',
-            'email' => ($admin ? 'ana' : 'luis') . $count . ($admin ? '@admin.test' : '@example.test'),
+            'email' => ($admin ? 'ana' : 'luis').$count.($admin ? '@admin.test' : '@example.test'),
             'password' => 'secret',
         ]);
     }
 
     /**
-     * @return class-string<\Illuminate\Database\Eloquent\Model>
+     * @return class-string<Model>
      */
     private function model(string $name): string
     {
-        return self::NS . 'Models\\' . $name;
+        return self::NS.'Models\\'.$name;
     }
 
     /**
@@ -619,7 +623,7 @@ final class GeneratedPackageTest extends TestCase
      */
     private function prefix(string $kebab): string
     {
-        $contract = (string) file_get_contents(self::$project->path . "/resources/vue/src/models/{$kebab}/index.js");
+        $contract = (string) file_get_contents(self::$project->path."/resources/vue/src/models/{$kebab}/index.js");
 
         if (! preg_match("/API_ROUTE_PREFIX = '([^']+)'/", $contract, $match)) {
             $this->fail("El contrato de {$kebab} no declara API_ROUTE_PREFIX.");
@@ -633,7 +637,7 @@ final class GeneratedPackageTest extends TestCase
      */
     private function route(string $kebab, string $action, array $query = []): string
     {
-        return route($this->prefix($kebab) . $action, $query);
+        return route($this->prefix($kebab).$action, $query);
     }
 
     /**
@@ -651,7 +655,7 @@ final class GeneratedPackageTest extends TestCase
      */
     private static function composer(): array
     {
-        return json_decode((string) file_get_contents(self::$project->path . '/composer.json'), true);
+        return json_decode((string) file_get_contents(self::$project->path.'/composer.json'), true);
     }
 
     /**
@@ -662,11 +666,11 @@ final class GeneratedPackageTest extends TestCase
      */
     private function inheritedExtensions(): array
     {
-        $ini = (string) shell_exec(escapeshellarg(PHP_BINARY) . ' -m');
+        $ini = (string) shell_exec(escapeshellarg(PHP_BINARY).' -m');
         $arguments = [];
 
         foreach (['pdo_sqlite', 'sqlite3'] as $extension) {
-            if (extension_loaded($extension) && ! preg_match('/^' . $extension . '$/mi', $ini)) {
+            if (extension_loaded($extension) && ! preg_match('/^'.$extension.'$/mi', $ini)) {
                 $arguments[] = '-d';
                 $arguments[] = "extension={$extension}";
             }

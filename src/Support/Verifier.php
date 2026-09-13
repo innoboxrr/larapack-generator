@@ -17,7 +17,9 @@ use Innoboxrr\LarapackGenerator\Support\Import\Actions;
 final class Verifier
 {
     public const ERROR = 'error';
+
     public const WARNING = 'warning';
+
     public const INFO = 'info';
 
     /**
@@ -38,7 +40,7 @@ final class Verifier
 
     public function __construct(private ?Manifest $manifest = null)
     {
-        $this->manifest ??= new Manifest();
+        $this->manifest ??= new Manifest;
     }
 
     /**
@@ -93,7 +95,7 @@ final class Verifier
                     'check' => 'missing-file',
                     'model' => $model ?: null,
                     'file' => $relative,
-                    'message' => "Se generó pero ya no existe. Regenéralo con --force o retíralo del manifiesto.",
+                    'message' => 'Se generó pero ya no existe. Regenéralo con --force o retíralo del manifiesto.',
                 ];
             }
         }
@@ -413,16 +415,16 @@ final class Verifier
         $app = $this->appDirectory($model);
 
         foreach ($actions as $action) {
-            if (str_contains($routesContent, "->name('" . Actions::routeName($action) . "')")) {
+            if (str_contains($routesContent, "->name('".Actions::routeName($action)."')")) {
                 $traces[] = [$action, $routes, 'Hay una ruta para'];
             }
 
-            if (preg_match('/public function ' . $action . '\s*\(/', $controllerContent)) {
+            if (preg_match('/public function '.$action.'\s*\(/', $controllerContent)) {
                 $traces[] = [$action, $controller, 'El controlador tiene un método para'];
             }
 
             if ($app !== null) {
-                $request = "{$app}/Http/Requests/{$model}/" . Actions::requestClass($action) . '.php';
+                $request = "{$app}/Http/Requests/{$model}/".Actions::requestClass($action).'.php';
 
                 if (is_file($this->manifest->absolute($request))) {
                     $traces[] = [$action, $request, 'Existe el request de'];
@@ -504,11 +506,11 @@ final class Verifier
 
     private function arrayPropertyContains(string $php, string $property, string $value): bool
     {
-        if (! preg_match('/\$' . $property . '\s*=\s*\[(.*?)\];/s', $php, $matches)) {
+        if (! preg_match('/\$'.$property.'\s*=\s*\[(.*?)\];/s', $php, $matches)) {
             return false;
         }
 
-        return (bool) preg_match("/['\"]" . preg_quote($value, '/') . "['\"]/", $matches[1]);
+        return (bool) preg_match("/['\"]".preg_quote($value, '/')."['\"]/", $matches[1]);
     }
 
     /**
@@ -523,7 +525,7 @@ final class Verifier
     {
         $dotNamespace = mb_strtolower(str_replace('\\', '.', $namespace));
 
-        return 'api.' . $dotNamespace . str_replace('-', '_', $kebabModel) . '.';
+        return 'api.'.$dotNamespace.str_replace('-', '_', $kebabModel).'.';
     }
 
     /**

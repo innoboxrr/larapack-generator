@@ -2,140 +2,146 @@
 
 namespace Innoboxrr\LarapackGenerator\Tools\PivotMigration;
 
-use Innoboxrr\LarapackGenerator\Tools\Tool;
+use Innoboxrr\LarapackGenerator\Exceptions\MakerException;
 use Innoboxrr\LarapackGenerator\Support\Generation;
 use Innoboxrr\LarapackGenerator\Support\MigrationTimestamp;
-use Innoboxrr\LarapackGenerator\Exceptions\MakerException;
+use Innoboxrr\LarapackGenerator\Tools\Tool;
 
 class PivotMigrationTool extends Tool
 {
+    protected $migrationPath;
 
-	protected $migrationPath;
-	protected $migrationTemplatePath;
-	protected $migrationName;
+    protected $migrationTemplatePath;
 
-	private function setMigrationPath()
-	{
-		$this->migrationPath = get_path('database/migrations');
-		return $this;
-	}
+    protected $migrationName;
 
-	private function setPivotMigrationTemplatePath()
-	{
-		$this->migrationTemplatePath = stubs_path('PivotMigration');
-		return $this;
-	}
+    private function setMigrationPath()
+    {
+        $this->migrationPath = get_path('database/migrations');
 
-	public function create(string $migrationName)
-	{
-		$this->migrationName = $migrationName;
-		$this->setMigrationPath()
-			->setPivotMigrationTemplatePath();
-		// La que ya exista para esta tabla: con la hora en el nombre, importar
-		// otra vez creaba una segunda migración de la misma tabla.
-		$migrationFile = $this->migrationFile($this->migrationPath, 'create_' . $migrationName . '_table');
-		if(!file_exists($migrationFile)) {
-			$templateFile = $this->migrationTemplatePath . '/MigrationTemplate.txt';
-			if (Generation::isDryRun()) {
-				Generation::record('create', $migrationFile, $templateFile);
-				return true;
-			}
-			if(copy($templateFile, $migrationFile)) {
-				$this->replaceMigrationData($migrationFile);
-				if(self::isFromJsonImporter()) {
-					$this->processFileWithJson($migrationFile);
-				}
-				Generation::record('create', $migrationFile, $templateFile);
-			} else {
-				throw MakerException::copyFailed($templateFile, $migrationFile);
-			}
-		} else {
-			return false;
-		}
-		return true;
-	}
+        return $this;
+    }
 
-	public function remove(string $migrationName)
-	{
-		$this->migrationName = $migrationName;
-		// Asegurarte de que la zona horaria sea la correcta
-		date_default_timezone_set('UTC');
-		$this->setMigrationPath()
-			->setPivotMigrationTemplatePath();
-		$migrationFilename = MigrationTimestamp::next() . '_drop_' . $migrationName . '_table.php';
-		$migrationFile = $this->migrationPath . '/' . $migrationFilename;
-		// Solo proceder en caso de los archivos no existan
-		if(!file_exists($migrationFile)) {
-			$templateFile = $this->migrationTemplatePath . '/DropTemplate.txt';
-			if(copy($templateFile, $migrationFile)) {
-				$this->replaceMigrationData($migrationFile);
-			} else {
-				throw MakerException::copyFailed($templateFile, $migrationFile);
-			}
-		} else {
-			return false;
-		}
-		return true;
-	}
+    private function setPivotMigrationTemplatePath()
+    {
+        $this->migrationTemplatePath = stubs_path('PivotMigration');
 
-	private function replaceMigrationData($migrationFile)
-	{
-		$content = file_get_contents($migrationFile);
-		$content = str_replace("migration_name", $this->migrationName, $content);
-		file_put_contents($migrationFile, $content);
-	}
+        return $this;
+    }
 
-	protected function processFileWithJson($migrationFile)
-	{
-		$data = self::getJsonContent();
-		$pivot = collect($data['pivots'])->where('name', $this->migrationName)->first();
-		$fileContent = file_get_contents(filename: $migrationFile);
-		$columnsSchema = $this->generateMigrationColumns($pivot['props']);
-		$updatedFileContent = str_replace('//EDIT//', $columnsSchema, $fileContent);
-		file_put_contents($migrationFile, $updatedFileContent);
-	}
-	
-	private function generateMigrationColumns(array $props)
-	{
-		$columns = '';
-		foreach ($props as $index => $prop) {
-			$columnDefinition = $this->getColumnDefinition($prop);
-			if($index == 0) {
-				$columns .= "{$columnDefinition}\n";
-			} else if($index == count($props) - 1) {
-				$columns .= "            {$columnDefinition}";
-			} else {
-				$columns .= "            {$columnDefinition}\n";
-			}
-		}	
-		return $columns;
-	}
-	
-	private function getColumnDefinition(array $prop)
-	{
-		$column = "\$table->{$prop['type']}('{$prop['name']}')";
+    public function create(string $migrationName)
+    {
+        $this->migrationName = $migrationName;
+        $this->setMigrationPath()
+            ->setPivotMigrationTemplatePath();
+        // La que ya exista para esta tabla: con la hora en el nombre, importar
+        // otra vez creaba una segunda migración de la misma tabla.
+        $migrationFile = $this->migrationFile($this->migrationPath, 'create_'.$migrationName.'_table');
+        if (! file_exists($migrationFile)) {
+            $templateFile = $this->migrationTemplatePath.'/MigrationTemplate.txt';
+            if (Generation::isDryRun()) {
+                Generation::record('create', $migrationFile, $templateFile);
 
-		// Agregar las propiedades adicionales como 'nullable', 'default', 'after', etc.
-		if ($prop['nullable']) {
-			$column .= "->nullable()";
-		}
-	
-		if (!is_null($prop['default'])) {
-			$column .= "->default('{$prop['default']}')";
-		}
-	
-		/*
-		if (!is_null($prop['after'])) {
-			$column .= "->after('{$prop['after']}')";
-		}
-		*/
-	
-		// Agregar restricciones de clave foránea si las hay
-		if ($prop['type'] === 'foreignId' && !is_null($prop['constraint'])) {
-			$column .= "->constrained('{$prop['constraint']}')->onUpdate('cascade')->onDelete('cascade')";
-		}
-	
-		return $column . ";";
-	}
-	
+                return true;
+            }
+            if (copy($templateFile, $migrationFile)) {
+                $this->replaceMigrationData($migrationFile);
+                if (self::isFromJsonImporter()) {
+                    $this->processFileWithJson($migrationFile);
+                }
+                Generation::record('create', $migrationFile, $templateFile);
+            } else {
+                throw MakerException::copyFailed($templateFile, $migrationFile);
+            }
+        } else {
+            return false;
+        }
+
+        return true;
+    }
+
+    public function remove(string $migrationName)
+    {
+        $this->migrationName = $migrationName;
+        // Asegurarte de que la zona horaria sea la correcta
+        date_default_timezone_set('UTC');
+        $this->setMigrationPath()
+            ->setPivotMigrationTemplatePath();
+        $migrationFilename = MigrationTimestamp::next().'_drop_'.$migrationName.'_table.php';
+        $migrationFile = $this->migrationPath.'/'.$migrationFilename;
+        // Solo proceder en caso de los archivos no existan
+        if (! file_exists($migrationFile)) {
+            $templateFile = $this->migrationTemplatePath.'/DropTemplate.txt';
+            if (copy($templateFile, $migrationFile)) {
+                $this->replaceMigrationData($migrationFile);
+            } else {
+                throw MakerException::copyFailed($templateFile, $migrationFile);
+            }
+        } else {
+            return false;
+        }
+
+        return true;
+    }
+
+    private function replaceMigrationData($migrationFile)
+    {
+        $content = file_get_contents($migrationFile);
+        $content = str_replace('migration_name', $this->migrationName, $content);
+        file_put_contents($migrationFile, $content);
+    }
+
+    protected function processFileWithJson($migrationFile)
+    {
+        $data = self::getJsonContent();
+        $pivot = collect($data['pivots'])->where('name', $this->migrationName)->first();
+        $fileContent = file_get_contents(filename: $migrationFile);
+        $columnsSchema = $this->generateMigrationColumns($pivot['props']);
+        $updatedFileContent = str_replace('//EDIT//', $columnsSchema, $fileContent);
+        file_put_contents($migrationFile, $updatedFileContent);
+    }
+
+    private function generateMigrationColumns(array $props)
+    {
+        $columns = '';
+        foreach ($props as $index => $prop) {
+            $columnDefinition = $this->getColumnDefinition($prop);
+            if ($index == 0) {
+                $columns .= "{$columnDefinition}\n";
+            } elseif ($index == count($props) - 1) {
+                $columns .= "            {$columnDefinition}";
+            } else {
+                $columns .= "            {$columnDefinition}\n";
+            }
+        }
+
+        return $columns;
+    }
+
+    private function getColumnDefinition(array $prop)
+    {
+        $column = "\$table->{$prop['type']}('{$prop['name']}')";
+
+        // Agregar las propiedades adicionales como 'nullable', 'default', 'after', etc.
+        if ($prop['nullable']) {
+            $column .= '->nullable()';
+        }
+
+        if (! is_null($prop['default'])) {
+            $column .= "->default('{$prop['default']}')";
+        }
+
+        /*
+        if (!is_null($prop['after'])) {
+            $column .= "->after('{$prop['after']}')";
+        }
+        */
+
+        // Agregar restricciones de clave foránea si las hay
+        if ($prop['type'] === 'foreignId' && ! is_null($prop['constraint'])) {
+            $column .= "->constrained('{$prop['constraint']}')->onUpdate('cascade')->onDelete('cascade')";
+        }
+
+        return $column.';';
+    }
 }

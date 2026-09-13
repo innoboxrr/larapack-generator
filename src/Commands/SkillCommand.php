@@ -59,7 +59,7 @@ class SkillCommand extends Command
             $output->writeln($result['written']
                 ? "  <info>Ya instalado y al día:</info> {$result['target']}"
                 : "  <comment>Ya existe y difiere del paquete:</comment> {$result['target']}\n"
-                    . '  Usa --force para sobrescribirlo, o --print para compararlo.');
+                    .'  Usa --force para sobrescribirlo, o --print para compararlo.');
 
             return Command::SUCCESS;
         }

@@ -6,56 +6,54 @@ use Innoboxrr\LarapackGenerator\Tools\Tool;
 
 class RouteTool extends Tool
 {
+    protected $apiRoutepath;
 
-	protected $apiRoutepath;
+    protected $routeTemplatePath;
 
-	protected $routeTemplatePath;
+    private function setApiRoutepath()
+    {
 
-	private function setApiRoutepath()
-	{
+        $this->apiRoutepath = get_path('routes/api/models');
 
-		$this->apiRoutepath = get_path('routes/api/models');
+        return $this;
 
-		return $this;
+    }
 
-	}
+    private function setRouteTemplatePath()
+    {
 
-	private function setRouteTemplatePath()
-	{
+        $this->routeTemplatePath = stubs_path('Route');
 
-		$this->routeTemplatePath = stubs_path('Route');
+        return $this;
 
-		return $this;
+    }
 
-	}
+    public function create(string $ModelName)
+    {
 
-	public function create(string $ModelName)
-	{
+        if (! $this->init($ModelName)->declaresAnyAction()) {
+            return false;
+        }
 
-		if (! $this->init($ModelName)->declaresAnyAction()) {
-			return false;
-		}
+        $this->init($ModelName)
+            ->setApiRoutepath()
+            ->setRouteTemplatePath();
 
-		$this->init($ModelName)
-			->setApiRoutepath()
-			->setRouteTemplatePath();
+        $routeFile = $this->apiRoutepath.'/'.$this->snake_case_model_name.'.php';
 
-		$routeFile = $this->apiRoutepath . '/' . $this->snake_case_model_name . '.php';
+        return $this->generate($this->routeTemplatePath.'/RouteTemplate.txt', $routeFile);
 
-		return $this->generate($this->routeTemplatePath . '/RouteTemplate.txt', $routeFile);
+    }
 
-	}
+    public function remove(string $ModelName)
+    {
 
-	public function remove(string $ModelName)
-	{
+        $this->init($ModelName)
+            ->setApiRoutepath();
 
-		$this->init($ModelName)
-			->setApiRoutepath();
+        $path = $this->apiRoutepath.'/'.$this->snake_case_model_name.'.php';
 
-		$path = $this->apiRoutepath . '/' . $this->snake_case_model_name . '.php';
+        return (file_exists($path)) ? $this->dropFile($path) : false;
 
-		return (file_exists($path)) ? $this->dropFile($path) : false;
-
-	}
-
+    }
 }

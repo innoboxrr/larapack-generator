@@ -25,8 +25,8 @@ final class GeneratedMetasTest extends TestCase
 
         $this->assertSame(
             Command::SUCCESS,
-            $this->runCommand('larapack:import', ['jsonPath' => dirname(__DIR__) . '/Fixtures/laraimport.json']),
-            "larapack:import terminó con error:\n" . $this->lastOutput
+            $this->runCommand('larapack:import', ['jsonPath' => dirname(__DIR__).'/Fixtures/laraimport.json']),
+            "larapack:import terminó con error:\n".$this->lastOutput
         );
     }
 
@@ -102,8 +102,8 @@ final class GeneratedMetasTest extends TestCase
 
         $this->assertSame(
             Command::SUCCESS,
-            $this->runCommand('larapack:import', ['jsonPath' => dirname(__DIR__) . '/Fixtures/laraimport.json', '--vue' => true, '--react' => true]),
-            "larapack:import terminó con error:\n" . $this->lastOutput
+            $this->runCommand('larapack:import', ['jsonPath' => dirname(__DIR__).'/Fixtures/laraimport.json', '--vue' => true, '--react' => true]),
+            "larapack:import terminó con error:\n".$this->lastOutput
         );
 
         foreach (['vue' => 'vue', 'react' => 'jsx'] as $ui => $extension) {
@@ -143,9 +143,9 @@ final class GeneratedMetasTest extends TestCase
         $this->assertSame(Command::SUCCESS, $this->runCommand('larapack:full-model', ['name' => 'Product']));
 
         $this->assertStringNotContainsString('function metas()', $this->project->read('src/Models/Traits/Relations/ProductRelations.php'));
-        $this->assertStringContainsString("// use Acme\\Blog\\Models\\ProductMeta;", $this->project->read('src/Models/Traits/Storage/ProductStorage.php'));
+        $this->assertStringContainsString('// use Acme\\Blog\\Models\\ProductMeta;', $this->project->read('src/Models/Traits/Storage/ProductStorage.php'));
         $this->assertStringContainsString("/*\n    public function buildPayload()", $this->project->read('src/Models/Traits/Operations/ProductOperations.php'));
-        $this->assertFileDoesNotExist($this->project->path . '/src/Models/ProductMeta.php');
+        $this->assertFileDoesNotExist($this->project->path.'/src/Models/ProductMeta.php');
     }
 
     /**
@@ -157,7 +157,7 @@ final class GeneratedMetasTest extends TestCase
 
         $this->assertSame(Command::SUCCESS, $this->runCommand('larapack:full-model', ['name' => 'Product', '--metas' => true]));
 
-        $this->assertFileExists($this->project->path . '/src/Models/ProductMeta.php');
+        $this->assertFileExists($this->project->path.'/src/Models/ProductMeta.php');
         $this->assertStringContainsString('function metas(): HasMany', $this->project->read('src/Models/Traits/Relations/ProductRelations.php'));
         $this->assertStringContainsString('function updateModelMetas($request)', $this->project->read('src/Models/Traits/Storage/ProductStorage.php'));
     }
@@ -173,7 +173,7 @@ final class GeneratedMetasTest extends TestCase
         $this->assertSame(Command::SUCCESS, $this->runCommand('larapack:full-model', ['name' => 'Product', '--metas' => true]));
         $this->assertSame(Command::SUCCESS, $this->runCommand('larapack:remove-full-model', ['name' => 'Product']), $this->lastOutput);
 
-        $this->assertFileDoesNotExist($this->project->path . '/src/Models/ProductMeta.php');
+        $this->assertFileDoesNotExist($this->project->path.'/src/Models/ProductMeta.php');
         $this->assertNotNull($this->project->glob('database/migrations/*_drop_product_metas_table.php'));
     }
 

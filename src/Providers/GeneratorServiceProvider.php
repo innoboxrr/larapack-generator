@@ -3,6 +3,7 @@
 namespace Innoboxrr\LarapackGenerator\Providers;
 
 use Illuminate\Support\ServiceProvider;
+use Symfony\Component\Console\Command\Command;
 
 class GeneratorServiceProvider extends ServiceProvider
 {
@@ -11,7 +12,7 @@ class GeneratorServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->mergeConfigFrom(
-            __DIR__ . '/../../config/larapack-generator.php',
+            __DIR__.'/../../config/larapack-generator.php',
             'larapack-generator'
         );
     }
@@ -23,7 +24,7 @@ class GeneratorServiceProvider extends ServiceProvider
         }
 
         $this->publishes([
-            __DIR__ . '/../../config/larapack-generator.php' => config_path('larapack-generator.php'),
+            __DIR__.'/../../config/larapack-generator.php' => config_path('larapack-generator.php'),
         ], 'larapack-generator-config');
 
         // Los comandos son de Symfony Console, no de Illuminate. Artisan los
@@ -35,14 +36,14 @@ class GeneratorServiceProvider extends ServiceProvider
     }
 
     /**
-     * @return array<int, class-string<\Symfony\Component\Console\Command\Command>>
+     * @return array<int, class-string<Command>>
      */
     private function commandClasses(): array
     {
         $classes = [];
 
-        foreach (glob(__DIR__ . '/../Commands/*Command.php') ?: [] as $file) {
-            $classes[] = self::COMMAND_NAMESPACE . basename($file, '.php');
+        foreach (glob(__DIR__.'/../Commands/*Command.php') ?: [] as $file) {
+            $classes[] = self::COMMAND_NAMESPACE.basename($file, '.php');
         }
 
         return $classes;

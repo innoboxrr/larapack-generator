@@ -6,41 +6,39 @@ use Innoboxrr\LarapackGenerator\Tools\Tool;
 
 class AuthServiceProviderTool extends Tool
 {
+    protected $authServiceProviderPath;
 
-	protected $authServiceProviderPath;
+    protected $authServiceProviderTemplatePath;
 
-	protected $authServiceProviderTemplatePath;
+    private function setAuthServiceProviderPath()
+    {
 
-	private function setAuthServiceProviderPath()
-	{
+        $this->authServiceProviderPath = get_path(app_dir_name().'/Providers');
 
-		$this->authServiceProviderPath = get_path(app_dir_name() . '/Providers');
+        return $this;
 
-		return $this;
+    }
 
-	}
+    private function setAuthServiceProviderTemplatePath()
+    {
 
-	private function setAuthServiceProviderTemplatePath()
-	{
+        $this->authServiceProviderTemplatePath = stubs_path('Providers');
 
-		$this->authServiceProviderTemplatePath = stubs_path('Providers');
+        return $this;
 
-		return $this;
+    }
 
-	}
+    public function create()
+    {
 
-	public function create()
-	{
+        $this->init('')
+            ->setAuthServiceProviderPath()
+            ->setAuthServiceProviderTemplatePath()
+            ->addProvidersToComposerJson([$this->namespace.'Providers\AuthServiceProvider']);
 
-		$this->init('')
-			->setAuthServiceProviderPath()
-			->setAuthServiceProviderTemplatePath()
-			->addProvidersToComposerJson([$this->namespace . 'Providers\AuthServiceProvider']);
+        $authServiceProviderFile = $this->authServiceProviderPath.'/AuthServiceProvider.php';
 
-		$authServiceProviderFile = $this->authServiceProviderPath . '/AuthServiceProvider.php';
+        return $this->generate($this->authServiceProviderTemplatePath.'/AuthServiceProviderTemplate.txt', $authServiceProviderFile);
 
-		return $this->generate($this->authServiceProviderTemplatePath . '/AuthServiceProviderTemplate.txt', $authServiceProviderFile);
-
-	}
-
+    }
 }

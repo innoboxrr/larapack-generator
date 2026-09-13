@@ -23,6 +23,7 @@ use UnexpectedValueException;
 final class Ecosystem
 {
     public const ERROR = 'error';
+
     public const WARNING = 'warning';
 
     private const FILE = 'ecosystem.json';
@@ -32,7 +33,7 @@ final class Ecosystem
 
     public function __construct(private ?string $manifestPath = null)
     {
-        $this->manifestPath ??= dirname(__DIR__, 2) . '/' . self::FILE;
+        $this->manifestPath ??= dirname(__DIR__, 2).'/'.self::FILE;
     }
 
     /**
@@ -351,7 +352,7 @@ final class Ecosystem
      */
     private function auditConstraint(string $check, string $package, string $dependency, string $declared, string $baseline): array
     {
-        $parser = new VersionParser();
+        $parser = new VersionParser;
 
         try {
             $declaredConstraint = $parser->parseConstraints($declared);

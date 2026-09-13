@@ -30,17 +30,17 @@ final class GeneratedDesktopUiTest extends TestCase
         $this->assertSame(
             Command::SUCCESS,
             $this->runCommand('larapack:import', [
-                'jsonPath' => dirname(__DIR__) . '/Fixtures/laraimport.json',
+                'jsonPath' => dirname(__DIR__).'/Fixtures/laraimport.json',
                 '--vue' => true,
                 '--react' => true,
             ]),
-            "larapack:import --vue --react terminó con error:\n" . $this->lastOutput
+            "larapack:import --vue --react terminó con error:\n".$this->lastOutput
         );
     }
 
     public function test_el_alta_se_abre_en_un_drawer_sobre_la_tabla(): void
     {
-        foreach ([self::VUE . '/views/AdminView.vue', self::REACT . '/views/AdminView.jsx'] as $file) {
+        foreach ([self::VUE.'/views/AdminView.vue', self::REACT.'/views/AdminView.jsx'] as $file) {
             $view = $this->read($file);
 
             $this->assertStringContainsString('<DrawerComponent', $view, "{$file} no abre el alta en un drawer.");
@@ -52,7 +52,7 @@ final class GeneratedDesktopUiTest extends TestCase
 
     public function test_la_edicion_se_abre_en_un_drawer_sobre_la_ficha(): void
     {
-        foreach ([self::VUE . '/views/ShowView.vue', self::REACT . '/views/ShowView.jsx'] as $file) {
+        foreach ([self::VUE.'/views/ShowView.vue', self::REACT.'/views/ShowView.jsx'] as $file) {
             $view = $this->read($file);
 
             $this->assertStringContainsString('<DrawerComponent', $view, "{$file} no abre la edición en un drawer.");
@@ -67,8 +67,8 @@ final class GeneratedDesktopUiTest extends TestCase
     public function test_el_alta_y_la_edicion_avisan_en_vez_de_navegar(): void
     {
         foreach (['CreateView', 'EditView'] as $view) {
-            $vue = $this->read(self::VUE . "/views/{$view}.vue");
-            $react = $this->read(self::REACT . "/views/{$view}.jsx");
+            $vue = $this->read(self::VUE."/views/{$view}.vue");
+            $react = $this->read(self::REACT."/views/{$view}.jsx");
 
             $this->assertStringContainsString("emit('updateData'", $vue);
             $this->assertStringNotContainsString('useRouter', $vue, "La vista Vue {$view} sigue navegando.");
@@ -80,7 +80,7 @@ final class GeneratedDesktopUiTest extends TestCase
 
     public function test_el_detalle_ensena_la_forma_del_registro_mientras_llega(): void
     {
-        foreach ([self::VUE . '/views/ShowView.vue', self::REACT . '/views/ShowView.jsx'] as $file) {
+        foreach ([self::VUE.'/views/ShowView.vue', self::REACT.'/views/ShowView.jsx'] as $file) {
             $view = $this->read($file);
 
             $this->assertStringContainsString('SkeletonComponent', $view, "{$file} se queda en blanco mientras carga.");
@@ -90,14 +90,14 @@ final class GeneratedDesktopUiTest extends TestCase
 
     public function test_la_tabla_se_puede_recargar_desde_fuera(): void
     {
-        $this->assertStringContainsString('defineExpose', $this->read(self::VUE . '/widgets/DataTable.vue'));
-        $this->assertStringContainsString('ref={ref}', $this->read(self::REACT . '/widgets/DataTable.jsx'));
+        $this->assertStringContainsString('defineExpose', $this->read(self::VUE.'/widgets/DataTable.vue'));
+        $this->assertStringContainsString('ref={ref}', $this->read(self::REACT.'/widgets/DataTable.jsx'));
     }
 
     public function test_el_indice_tiene_paleta_de_comandos(): void
     {
-        $this->assertStringContainsString('<CommandPaletteComponent', $this->read(self::VUE . '/views/AdminView.vue'));
-        $this->assertStringContainsString('<CommandPaletteComponent', $this->read(self::REACT . '/views/AdminView.jsx'));
+        $this->assertStringContainsString('<CommandPaletteComponent', $this->read(self::VUE.'/views/AdminView.vue'));
+        $this->assertStringContainsString('<CommandPaletteComponent', $this->read(self::REACT.'/views/AdminView.jsx'));
     }
 
     public function test_las_acciones_del_registro_son_un_menu_de_verdad(): void
@@ -127,7 +127,7 @@ final class GeneratedDesktopUiTest extends TestCase
 
     private function read(string $relative): string
     {
-        $path = $this->project->path . '/' . $relative;
+        $path = $this->project->path.'/'.$relative;
 
         $this->assertFileExists($path);
 

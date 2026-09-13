@@ -24,7 +24,7 @@ final class DeclaredRoutesGenerationTest extends TestCase
 
         $this->useProject(FakeProject::library('Acme\\Audit\\'));
 
-        $path = $this->project->path . '/laraimport.json';
+        $path = $this->project->path.'/laraimport.json';
 
         file_put_contents($path, json_encode(['models' => [
             ['name' => 'Post', 'props' => [['name' => 'title', 'type' => 'string']]],
@@ -36,7 +36,7 @@ final class DeclaredRoutesGenerationTest extends TestCase
         $this->assertSame(
             Command::SUCCESS,
             $this->runCommand('larapack:import', ['jsonPath' => $path]),
-            "larapack:import terminó con error:\n" . $this->lastOutput
+            "larapack:import terminó con error:\n".$this->lastOutput
         );
     }
 
@@ -82,7 +82,7 @@ final class DeclaredRoutesGenerationTest extends TestCase
 
         // Y tampoco quedan los directorios vacíos que habría creado resolver
         // la ruta antes de preguntar.
-        $this->assertDirectoryDoesNotExist($this->project->path . '/src/Notifications/AuditEvent');
+        $this->assertDirectoryDoesNotExist($this->project->path.'/src/Notifications/AuditEvent');
     }
 
     public function test_la_politica_solo_tiene_las_habilidades_de_sus_acciones(): void
@@ -202,7 +202,7 @@ final class DeclaredRoutesGenerationTest extends TestCase
      */
     private function filesIn(string $relative): array
     {
-        $files = array_map('basename', glob($this->project->path . '/' . $relative . '/*.php') ?: []);
+        $files = array_map('basename', glob($this->project->path.'/'.$relative.'/*.php') ?: []);
 
         sort($files);
 

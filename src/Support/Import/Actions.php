@@ -121,6 +121,6 @@ final class Actions
      */
     public static function requestClass(string $action): string
     {
-        return ucfirst($action) . 'Request';
+        return ucfirst($action).'Request';
     }
 }

@@ -63,7 +63,7 @@ final class NewPackageCommandTest extends TestCase
         $this->assertStringContainsString('vendor/bin/phpstan analyse', $this->project->read('.github/workflows/tests.yml'));
 
         $this->assertStringContainsString('composer require acme/shop-catalog', $this->project->read('README.md'));
-        $this->assertStringContainsString('Copyright (c) ' . date('Y') . ' Acme', $this->project->read('LICENSE'));
+        $this->assertStringContainsString('Copyright (c) '.date('Y').' Acme', $this->project->read('LICENSE'));
     }
 
     /**
@@ -73,7 +73,7 @@ final class NewPackageCommandTest extends TestCase
     {
         $this->create();
 
-        $this->assertSame([], (new Ecosystem())->audit($this->project->path));
+        $this->assertSame([], (new Ecosystem)->audit($this->project->path));
     }
 
     public function test_todo_el_php_creado_compila(): void
@@ -85,7 +85,7 @@ final class NewPackageCommandTest extends TestCase
 
     public function test_no_toca_un_directorio_que_ya_es_un_proyecto(): void
     {
-        file_put_contents($this->project->path . '/composer.json', '{"name":"otro/proyecto"}');
+        file_put_contents($this->project->path.'/composer.json', '{"name":"otro/proyecto"}');
 
         $this->assertSame(Command::FAILURE, $this->runCommand('larapack:new', ['name' => 'acme/shop', 'directory' => $this->project->path]));
 
@@ -95,7 +95,7 @@ final class NewPackageCommandTest extends TestCase
 
     public function test_la_simulacion_dice_lo_que_crearia_y_no_escribe_nada(): void
     {
-        $target = $this->project->path . '/shop';
+        $target = $this->project->path.'/shop';
 
         $this->assertSame(Command::SUCCESS, $this->runCommand('larapack:new', [
             'name' => 'acme/shop',
@@ -153,11 +153,11 @@ final class NewPackageCommandTest extends TestCase
         $validate = Process::fromShellCommandline('composer validate --no-check-publish --no-check-lock', $this->project->path, null, null, 120);
         $validate->run();
 
-        if (str_contains($validate->getErrorOutput() . $validate->getOutput(), 'not recognized') || $validate->getExitCode() === 127) {
+        if (str_contains($validate->getErrorOutput().$validate->getOutput(), 'not recognized') || $validate->getExitCode() === 127) {
             $this->markTestSkipped('Composer no está disponible.');
         }
 
-        $this->assertTrue($validate->isSuccessful(), $validate->getOutput() . $validate->getErrorOutput());
+        $this->assertTrue($validate->isSuccessful(), $validate->getOutput().$validate->getErrorOutput());
     }
 
     private function create(): void

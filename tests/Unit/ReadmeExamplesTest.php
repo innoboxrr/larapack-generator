@@ -29,8 +29,8 @@ final class ReadmeExamplesTest extends TestCase
 
             ['document' => $document, 'errors' => $errors] = ImportDocument::fromArray($decoded);
 
-            $this->assertNotNull($document, "El ejemplo #{$index} del README no valida:\n" . $this->format($errors));
-            $this->assertSame([], $errors, "El ejemplo #{$index} del README deja avisos:\n" . $this->format($errors));
+            $this->assertNotNull($document, "El ejemplo #{$index} del README no valida:\n".$this->format($errors));
+            $this->assertSame([], $errors, "El ejemplo #{$index} del README deja avisos:\n".$this->format($errors));
         }
     }
 
@@ -42,7 +42,7 @@ final class ReadmeExamplesTest extends TestCase
      */
     private function examples(): array
     {
-        $readme = file_get_contents(dirname(__DIR__, 2) . '/README.md');
+        $readme = file_get_contents(dirname(__DIR__, 2).'/README.md');
         $start = strpos($readme, '## El contrato: laraimport.json');
 
         $this->assertNotFalse($start, 'El README ya no tiene la sección de ejemplos.');

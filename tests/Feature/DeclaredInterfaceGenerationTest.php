@@ -22,7 +22,7 @@ final class DeclaredInterfaceGenerationTest extends TestCase
 
         $this->useProject(FakeProject::library('Acme\\Audit\\'));
 
-        $path = $this->project->path . '/laraimport.json';
+        $path = $this->project->path.'/laraimport.json';
 
         file_put_contents($path, json_encode(['models' => [
             ['name' => 'Post', 'props' => [['name' => 'title', 'type' => 'string', 'datatable' => true]]],
@@ -34,7 +34,7 @@ final class DeclaredInterfaceGenerationTest extends TestCase
         $this->assertSame(
             Command::SUCCESS,
             $this->runCommand('larapack:import', ['jsonPath' => $path, '--vue' => true, '--react' => true]),
-            "larapack:import terminó con error:\n" . $this->lastOutput
+            "larapack:import terminó con error:\n".$this->lastOutput
         );
     }
 
@@ -203,7 +203,7 @@ final class DeclaredInterfaceGenerationTest extends TestCase
         $problems = [];
 
         $iterator = new \RecursiveIteratorIterator(
-            new \RecursiveDirectoryIterator($this->project->path . '/resources', \FilesystemIterator::SKIP_DOTS)
+            new \RecursiveDirectoryIterator($this->project->path.'/resources', \FilesystemIterator::SKIP_DOTS)
         );
 
         foreach ($iterator as $file) {
@@ -215,7 +215,7 @@ final class DeclaredInterfaceGenerationTest extends TestCase
 
             foreach (['{' => '}', '[' => ']', '(' => ')'] as $open => $close) {
                 if (substr_count($content, $open) !== substr_count($content, $close)) {
-                    $problems[] = basename(dirname($file->getPathname(), 2)) . '/' . basename(dirname($file->getPathname())) . '/' . $file->getFilename() . " {$open}{$close}";
+                    $problems[] = basename(dirname($file->getPathname(), 2)).'/'.basename(dirname($file->getPathname())).'/'.$file->getFilename()." {$open}{$close}";
                 }
             }
         }

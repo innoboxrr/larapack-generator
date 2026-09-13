@@ -20,7 +20,7 @@ final class VerifyDeclaredShapeTest extends TestCase
 
         $this->useProject(FakeProject::library('Acme\\Ledger\\'));
 
-        $path = $this->project->path . '/laraimport.json';
+        $path = $this->project->path.'/laraimport.json';
 
         file_put_contents($path, json_encode(['models' => [
             ['name' => 'Post', 'props' => [['name' => 'title', 'type' => 'string']]],
@@ -36,7 +36,7 @@ final class VerifyDeclaredShapeTest extends TestCase
         $this->assertSame(
             Command::SUCCESS,
             $this->runCommand('larapack:import', ['jsonPath' => $path, '--vue' => true, '--react' => true]),
-            "larapack:import terminó con error:\n" . $this->lastOutput
+            "larapack:import terminó con error:\n".$this->lastOutput
         );
     }
 
@@ -61,7 +61,7 @@ final class VerifyDeclaredShapeTest extends TestCase
 
     private function edit(string $relative, callable $change): void
     {
-        $file = $this->project->path . '/' . $relative;
+        $file = $this->project->path.'/'.$relative;
 
         file_put_contents($file, $change((string) file_get_contents($file)));
     }
@@ -84,7 +84,7 @@ final class VerifyDeclaredShapeTest extends TestCase
      */
     public function test_la_consistencia_se_sigue_exigiendo_entre_modelos_de_la_misma_forma(): void
     {
-        unlink($this->project->path . '/src/Policies/CategoryPolicy.php');
+        unlink($this->project->path.'/src/Policies/CategoryPolicy.php');
 
         $this->runCommand('larapack:model', ['name' => 'Tag']);
 
@@ -100,7 +100,7 @@ final class VerifyDeclaredShapeTest extends TestCase
     public function test_una_ruta_escrita_a_mano_para_una_accion_no_declarada_falla(): void
     {
         $this->edit('routes/api/models/audit_event.php', fn (string $php): string => $php
-            . "\nRoute::put('update', [AuditEventController::class, 'update'])\n\t->name('update');\n");
+            ."\nRoute::put('update', [AuditEventController::class, 'update'])\n\t->name('update');\n");
 
         [$code, $report] = $this->verify();
 
@@ -115,7 +115,7 @@ final class VerifyDeclaredShapeTest extends TestCase
 
     public function test_un_formulario_escrito_a_mano_para_una_accion_no_declarada_falla(): void
     {
-        file_put_contents($this->project->path . '/resources/vue/src/models/audit-event/forms/EditForm.vue', "<template/>\n");
+        file_put_contents($this->project->path.'/resources/vue/src/models/audit-event/forms/EditForm.vue', "<template/>\n");
 
         [$code, $report] = $this->verify();
 
@@ -135,7 +135,7 @@ final class VerifyDeclaredShapeTest extends TestCase
     public function test_una_ruta_put_en_un_modelo_inmutable_falla_con_immutable_write(): void
     {
         $this->edit('routes/api/models/consent.php', fn (string $php): string => $php
-            . "\nRoute::put('update', [ConsentController::class, 'update'])\n\t->name('update');\n");
+            ."\nRoute::put('update', [ConsentController::class, 'update'])\n\t->name('update');\n");
 
         [$code, $report] = $this->verify();
 

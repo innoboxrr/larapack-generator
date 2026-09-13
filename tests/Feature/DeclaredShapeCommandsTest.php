@@ -33,7 +33,7 @@ final class DeclaredShapeCommandsTest extends TestCase
      */
     private function laraimport(array $models): string
     {
-        $path = $this->project->path . '/laraimport.json';
+        $path = $this->project->path.'/laraimport.json';
 
         file_put_contents($path, json_encode(['models' => $models]));
 

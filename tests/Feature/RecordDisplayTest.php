@@ -27,7 +27,7 @@ final class RecordDisplayTest extends TestCase
             ...$extra,
         ]]]);
 
-        $this->assertNotNull($document, 'El documento no es válido: ' . json_encode($errors));
+        $this->assertNotNull($document, 'El documento no es válido: '.json_encode($errors));
 
         return $document->model('Item')['display'];
     }
@@ -93,7 +93,7 @@ final class RecordDisplayTest extends TestCase
     public function test_display_tiene_que_ser_una_columna_que_salga_por_la_api(): void
     {
         foreach ([
-            ['display' => 'inventada', 'expected' => "no es ninguna de sus columnas"],
+            ['display' => 'inventada', 'expected' => 'no es ninguna de sus columnas'],
             ['display' => 'token', 'expected' => 'es secret'],
         ] as $case) {
             ['document' => $document, 'errors' => $errors] = ImportDocument::fromArray(['models' => [[
@@ -114,14 +114,14 @@ final class RecordDisplayTest extends TestCase
     {
         $this->useProject(FakeProject::library('Acme\\Tienda\\'));
 
-        file_put_contents($this->project->path . '/laraimport.json', json_encode(['models' => [[
+        file_put_contents($this->project->path.'/laraimport.json', json_encode(['models' => [[
             'name' => 'Product',
             'props' => [['name' => 'title', 'type' => 'string', 'datatable' => true]],
         ]]]));
 
         $this->assertSame(
             Command::SUCCESS,
-            $this->runCommand('larapack:import', ['jsonPath' => $this->project->path . '/laraimport.json', '--vue' => true, '--react' => true]),
+            $this->runCommand('larapack:import', ['jsonPath' => $this->project->path.'/laraimport.json', '--vue' => true, '--react' => true]),
             $this->lastOutput
         );
 
@@ -133,7 +133,7 @@ final class RecordDisplayTest extends TestCase
             $this->assertStringContainsString('loaded?.title ??', $show);
             $this->assertMatchesRegularExpression('/product(\.value)?\.title \?\?/', $show);
             $this->assertStringContainsString('product?.title ??', $card);
-            $this->assertStringNotContainsString('.name ??', $show . $card, "La vista {$ui} sigue leyendo .name.");
+            $this->assertStringNotContainsString('.name ??', $show.$card, "La vista {$ui} sigue leyendo .name.");
         }
     }
 

@@ -6,52 +6,50 @@ use Innoboxrr\LarapackGenerator\Tools\Tool;
 
 class ObserverTool extends Tool
 {
+    protected $observerPath;
 
-	protected $observerPath;
+    protected $observerTemplatePath;
 
-	protected $observerTemplatePath;
+    private function setObserverPath()
+    {
 
-	private function setObserverPath()
-	{
+        $this->observerPath = get_path(app_dir_name().'/Observers');
 
-		$this->observerPath = get_path(app_dir_name() . '/Observers');
+        return $this;
 
-		return $this;
+    }
 
-	}
+    private function setObserverTemplatePath()
+    {
 
-	private function setObserverTemplatePath()
-	{
+        $this->observerTemplatePath = stubs_path('Observer');
 
-		$this->observerTemplatePath = stubs_path('Observer');
+        return $this;
 
-		return $this;
+    }
 
-	}
+    public function create(string $ModelName)
+    {
 
-	public function create(string $ModelName)
-	{
+        $this->init($ModelName)
+            ->setObserverPath()
+            ->setObserverTemplatePath();
 
-		$this->init($ModelName)
-			->setObserverPath()
-			->setObserverTemplatePath();
+        $observerFile = $this->observerPath.'/'.$this->PascalCaseModelName.'Observer.php';
 
-		$observerFile = $this->observerPath . '/' . $this->PascalCaseModelName . 'Observer.php';
+        return $this->generate($this->observerTemplatePath.'/ObserverTemplate.txt', $observerFile);
 
-		return $this->generate($this->observerTemplatePath . '/ObserverTemplate.txt', $observerFile);
+    }
 
-	}
+    public function remove(string $ModelName)
+    {
 
-	public function remove(string $ModelName)
-	{
+        $this->init($ModelName)
+            ->setObserverPath();
 
-		$this->init($ModelName)
-			->setObserverPath();
+        $path = $this->observerPath.'/'.$this->PascalCaseModelName.'Observer.php';
 
-		$path = $this->observerPath . '/' . $this->PascalCaseModelName . 'Observer.php';
+        return (file_exists($path)) ? $this->dropFile($path) : false;
 
-		return (file_exists($path)) ? $this->dropFile($path) : false;
-
-	}
-
+    }
 }

@@ -46,7 +46,7 @@ final class SchemaChangeTest extends TestCase
             ['name' => 'notes', 'type' => 'text', 'nullable' => true],
         ]);
 
-        $create = $this->project->path . '/' . $this->project->glob('database/migrations/*_create_products_table.php');
+        $create = $this->project->path.'/'.$this->project->glob('database/migrations/*_create_products_table.php');
         $original = (string) file_get_contents($create);
 
         $this->migrate();
@@ -117,7 +117,7 @@ final class SchemaChangeTest extends TestCase
      */
     private function import(array $props, array $options = []): void
     {
-        $laraimport = $this->project->path . '/laraimport.json';
+        $laraimport = $this->project->path.'/laraimport.json';
 
         file_put_contents($laraimport, (string) json_encode(['models' => [['name' => 'Product', 'props' => $props]]]));
 
@@ -142,7 +142,7 @@ final class SchemaChangeTest extends TestCase
 
     private function migrations(): string
     {
-        return $this->project->path . '/database/migrations';
+        return $this->project->path.'/database/migrations';
     }
 
     /**
@@ -150,7 +150,7 @@ final class SchemaChangeTest extends TestCase
      */
     private function alters(): array
     {
-        $files = glob($this->migrations() . '/*_alter_products_table.php') ?: [];
+        $files = glob($this->migrations().'/*_alter_products_table.php') ?: [];
 
         sort($files);
 

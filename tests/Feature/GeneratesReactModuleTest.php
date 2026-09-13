@@ -5,6 +5,7 @@ namespace Innoboxrr\LarapackGenerator\Tests\Feature;
 use Innoboxrr\LarapackGenerator\Tests\Support\FakeProject;
 use Innoboxrr\LarapackGenerator\Tests\TestCase;
 use Symfony\Component\Console\Command\Command;
+use Symfony\Component\Process\Process;
 
 final class GeneratesReactModuleTest extends TestCase
 {
@@ -21,11 +22,11 @@ final class GeneratesReactModuleTest extends TestCase
         $this->assertSame(
             Command::SUCCESS,
             $this->runCommand('larapack:import', [
-                'jsonPath' => dirname(__DIR__) . '/Fixtures/laraimport.json',
+                'jsonPath' => dirname(__DIR__).'/Fixtures/laraimport.json',
                 '--vue' => true,
                 '--react' => true,
             ]),
-            "larapack:import --vue --react terminó con error:\n" . $this->lastOutput
+            "larapack:import --vue --react terminó con error:\n".$this->lastOutput
         );
     }
 
@@ -37,19 +38,19 @@ final class GeneratesReactModuleTest extends TestCase
             'resources/react/index.js',
             'resources/react/src/routes/index.js',
             'resources/react/src/theme.js',
-            self::REACT . '/index.js',
-            self::REACT . '/store/index.js',
-            self::REACT . '/routes/index.js',
-            self::REACT . '/forms/CreateForm.jsx',
-            self::REACT . '/forms/EditForm.jsx',
-            self::REACT . '/forms/FilterForm.jsx',
-            self::REACT . '/views/AdminView.jsx',
-            self::REACT . '/views/CreateView.jsx',
-            self::REACT . '/views/EditView.jsx',
-            self::REACT . '/views/ShowView.jsx',
-            self::REACT . '/widgets/DataTable.jsx',
-            self::REACT . '/widgets/ModelCard.jsx',
-            self::REACT . '/widgets/ModelProfile.jsx',
+            self::REACT.'/index.js',
+            self::REACT.'/store/index.js',
+            self::REACT.'/routes/index.js',
+            self::REACT.'/forms/CreateForm.jsx',
+            self::REACT.'/forms/EditForm.jsx',
+            self::REACT.'/forms/FilterForm.jsx',
+            self::REACT.'/views/AdminView.jsx',
+            self::REACT.'/views/CreateView.jsx',
+            self::REACT.'/views/EditView.jsx',
+            self::REACT.'/views/ShowView.jsx',
+            self::REACT.'/widgets/DataTable.jsx',
+            self::REACT.'/widgets/ModelCard.jsx',
+            self::REACT.'/widgets/ModelProfile.jsx',
         ] as $expected) {
             $this->assertGenerated($expected);
         }
@@ -63,8 +64,8 @@ final class GeneratesReactModuleTest extends TestCase
     public function test_el_contrato_es_literalmente_el_mismo_archivo(): void
     {
         $this->assertSame(
-            $this->project->read(self::VUE . '/index.js'),
-            $this->project->read(self::REACT . '/index.js'),
+            $this->project->read(self::VUE.'/index.js'),
+            $this->project->read(self::REACT.'/index.js'),
             'El contrato del modelo difiere entre Vue y React.'
         );
     }
@@ -83,7 +84,7 @@ final class GeneratesReactModuleTest extends TestCase
 
     public function test_el_store_es_zustand_y_expone_lo_mismo_que_el_de_pinia(): void
     {
-        $store = $this->project->read(self::REACT . '/store/index.js');
+        $store = $this->project->read(self::REACT.'/store/index.js');
 
         $this->assertStringContainsString("import { create } from 'zustand'", $store);
         $this->assertStringContainsString('export const usePostStore', $store);
@@ -116,7 +117,7 @@ final class GeneratesReactModuleTest extends TestCase
 
     public function test_construye_los_inputs_declarados_en_el_json(): void
     {
-        $create = $this->project->read(self::REACT . '/forms/CreateForm.jsx');
+        $create = $this->project->read(self::REACT.'/forms/CreateForm.jsx');
 
         // title -> TextInputComponent, con el contrato value/onChange.
         $this->assertStringContainsString('<TextInputComponent', $create);
@@ -157,7 +158,7 @@ final class GeneratesReactModuleTest extends TestCase
     {
         $this->assertStringContainsString(
             "export const API_ROUTE_PREFIX = 'api.acme.blog.post.'",
-            $this->project->read(self::REACT . '/index.js')
+            $this->project->read(self::REACT.'/index.js')
         );
     }
 
@@ -170,12 +171,12 @@ final class GeneratesReactModuleTest extends TestCase
     {
         // El alta ya no navega: avisa al índice, que cierra su drawer. Quien
         // resuelve rutas por nombre es el detalle.
-        $show = $this->project->read(self::REACT . '/views/ShowView.jsx');
+        $show = $this->project->read(self::REACT.'/views/ShowView.jsx');
 
         $this->assertStringContainsString("import { buildPath } from 'innoboxrr-react-datatable'", $show);
         $this->assertStringContainsString("buildPath('AdminShowPost', { id: post.id })", $show);
 
-        $routes = $this->project->read(self::REACT . '/routes/index.js');
+        $routes = $this->project->read(self::REACT.'/routes/index.js');
 
         $this->assertStringContainsString("id: 'AdminShowPost',", $routes);
         $this->assertStringNotContainsString('routeNames', $routes);
@@ -223,7 +224,7 @@ final class GeneratesReactModuleTest extends TestCase
 
     public function test_los_inputs_generados_no_llevan_clases(): void
     {
-        $create = $this->project->read(self::REACT . '/forms/CreateForm.jsx');
+        $create = $this->project->read(self::REACT.'/forms/CreateForm.jsx');
 
         $this->assertStringNotContainsString('customClass', $create);
         $this->assertStringContainsString('<TextInputComponent', $create);
@@ -231,7 +232,7 @@ final class GeneratesReactModuleTest extends TestCase
 
     public function test_el_boton_de_reiniciar_filtros_usa_la_variante_secundaria(): void
     {
-        $filter = $this->project->read(self::REACT . '/forms/FilterForm.jsx');
+        $filter = $this->project->read(self::REACT.'/forms/FilterForm.jsx');
 
         $this->assertStringContainsString('variant="secondary"', $filter);
         $this->assertStringNotContainsString('bg-gray-400', $filter);
@@ -240,7 +241,7 @@ final class GeneratesReactModuleTest extends TestCase
     public function test_el_formulario_pregunta_al_validador_en_vez_de_leer_su_estado(): void
     {
         foreach (['CreateForm', 'EditForm'] as $form) {
-            $contents = $this->project->read(self::REACT . "/forms/{$form}.jsx");
+            $contents = $this->project->read(self::REACT."/forms/{$form}.jsx");
 
             $this->assertStringContainsString('validator.current?.validate()', $contents, "{$form} sigue leyendo .status.");
             $this->assertStringNotContainsString('validator.current?.status', $contents);
@@ -252,7 +253,7 @@ final class GeneratesReactModuleTest extends TestCase
         foreach (['CreateForm', 'EditForm'] as $form) {
             $this->assertStringContainsString(
                 'destroy()',
-                $this->project->read(self::REACT . "/forms/{$form}.jsx"),
+                $this->project->read(self::REACT."/forms/{$form}.jsx"),
                 "{$form} no desengancha el validador."
             );
         }
@@ -262,7 +263,7 @@ final class GeneratesReactModuleTest extends TestCase
     {
         $this->assertStringNotContainsString(
             'status = true',
-            $this->project->read(self::REACT . '/forms/EditForm.jsx')
+            $this->project->read(self::REACT.'/forms/EditForm.jsx')
         );
     }
 
@@ -298,18 +299,18 @@ final class GeneratesReactModuleTest extends TestCase
 
         foreach ($this->generatedReactFiles() as $relative) {
             $command = escapeshellarg($esbuild)
-                . ' --loader:.jsx=jsx --loader:.js=jsx '
-                . escapeshellarg($this->project->path . '/' . $relative)
-                . ' --outfile=' . escapeshellarg($this->nullDevice());
+                .' --loader:.jsx=jsx --loader:.js=jsx '
+                .escapeshellarg($this->project->path.'/'.$relative)
+                .' --outfile='.escapeshellarg($this->nullDevice());
 
-            exec($command . ' 2>&1', $output, $exitCode);
+            exec($command.' 2>&1', $output, $exitCode);
 
             if ($exitCode !== 0) {
-                $errors[] = "{$relative}: " . trim(implode(' ', $output));
+                $errors[] = "{$relative}: ".trim(implode(' ', $output));
             }
         }
 
-        $this->assertSame([], $errors, "JSX generado con errores de sintaxis:\n" . implode("\n", $errors));
+        $this->assertSame([], $errors, "JSX generado con errores de sintaxis:\n".implode("\n", $errors));
     }
 
     /**
@@ -322,8 +323,8 @@ final class GeneratesReactModuleTest extends TestCase
     {
         $binaries = DIRECTORY_SEPARATOR === '\\' ? ['esbuild.cmd', 'esbuild'] : ['esbuild'];
         $directories = [
-            dirname(__DIR__, 4) . '/npm/react-form-elements/node_modules/.bin',
-            sys_get_temp_dir() . '/larapack-esbuild/node_modules/.bin',
+            dirname(__DIR__, 4).'/npm/react-form-elements/node_modules/.bin',
+            sys_get_temp_dir().'/larapack-esbuild/node_modules/.bin',
         ];
 
         foreach ($directories as $directory) {
@@ -338,15 +339,15 @@ final class GeneratesReactModuleTest extends TestCase
             return null;
         }
 
-        $install = sys_get_temp_dir() . '/larapack-esbuild';
+        $install = sys_get_temp_dir().'/larapack-esbuild';
 
         if (! is_dir($install)) {
             mkdir($install, 0777, true);
         }
 
-        file_put_contents($install . '/package.json', '{"private": true}');
+        file_put_contents($install.'/package.json', '{"private": true}');
 
-        $process = \Symfony\Component\Process\Process::fromShellCommandline('npm install --no-audit --no-fund esbuild@^0.25', $install, null, null, 300);
+        $process = Process::fromShellCommandline('npm install --no-audit --no-fund esbuild@^0.25', $install, null, null, 300);
         $process->run();
 
         foreach ($binaries as $binary) {
@@ -372,11 +373,11 @@ final class GeneratesReactModuleTest extends TestCase
     private function moduleShape(string $module): array
     {
         $files = [];
-        $prefix = strlen($this->project->path . '/' . $module) + 1;
+        $prefix = strlen($this->project->path.'/'.$module) + 1;
 
         $iterator = new \RecursiveIteratorIterator(
             new \RecursiveDirectoryIterator(
-                $this->project->path . '/' . $module,
+                $this->project->path.'/'.$module,
                 \FilesystemIterator::SKIP_DOTS
             )
         );
@@ -402,7 +403,7 @@ final class GeneratesReactModuleTest extends TestCase
 
         $iterator = new \RecursiveIteratorIterator(
             new \RecursiveDirectoryIterator(
-                $this->project->path . '/resources/react',
+                $this->project->path.'/resources/react',
                 \FilesystemIterator::SKIP_DOTS
             )
         );

@@ -13,8 +13,7 @@ final class FakeProject
     private function __construct(
         public readonly string $path,
         public readonly string $namespace,
-    ) {
-    }
+    ) {}
 
     /**
      * Paquete Composer: `app_dir_name()` devolverá `src`.
@@ -42,7 +41,7 @@ final class FakeProject
 
     private static function temporaryDirectory(): string
     {
-        $path = sys_get_temp_dir() . '/larapack-' . bin2hex(random_bytes(6));
+        $path = sys_get_temp_dir().'/larapack-'.bin2hex(random_bytes(6));
 
         if (! mkdir($path, 0777, true) && ! is_dir($path)) {
             throw new RuntimeException("No se pudo crear el directorio temporal {$path}");
@@ -57,10 +56,10 @@ final class FakeProject
 
         $sourceDir = $type === 'library' ? 'src' : 'app';
 
-        file_put_contents($path . '/composer.json', json_encode([
+        file_put_contents($path.'/composer.json', json_encode([
             'name' => 'testvendor/test-pkg',
             'type' => $type,
-            'autoload' => ['psr-4' => [$namespace => $sourceDir . '/']],
+            'autoload' => ['psr-4' => [$namespace => $sourceDir.'/']],
         ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
 
         return new self(realpath($path), $namespace);
@@ -68,12 +67,12 @@ final class FakeProject
 
     public function has(string $relative): bool
     {
-        return file_exists($this->path . '/' . $relative);
+        return file_exists($this->path.'/'.$relative);
     }
 
     public function read(string $relative): string
     {
-        $file = $this->path . '/' . $relative;
+        $file = $this->path.'/'.$relative;
 
         if (! is_file($file)) {
             throw new RuntimeException("El archivo generado no existe: {$relative}");
@@ -88,7 +87,7 @@ final class FakeProject
      */
     public function glob(string $pattern): ?string
     {
-        $matches = glob($this->path . '/' . $pattern);
+        $matches = glob($this->path.'/'.$pattern);
 
         return $matches ? substr($matches[0], strlen($this->path) + 1) : null;
     }
@@ -134,7 +133,7 @@ final class FakeProject
                 continue;
             }
 
-            $path = $dir . '/' . $entry;
+            $path = $dir.'/'.$entry;
 
             is_dir($path) ? self::remove($path) : @unlink($path);
         }

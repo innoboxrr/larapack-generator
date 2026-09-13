@@ -3,25 +3,22 @@
 namespace Innoboxrr\LarapackGenerator\Commands;
 
 use Innoboxrr\LarapackGenerator\Commands\Concerns\ReportsGeneration;
+use Innoboxrr\LarapackGenerator\Tools\Observer\ObserverTool;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
-use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
-use Innoboxrr\LarapackGenerator\Tools\Observer\ObserverTool;
 
 class MakeObserverCommand extends Command
 {
     use ReportsGeneration;
 
-    
     protected function configure(): void
     {
 
         $this->setName('larapack:observer')
             ->setDescription('Create a new observer class')
             ->addArgument('name', InputArgument::REQUIRED, 'The name of the observed model');
-
 
         $this->addGenerationOptions();
     }
@@ -30,18 +27,15 @@ class MakeObserverCommand extends Command
     {
         $this->applyGenerationOptions($input);
 
-
         $modelName = $input->getArgument('name');
 
-        $maker = new ObserverTool();
+        $maker = new ObserverTool;
 
         $maker->create($modelName);
 
         $this->reportGeneration($input, $output);
 
-
         return Command::SUCCESS;
 
     }
-
 }

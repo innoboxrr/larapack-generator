@@ -19,10 +19,10 @@ final class GeneratesVueModuleTest extends TestCase
         $this->assertSame(
             Command::SUCCESS,
             $this->runCommand('larapack:import', [
-                'jsonPath' => dirname(__DIR__) . '/Fixtures/laraimport.json',
+                'jsonPath' => dirname(__DIR__).'/Fixtures/laraimport.json',
                 '--vue' => true,
             ]),
-            "larapack:import --vue terminó con error:\n" . $this->lastOutput
+            "larapack:import --vue terminó con error:\n".$this->lastOutput
         );
     }
 
@@ -37,19 +37,19 @@ final class GeneratesVueModuleTest extends TestCase
             'resources/vue/vite.config.js',
             'resources/vue/index.js',
             'resources/vue/src/routes/index.js',
-            self::MODULE . '/index.js',
-            self::MODULE . '/store/index.js',
-            self::MODULE . '/routes/index.js',
-            self::MODULE . '/forms/CreateForm.vue',
-            self::MODULE . '/forms/EditForm.vue',
-            self::MODULE . '/forms/FilterForm.vue',
-            self::MODULE . '/views/AdminView.vue',
-            self::MODULE . '/views/CreateView.vue',
-            self::MODULE . '/views/EditView.vue',
-            self::MODULE . '/views/ShowView.vue',
-            self::MODULE . '/widgets/DataTable.vue',
-            self::MODULE . '/widgets/ModelCard.vue',
-            self::MODULE . '/widgets/ModelProfile.vue',
+            self::MODULE.'/index.js',
+            self::MODULE.'/store/index.js',
+            self::MODULE.'/routes/index.js',
+            self::MODULE.'/forms/CreateForm.vue',
+            self::MODULE.'/forms/EditForm.vue',
+            self::MODULE.'/forms/FilterForm.vue',
+            self::MODULE.'/views/AdminView.vue',
+            self::MODULE.'/views/CreateView.vue',
+            self::MODULE.'/views/EditView.vue',
+            self::MODULE.'/views/ShowView.vue',
+            self::MODULE.'/widgets/DataTable.vue',
+            self::MODULE.'/widgets/ModelCard.vue',
+            self::MODULE.'/widgets/ModelProfile.vue',
         ] as $expected) {
             $this->assertGenerated($expected);
         }
@@ -57,7 +57,7 @@ final class GeneratesVueModuleTest extends TestCase
 
     public function test_todos_los_componentes_usan_composition_api(): void
     {
-        foreach (glob($this->project->path . '/' . self::MODULE . '/**/*.vue') as $file) {
+        foreach (glob($this->project->path.'/'.self::MODULE.'/**/*.vue') as $file) {
             $contents = file_get_contents($file);
             $name = basename($file);
 
@@ -69,7 +69,7 @@ final class GeneratesVueModuleTest extends TestCase
 
     public function test_el_store_es_pinia_y_no_vuex(): void
     {
-        $store = $this->project->read(self::MODULE . '/store/index.js');
+        $store = $this->project->read(self::MODULE.'/store/index.js');
 
         $this->assertStringContainsString('defineStore', $store);
         $this->assertStringContainsString('usePostStore', $store);
@@ -77,7 +77,7 @@ final class GeneratesVueModuleTest extends TestCase
         $this->assertStringNotContainsString('mutations', $store);
 
         $this->assertFalse(
-            $this->project->has(self::MODULE . '/vuex/postModel.js'),
+            $this->project->has(self::MODULE.'/vuex/postModel.js'),
             'Se sigue generando el módulo Vuex huérfano.'
         );
     }
@@ -89,7 +89,7 @@ final class GeneratesVueModuleTest extends TestCase
      */
     public function test_el_prefijo_de_rutas_coincide_con_el_del_backend(): void
     {
-        $module = $this->project->read(self::MODULE . '/index.js');
+        $module = $this->project->read(self::MODULE.'/index.js');
 
         $this->assertStringContainsString(
             "export const API_ROUTE_PREFIX = 'api.acme.blog.post.'",
@@ -118,7 +118,7 @@ final class GeneratesVueModuleTest extends TestCase
 
     public function test_construye_los_inputs_declarados_en_el_json(): void
     {
-        $create = $this->project->read(self::MODULE . '/forms/CreateForm.vue');
+        $create = $this->project->read(self::MODULE.'/forms/CreateForm.vue');
 
         // title -> TextInputComponent
         $this->assertStringContainsString('<TextInputComponent', $create);
@@ -145,7 +145,7 @@ final class GeneratesVueModuleTest extends TestCase
      */
     public function test_soporta_cualquier_componente_del_paquete_de_formularios(): void
     {
-        $create = $this->project->read(self::MODULE . '/forms/CreateForm.vue');
+        $create = $this->project->read(self::MODULE.'/forms/CreateForm.vue');
 
         $this->assertStringContainsString('<CheckboxInputComponent', $create);
         $this->assertStringContainsString('        CheckboxInputComponent,', $create);
@@ -154,7 +154,7 @@ final class GeneratesVueModuleTest extends TestCase
 
     public function test_la_tabla_ordena_por_una_columna_que_muestra(): void
     {
-        $module = $this->project->read(self::MODULE . '/index.js');
+        $module = $this->project->read(self::MODULE.'/index.js');
 
         $this->assertStringContainsString("id: 'title',", $module);
         $this->assertStringContainsString("    title: 'asc',", $module);
@@ -204,7 +204,7 @@ final class GeneratesVueModuleTest extends TestCase
      */
     public function test_los_inputs_generados_no_llevan_clases(): void
     {
-        $create = $this->project->read(self::MODULE . '/forms/CreateForm.vue');
+        $create = $this->project->read(self::MODULE.'/forms/CreateForm.vue');
 
         $this->assertStringNotContainsString(':custom-class', $create);
         $this->assertStringContainsString('<TextInputComponent', $create);
@@ -212,7 +212,7 @@ final class GeneratesVueModuleTest extends TestCase
 
     public function test_el_boton_de_reiniciar_filtros_usa_la_variante_secundaria(): void
     {
-        $filter = $this->project->read(self::MODULE . '/forms/FilterForm.vue');
+        $filter = $this->project->read(self::MODULE.'/forms/FilterForm.vue');
 
         $this->assertStringContainsString('variant="secondary"', $filter);
         $this->assertStringNotContainsString('bg-gray-400', $filter);
@@ -227,7 +227,7 @@ final class GeneratesVueModuleTest extends TestCase
     public function test_el_formulario_pregunta_al_validador_en_vez_de_leer_su_estado(): void
     {
         foreach (['CreateForm', 'EditForm'] as $form) {
-            $contents = $this->project->read(self::MODULE . "/forms/{$form}.vue");
+            $contents = $this->project->read(self::MODULE."/forms/{$form}.vue");
 
             $this->assertStringContainsString('validator.value?.validate()', $contents, "{$form} sigue leyendo .status.");
             $this->assertStringNotContainsString('validator.value?.status', $contents);
@@ -243,7 +243,7 @@ final class GeneratesVueModuleTest extends TestCase
         foreach (['CreateForm', 'EditForm'] as $form) {
             $this->assertStringContainsString(
                 'destroy()',
-                $this->project->read(self::MODULE . "/forms/{$form}.vue"),
+                $this->project->read(self::MODULE."/forms/{$form}.vue"),
                 "{$form} no desengancha el validador."
             );
         }
@@ -257,7 +257,7 @@ final class GeneratesVueModuleTest extends TestCase
     {
         $this->assertStringNotContainsString(
             'status = true',
-            $this->project->read(self::MODULE . '/forms/EditForm.vue')
+            $this->project->read(self::MODULE.'/forms/EditForm.vue')
         );
     }
 
@@ -281,7 +281,7 @@ final class GeneratesVueModuleTest extends TestCase
 
         $iterator = new \RecursiveIteratorIterator(
             new \RecursiveDirectoryIterator(
-                $this->project->path . '/resources/vue',
+                $this->project->path.'/resources/vue',
                 \FilesystemIterator::SKIP_DOTS
             )
         );

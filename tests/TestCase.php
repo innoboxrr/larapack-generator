@@ -69,24 +69,24 @@ abstract class TestCase extends BaseTestCase
         $errors = [];
 
         foreach ($files as $relative) {
-            $result = $this->lint($this->project->path . '/' . $relative);
+            $result = $this->lint($this->project->path.'/'.$relative);
 
             if ($result !== null) {
                 $errors[] = "{$relative}: {$result}";
             }
         }
 
-        $this->assertSame([], $errors, "PHP generado con errores de sintaxis:\n" . implode("\n", $errors));
+        $this->assertSame([], $errors, "PHP generado con errores de sintaxis:\n".implode("\n", $errors));
     }
 
     /**
-     * @return string|null  El mensaje de error, o null si compila.
+     * @return string|null El mensaje de error, o null si compila.
      */
     private function lint(string $file): ?string
     {
-        $command = escapeshellarg(PHP_BINARY) . ' -l ' . escapeshellarg($file);
+        $command = escapeshellarg(PHP_BINARY).' -l '.escapeshellarg($file);
 
-        exec($command . ' 2>&1', $output, $exitCode);
+        exec($command.' 2>&1', $output, $exitCode);
 
         return $exitCode === 0 ? null : trim(implode(' ', $output));
     }
@@ -96,7 +96,7 @@ abstract class TestCase extends BaseTestCase
         $this->assertTrue(
             $this->project->has($relative),
             "Se esperaba que el generador creara {$relative}.\nGenerados:\n  "
-            . implode("\n  ", $this->project->phpFiles())
+            .implode("\n  ", $this->project->phpFiles())
         );
     }
 }

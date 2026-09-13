@@ -39,11 +39,11 @@ final class NoImplicitGlobalsTest extends TestCase
         $this->assertSame(
             Command::SUCCESS,
             $this->runCommand('larapack:import', [
-                'jsonPath' => dirname(__DIR__) . '/Fixtures/laraimport.json',
+                'jsonPath' => dirname(__DIR__).'/Fixtures/laraimport.json',
                 '--vue' => true,
                 '--react' => true,
             ]),
-            "larapack:import --vue --react terminó con error:\n" . $this->lastOutput
+            "larapack:import --vue --react terminó con error:\n".$this->lastOutput
         );
     }
 
@@ -56,7 +56,7 @@ final class NoImplicitGlobalsTest extends TestCase
 
             foreach (self::PHANTOM_COMPONENTS as $component) {
                 if (str_contains($contents, "<{$component}")) {
-                    $offenders[] = basename(dirname($file)) . '/' . basename($file) . " usa <{$component}>";
+                    $offenders[] = basename(dirname($file)).'/'.basename($file)." usa <{$component}>";
                 }
             }
         }
@@ -76,8 +76,8 @@ final class NoImplicitGlobalsTest extends TestCase
             $contents = $this->withoutComments((string) file_get_contents($file));
 
             if (preg_match_all('/\buk-[a-z0-9@-]+/', $contents, $matches)) {
-                $offenders[] = basename(dirname($file)) . '/' . basename($file)
-                    . ': ' . implode(', ', array_unique($matches[0]));
+                $offenders[] = basename(dirname($file)).'/'.basename($file)
+                    .': '.implode(', ', array_unique($matches[0]));
             }
         }
 
@@ -97,8 +97,8 @@ final class NoImplicitGlobalsTest extends TestCase
             $contents = $this->withoutComments((string) file_get_contents($file));
 
             if (preg_match_all('/\bfa[srlbd]?-[a-z0-9-]+/', $contents, $matches)) {
-                $offenders[] = basename(dirname($file)) . '/' . basename($file)
-                    . ': ' . implode(', ', array_unique($matches[0]));
+                $offenders[] = basename(dirname($file)).'/'.basename($file)
+                    .': '.implode(', ', array_unique($matches[0]));
             }
         }
 
@@ -143,7 +143,7 @@ final class NoImplicitGlobalsTest extends TestCase
             'resources/react/src/components/ActionMenu.jsx',
         ] as $file) {
             $this->assertFileExists(
-                $this->project->path . '/' . $file,
+                $this->project->path.'/'.$file,
                 "Falta {$file}: sin el, el modulo generado vuelve a depender de un componente que la app tiene que registrar por su cuenta."
             );
         }
@@ -213,7 +213,7 @@ final class NoImplicitGlobalsTest extends TestCase
      */
     private function stubFiles(): array
     {
-        $stubs = dirname(__DIR__, 2) . '/src/Stubs';
+        $stubs = dirname(__DIR__, 2).'/src/Stubs';
         $files = [];
 
         $iterator = new \RecursiveIteratorIterator(
@@ -234,7 +234,7 @@ final class NoImplicitGlobalsTest extends TestCase
 
     private function read(string $relative): string
     {
-        $path = $this->project->path . '/' . $relative;
+        $path = $this->project->path.'/'.$relative;
 
         $this->assertFileExists($path);
 

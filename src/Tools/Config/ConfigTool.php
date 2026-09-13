@@ -6,58 +6,56 @@ use Innoboxrr\LarapackGenerator\Tools\Tool;
 
 class ConfigTool extends Tool
 {
+    protected $configPath;
 
-	protected $configPath;
+    protected $configTemplatePath;
 
-	protected $configTemplatePath;
+    private function setConfigPath()
+    {
 
-	private function setConfigPath()
-	{
+        $this->configPath = get_path('config');
 
-		$this->configPath = get_path('config');
+        return $this;
 
-		return $this;
+    }
 
-	}
+    private function setConfigTemplatePath()
+    {
 
-	private function setConfigTemplatePath()
-	{
+        $this->configTemplatePath = stubs_path('Config');
 
-		$this->configTemplatePath = stubs_path('Config');
+        return $this;
 
-		return $this;
+    }
 
-	}
+    private function setUp()
+    {
 
-	private function setUp()
-	{
+        $this->init('')
+            ->setConfigPath()
+            ->setConfigTemplatePath();
 
-		$this->init('')
-			->setConfigPath()
-			->setConfigTemplatePath();
+    }
 
-	}
+    public function create()
+    {
 
-	public function create()
-	{
+        $this->setUp();
 
-		$this->setUp();
+        $configFile = $this->configPath.'/'.$this->namespaceWithoutSeparation.'.php';
 
-		$configFile = $this->configPath . '/' . $this->namespaceWithoutSeparation . '.php';
+        return $this->generate($this->configTemplatePath.'/ConfigTemplate.txt', $configFile);
 
-		return $this->generate($this->configTemplatePath . '/ConfigTemplate.txt', $configFile);
+    }
 
-	}
+    public function remove()
+    {
 
-	public function remove()
-	{
-		
-		$this->setUp();
+        $this->setUp();
 
-		$path = $this->configPath . '/' . $this->namespaceWithoutSeparation . '.php';
+        $path = $this->configPath.'/'.$this->namespaceWithoutSeparation.'.php';
 
-		return (file_exists($path)) ? $this->dropFile($path) : false;
+        return (file_exists($path)) ? $this->dropFile($path) : false;
 
-	}
-
+    }
 }

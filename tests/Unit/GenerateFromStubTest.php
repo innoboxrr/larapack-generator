@@ -22,10 +22,10 @@ final class GenerateFromStubTest extends TestCase
 
         ProjectRoot::set($this->project->path);
 
-        $this->tool = new ExposedTool();
+        $this->tool = new ExposedTool;
         $this->tool->prepare('Invoice');
 
-        $this->stub = $this->project->path . '/stub.txt';
+        $this->stub = $this->project->path.'/stub.txt';
 
         file_put_contents($this->stub, "<?php\n// PascalCaseModelName en Namespace\Models\n");
     }
@@ -38,7 +38,7 @@ final class GenerateFromStubTest extends TestCase
 
     public function test_copia_el_stub_y_sustituye_los_tokens(): void
     {
-        $destination = $this->project->path . '/out/Invoice.php';
+        $destination = $this->project->path.'/out/Invoice.php';
 
         $this->assertTrue($this->tool->generateFrom($this->stub, $destination));
 
@@ -47,7 +47,7 @@ final class GenerateFromStubTest extends TestCase
 
     public function test_crea_los_directorios_intermedios(): void
     {
-        $destination = $this->project->path . '/a/b/c/Invoice.php';
+        $destination = $this->project->path.'/a/b/c/Invoice.php';
 
         $this->tool->generateFrom($this->stub, $destination);
 
@@ -56,7 +56,7 @@ final class GenerateFromStubTest extends TestCase
 
     public function test_no_sobrescribe_un_destino_existente(): void
     {
-        $destination = $this->project->path . '/Invoice.php';
+        $destination = $this->project->path.'/Invoice.php';
 
         file_put_contents($destination, 'contenido a mano');
 
@@ -74,8 +74,8 @@ final class GenerateFromStubTest extends TestCase
         $this->expectExceptionMessage('inexistente.txt');
 
         $this->tool->generateFrom(
-            $this->project->path . '/inexistente.txt',
-            $this->project->path . '/out/Invoice.php'
+            $this->project->path.'/inexistente.txt',
+            $this->project->path.'/out/Invoice.php'
         );
     }
 }

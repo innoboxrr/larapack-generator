@@ -45,7 +45,7 @@ final class VerifyTest extends TestCase
     {
         $this->runCommand('larapack:full-model', ['name' => 'Product']);
 
-        unlink($this->project->path . '/src/Policies/ProductPolicy.php');
+        unlink($this->project->path.'/src/Policies/ProductPolicy.php');
 
         [$code, $report] = $this->verify();
 
@@ -66,7 +66,7 @@ final class VerifyTest extends TestCase
         $this->runCommand('larapack:full-model', ['name' => 'Product']);
 
         file_put_contents(
-            $this->project->path . '/src/Policies/ProductPolicy.php',
+            $this->project->path.'/src/Policies/ProductPolicy.php',
             "<?php\n// mi logica\n"
         );
 
@@ -139,7 +139,7 @@ final class VerifyTest extends TestCase
         $this->runCommand('larapack:full-model', ['name' => 'Product']);
         $this->runCommand('larapack:providers');
 
-        unlink($this->project->path . '/src/Providers/RouteServiceProvider.php');
+        unlink($this->project->path.'/src/Providers/RouteServiceProvider.php');
 
         [$code, $report] = $this->verify();
 
@@ -169,7 +169,7 @@ final class VerifyTest extends TestCase
     {
         $this->runCommand('larapack:full-model', ['name' => 'Product', '--vue' => true]);
 
-        $module = $this->project->path . '/resources/vue/src/models/product/index.js';
+        $module = $this->project->path.'/resources/vue/src/models/product/index.js';
 
         $this->assertFileExists($module);
 

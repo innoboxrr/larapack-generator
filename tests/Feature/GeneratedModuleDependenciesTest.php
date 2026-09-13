@@ -27,7 +27,7 @@ final class GeneratedModuleDependenciesTest extends TestCase
         parent::setUp();
 
         $ecosystem = json_decode(
-            (string) file_get_contents(dirname(__DIR__, 2) . '/ecosystem.json'),
+            (string) file_get_contents(dirname(__DIR__, 2).'/ecosystem.json'),
             true
         );
 
@@ -38,11 +38,11 @@ final class GeneratedModuleDependenciesTest extends TestCase
         $this->assertSame(
             Command::SUCCESS,
             $this->runCommand('larapack:import', [
-                'jsonPath' => dirname(__DIR__) . '/Fixtures/laraimport.json',
+                'jsonPath' => dirname(__DIR__).'/Fixtures/laraimport.json',
                 '--vue' => true,
                 '--react' => true,
             ]),
-            "larapack:import --vue --react terminó con error:\n" . $this->lastOutput
+            "larapack:import --vue --react terminó con error:\n".$this->lastOutput
         );
     }
 
@@ -125,7 +125,7 @@ final class GeneratedModuleDependenciesTest extends TestCase
             }
         }
 
-        $this->assertSame([], $desviaciones, $manifest . ":\n" . implode("\n", $desviaciones));
+        $this->assertSame([], $desviaciones, $manifest.":\n".implode("\n", $desviaciones));
     }
 
     /**
@@ -146,7 +146,7 @@ final class GeneratedModuleDependenciesTest extends TestCase
 
     private function read(string $relative): string
     {
-        $path = $this->project->path . '/' . $relative;
+        $path = $this->project->path.'/'.$relative;
 
         $this->assertFileExists($path);
 

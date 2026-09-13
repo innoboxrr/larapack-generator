@@ -43,8 +43,8 @@ final class SkillTest extends TestCase
     {
         $this->runCommand('larapack:skill');
 
-        $target = $this->project->path . '/' . Skill::DEFAULT_TARGET;
-        file_put_contents($target, Skill::contents() . "\n\n## Reglas de este proyecto\n");
+        $target = $this->project->path.'/'.Skill::DEFAULT_TARGET;
+        file_put_contents($target, Skill::contents()."\n\n## Reglas de este proyecto\n");
 
         $this->runCommand('larapack:skill');
 
@@ -79,9 +79,9 @@ final class SkillTest extends TestCase
 
         $available = [];
 
-        foreach (glob(dirname(__DIR__, 2) . '/src/Commands/*Command.php') as $file) {
-            $class = 'Innoboxrr\\LarapackGenerator\\Commands\\' . basename($file, '.php');
-            $available[] = (new $class())->getName();
+        foreach (glob(dirname(__DIR__, 2).'/src/Commands/*Command.php') as $file) {
+            $class = 'Innoboxrr\\LarapackGenerator\\Commands\\'.basename($file, '.php');
+            $available[] = (new $class)->getName();
         }
 
         // `larapack:<comando>` es el marcador de posición de la sintaxis.
@@ -100,7 +100,7 @@ final class SkillTest extends TestCase
         $this->assertSame(
             Command::SUCCESS,
             $this->runCommand('larapack:import', [
-                'jsonPath' => dirname(__DIR__) . '/Fixtures/laraimport.json',
+                'jsonPath' => dirname(__DIR__).'/Fixtures/laraimport.json',
             ]),
             $this->lastOutput
         );

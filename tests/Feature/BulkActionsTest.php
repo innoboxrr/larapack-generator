@@ -28,7 +28,7 @@ final class BulkActionsTest extends TestCase
 
         $flags = ['datatable' => true, 'form' => true, 'form_submit' => true, 'fillable' => true, 'creatable' => true, 'updatable' => true];
 
-        $path = $this->project->path . '/laraimport.json';
+        $path = $this->project->path.'/laraimport.json';
 
         file_put_contents($path, (string) json_encode(['models' => [[
             'name' => 'Product',
@@ -43,7 +43,7 @@ final class BulkActionsTest extends TestCase
         $this->assertSame(
             Command::SUCCESS,
             $this->runCommand('larapack:import', ['jsonPath' => $path, '--vue' => true, '--react' => true]),
-            "larapack:import terminó con error:\n" . $this->lastOutput
+            "larapack:import terminó con error:\n".$this->lastOutput
         );
     }
 
@@ -103,7 +103,7 @@ final class BulkActionsTest extends TestCase
 
         $this->importProduct(['routes' => ['except' => ['update']]]);
 
-        $this->assertFileDoesNotExist($this->project->path . '/src/Http/Requests/Product/BulkUpdateRequest.php');
+        $this->assertFileDoesNotExist($this->project->path.'/src/Http/Requests/Product/BulkUpdateRequest.php');
         $this->assertStringNotContainsString('bulk.update', $this->project->read('routes/api/models/product.php'));
 
         $contract = $this->project->read('resources/vue/src/models/product/index.js');

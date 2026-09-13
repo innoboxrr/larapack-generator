@@ -3,18 +3,17 @@
 namespace Innoboxrr\LarapackGenerator\Commands;
 
 use Innoboxrr\LarapackGenerator\Commands\Concerns\ReportsGeneration;
-use Symfony\Component\Console\Command\Command;
-use Symfony\Component\Console\Input\InputArgument;
-use Symfony\Component\Console\Input\InputOption;
-use Symfony\Component\Console\Input\InputInterface;
-use Symfony\Component\Console\Output\OutputInterface;
-use Symfony\Component\Console\Input\ArrayInput;
 use Innoboxrr\LarapackGenerator\Support\Declaration;
 use Innoboxrr\LarapackGenerator\Support\Import\ImportDocument;
 use Innoboxrr\LarapackGenerator\Support\Import\SemanticValidator;
-use Innoboxrr\LarapackGenerator\Tools\Tool;
-use Innoboxrr\LarapackGenerator\Commands\MakeFullModelCommand;
 use Innoboxrr\LarapackGenerator\Tools\PivotMigration\PivotMigrationTool;
+use Innoboxrr\LarapackGenerator\Tools\Tool;
+use Symfony\Component\Console\Command\Command;
+use Symfony\Component\Console\Input\ArrayInput;
+use Symfony\Component\Console\Input\InputArgument;
+use Symfony\Component\Console\Input\InputInterface;
+use Symfony\Component\Console\Input\InputOption;
+use Symfony\Component\Console\Output\OutputInterface;
 
 class JsonImporterCommand extends Command
 {
@@ -35,7 +34,7 @@ class JsonImporterCommand extends Command
     {
         $this->applyGenerationOptions($input);
 
-        $jsonPath = $input->getArgument('jsonPath') ?? root_path() . '/laraimport.json';
+        $jsonPath = $input->getArgument('jsonPath') ?? root_path().'/laraimport.json';
 
         // Se valida antes de tocar el disco. Antes un archivo incompleto no
         // daba un mensaje sino un TypeError a mitad de la generación, con
@@ -90,7 +89,7 @@ class JsonImporterCommand extends Command
             foreach ($document->pivots() as $pivot) {
                 $output->writeln("Processing pivot: {$pivot['name']}");
 
-                (new PivotMigrationTool())->create($pivot['name']);
+                (new PivotMigrationTool)->create($pivot['name']);
             }
 
         } finally {
@@ -114,16 +113,16 @@ class JsonImporterCommand extends Command
     private function callMakeFullModelCommand($modelName, array $ui, $metas, OutputInterface $output)
     {
         // Crear la instancia del comando MakeFullModelCommand
-        $command = new MakeFullModelCommand();
+        $command = new MakeFullModelCommand;
 
         // Crear los argumentos para el comando MakeFullModelCommand
         $arguments = [
-            'name' => $modelName
+            'name' => $modelName,
         ];
 
         foreach ($ui as $framework => $requested) {
             if ($requested) {
-                $arguments['--' . $framework] = true;
+                $arguments['--'.$framework] = true;
             }
         }
 

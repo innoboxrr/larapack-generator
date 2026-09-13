@@ -37,7 +37,7 @@ final class ImportContractTest extends TestCase
     private function messages(array $errors, string $level): array
     {
         return array_map(
-            fn (array $e): string => $e['path'] . ' ' . $e['message'],
+            fn (array $e): string => $e['path'].' '.$e['message'],
             array_values(array_filter($errors, fn (array $e): bool => $e['level'] === $level))
         );
     }

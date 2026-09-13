@@ -35,7 +35,7 @@ final class DeclaredImmutableAndSecretTest extends TestCase
 
         $this->useProject(FakeProject::library('Acme\\Ledger\\'));
 
-        $path = $this->project->path . '/laraimport.json';
+        $path = $this->project->path.'/laraimport.json';
 
         file_put_contents($path, json_encode(['models' => [
             ['name' => 'Post', 'props' => [['name' => 'title', 'type' => 'string']]],
@@ -49,7 +49,7 @@ final class DeclaredImmutableAndSecretTest extends TestCase
         $this->assertSame(
             Command::SUCCESS,
             $this->runCommand('larapack:import', ['jsonPath' => $path, '--vue' => true]),
-            "larapack:import terminó con error:\n" . $this->lastOutput
+            "larapack:import terminó con error:\n".$this->lastOutput
         );
     }
 
@@ -122,7 +122,7 @@ final class DeclaredImmutableAndSecretTest extends TestCase
         try {
             $post->save();
         } catch (LogicException $e) {
-            $this->fail('Un modelo normal no debería rechazar un save(): ' . $e->getMessage());
+            $this->fail('Un modelo normal no debería rechazar un save(): '.$e->getMessage());
         } catch (\Throwable) {
             // Sin base de datos de verdad el UPDATE falla al ejecutarse, que es
             // justo después del punto que se comprueba.
@@ -175,7 +175,7 @@ final class DeclaredImmutableAndSecretTest extends TestCase
         $container = Container::getInstance();
 
         if (! $container->bound('translator')) {
-            $container->instance('translator', new Translator(new ArrayLoader(), 'en'));
+            $container->instance('translator', new Translator(new ArrayLoader, 'en'));
             $this->boundTranslator = true;
         }
 
@@ -197,11 +197,11 @@ final class DeclaredImmutableAndSecretTest extends TestCase
     private function model(string $name): Model
     {
         if ($this->autoloader === null) {
-            $source = $this->project->path . '/src/';
+            $source = $this->project->path.'/src/';
 
             $this->autoloader = static function (string $class) use ($source): void {
                 if (str_starts_with($class, 'Acme\\Ledger\\')) {
-                    $file = $source . str_replace('\\', '/', substr($class, strlen('Acme\\Ledger\\'))) . '.php';
+                    $file = $source.str_replace('\\', '/', substr($class, strlen('Acme\\Ledger\\'))).'.php';
 
                     if (is_file($file)) {
                         require $file;
@@ -211,15 +211,15 @@ final class DeclaredImmutableAndSecretTest extends TestCase
 
             spl_autoload_register($this->autoloader);
 
-            $capsule = new Capsule();
+            $capsule = new Capsule;
             $capsule->addConnection(['driver' => 'sqlite', 'database' => ':memory:']);
-            $capsule->setEventDispatcher(new Dispatcher(new Container()));
+            $capsule->setEventDispatcher(new Dispatcher(new Container));
             $capsule->bootEloquent();
         }
 
-        $class = 'Acme\\Ledger\\Models\\' . $name;
+        $class = 'Acme\\Ledger\\Models\\'.$name;
 
-        return new $class();
+        return new $class;
     }
 
     /**

@@ -39,7 +39,7 @@ class AuditCommand extends Command
             return Command::FAILURE;
         }
 
-        $ecosystem = new Ecosystem();
+        $ecosystem = new Ecosystem;
         $findings = [];
 
         foreach ($this->targets($path, (bool) $input->getOption('all')) as $target) {

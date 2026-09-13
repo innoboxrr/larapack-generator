@@ -6,52 +6,50 @@ use Innoboxrr\LarapackGenerator\Tools\Tool;
 
 class PolicyTool extends Tool
 {
+    protected $policyPath;
 
-	protected $policyPath;
+    protected $policyTemplatePath;
 
-	protected $policyTemplatePath;
+    private function setPolicyPath()
+    {
 
-	private function setPolicyPath()
-	{
+        $this->policyPath = get_path(app_dir_name().'/Policies');
 
-		$this->policyPath = get_path(app_dir_name() . '/Policies');
+        return $this;
 
-		return $this;
+    }
 
-	}
+    private function setPolicyTemplatePath()
+    {
 
-	private function setPolicyTemplatePath()
-	{
+        $this->policyTemplatePath = stubs_path('Policy');
 
-		$this->policyTemplatePath = stubs_path('Policy');
+        return $this;
 
-		return $this;
+    }
 
-	}
+    public function create(string $ModelName)
+    {
 
-	public function create(string $ModelName)
-	{
+        $this->init($ModelName)
+            ->setPolicyPath()
+            ->setPolicyTemplatePath();
 
-		$this->init($ModelName)
-			->setPolicyPath()
-			->setPolicyTemplatePath();
+        $policyFile = $this->policyPath.'/'.$this->PascalCaseModelName.'Policy.php';
 
-		$policyFile = $this->policyPath . '/' . $this->PascalCaseModelName . 'Policy.php';
+        return $this->generate($this->policyTemplatePath.'/PolicyTemplate.txt', $policyFile);
 
-		return $this->generate($this->policyTemplatePath . '/PolicyTemplate.txt', $policyFile);
+    }
 
-	}
+    public function remove(string $ModelName)
+    {
 
-	public function remove(string $ModelName)
-	{
+        $this->init($ModelName)
+            ->setPolicyPath();
 
-		$this->init($ModelName)
-			->setPolicyPath();
+        $path = $this->policyPath.'/'.$this->PascalCaseModelName.'Policy.php';
 
-		$path = $this->policyPath . '/' . $this->PascalCaseModelName . 'Policy.php';
+        return (file_exists($path)) ? $this->dropFile($path) : false;
 
-		return (file_exists($path)) ? $this->dropFile($path) : false;
-
-	}
-
+    }
 }

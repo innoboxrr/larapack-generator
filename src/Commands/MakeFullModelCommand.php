@@ -10,14 +10,13 @@ use Innoboxrr\LarapackGenerator\Support\Manifest;
 use Innoboxrr\LarapackGenerator\Tools\Tool;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
-use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Input\InputInterface;
+use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 
 class MakeFullModelCommand extends Command
 {
     use ReportsGeneration;
-
 
     protected $commands = [
         'Migration',
@@ -35,9 +34,9 @@ class MakeFullModelCommand extends Command
         'Requests',
         'Resource',
         'Route',
-        'Test'
+        'Test',
     ];
-    
+
     protected function configure(): void
     {
         $this->setName('larapack:full-model')
@@ -95,8 +94,8 @@ class MakeFullModelCommand extends Command
             Declaration::enableMetas($modelName);
         }
 
-        foreach($commands as $command) {
-            $className = '\Innoboxrr\LarapackGenerator\Tools\\' . $command . '\\' . $command . 'Tool';
+        foreach ($commands as $command) {
+            $className = '\Innoboxrr\LarapackGenerator\Tools\\'.$command.'\\'.$command.'Tool';
             if (class_exists($className)) {
                 $class = new \ReflectionClass($className);
                 ($class->newInstance())->create($modelName);
@@ -104,7 +103,7 @@ class MakeFullModelCommand extends Command
         }
 
         if (! Generation::isDryRun()) {
-            (new Manifest())->declare($modelName, Declaration::toManifest($modelName));
+            (new Manifest)->declare($modelName, Declaration::toManifest($modelName));
         }
 
         if (! $nested) {
@@ -121,7 +120,7 @@ class MakeFullModelCommand extends Command
      * Sin ninguna de las opciones no se toca nada: si el modelo viene del
      * importador, su forma ya está declarada.
      *
-     * @return string|null  El error, si las opciones no son válidas.
+     * @return string|null El error, si las opciones no son válidas.
      */
     private function declareShape(string $modelName, InputInterface $input): ?string
     {
@@ -149,12 +148,12 @@ class MakeFullModelCommand extends Command
             $unknown = array_diff($routes[$key], Actions::ALL);
 
             if ($unknown !== []) {
-                return 'Acciones desconocidas: ' . implode(', ', $unknown) . '. Las válidas son ' . implode(', ', Actions::ALL) . '.';
+                return 'Acciones desconocidas: '.implode(', ', $unknown).'. Las válidas son '.implode(', ', Actions::ALL).'.';
             }
         }
 
         if ($immutable && array_intersect(Actions::MODIFY, $routes['only'] ?? []) !== []) {
-            return 'Un modelo inmutable no puede declarar ' . implode(', ', array_intersect(Actions::MODIFY, $routes['only'])) . '.';
+            return 'Un modelo inmutable no puede declarar '.implode(', ', array_intersect(Actions::MODIFY, $routes['only'])).'.';
         }
 
         Declaration::set(
@@ -165,5 +164,4 @@ class MakeFullModelCommand extends Command
 
         return null;
     }
-
 }

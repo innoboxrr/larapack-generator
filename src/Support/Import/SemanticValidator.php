@@ -15,6 +15,7 @@ use Illuminate\Support\Pluralizer;
 final class SemanticValidator
 {
     public const ERROR = 'error';
+
     public const WARNING = 'warning';
 
     /**
@@ -118,7 +119,7 @@ final class SemanticValidator
                     $findings[] = [
                         'level' => self::ERROR,
                         'path' => "{$path}/only",
-                        'message' => "{$model['name']} es immutable y declara " . implode(', ', $contradicted) . ': una fila inmutable no se modifica ni se borra.',
+                        'message' => "{$model['name']} es immutable y declara ".implode(', ', $contradicted).': una fila inmutable no se modifica ni se borra.',
                     ];
                 }
             }
@@ -146,7 +147,7 @@ final class SemanticValidator
                     $findings[] = [
                         'level' => self::WARNING,
                         'path' => $path,
-                        'message' => "{$model['name']} declara " . implode(' y ', $orphans) . ' sin delete: nada de la API puede producir una fila borrada. Es correcto si la borra otro proceso.',
+                        'message' => "{$model['name']} declara ".implode(' y ', $orphans).' sin delete: nada de la API puede producir una fila borrada. Es correcto si la borra otro proceso.',
                     ];
                 }
             }
@@ -484,7 +485,7 @@ final class SemanticValidator
                 $findings[] = [
                     'level' => self::ERROR,
                     'path' => '/models',
-                    'message' => 'Ciclo de claves foráneas: ' . implode(' -> ', [...$cycle, $node]) . '. No hay orden de migración posible.',
+                    'message' => 'Ciclo de claves foráneas: '.implode(' -> ', [...$cycle, $node]).'. No hay orden de migración posible.',
                 ];
 
                 return;
@@ -551,7 +552,7 @@ final class SemanticValidator
 
         foreach ($models as $index => $model) {
             $columns = array_column($model['props'], 'name');
-            $identifier = self::snake($model['name']) . '_id';
+            $identifier = self::snake($model['name']).'_id';
 
             foreach ($model['requests'] as $position => $request) {
                 foreach (array_keys($request['rules'] ?? []) as $field) {

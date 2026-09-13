@@ -25,7 +25,7 @@ final class Schema
 
     public static function path(): string
     {
-        $path = realpath(__DIR__ . self::RELATIVE_PATH);
+        $path = realpath(__DIR__.self::RELATIVE_PATH);
 
         if ($path === false) {
             throw new RuntimeException('No se encontró schema/laraimport.schema.json en el paquete.');
@@ -56,7 +56,7 @@ final class Schema
      */
     public static function validate(array $document): array
     {
-        $validator = new Validator();
+        $validator = new Validator;
 
         $validator->resolver()->registerRaw(file_get_contents(self::path()), self::id());
 
@@ -69,7 +69,7 @@ final class Schema
             return [];
         }
 
-        return self::flatten((new ErrorFormatter())->format($result->error(), true));
+        return self::flatten((new ErrorFormatter)->format($result->error(), true));
     }
 
     /**

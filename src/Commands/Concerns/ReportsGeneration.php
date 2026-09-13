@@ -53,7 +53,7 @@ trait ReportsGeneration
                 ),
                 ...Generation::writtenFiles(),
             ],
-            new Manifest()
+            new Manifest
         );
 
         if ($input->getOption('format') === 'json') {
@@ -117,6 +117,6 @@ trait ReportsGeneration
         $root = str_replace('\\', '/', root_path());
         $file = str_replace('\\', '/', $file);
 
-        return str_starts_with($file, $root . '/') ? substr($file, strlen($root) + 1) : $file;
+        return str_starts_with($file, $root.'/') ? substr($file, strlen($root) + 1) : $file;
     }
 }

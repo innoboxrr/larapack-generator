@@ -19,7 +19,7 @@ final class TokenReplacementTest extends TestCase
 
         ProjectRoot::set($this->project->path);
 
-        $this->tool = new ExposedTool();
+        $this->tool = new ExposedTool;
     }
 
     protected function tearDown(): void

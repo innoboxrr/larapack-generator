@@ -6,41 +6,39 @@ use Innoboxrr\LarapackGenerator\Tools\Tool;
 
 class RouteServiceProviderTool extends Tool
 {
+    protected $routeServiceProviderPath;
 
-	protected $routeServiceProviderPath;
+    protected $routeServiceProviderTemplatePath;
 
-	protected $routeServiceProviderTemplatePath;
+    private function setRouteServiceProviderPath()
+    {
 
-	private function setRouteServiceProviderPath()
-	{
+        $this->routeServiceProviderPath = get_path(app_dir_name().'/Providers');
 
-		$this->routeServiceProviderPath = get_path(app_dir_name() . '/Providers');
+        return $this;
 
-		return $this;
+    }
 
-	}
+    private function setRouteServiceProviderTemplatePath()
+    {
 
-	private function setRouteServiceProviderTemplatePath()
-	{
+        $this->routeServiceProviderTemplatePath = stubs_path('Providers');
 
-		$this->routeServiceProviderTemplatePath = stubs_path('Providers');
+        return $this;
 
-		return $this;
+    }
 
-	}
+    public function create()
+    {
 
-	public function create()
-	{
+        $this->init('')
+            ->setRouteServiceProviderPath()
+            ->setRouteServiceProviderTemplatePath()
+            ->addProvidersToComposerJson([$this->namespace.'Providers\RouteServiceProvider']);
 
-		$this->init('')
-			->setRouteServiceProviderPath()
-			->setRouteServiceProviderTemplatePath()
-			->addProvidersToComposerJson([$this->namespace . 'Providers\RouteServiceProvider']);
+        $routeServiceProviderFile = $this->routeServiceProviderPath.'/RouteServiceProvider.php';
 
-		$routeServiceProviderFile = $this->routeServiceProviderPath . '/RouteServiceProvider.php';
+        return $this->generate($this->routeServiceProviderTemplatePath.'/RouteServiceProviderTemplate.txt', $routeServiceProviderFile);
 
-		return $this->generate($this->routeServiceProviderTemplatePath . '/RouteServiceProviderTemplate.txt', $routeServiceProviderFile);
-
-	}
-
+    }
 }

@@ -35,14 +35,14 @@ final class Formatter
             return is_file($override) ? $override : null;
         }
 
-        $candidate = root_path() . '/vendor/laravel/pint/builds/pint';
+        $candidate = root_path().'/vendor/laravel/pint/builds/pint';
 
         return is_file($candidate) ? $candidate : null;
     }
 
     /**
      * @param  array<int, string>  $files
-     * @return int|null  los archivos PHP formateados, o null si hacía falta Pint y no está
+     * @return int|null los archivos PHP formateados, o null si hacía falta Pint y no está
      */
     public static function format(array $files, Manifest $manifest): ?int
     {

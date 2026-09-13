@@ -35,7 +35,7 @@ class VerifyCommand extends Command
     {
         $this->applyRootOption($input);
 
-        $findings = (new Verifier())->run();
+        $findings = (new Verifier)->run();
 
         $errors = $this->count($findings, Verifier::ERROR);
         $warnings = $this->count($findings, Verifier::WARNING);

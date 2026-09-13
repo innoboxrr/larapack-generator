@@ -6,89 +6,89 @@ use Innoboxrr\LarapackGenerator\Tools\Tool;
 
 class FiltersTool extends Tool
 {
+    protected $filtersPath;
 
-	protected $filtersPath;
+    protected $filtersTemplatePath;
 
-	protected $filtersTemplatePath;
+    protected $mainFiltersPath;
 
-	protected $mainFiltersPath;
+    protected $filters = [
+        'CreationFilter',
+        'EagerLoadingFilter',
+        'IdFilter',
+        'ManagedFilter',
+        'UpdatedFilter',
+    ];
 
-	protected $filters = [
-		'CreationFilter',
-		'EagerLoadingFilter',
-		'IdFilter',
-		'ManagedFilter',
-		'UpdatedFilter',
-	];
+    private function setFiltersPath()
+    {
 
-	private function setFiltersPath()
-	{
+        $this->filtersPath = get_path(app_dir_name().'/Models/Filters');
 
-		$this->filtersPath = get_path(app_dir_name() . '/Models/Filters');
+        return $this;
 
-		return $this;
+    }
 
-	}
+    private function setFiltersTemplatePath()
+    {
 
-	private function setFiltersTemplatePath()
-	{
+        $this->filtersTemplatePath = stubs_path('Filters');
 
-		$this->filtersTemplatePath = stubs_path('Filters');
+        return $this;
 
-		return $this;
+    }
 
-	}
+    protected function setMainFiltersPath()
+    {
 
-	protected function setMainFiltersPath()
-	{
+        $path = $this->filtersPath.'/'.$this->PascalCaseModelName;
 
-		$path = $this->filtersPath . '/' . $this->PascalCaseModelName;
+        if (! file_exists($path)) {
+            mkdir($path, 0777, true);
+        }
 
-		if (!file_exists($path)) mkdir($path, 0777, true);
+        $this->mainFiltersPath = $path;
 
-		$this->mainFiltersPath = $path;
+        return $this;
 
-		return $this;
+    }
 
-	}
+    public function create(string $ModelName)
+    {
 
-	public function create(string $ModelName)
-	{
+        $this->init($ModelName)
+            ->setFiltersPath()
+            ->setFiltersTemplatePath()
+            ->setMainFiltersPath();
 
-		$this->init($ModelName)
-			->setFiltersPath()
-			->setFiltersTemplatePath()
-			->setMainFiltersPath();
+        foreach ($this->filters as $filter) {
 
-		foreach($this->filters as $filter) {
+            $this->createRequestFile($filter);
 
-			$this->createRequestFile($filter);
+        }
 
-		}
+        return true;
 
-		return true;
+    }
 
-	}
+    protected function createRequestFile($filterName)
+    {
 
-	protected function createRequestFile($filterName)
-	{
+        $filterFile = $this->mainFiltersPath.'/'.$filterName.'.php';
 
-		$filterFile = $this->mainFiltersPath . '/' . $filterName . '.php';
+        return $this->generate($this->filtersTemplatePath.'/'.$filterName.'Template.txt', $filterFile);
 
-		return $this->generate($this->filtersTemplatePath . '/' . $filterName . 'Template.txt', $filterFile);
+    }
 
-	}
+    public function remove(string $ModelName)
+    {
 
-	public function remove(string $ModelName)
-	{	
+        $this->init($ModelName)
+            ->setFiltersPath();
 
-		$this->init($ModelName)
-			->setFiltersPath();
+        $path = $this->filtersPath.'/'.$this->PascalCaseModelName;
 
-		$path = $this->filtersPath . '/' . $this->PascalCaseModelName;
+        return (file_exists($path)) ? $this->dropDir($path) : false;
 
-		return (file_exists($path)) ? $this->dropDir($path) : false;
-
-	}
-
+    }
 }

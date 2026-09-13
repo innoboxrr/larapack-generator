@@ -2,287 +2,283 @@
 
 namespace Innoboxrr\LarapackGenerator\Tools\Test;
 
-use Innoboxrr\LarapackGenerator\Tools\Tool;
 use Innoboxrr\LarapackGenerator\Exceptions\MakerException;
 use Innoboxrr\LarapackGenerator\Support\Generation;
+use Innoboxrr\LarapackGenerator\Tools\Tool;
 
 class TestTool extends Tool
 {
+    protected $testPath;
 
-	protected $testPath;
+    protected $testTemplatePath;
 
-	protected $testTemplatePath;
+    protected $testCasePath;
 
-	protected $testCasePath;
+    protected $testUnitPath;
 
-	protected $testUnitPath;
+    private function setTestPath()
+    {
 
-	private function setTestPath()
-	{
+        $this->testPath = get_path('tests/Feature/Models');
 
-		$this->testPath = get_path('tests/Feature/Models');
+        return $this;
 
-		return $this;
+    }
 
-	}
+    private function setTestCasePath()
+    {
 
-	private function setTestCasePath()
-	{
+        $this->testCasePath = get_path('tests');
 
-		$this->testCasePath = get_path('tests');
+        return $this;
 
-		return $this;
+    }
 
-	}
+    private function setTestUnitPath()
+    {
 
-	private function setTestUnitPath()
-	{
+        $this->testUnitPath = get_path('tests/Unit');
 
-		$this->testUnitPath = get_path('tests/Unit');
+        return $this;
 
-		return $this;
+    }
 
-	}
+    private function setTestTemplatePath()
+    {
 
-	private function setTestTemplatePath()
-	{
+        $this->testTemplatePath = stubs_path('Test');
 
-		$this->testTemplatePath = stubs_path('Test');
+        return $this;
 
-		return $this;
+    }
 
-	}
+    public function create(string $ModelName)
+    {
 
-	public function create(string $ModelName)
-	{
+        $this->init($ModelName)
+            ->setTestPath()
+            ->setTestCasePath()
+            ->setTestUnitPath()
+            ->setTestTemplatePath()
+            ->createTestCaseClass()
+            ->createTestUserClass()
+            ->createPhpUnitXmlFile()
+            ->addTestNamespaceToComposerJson()
+            ->createFeatureTest();
 
-		$this->init($ModelName)
-			->setTestPath()
-			->setTestCasePath()
-			->setTestUnitPath()
-			->setTestTemplatePath()
-			->createTestCaseClass()
-			->createTestUserClass()
-			->createPhpUnitXmlFile()
-			->addTestNamespaceToComposerJson()
-			->createFeatureTest();
+    }
 
-	}
+    /**
+     * Lo que un proyecto necesita para tener tests antes de su primer modelo.
+     */
+    public function createScaffold()
+    {
 
-	/**
-	 * Lo que un proyecto necesita para tener tests antes de su primer modelo.
-	 */
-	public function createScaffold()
-	{
+        $this->init('')
+            ->setTestCasePath()
+            ->setTestTemplatePath()
+            ->createTestCaseClass()
+            ->createTestUserClass()
+            ->createPhpUnitXmlFile()
+            ->addTestNamespaceToComposerJson();
 
-		$this->init('')
-			->setTestCasePath()
-			->setTestTemplatePath()
-			->createTestCaseClass()
-			->createTestUserClass()
-			->createPhpUnitXmlFile()
-			->addTestNamespaceToComposerJson();
+        return $this;
 
-		return $this;
+    }
 
-	}
+    /**
+     * Copia una plantilla de test si el destino no existe, respetando la
+     * simulacion y dejando constancia: antes se copiaba en silencio, tambien con
+     * --dry-run, y el informe no la mencionaba.
+     */
+    private function copyOnce(string $template, string $destination): bool
+    {
 
-	/**
-	 * Copia una plantilla de test si el destino no existe, respetando la
-	 * simulacion y dejando constancia: antes se copiaba en silencio, tambien con
-	 * --dry-run, y el informe no la mencionaba.
-	 */
-	private function copyOnce(string $template, string $destination): bool
-	{
+        if (file_exists($destination)) {
 
-		if (file_exists($destination)) {
+            return false;
 
-			return false;
+        }
 
-		}
+        if (Generation::isDryRun()) {
 
-		if (Generation::isDryRun()) {
+            Generation::record('create', $destination, $template);
 
-			Generation::record('create', $destination, $template);
+            return false;
 
-			return false;
+        }
 
-		}
+        if (! copy($template, $destination)) {
 
-		if (! copy($template, $destination)) {
+            throw MakerException::copyFailed($template, $destination);
+        }
 
-			throw MakerException::copyFailed($template, $destination);
+        Generation::record('create', $destination, $template);
 
-		}
+        return true;
 
-		Generation::record('create', $destination, $template);
+    }
 
-		return true;
+    private function createTestCaseClass()
+    {
 
-	}
+        $testCaseFile = $this->testCasePath.'/TestCase.php';
 
-	private function createTestCaseClass()
-	{
+        if ($this->copyOnce($this->testTemplatePath.'/TestCaseTemplate.txt', $testCaseFile)) {
 
-		$testCaseFile = $this->testCasePath . '/TestCase.php';
+            $this->replaceData($testCaseFile);
 
-		if ($this->copyOnce($this->testTemplatePath . '/TestCaseTemplate.txt', $testCaseFile)) {
+        }
 
-			$this->replaceData($testCaseFile);
+        return $this;
 
-		}
+    }
 
-		return $this;
+    /**
+     * El usuario con que se autentican los tests de un paquete. Una aplicacion
+     * ya tiene el suyo; un paquete no conoce el de quien lo instale.
+     */
+    private function createTestUserClass()
+    {
 
-	}
+        $userFile = $this->testCasePath.'/User.php';
 
-	/**
-	 * El usuario con que se autentican los tests de un paquete. Una aplicacion
-	 * ya tiene el suyo; un paquete no conoce el de quien lo instale.
-	 */
-	private function createTestUserClass()
-	{
+        if (app_dir_name() == 'src' && $this->copyOnce($this->testTemplatePath.'/TestUserTemplate.txt', $userFile)) {
 
-		$userFile = $this->testCasePath . '/User.php';
+            $this->replaceData($userFile);
 
-		if (app_dir_name() == 'src' && $this->copyOnce($this->testTemplatePath . '/TestUserTemplate.txt', $userFile)) {
+        }
 
-			$this->replaceData($userFile);
+        return $this;
 
-		}
+    }
 
-		return $this;
+    private function createPhpUnitXmlFile()
+    {
 
-	}
+        $phpunitFile = root_path().'/phpunit.xml';
 
-	private function createPhpUnitXmlFile()
-	{
+        // Un phpunit.xml.dist ya es la configuracion del proyecto; crear ademas
+        // un phpunit.xml la taparia en silencio para quien lo tenga.
+        if (file_exists(root_path().'/phpunit.xml.dist')) {
 
-		$phpunitFile = root_path() . '/phpunit.xml';
+            return $this;
 
-		// Un phpunit.xml.dist ya es la configuracion del proyecto; crear ademas
-		// un phpunit.xml la taparia en silencio para quien lo tenga.
-		if (file_exists(root_path() . '/phpunit.xml.dist')) {
+        }
 
-			return $this;
+        if (! file_exists($phpunitFile)) {
 
-		}
+            $templateFile = $this->testTemplatePath.'/PhpunitTemplate.txt';
 
-		if(!file_exists($phpunitFile)) {
+            if ($this->copyOnce($templateFile, $phpunitFile)) {
 
-			$templateFile = $this->testTemplatePath . '/PhpunitTemplate.txt';
+                // El directorio de cobertura depende de si es paquete (src) o proyecto (app).
+                file_put_contents($phpunitFile, str_replace(
+                    '__SOURCE_DIR__',
+                    app_dir_name(),
+                    file_get_contents($phpunitFile)
+                ));
 
-			if($this->copyOnce($templateFile, $phpunitFile)) {
+            }
 
-				// El directorio de cobertura depende de si es paquete (src) o proyecto (app).
-				file_put_contents($phpunitFile, str_replace(
-					'__SOURCE_DIR__',
-					app_dir_name(),
-					file_get_contents($phpunitFile)
-				));
+        }
 
-			}
+        return $this;
 
-		}
+    }
 
-		return $this;
+    private function addTestNamespaceToComposerJson()
+    {
 
-	}
+        // Una simulación no escribe nada, tampoco composer.json.
+        if (app_dir_name() == 'src' && ! Generation::isDryRun()) {
 
-	private function addTestNamespaceToComposerJson()
-	{
+            $composerJsonPath = root_path().'/composer.json';
 
-		// Una simulación no escribe nada, tampoco composer.json.
-		if(app_dir_name() == 'src' && ! Generation::isDryRun()) {
+            $composerJsonData = json_decode(file_get_contents($composerJsonPath), true);
 
-			$composerJsonPath = root_path() . '/composer.json';
+            $baseNamespace = array_keys($composerJsonData['autoload']['psr-4'])[0];
 
-		    $composerJsonData = json_decode(file_get_contents($composerJsonPath), true);
+            if (isset($composerJsonData['autoload-dev']['psr-4'])) {
 
-			$baseNamespace = array_keys($composerJsonData['autoload']['psr-4'])[0];
+                $composerJsonData['autoload-dev']['psr-4'][$baseNamespace.'Tests\\'] = 'tests/';
 
-			if (isset($composerJsonData['autoload-dev']['psr-4'])) {
+            } else {
 
-			    $composerJsonData['autoload-dev']['psr-4'][$baseNamespace . 'Tests\\'] = 'tests/';
+                $composerJsonData['autoload-dev'] = [
 
-			} else {
-			    
-			    $composerJsonData['autoload-dev'] = [
-			    
-			        'psr-4' => [
-			    
-			            $baseNamespace . 'Tests\\' => 'tests/',
-			    
-			        ],
-			    
-			    ];
+                    'psr-4' => [
 
-			}
+                        $baseNamespace.'Tests\\' => 'tests/',
 
-			file_put_contents(
-				$composerJsonPath, 
-				json_encode($composerJsonData, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)
-			);
+                    ],
 
-		}
+                ];
 
-		return $this;
+            }
 
-	}
+            file_put_contents(
+                $composerJsonPath,
+                json_encode($composerJsonData, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)
+            );
 
-	private function createFeatureTest()
-	{
+        }
 
-		$testFile = $this->testPath . '/' . $this->PascalCaseModelName . 'EndpointsTest.php';
+        return $this;
 
-		if(!file_exists($testFile)) {
+    }
 
-			$templateName = (app_dir_name() == 'src') ? 
-				'/TestPackageTemplate.txt' : 
-				'/TestProjectTemplate.txt';
+    private function createFeatureTest()
+    {
 
-			$templateFile = $this->testTemplatePath . $templateName;
+        $testFile = $this->testPath.'/'.$this->PascalCaseModelName.'EndpointsTest.php';
 
-			if (Generation::isDryRun()) {
+        if (! file_exists($testFile)) {
 
-				Generation::record('create', $testFile, $templateFile);
+            $templateName = (app_dir_name() == 'src') ?
+                '/TestPackageTemplate.txt' :
+                '/TestProjectTemplate.txt';
 
-				return $this;
+            $templateFile = $this->testTemplatePath.$templateName;
 
-			}
+            if (Generation::isDryRun()) {
 
-			if(copy($templateFile, $testFile)) {
+                Generation::record('create', $testFile, $templateFile);
 
-				$this->applyBlocks($testFile);
+                return $this;
 
-				$this->replaceData($testFile);
+            }
 
-			} else {
+            if (copy($templateFile, $testFile)) {
 
-				throw MakerException::copyFailed($templateFile, $testFile);
+                $this->applyBlocks($testFile);
 
-			}
+                $this->replaceData($testFile);
 
-		} else {
+            } else {
 
-			return false;
+                throw MakerException::copyFailed($templateFile, $testFile);
+            }
 
-		}
+        } else {
 
-		return true;
-		
-	}
+            return false;
 
-	public function remove(string $ModelName)
-	{
+        }
 
-		$this->init($ModelName)
-			->setTestPath();
+        return true;
 
-		$path = $this->testPath . '/' . $this->PascalCaseModelName . 'EndpointsTest.php';
+    }
 
-		return (file_exists($path)) ? $this->dropFile($path) : false;
-		
-	}
+    public function remove(string $ModelName)
+    {
 
+        $this->init($ModelName)
+            ->setTestPath();
+
+        $path = $this->testPath.'/'.$this->PascalCaseModelName.'EndpointsTest.php';
+
+        return (file_exists($path)) ? $this->dropFile($path) : false;
+
+    }
 }

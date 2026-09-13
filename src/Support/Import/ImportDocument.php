@@ -18,9 +18,7 @@ final class ImportDocument
     /**
      * @param  array<string, mixed>  $data
      */
-    private function __construct(public readonly array $data)
-    {
-    }
+    private function __construct(public readonly array $data) {}
 
     /**
      * @return array{document: self|null, errors: array<int, array{level: string, path: string, message: string}>}
@@ -41,7 +39,7 @@ final class ImportDocument
             return ['document' => null, 'errors' => [[
                 'level' => SemanticValidator::ERROR,
                 'path' => '/',
-                'message' => 'El archivo no contiene un objeto JSON válido: ' . json_last_error_msg(),
+                'message' => 'El archivo no contiene un objeto JSON válido: '.json_last_error_msg(),
             ]]];
         }
 

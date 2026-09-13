@@ -53,7 +53,7 @@ final class StubBlocks
 
             if (preg_match(self::CLOSE, $line)) {
                 if ($stack === []) {
-                    throw new MakerException('@larapack:endif sin @larapack:if en la línea ' . ($number + 1) . '.');
+                    throw new MakerException('@larapack:endif sin @larapack:if en la línea '.($number + 1).'.');
                 }
 
                 array_pop($stack);
@@ -67,7 +67,7 @@ final class StubBlocks
         }
 
         if ($stack !== []) {
-            throw new MakerException('Hay ' . count($stack) . ' @larapack:if sin cerrar.');
+            throw new MakerException('Hay '.count($stack).' @larapack:if sin cerrar.');
         }
 
         return $output;
@@ -114,7 +114,7 @@ final class StubBlocks
         $any = str_contains($expression, '|');
 
         if ($all && $any) {
-            throw new MakerException("La condición '{$expression}' de la línea " . ($number + 1) . ' mezcla & y |.');
+            throw new MakerException("La condición '{$expression}' de la línea ".($number + 1).' mezcla & y |.');
         }
 
         $conditions = preg_split('/[|&]/', $expression);
