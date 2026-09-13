@@ -1,5 +1,40 @@
 # Changelog
 
+## 7.9.0
+
+Lo que faltaba para trabajar como en una aplicación de escritorio, y la puerta de
+calidad en la CI.
+
+- **Acciones masivas.** Dos acciones nuevas, `bulkUpdate` y `bulkDelete`, con
+  ruta, método, request y test: cada registro pasa por la política de la acción
+  individual, todo va en una transacción y un id que no existe no deja nada a
+  medias. `bulkUpdate` valida con las reglas de `UpdateRequest`, sólo los campos
+  que llegan. `immutable` las quita, quitar `update` o `delete` quita su masiva,
+  y pedirla con `only` sin la individual es un error de `larapack:validate`.
+- **La tabla generada selecciona filas**: borrar las seleccionadas y, por cada
+  columna con `enum`, ponerles un valor.
+- **Edición en la celda** para las columnas de texto de una línea que el
+  formulario edita: guarda sólo ese campo y enseña el error de la regla.
+- **Exportar avisa** al pedirse, y **la paleta** ofrece exportar.
+- **Los formularios escriben las metas editables**, y la edición las rellena
+  desde `payload`.
+- **Migraciones de alteración.** Reimportar con columnas distintas escribe
+  `*_alter_<tabla>_table.php` con lo añadido, cambiado y quitado, y su `down()`.
+  La migración de creación no se toca. Una llave foránea que cambia y una
+  migración editada a mano se dejan para escribirlas a mano.
+- **Pint y Larastan** en la CI de LaraPack y en cada paquete de `larapack:new`
+  (`pint.json`, `phpstan.neon.dist` nivel 5 y el trabajo `quality`). Lo generado
+  sale formateado y pasa el análisis.
+- **Vite 8** en el módulo generado (`vite ^8`, `@vitejs/plugin-react ^6`), y
+  `innoboxrr-vue-datatable`/`innoboxrr-react-datatable` 3.1,
+  `innoboxrr-form-elements` 6.7 e `innoboxrr-react-form-elements` 3.7.
+- **La comprobación del JSX generado corre en la CI**: instala esbuild si no lo
+  encuentra, en lugar de saltarse.
+
+### Para proyectos existentes
+
+Ver «De 7.8 a 7.9» en la guía de actualización del README.
+
 ## 7.8.0
 
 La interfaz generada nombra a cada registro por su columna. La ficha, las migas y
