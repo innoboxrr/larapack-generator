@@ -396,6 +396,7 @@ dice lo que se decide de verdad:
 | `load_counts` | La lista `$loadable_counts`. |
 | `editable_metas` | Metas que el formulario puede escribir. Los grupos anidados llegan aplanados: `seo.title` es `seo_title`. |
 | `protected_metas` | Metas que sólo escribe tu código con `setMeta()`; el formulario no las toca. |
+| `display` | La columna que nombra a un registro en la ficha, las migas y la pestaña. Sin la clave: `name`, luego `title`, luego la primera columna de texto, y si no hay, `id`. |
 | `requests[]` | Reglas de `CreateRequest` y `UpdateRequest`. |
 | `pivots[]` | Migraciones de tablas pivote, sin modelo. |
 | `routes` | Qué acciones genera el modelo: `only` o `except`. Sin la clave, las diez. |
@@ -1190,8 +1191,9 @@ versión hasta la última.
 | 7.5.0 | Bajo | Nada; tres dependencias npm | [7.5.0 → 7.5.1](#de-750-a-751) y siguiente |
 | 7.5.1 | Medio | La aplicación carga las traducciones del módulo; algunas claves cambian | [7.5 → 7.6](#de-75-a-76) y siguiente |
 | 7.6 | Medio si usas metas; bajo si no | Metas conectadas; traits y support 2.1 | [7.6 → 7.7](#de-76-a-77) y siguiente |
-| 7.7.0 | Bajo | La exportación trae Excel y usa el disco `local` | [7.7.0 → 7.7.1](#de-770-a-771) |
-| 7.7.1 | — | Estás al día | — |
+| 7.7.0 | Bajo | La exportación trae Excel y usa el disco `local` | [7.7.0 → 7.7.1](#de-770-a-771) y siguiente |
+| 7.7.1 | Bajo | La ficha nombra al registro por su columna | [7.7 → 7.8](#de-77-a-78) |
+| 7.8 | — | Estás al día | — |
 
 Las notas completas de cada versión están en `CHANGELOG.md`.
 
@@ -1563,6 +1565,20 @@ avisan con un mensaje claro si falla y enlazan a una descarga firmada.
 
 **En la aplicación**: `$middleware->statefulApi()` en `bootstrap/app.php`, y
 `vue-router@4` con `pinia@3` (ver [Montar un paquete](#frontend-con-vue)).
+
+### De 7.7 a 7.8
+
+La ficha, las migas y el título de la pestaña nombran al registro por su columna.
+Antes leían siempre `.name`, y un modelo con `title` salía con el nombre del
+modelo.
+
+**En el laraimport, opcional:** `"display": "sku"` si la columna que lo nombra no
+es `name`, `title` ni la primera columna de texto. Una columna que no existe o una
+`secret` es un error de `larapack:validate`.
+
+**Regenera con `--force`** `views/ShowView` y `widgets/ModelCard`. Si los editaste,
+cambia a mano `.name` por la columna en esos dos archivos: tres sitios en total.
+Un modelo con `name` sale igual que antes.
 
 ---
 

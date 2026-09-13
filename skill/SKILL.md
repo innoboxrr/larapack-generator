@@ -97,6 +97,7 @@ Lo que conviene saber sin tener que leer el esquema entero:
 | `load_counts` | Whitelist `$loadable_counts`. |
 | `editable_metas` | Metas que escribe el formulario, con el nombre ya aplanado (`seo_title`). |
 | `protected_metas` | Metas que sólo escribe tu código; el formulario no las toca. |
+| `display` | La columna que nombra a un registro en la ficha, las migas y la pestaña. Decláralo sólo si no es `name`, `title` ni la primera columna de texto; nunca una `secret`. |
 | `requests[]` | Reglas de `CreateRequest` y `UpdateRequest`. Solo esos dos. |
 | `pivots[]` | Migraciones de tablas pivote, sin modelo. |
 | `routes` | Qué acciones genera el modelo: `only` o `except`. Sin la clave, las diez. |
