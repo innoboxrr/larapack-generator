@@ -174,10 +174,10 @@ una excepción:
 
 Dos avisos:
 
-- **Una tabla que ya existe en producción no se altera regenerando su migración
-  de creación.** El JSON actualiza el modelo, las requests, los formularios y la
-  tabla de la interfaz; el cambio de esquema de una base ya migrada va en una
-  migración nueva (`php artisan make:migration`).
+- **Una tabla que ya existe no se altera regenerando su migración de creación.**
+  Al reimportar, las columnas que cambian en el JSON van a una migración de
+  alteración nueva, `<fecha>_alter_<tabla>_table.php`, y basta con `php artisan
+  migrate` (ver [Regenerar sin destruir](#regenerar-sin-destruir)).
 - **Si falta un endpoint o una pieza, falta en el JSON o en el generador**, no en
   el archivo generado. Escribirlo a mano es exactamente la deriva que
   `larapack:verify` señala.
@@ -185,7 +185,7 @@ Dos avisos:
 ### Tablas que no se administran desde un formulario
 
 Una bitácora sólo se agrega, un catálogo sólo se lee, una concesión se otorga y
-se revoca pero no se edita. No se generan las diez acciones para borrar después
+se revoca pero no se edita. No se generan todas las acciones para borrar después
 lo que sobra: se declara con `routes`, `immutable` y `secret` (ver
 [el contrato](#tablas-que-no-se-administran-desde-un-formulario-1)). Lo borrado
 a mano queda marcado como editado para siempre, y el contrato deja de describir
@@ -399,7 +399,7 @@ dice lo que se decide de verdad:
 | `display` | La columna que nombra a un registro en la ficha, las migas y la pestaña. Sin la clave: `name`, luego `title`, luego la primera columna de texto, y si no hay, `id`. |
 | `requests[]` | Reglas de `CreateRequest` y `UpdateRequest`. |
 | `pivots[]` | Migraciones de tablas pivote, sin modelo. |
-| `routes` | Qué acciones genera el modelo: `only` o `except`. Sin la clave, las diez. |
+| `routes` | Qué acciones genera el modelo: `only` o `except`. Sin la clave, todas. |
 | `immutable` | La fila no cambia una vez creada. |
 
 ### Un modelo completo
@@ -564,9 +564,10 @@ y, con `"editable_metas": ["seo_title", "seo_og_image"]`, quedan las metas
   **no se toca**: para no cambiar una meta, no la mandes;
 - una lista (`['a', 'b']`) se guarda entera, como JSON;
 - después de guardar se rehace `payload`;
-- **los formularios generados no traen campos para las metas**: añade los inputs
-  a `CreateForm` y `EditForm` con el nombre del grupo (`seo.title`) y mándalos
-  en el envío.
+- **los formularios generados traen un campo de texto por cada meta editable**
+  que no sea protegida: no es obligatorio —vacío, la meta se borra—, viaja con el
+  nombre aplanado (`seo_title`) y, al editar, se rellena desde `payload`. Para un
+  campo de otro tipo, cambia el componente en `CreateForm` y `EditForm`.
 
 **Qué escribe tu código.** Las metas protegidas —contadores, fechas de un
 proceso, lo que calcula el sistema— se escriben con `setMeta()` o `setMetas()`,
@@ -611,11 +612,11 @@ y después `$post->getPayload('seo.title')`.
 
 ### Tablas que no se administran desde un formulario
 
-LaraPack genera diez acciones por modelo: `policies`, `policy`, `index`, `show`,
-`create`, `update`, `delete`, `restore`, `forceDelete` y `export`. Es la forma
-correcta para algo que una persona administra desde una pantalla, y la
-equivocada para buena parte de un sistema real. Tres claves lo declaran; si no
-están, el modelo tiene las diez de siempre:
+LaraPack genera doce acciones por modelo: `policies`, `policy`, `index`, `show`,
+`create`, `update`, `delete`, `restore`, `forceDelete`, `export`, `bulkUpdate` y
+`bulkDelete`. Es la forma correcta para algo que una persona administra desde una
+pantalla, y la equivocada para buena parte de un sistema real. Tres claves lo
+declaran; si no están, el modelo las tiene todas:
 
 ```json
 {
@@ -646,9 +647,16 @@ están, el modelo tiene las diez de siempre:
   su habilidad en la política, su test y, en la interfaz, su formulario, su vista,
   su drawer y su función del contrato. Sin `delete`, `restore` ni `forceDelete`,
   el modelo tampoco usa `SoftDeletes`.
+- **Las masivas** son la individual aplicada a varios registros: `bulkUpdate`
+  valida con las reglas de `UpdateRequest` —sólo los campos que llegan— y
+  `bulkDelete` borra como `delete`. Cada registro pasa por la política de la
+  individual, todo va en una transacción y un id que no existe no deja nada a
+  medias. Quitar `update` o `delete` quita también su masiva; pedirla con `only`
+  sin la individual es un error de `larapack:validate`.
 - **`immutable`** — una vez creada, la fila no se modifica ni se borra. Quita
   `update`, `delete`, `restore` y `forceDelete`, y el modelo lanza una excepción
-  si algo lo intenta por otro camino que no sea HTTP. **Crear sigue permitido**:
+  si algo lo intenta por otro camino que no sea HTTP. También quita las masivas.
+  **Crear sigue permitido**:
   una fila inmutable nace. Si tampoco debe crearse por la API, se quita con
   `routes`.
 - **`secret`** — la columna va a `$hidden` y nunca sale en la exportación ni en la
@@ -766,6 +774,20 @@ php artisan larapack:model Post --format=json
 editaste, se conserva y se avisa. Un archivo que el manifiesto no conoce se
 respeta igual: el generador no toca lo que no escribió él.
 
+**Cambiar las columnas de una tabla que ya existe.** Una base migrada no vuelve a
+correr la migración de creación, así que reescribirla no serviría de nada. Al
+reimportar, LaraPack compara las columnas del laraimport con lo que ya dejaron
+las migraciones de la tabla —la de creación y las alteraciones anteriores— y
+escribe `<fecha>_alter_<tabla>_table.php` con lo que se añade, se cambia
+(`->change()`) y se quita, y su `down()` para deshacerlo. La migración de
+creación no se toca. Sin cambios no se escribe nada, y con `--dry-run` sólo se
+dice.
+
+Dos casos se dejan a mano, y la migración o el informe lo dicen: cambiar una
+llave foránea —sería quitarla y crearla otra vez, con sus datos— y una migración
+de creación editada, porque lo escrito fuera del laraimport no se puede leer con
+seguridad y adivinar acabaría quitando una columna que existe.
+
 El manifiesto debe versionarse con el proyecto.
 
 ---
@@ -868,10 +890,20 @@ Las vistas se usan como una aplicación de escritorio:
 - **Crear, guardar y borrar lo confirman con un aviso**; borrar y exportar
   preguntan con la confirmación del tema.
 - **Las acciones de un registro son un menú desplegable**, y **Ctrl+K** abre la
-  paleta de comandos del índice.
+  paleta de comandos del índice: crear, exportar y recargar.
 - **La tabla** resuelve los permisos de cada fila antes de abrir su menú, pinta
-  esqueletos mientras carga, explica un 403 en lugar de enseñar una tabla vacía y
-  admite selección de filas con acciones masivas.
+  esqueletos mientras carga y explica un 403 en lugar de enseñar una tabla vacía.
+- **Seleccionar filas** abre la barra de acciones masivas: borrar las
+  seleccionadas —también las de otras páginas— y, por cada columna con `enum`,
+  ponerles un valor («Estado: Publicado»). Las declara `bulkActions()` en el
+  contrato, y la tabla llama a `callback(ids, filas, params)`.
+- **Una columna de texto de una línea que el formulario edita se edita en su
+  celda**: clic, Enter o salir guarda sólo ese campo con `updateField()`, y si la
+  API lo rechaza la celda enseña el mensaje de la regla sin cerrarse. Las dos
+  tablas lo pintan con `ClickToEditComponent`; el contrato sólo nombra el
+  componente, y cada widget `DataTable` se lo da.
+- **Exportar avisa** al pedirse, desde la barra o desde la paleta: el archivo
+  llega después, por notificación.
 
 Un formulario no navega al guardar: avisa (`updateData` en Vue, `onUpdateData` en
 React), y la vista que abrió el drawer decide qué pasa.
@@ -1128,6 +1160,17 @@ publicación nueva quedaría invisible.
 Un paquete que no pasa el audit no debería publicarse; por eso lo ejecuta el
 `tests.yml` del ecosistema.
 
+**Formato y tipos.** `larapack:new` añade `laravel/pint` y `larastan/larastan` a
+`require-dev`, con su `pint.json` (preset `laravel`) y `phpstan.neon.dist`
+(nivel 5 sobre `src` y `database`), y un trabajo `quality` en `tests.yml` que
+corre `vendor/bin/pint --test` y `vendor/bin/phpstan analyse`. Lo que genera
+LaraPack sale formateado y pasa ese análisis, así que un fallo ahí es algo que se
+escribió a mano: `vendor/bin/pint` lo formatea. LaraPack pasa el mismo control en
+su propia CI.
+
+**La compilación del front** va sobre Vite 8, la de Laravel 13: el `package.json`
+del módulo pide `vite ^8`, y `@vitejs/plugin-vue ^6` o `@vitejs/plugin-react ^6`.
+
 ### La CI y la publicación
 
 Un paquete del ecosistema tiene dos workflows que llaman a los reutilizables de
@@ -1192,8 +1235,9 @@ versión hasta la última.
 | 7.5.1 | Medio | La aplicación carga las traducciones del módulo; algunas claves cambian | [7.5 → 7.6](#de-75-a-76) y siguiente |
 | 7.6 | Medio si usas metas; bajo si no | Metas conectadas; traits y support 2.1 | [7.6 → 7.7](#de-76-a-77) y siguiente |
 | 7.7.0 | Bajo | La exportación trae Excel y usa el disco `local` | [7.7.0 → 7.7.1](#de-770-a-771) y siguiente |
-| 7.7.1 | Bajo | La ficha nombra al registro por su columna | [7.7 → 7.8](#de-77-a-78) |
-| 7.8 | — | Estás al día | — |
+| 7.7.1 | Bajo | La ficha nombra al registro por su columna | [7.7 → 7.8](#de-77-a-78) y siguiente |
+| 7.8 | Bajo | Nada; datatables 3.1 y Vite 8 en el módulo | [7.8 → 7.9](#de-78-a-79) |
+| 7.9 | — | Estás al día | — |
 
 Las notas completas de cada versión están en `CHANGELOG.md`.
 
@@ -1579,6 +1623,47 @@ es `name`, `title` ni la primera columna de texto. Una columna que no existe o u
 **Regenera con `--force`** `views/ShowView` y `widgets/ModelCard`. Si los editaste,
 cambia a mano `.name` por la columna en esos dos archivos: tres sitios en total.
 Un modelo con `name` sale igual que antes.
+
+### De 7.8 a 7.9
+
+Acciones masivas, edición en la celda, exportar desde la paleta, campos para las
+metas, migraciones de alteración, Pint y Larastan, y Vite 8. No cambia el
+contrato: sin `routes`, un modelo gana `bulkUpdate` y `bulkDelete` solo.
+
+**Regenera con `--force`**, primero en simulación. Cambian el controlador, las
+rutas, `PoliciesRequest`, el test de endpoints y, en la interfaz, `index.js`,
+`widgets/DataTable`, `views/AdminView`, `forms/CreateForm` y `forms/EditForm`.
+Aparecen `BulkUpdateRequest` y `BulkDeleteRequest`. Un modelo con `routes.only`
+sólo las tiene si las añades a la lista.
+
+**Si editaste alguno**, lo mínimo a mano:
+
+- `PoliciesRequest`: `'bulkUpdate' => 'update'` y `'bulkDelete' => 'delete'` en
+  `$policyMethodMapping`;
+- `widgets/DataTable`: pasa `selectable` a la tabla, y un modelo con
+  `dataTableComponents: () => ({ ClickToEdit: ClickToEditComponent })` (en React,
+  un envoltorio que pase `save` como `onSave`);
+- `index.js`: `bulkActions()`, `bulkUpdateModels`, `updateField` y
+  `bulkDeleteModels` salen de un paquete recién generado tal cual.
+
+**Dependencias** en `resources/<ui>/package.json`: `innoboxrr-vue-datatable` o
+`innoboxrr-react-datatable` `^3.1.0`, `innoboxrr-form-elements` `^6.7.0` o
+`innoboxrr-react-form-elements` `^3.7.0`, `vite` `^8.0.0` y, en React,
+`@vitejs/plugin-react` `^6.0.0`.
+
+**Migraciones.** Desde ahora, cambiar columnas y reimportar escribe una
+alteración. Si antes regeneraste con `--force` la migración de creación de una
+tabla ya migrada, esa diferencia nunca llegó a tu base y LaraPack ya no la ve:
+escribe esa alteración a mano una vez.
+
+**Formato y tipos, opcional en un paquete existente:** `composer require --dev
+laravel/pint larastan/larastan`, copia `pint.json`, `phpstan.neon.dist` y el
+trabajo `quality` de `tests.yml` de un paquete recién creado, y formatea una vez
+con `vendor/bin/pint` en su propio commit.
+
+**El teléfono de Vue valida por país**, como el de React: un número de 10 dígitos
+que no es válido para su país deja de pasar, y uno español de 9 empieza a pasar.
+Lo que emite no cambia.
 
 ---
 

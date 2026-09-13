@@ -100,7 +100,7 @@ Lo que conviene saber sin tener que leer el esquema entero:
 | `display` | La columna que nombra a un registro en la ficha, las migas y la pestaña. Decláralo sólo si no es `name`, `title` ni la primera columna de texto; nunca una `secret`. |
 | `requests[]` | Reglas de `CreateRequest` y `UpdateRequest`. Solo esos dos. |
 | `pivots[]` | Migraciones de tablas pivote, sin modelo. |
-| `routes` | Qué acciones genera el modelo: `only` o `except`. Sin la clave, las diez. |
+| `routes` | Qué acciones genera el modelo: `only` o `except`. Sin la clave, todas. |
 | `immutable` | La fila no cambia una vez creada: sin `update`, `delete`, `restore` ni `forceDelete`, y el modelo lanza si algo lo intenta. Crear sigue permitido. |
 | `props[].secret` | Nunca sale por la API: va a `$hidden`, fuera de la exportación y de la tabla. Se escribe, no se lee. |
 
@@ -116,7 +116,7 @@ Tres cosas se resuelven solas — **no intentes arreglarlas a mano**:
 
 **No todas las tablas se administran desde un formulario.** Una bitácora sólo se
 agrega, un catálogo sólo se lee, una concesión se otorga y se revoca pero no se
-edita. Decláralo con `routes` e `immutable` en lugar de generar las diez
+edita. Decláralo con `routes` e `immutable` en lugar de generar todas las
 acciones y borrar lo que sobra: lo borrado a mano queda marcado como editado
 para siempre, `larapack:verify` lo detecta como deriva, y el contrato deja de
 describir el código.
@@ -337,6 +337,16 @@ El generador es idempotente y **nunca destruye trabajo**:
 Así que ampliar el `laraimport.json` y volver a importar es seguro. Es el flujo
 normal, no una excepción.
 
+**Cambiar columnas de una tabla que ya existe también se hace en el JSON.** Al
+reimportar, LaraPack escribe `<fecha>_alter_<tabla>_table.php` con lo que se
+añade, cambia y quita. **No edites la migración de creación para cambiar
+columnas**: una base ya migrada no la vuelve a correr, y editada, LaraPack deja
+de poder escribir las alteraciones. Una llave foránea que cambia se escribe a
+mano; la alteración lo dice.
+
+Lo generado sale formateado y pasa Larastan: si `vendor/bin/pint --test` o
+`vendor/bin/phpstan analyse` fallan, lo que falla es algo escrito a mano.
+
 ## Vue y React
 
 `<ui>` es `vue` o `react`, y lo eliges con `--vue` / `--react`. Los dos
@@ -492,7 +502,9 @@ Si añades un endpoint, hay que volver a exportar el `routes.json`.
 **4. Las acciones.** El array `actions` del `<Model>Resource` llega al datatable
 y se dispara con `actionClicked()`. Una acción con `route: false` invoca
 `model[callback](params)`, así que `callback` tiene que ser un export real de
-`models/<kebab>/index.js`.
+`models/<kebab>/index.js`. Las masivas de `bulkActions()` reciben
+`(ids, filas, params)`, y una celda editable guarda con `updateField(id, campo,
+valor)`, que va a `bulk.update` con sólo ese campo.
 
 ## Errores frecuentes
 
@@ -500,7 +512,7 @@ y se dispara con `actionClicked()`. Una acción con `route: false` invoca
   treinta.
 - **Rellenar todas las claves del JSON.** Declara lo que decides; el resto son
   defaults del esquema.
-- **Generar las diez acciones y borrar las que sobran.** Declara `routes` o
+- **Generar todas las acciones y borrar las que sobran.** Declara `routes` o
   `immutable`. Lo borrado a mano queda como deriva para siempre.
 - **Exponer un secreto en el Resource "sólo para depurar".** `larapack:verify`
   falla con `secret-exposed`, y tiene razón.
