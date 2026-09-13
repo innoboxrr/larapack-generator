@@ -1,5 +1,45 @@
 # Changelog
 
+## 7.5.0
+
+Los módulos Vue y React que genera LaraPack se usan como una aplicación de
+escritorio, y lo hacen igual en los dos frameworks:
+
+- **La tabla no se va.** El alta se abre en un drawer encima del índice y, al
+  guardar, la tabla se recarga en su sitio con `refresh()`, sin perder página,
+  orden ni filtros. Antes el alta era otra página y, al volver, la tabla se
+  remontaba desde la primera página y sin filtros.
+- **La edición también es un drawer**, sobre la ficha del registro. Las rutas
+  conservan sus nombres: un enlace a `AdminCreate…` o `AdminEdit…` abre el
+  drawer que toca. Los formularios ya no navegan al guardar: avisan, y decide la
+  vista que abrió el drawer.
+- **El detalle enseña la forma del registro mientras llega**, en vez de quedarse
+  en blanco o enseñar el registro anterior.
+- **Crear, guardar y borrar lo confirman con un aviso**, y un borrado que falla
+  dice por qué.
+- **Las acciones de un registro son un menú desplegable** de verdad, y el índice
+  tiene paleta de comandos con Ctrl+K.
+- **Borrar y exportar preguntan con la confirmación del tema** (`confirmAction`
+  de `innoboxrr-form-core`), no con un SweetAlert cuyos colores estaban escritos
+  en el contrato y no seguía el modo oscuro. Cancelar sigue rechazando con
+  `RequestCancelledError`, así que nadie avisa de lo que no se hizo.
+- La ficha y el detalle dejan de usar clases de Tailwind.
+
+La aplicación anfitriona tiene que montar una vez `ToastRegionComponent` y
+`ConfirmHostComponent`: es donde se pintan los avisos y la confirmación. Está en
+la tabla «Lo que el paquete espera de la aplicación» del skill.
+
+El módulo generado pide ahora `innoboxrr-form-core` ^2.6,
+`innoboxrr-form-elements` ^6.4, `innoboxrr-react-form-elements` ^3.4 y los
+datatables ^3.0, que van sobre TanStack Table con selección de filas, permisos
+resueltos antes de abrir cada menú y errores que se ven.
+
+### Para proyectos existentes
+
+Regenerar con `--force` cambia las vistas, los widgets, `ActionMenu` y el
+contrato `index.js`. Los formularios, las rutas y los stores salen igual. Los
+datatables 3.0 no son compatibles con la 2: su README explica qué cambia.
+
 ## 7.4.0
 
 `larapack:new` crea un paquete desde cero, listo para generar, probar y publicar:
