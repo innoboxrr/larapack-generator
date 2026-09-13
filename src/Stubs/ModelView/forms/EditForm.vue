@@ -53,10 +53,15 @@
         const camelCaseModelName = await store.fetchOne(props.camelCaseModelNameId)
 
         // Solo se rellenan las claves que el formulario declara; asi un campo
-        // nuevo en la API no se cuela en el payload de actualizacion.
+        // nuevo en la API no se cuela en el payload de actualizacion. Las
+        // metas no son columnas: llegan dentro de payload.
         Object.keys(form).forEach((field) => {
-            if (camelCaseModelName[field] !== undefined) {
-                form[field] = camelCaseModelName[field]
+            const value = camelCaseModelName[field] !== undefined
+                ? camelCaseModelName[field]
+                : camelCaseModelName.payload?.[field]
+
+            if (value !== undefined) {
+                form[field] = value
             }
         })
 

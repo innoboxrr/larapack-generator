@@ -104,7 +104,7 @@ class ReactViewTool extends UiModuleTool
 		return "    {$name} = null,\n";
 	}
 
-	protected function input(array $prop, ?string $component, string $mode): string
+	protected function input(array $prop, ?string $component, string $mode, bool $required = true): string
 	{
 		$name = $prop['name'];
 		$label = $this->label($name);
@@ -121,7 +121,7 @@ class ReactViewTool extends UiModuleTool
 			return "{$tagIndent}{/* {$name}: declara form_component en el JSON de importacion */}\n";
 		}
 
-		$validators = $mode === 'filter' ? '' : "{$attrIndent}validators=\"required\"\n";
+		$validators = $mode === 'filter' || ! $required ? '' : "{$attrIndent}validators=\"required\"\n";
 
 		$binding = "{$attrIndent}value={form.{$name} ?? ''}\n"
 			. "{$attrIndent}onChange={(value) => setField('{$name}', value)}";

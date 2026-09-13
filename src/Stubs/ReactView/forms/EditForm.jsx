@@ -39,12 +39,16 @@ export default function EditForm({
 
             // Solo se rellenan las claves que el formulario declara; asi un
             // campo nuevo en la API no se cuela en el payload de
-            // actualizacion.
+            // actualizacion. Las metas no son columnas: llegan dentro de
+            // payload.
             setForm((current) => Object.fromEntries(
-                Object.keys(current).map((field) => [
-                    field,
-                    camelCaseModelName[field] !== undefined ? camelCaseModelName[field] : current[field],
-                ])
+                Object.keys(current).map((field) => {
+                    const value = camelCaseModelName[field] !== undefined
+                        ? camelCaseModelName[field]
+                        : camelCaseModelName.payload?.[field]
+
+                    return [field, value !== undefined ? value : current[field]]
+                })
             ))
 
             validator.current = new JSValidator(formId).init()

@@ -98,7 +98,7 @@ class ModelViewTool extends UiModuleTool
 			. "        },\n";
 	}
 
-	protected function input(array $prop, ?string $component, string $mode): string
+	protected function input(array $prop, ?string $component, string $mode, bool $required = true): string
 	{
 		$name = $prop['name'];
 		$label = $this->label($name);
@@ -112,7 +112,7 @@ class ModelViewTool extends UiModuleTool
 		$attrIndent = $indent . '    ';
 		$tagIndent = $mode === 'filter' ? $indent . '    ' : $indent;
 
-		$validators = $mode === 'filter' ? '' : "{$attrIndent}validators=\"required\"\n";
+		$validators = $mode === 'filter' || ! $required ? '' : "{$attrIndent}validators=\"required\"\n";
 
 		if ($component === null) {
 			return "{$tagIndent}<!-- {$name}: declara form_component en el JSON de importacion -->\n";

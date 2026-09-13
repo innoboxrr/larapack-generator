@@ -94,8 +94,9 @@ abstract class UiModuleTool extends Tool
 	 *
 	 * @param  array<string, mixed>  $prop
 	 * @param  string  $mode  create|edit|filter
+	 * @param  bool  $required  Fuera del filtro, si el campo se exige.
 	 */
-	abstract protected function input(array $prop, ?string $component, string $mode): string;
+	abstract protected function input(array $prop, ?string $component, string $mode, bool $required = true): string;
 
 	/**
 	 * Emite la linea de import de un componente dentro del formulario.
@@ -248,6 +249,28 @@ abstract class UiModuleTool extends Tool
 		return $model['props'] ?? [];
 	}
 
+	/**
+	 * Las metas que el formulario puede escribir: las editables que no son
+	 * protegidas, de un modelo con metas, y que no se llaman como una columna.
+	 *
+	 * @return array<int, string>
+	 */
+	protected function editableMetas(): array
+	{
+		$model = collect(self::getJsonContent()['models'] ?? [])
+			->where('name', $this->ModelName)
+			->first() ?? [];
+
+		if (empty($model['metas'])) {
+			return [];
+		}
+
+		return array_values(array_diff(
+			$model['editable_metas'] ?? [],
+			$model['protected_metas'] ?? [],
+			array_column($model['props'] ?? [], 'name')
+		));
+	}
 
 	// MODULO DEL MODELO
 
@@ -365,6 +388,17 @@ abstract class UiModuleTool extends Tool
 			// llegar desde fuera, asi que se declara como parametro de verdad.
 			if (empty($prop['form']) && ! empty($prop['form_submit'])) {
 				$componentProps .= $this->componentProp($name);
+			}
+		}
+
+		// Las metas que escribe el formulario. Viajan planas, como las espera
+		// updateModelMetas(), no son obligatorias —vacía, una meta se borra— y
+		// al editar se rellenan desde payload.
+		if ($mode !== 'filter') {
+			foreach ($this->editableMetas() as $key) {
+				$inputs .= $this->input(['name' => $key], 'TextInputComponent', $mode, false);
+				$fields .= $this->field($key, $mode);
+				$submit .= $this->submitFromForm($key);
 			}
 		}
 

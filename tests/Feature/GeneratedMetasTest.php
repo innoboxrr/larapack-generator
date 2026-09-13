@@ -92,6 +92,37 @@ final class GeneratedMetasTest extends TestCase
         $this->assertStringNotContainsString("'payload' =>", $this->project->read('database/factories/PostFactory.php'));
     }
 
+    /**
+     * Las metas editables tenían dónde guardarse y ningún campo que las
+     * mandara: había que añadirlo a mano en cada formulario.
+     */
+    public function test_los_formularios_escriben_las_metas_editables(): void
+    {
+        $this->useProject(FakeProject::library('Acme\\Blog\\'));
+
+        $this->assertSame(
+            Command::SUCCESS,
+            $this->runCommand('larapack:import', ['jsonPath' => dirname(__DIR__) . '/Fixtures/laraimport.json', '--vue' => true, '--react' => true]),
+            "larapack:import terminó con error:\n" . $this->lastOutput
+        );
+
+        foreach (['vue' => 'vue', 'react' => 'jsx'] as $ui => $extension) {
+            foreach (['CreateForm', 'EditForm'] as $form) {
+                $source = $this->project->read("resources/{$ui}/src/models/post/forms/{$form}.{$extension}");
+
+                $this->assertMatchesRegularExpression('/name="seo_title"(?:(?!validators=)[\s\S])*?(?:\/>|>)/', $source, "{$ui} {$form} no pide seo_title o lo exige.");
+                $this->assertStringContainsString('seo_title: form.seo_title,', $source);
+                $this->assertStringNotContainsString('name="views"', $source, 'Una meta protegida no se escribe desde el formulario.');
+            }
+
+            $this->assertStringContainsString(
+                'camelCaseModelName.payload?.[field]',
+                str_replace('post.payload', 'camelCaseModelName.payload', $this->project->read("resources/{$ui}/src/models/post/forms/EditForm.{$extension}")),
+                "{$ui} EditForm no rellena las metas desde payload."
+            );
+        }
+    }
+
     public function test_no_quedan_marcadores_en_lo_generado(): void
     {
         $this->importFixture();
