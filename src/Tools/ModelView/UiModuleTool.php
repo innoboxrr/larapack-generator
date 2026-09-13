@@ -192,11 +192,21 @@ abstract class UiModuleTool extends Tool
     /**
      * package.json, la configuracion de build y el agregador de rutas. Se
      * crean con el primer modelo y no se vuelven a tocar: sin ellos el modulo
-     * generado no se puede construir ni publicar.
+     * de un paquete no se puede construir ni publicar.
+     *
+     * En una aplicacion el modulo no se publica: lo compila el Vite de la
+     * aplicacion, que ya tiene su package.json y su vite.config.js. Un segundo
+     * par dentro de resources/ no lo usaba nadie y confundia a quien lo leia.
      */
     protected function scaffoldModule(): void
     {
+        $inApplication = app_dir_name() === 'app';
+
         foreach ($this->moduleFiles() as $stub => $destination) {
+            if ($inApplication && in_array($destination, ['package.json', 'vite.config.js'], true)) {
+                continue;
+            }
+
             $this->generate(
                 stubs_path($stub),
                 $this->packagePath().'/'.$destination
