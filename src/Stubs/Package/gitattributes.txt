@@ -1,0 +1,11 @@
+# El repositorio es LF, también en un checkout de Windows: sin esto el código
+# generado sale con finales de línea distintos según quién lo genere.
+* text=auto eol=lf
+
+# Lo que no necesita quien instala el paquete.
+/.github export-ignore
+/.claude export-ignore
+/.larapack export-ignore
+/tests export-ignore
+/phpunit.xml.dist export-ignore
+/AGENTS.md export-ignore

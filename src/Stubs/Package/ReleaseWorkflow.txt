@@ -1,0 +1,22 @@
+name: Release
+
+# Se dispara sólo si los tests pasaron. La versión la declara el archivo VERSION
+# y el tag se deriva de ella: un push con un test roto no publica nada, y un tag
+# que ya existe no se vuelve a crear.
+on:
+    workflow_run:
+        workflows: ['Tests']
+        types: [completed]
+        branches: [main, master]
+    workflow_dispatch:
+
+jobs:
+    release:
+        # Explícito y no heredado: el reutilizable necesita `contents: write` para
+        # empujar el tag, y un repositorio cuyo permiso por defecto sea de sólo
+        # lectura no puede concedérselo. Eso no falla el job: falla el arranque
+        # del workflow entero, sin log.
+        permissions:
+            contents: write
+
+        uses: innoboxrr/.github/.github/workflows/php-release.yml@main

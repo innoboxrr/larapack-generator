@@ -1,0 +1,39 @@
+<?php
+
+namespace Namespace\Tests\Feature;
+
+use Namespace\Tests\TestCase;
+
+/**
+ * Que el paquete arranca dentro de una aplicacion Laravel: sus proveedores se
+ * registran y sus migraciones corren.
+ *
+ * Es el primer test del paquete, antes de cualquier modelo, y el que le da a la
+ * CI algo que ejecutar desde el primer push.
+ */
+class PackageBootsTest extends TestCase
+{
+
+    public function test_los_proveedores_declarados_se_registran(): void
+    {
+
+        $composer = json_decode((string) file_get_contents(dirname(__DIR__, 2) . '/composer.json'), true);
+
+        $providers = $composer['extra']['laravel']['providers'] ?? [];
+
+        $this->assertNotEmpty($providers, 'composer.json no declara proveedores: la aplicacion que instale el paquete no lo arrancaria.');
+
+        foreach ($providers as $provider) {
+            $this->assertInstanceOf($provider, $this->app->getProvider($provider), "{$provider} no se registro.");
+        }
+
+    }
+
+    public function test_las_migraciones_corren(): void
+    {
+
+        $this->artisan('migrate:status')->assertSuccessful();
+
+    }
+
+}

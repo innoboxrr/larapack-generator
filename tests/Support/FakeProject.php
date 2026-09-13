@@ -32,13 +32,28 @@ final class FakeProject
         return self::make('project', $namespace);
     }
 
-    private static function make(string $type, string $namespace): self
+    /**
+     * Directorio vacío, sin composer.json: donde larapack:new crea un paquete.
+     */
+    public static function empty(): self
+    {
+        return new self(self::temporaryDirectory(), '');
+    }
+
+    private static function temporaryDirectory(): string
     {
         $path = sys_get_temp_dir() . '/larapack-' . bin2hex(random_bytes(6));
 
         if (! mkdir($path, 0777, true) && ! is_dir($path)) {
             throw new RuntimeException("No se pudo crear el directorio temporal {$path}");
         }
+
+        return realpath($path);
+    }
+
+    private static function make(string $type, string $namespace): self
+    {
+        $path = self::temporaryDirectory();
 
         $sourceDir = $type === 'library' ? 'src' : 'app';
 

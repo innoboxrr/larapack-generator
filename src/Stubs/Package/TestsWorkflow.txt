@@ -1,0 +1,14 @@
+name: Tests
+
+# La definición vive en innoboxrr/.github para que sea la misma en todo el
+# ecosistema: instala, comprueba la sintaxis, audita contra la línea base y corre
+# la suite. Aquí sólo se declara cuándo corre. Las dos ramas porque un repositorio
+# nuevo nace con una u otra según la configuración de git de quien lo crea.
+on:
+    push:
+        branches: [main, master]
+    pull_request:
+
+jobs:
+    tests:
+        uses: innoboxrr/.github/.github/workflows/php-tests.yml@main
