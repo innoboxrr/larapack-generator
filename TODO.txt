@@ -1,7 +1,0 @@
-# TODO
- - **** Cambiar la manera en la que se crea, actualiza, elimina un modelo para que se disparen los Observers
- - Añadir los compandos para revertir la creación. Ej. php builder remove:{context} {MODEL}
-    - Puede ser que cada herramienta así como define el método `create` tenga el correspondiente para elimianr lo que se creó
- - Modificar la manera en la que se hacen los save y update para que sean reconocidos por los observers
- - Corregir en el PoliciesRequest, el mapeo de métodos como se hace en Siconsulta
- - Corregir, en lugar de usar user() como helper en los request, usar $this->user()
