@@ -510,9 +510,17 @@ Lo que cambia es solo la capa de presentacion:
 | Formularios | `innoboxrr-form-elements` | `innoboxrr-react-form-elements` |
 | Tabla | `innoboxrr-vue-datatable` | `innoboxrr-react-datatable` |
 
-Los dos paquetes de formularios exportan **los mismos 30 nombres**, asi que el
+Los dos paquetes de formularios exportan **los mismos 37 nombres**, asi que el
 `form_component` del `laraimport` vale igual para los dos. Cada paquete tiene
 un test que falla si uno se adelanta al otro.
+
+Las vistas se usan como una aplicacion de escritorio. El indice deja la tabla
+montada y abre el alta en un drawer encima; al guardar, la tabla se recarga en
+su sitio sin perder pagina, orden ni filtros. El detalle ensena la forma del
+registro mientras llega y abre la edicion en otro drawer. Crear, guardar y
+borrar lo confirman con un aviso, borrar y exportar preguntan con la
+confirmacion del tema, y Ctrl+K abre la paleta de comandos. Para eso la
+aplicacion monta una vez `ToastRegionComponent` y `ConfirmHostComponent`.
 
 El host descubre los modelos por `import.meta.glob`, asi que generar uno nuevo
 no obliga a enumerarlo en ningun sitio.

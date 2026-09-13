@@ -43,15 +43,24 @@ con innoboxrr-route-resolver, que lee el routes.json que genera
 `php artisan route:json` (innoboxrr/routes-to-json).
 
 El array `actions` que emite el Resource de Laravel alimenta las acciones por
-fila del datatable: `route: true` se renderiza como router-link hacia
-params.to.name; `route: false` invoca model[callback](params), asi que el
-callback tiene que ser un export real de index.js.
+fila del datatable: `route: true` navega a params.to.name desde el menu de la
+fila; `route: false` invoca model[callback](params), asi que el callback tiene
+que ser un export real de index.js.
+
+Como se usa
+-----------
+
+  El indice deja la tabla montada: el alta se abre en un drawer encima, y al
+  guardar se recarga la tabla en su sitio, sin perder pagina, orden ni
+  filtros. El detalle abre la edicion en otro drawer sobre la ficha. Las
+  rutas conservan sus nombres, asi que un enlace a AdminCreate... o
+  AdminEdit... abre el drawer que toca. Ctrl+K abre la paleta de comandos.
 
 Requisitos del anfitrion
 ------------------------
 
   - JsonResource::withoutWrapping() en el AppServiceProvider. El codigo
     generado espera el recurso plano, no envuelto en { data: ... }.
-  - El alias @router apuntando a resources/vue/router (middleware de rutas).
-  - Los mixins globales que aportan inputClass y buttonClass.
+  - ToastRegionComponent y ConfirmHostComponent montados una vez: ahi se
+    pintan los avisos y la confirmacion antes de borrar o exportar.
   - window.route y las traducciones inicializadas en el bootstrap.

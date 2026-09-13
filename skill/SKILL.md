@@ -219,7 +219,7 @@ migraciones, vistas, configuración, rutas y eventos.
 ### Lo que el paquete espera de la aplicación
 
 El código generado no conoce la aplicación que lo instala, pero sí da por hecho
-cuatro cosas de ella. Si falta alguna, no es un defecto del paquete:
+estas cosas de ella. Si falta alguna, no es un defecto del paquete:
 
 | Qué | Por qué |
 |---|---|
@@ -228,6 +228,7 @@ cuatro cosas de ella. Si falta alguna, no es un defecto del paquete:
 | `isAdmin()` en el usuario, opcional | `before()` de cada Policy deja pasar al administrador. Sin el método nadie lo es y deciden los métodos de la Policy. |
 | `maatwebsite/excel` | Sólo si se usa la exportación. |
 | `JsonResource::withoutWrapping()` | El datatable espera `data`, `meta` y `links` en la raíz. Ver «El contrato front ↔ back». |
+| `ToastRegionComponent` y `ConfirmHostComponent`, montados una vez | Ahí se pintan los avisos tras crear, guardar o borrar y la confirmación antes de borrar o exportar. Sin ellos los avisos no se ven y la confirmación cae en `window.confirm`. |
 
 Esto no es teórico: la suite de LaraPack genera un paquete, lo instala en una
 aplicación Laravel y recorre su API y sus tests tal como salen.
@@ -331,9 +332,22 @@ Lo que cambia es sólo la capa de presentación:
 | Formularios | `innoboxrr-form-elements` | `innoboxrr-react-form-elements` |
 | Tabla | `innoboxrr-vue-datatable` | `innoboxrr-react-datatable` |
 
-Los dos paquetes de formularios exportan **los mismos 30 nombres**, así que el
+Los dos paquetes de formularios exportan **los mismos 37 nombres**, así que el
 `form_component` del `laraimport` vale igual para ambos. Hay un test en cada
 paquete que falla si uno se adelanta al otro.
+
+**Se usa como una aplicación de escritorio.** El índice deja la tabla montada:
+el alta se abre en un drawer encima y, al guardar, la tabla se recarga en su
+sitio con `refresh()`, sin perder página, orden ni filtros. El detalle enseña la
+forma del registro mientras llega y abre la edición en otro drawer sobre la
+ficha. Las rutas conservan sus nombres, así que un enlace a `AdminCreatePost` o
+`AdminEditPost` abre el drawer que toca. Ctrl+K abre la paleta de comandos del
+índice, las acciones de un registro son un menú desplegable, y crear, guardar y
+borrar lo confirman con un aviso. **No hagas que un formulario navegue al
+guardar**: avisa (`updateData` en Vue, `onUpdateData` en React) y es la vista
+que abrió el drawer la que decide. Borrar y exportar preguntan con
+`confirmAction` de `innoboxrr-form-core`; cancelar rechaza con
+`RequestCancelledError`, y nadie avisa de lo que el usuario decidió no hacer.
 
 **Rutas con nombre.** El contrato apunta a las vistas por nombre
 (`params.to.name`). vue-router lo resuelve de fábrica; React Router no, así
