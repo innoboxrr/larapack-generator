@@ -1038,8 +1038,9 @@ versión hasta la última.
 | 7.1 | Bajo | `audit` rechaza `version` en `composer.json` | [7.1 → 7.2](#de-71-a-72) y siguientes |
 | 7.2 | Medio | Rutas Vue con `meta.auth`; archivos a regenerar | [7.2 → 7.3](#de-72-a-73) y siguientes |
 | 7.3 | Bajo | Nada | [7.3 → 7.4](#de-73-a-74) y siguiente |
-| 7.4 | Medio | Datatables 3.0, avisos y confirmación en la aplicación | [7.4 → 7.5](#de-74-a-75) |
-| 7.5 | — | Estás al día | — |
+| 7.4 | Medio | Datatables 3.0, avisos y confirmación en la aplicación | [7.4 → 7.5](#de-74-a-75) y siguiente |
+| 7.5.0 | Bajo | Nada; tres dependencias npm | [7.5.0 → 7.5.1](#de-750-a-751) |
+| 7.5.1 | — | Estás al día | — |
 
 Las notas completas de cada versión están en `CHANGELOG.md`.
 
@@ -1255,6 +1256,21 @@ propia sección «De 2.x a 3.0».
 
 **Comprueba en el navegador**: crear desde la tabla, editar desde el detalle,
 borrar con confirmación, un borrado que falla y la paleta con Ctrl+K.
+
+### De 7.5.0 a 7.5.1
+
+No hay que regenerar. Sube tres dependencias en `resources/<ui>/package.json`:
+
+| Paquete | Versión |
+|---|---|
+| `innoboxrr-form-core` | `^2.7.0` |
+| `innoboxrr-form-elements` (Vue) | `^6.5.0` |
+| `innoboxrr-react-form-elements` (React) | `^3.5.0` |
+
+Con ellas los formularios dejan de necesitar Tailwind en la aplicación: las
+etiquetas, el grupo repetible, la zona de archivos, las casillas del código y el
+avatar salen del tema. Si tu aplicación sobrescribía esos campos con clases de
+Tailwind, revisa que sigan viéndose como esperas en claro y en oscuro.
 
 ---
 
