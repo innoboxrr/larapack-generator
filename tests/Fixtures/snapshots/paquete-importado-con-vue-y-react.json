@@ -1,5 +1,5 @@
 {
-    ".larapack/manifest.json": "e44e6f475e707cc2d7ef051dd11597aaf28f76c3e12ba03610fd617647615f2e",
+    ".larapack/manifest.json": "68e9f93270de3072739bfcf8b553d94ae1789c7c3d55599382814075b511d5ea",
     "composer.json": "dded2aaddb25ff97b89a8b0e047bfd8284706098a414f9124356b235318c7edb",
     "database/factories/PostFactory.php": "12b300b10c3238d4fb1c3522fbfef5d224d6c1522e88e1395146b8639e5651cc",
     "database/migrations/TIMESTAMP_create_post_metas_table.php": "96905ecd3dbc80a18440594a4c0bc06f8b4a0f59dd372add3392e6c2d5c960a3",
@@ -88,7 +88,7 @@
     "src/Models/Traits/Storage/PostStorage.php": "e5b23514882f4251905a151d82a5441a0aed128cde03dae02ac1afc569be048f",
     "src/Notifications/Post/ExportNotification.php": "6dd7d2026cc002ba21f3d67dc073157cc423ab46668b92e32b654aab3cd8a4c0",
     "src/Observers/PostObserver.php": "790ee47c1d2b412d23a490b58932a24bd8b23bb4e7806edb3d90edf42a4637ae",
-    "src/Policies/PostPolicy.php": "95b7f05eaf67f77c86c60707368e7774c075c2a914e1d22a6b77c5ad04547618",
+    "src/Policies/PostPolicy.php": "edb5383d61d2926af8ec967230b94a4e665b159e4da6049f90a2d409c29a6290",
     "tests/Feature/Models/PostEndpointsTest.php": "bd427b1ee3ff721a2e6bc83f3e4fee4c00b2634378cc54b3131d3e01382b0fdc",
     "tests/TestCase.php": "dd6355e1e3aad74d275753a33a7cb8a31813274a44c5344747389a891873ee7d"
 }

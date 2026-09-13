@@ -1,5 +1,5 @@
 {
-    ".larapack/manifest.json": "9cbaa0ad99f1d57756542b5332deb9a2170d3e4facd9c8de889da15d63153292",
+    ".larapack/manifest.json": "2f8a3a31ef5610d74d3b1d27646f244813a6f2c6450476c8a8b3a11d555ab735",
     "composer.json": "dded2aaddb25ff97b89a8b0e047bfd8284706098a414f9124356b235318c7edb",
     "database/factories/CategoryFactory.php": "a9e4af5fa0036c1914e1e336d223d16e8759bb1665047b9cdae517e94a830917",
     "database/factories/PostFactory.php": "5237fe12c5c0b8330b7c98ac3ad225202614e120abe9739b980855b85d12e0a6",
@@ -155,8 +155,8 @@
     "src/Notifications/Post/ExportNotification.php": "6dd7d2026cc002ba21f3d67dc073157cc423ab46668b92e32b654aab3cd8a4c0",
     "src/Observers/CategoryObserver.php": "432a2f0afa57fea665ce33299bd05edd8eb250bba1ebb29a027ad2e78149f715",
     "src/Observers/PostObserver.php": "790ee47c1d2b412d23a490b58932a24bd8b23bb4e7806edb3d90edf42a4637ae",
-    "src/Policies/CategoryPolicy.php": "d2746e458d5fdf14a823c0ba361e2d8ca6fb9186f13ac8e6f3dcc1634c361e8d",
-    "src/Policies/PostPolicy.php": "95b7f05eaf67f77c86c60707368e7774c075c2a914e1d22a6b77c5ad04547618",
+    "src/Policies/CategoryPolicy.php": "023d434abb7232d43876f91b9038da935e3dc60d6304910b3e01523e5e8e3b09",
+    "src/Policies/PostPolicy.php": "edb5383d61d2926af8ec967230b94a4e665b159e4da6049f90a2d409c29a6290",
     "tests/Feature/Models/CategoryEndpointsTest.php": "ccfb0d6da265a7ec9fadadc39d3feaf53318c6613d9973ee17bdc70841ed6243",
     "tests/Feature/Models/PostEndpointsTest.php": "bd427b1ee3ff721a2e6bc83f3e4fee4c00b2634378cc54b3131d3e01382b0fdc",
     "tests/TestCase.php": "dd6355e1e3aad74d275753a33a7cb8a31813274a44c5344747389a891873ee7d"

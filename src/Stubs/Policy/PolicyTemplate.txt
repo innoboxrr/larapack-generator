@@ -2,19 +2,29 @@
 
 namespace Namespace\Policies;
 
-use App\Models\User;
 use Illuminate\Auth\Access\Response;
+use Illuminate\Contracts\Auth\Authenticatable as User;
 use Namespace\Models\PascalCaseModelName;
 
 class PascalCaseModelNamePolicy
 {
 
+    /**
+     * El usuario es el de la aplicacion que instala el paquete, sea cual sea
+     * su clase: por eso el contrato y no App\Models\User.
+     *
+     * En el ecosistema quien administra lo dice isAdmin(). Una aplicacion cuyo
+     * usuario no lo define no tiene administradores para esta politica, y
+     * deciden los metodos de abajo.
+     */
     public function before(User $user, string $ability): ?bool
     {
 
         $exceptAbilities = [];
 
-        if ($user->isAdmin() && ! in_array($ability, $exceptAbilities, true)) {
+        $isAdmin = method_exists($user, 'isAdmin') && $user->isAdmin();
+
+        if ($isAdmin && ! in_array($ability, $exceptAbilities, true)) {
 
             return true;
 
