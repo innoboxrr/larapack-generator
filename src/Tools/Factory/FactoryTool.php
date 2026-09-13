@@ -3,6 +3,7 @@
 namespace Innoboxrr\LarapackGenerator\Tools\Factory;
 
 use Illuminate\Support\Pluralizer;
+use Innoboxrr\LarapackGenerator\Support\Generation;
 use Innoboxrr\LarapackGenerator\Tools\Tool;
 
 class FactoryTool extends Tool
@@ -36,7 +37,8 @@ class FactoryTool extends Tool
 
 	private function addDatabaseNamespaceToComposerJson()
 	{
-		if(app_dir_name() == 'src') {
+		// Una simulación no escribe nada, tampoco composer.json.
+		if(app_dir_name() == 'src' && ! Generation::isDryRun()) {
 			$composerJsonPath = root_path() . '/composer.json';
 		    $composerJsonData = json_decode(file_get_contents($composerJsonPath), true);
 			$baseNamespace = array_keys($composerJsonData['autoload']['psr-4'])[0];

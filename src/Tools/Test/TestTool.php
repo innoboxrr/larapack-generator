@@ -192,7 +192,8 @@ class TestTool extends Tool
 	private function addTestNamespaceToComposerJson()
 	{
 
-		if(app_dir_name() == 'src') {
+		// Una simulación no escribe nada, tampoco composer.json.
+		if(app_dir_name() == 'src' && ! Generation::isDryRun()) {
 
 			$composerJsonPath = root_path() . '/composer.json';
 
@@ -241,6 +242,14 @@ class TestTool extends Tool
 				'/TestProjectTemplate.txt';
 
 			$templateFile = $this->testTemplatePath . $templateName;
+
+			if (Generation::isDryRun()) {
+
+				Generation::record('create', $testFile, $templateFile);
+
+				return $this;
+
+			}
 
 			if(copy($templateFile, $testFile)) {
 

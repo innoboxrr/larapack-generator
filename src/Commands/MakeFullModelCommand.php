@@ -7,6 +7,7 @@ use Innoboxrr\LarapackGenerator\Support\Declaration;
 use Innoboxrr\LarapackGenerator\Support\Generation;
 use Innoboxrr\LarapackGenerator\Support\Import\Actions;
 use Innoboxrr\LarapackGenerator\Support\Manifest;
+use Innoboxrr\LarapackGenerator\Tools\Tool;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputOption;
@@ -54,7 +55,14 @@ class MakeFullModelCommand extends Command
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
-        $this->applyGenerationOptions($input);
+        // Llamado desde larapack:import, las opciones y el registro son los del
+        // importador. Reiniciarlos aquí apagaba --dry-run y --force en cada
+        // modelo: la simulación escribía todo y --force no forzaba nada.
+        $nested = Tool::isFromJsonImporter();
+
+        if (! $nested) {
+            $this->applyGenerationOptions($input);
+        }
 
         $modelName = $input->getArgument('name');
         $includeMetas = $input->getOption('metas');
@@ -99,7 +107,9 @@ class MakeFullModelCommand extends Command
             (new Manifest())->declare($modelName, Declaration::toManifest($modelName));
         }
 
-        $this->reportGeneration($input, $output);
+        if (! $nested) {
+            $this->reportGeneration($input, $output);
+        }
 
         return Command::SUCCESS;
     }

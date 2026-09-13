@@ -2,6 +2,7 @@
 
 namespace Innoboxrr\LarapackGenerator\Tools\ModelTraits;
 
+use Innoboxrr\LarapackGenerator\Support\Generation;
 use Innoboxrr\LarapackGenerator\Tools\Tool;
 use Innoboxrr\LarapackGenerator\Exceptions\MakerException;
 
@@ -43,6 +44,22 @@ class ModelTraitsTool extends Tool
 		return $this;
 	}
 
+	/**
+	 * Los traits se copian sin pasar por generate(), así que la simulación se
+	 * respeta aquí: se anota lo que se crearía y no se escribe. Antes
+	 * `larapack:import --dry-run` los creaba igualmente.
+	 */
+	private function simulated(string $template, string $file): bool
+	{
+		if (! Generation::isDryRun()) {
+			return false;
+		}
+
+		Generation::record('create', $file, $template);
+
+		return true;
+	}
+
 	public function create(string $ModelName)
 	{
 		$this->init($ModelName)
@@ -68,6 +85,9 @@ class ModelTraitsTool extends Tool
 		$assignmentTraitFile = $this->modelTraitsPath . '/Assignments/' . $this->PascalCaseModelName . 'Assignment.php';
 		if(!file_exists($assignmentTraitFile)) {
 			$templateFile = $this->modelTraitsTemplatePath . '/Assignments/AssignmentTemplate.txt';
+			if ($this->simulated($templateFile, $assignmentTraitFile)) {
+				return $this;
+			}
 			if(copy($templateFile, $assignmentTraitFile)) {
 				$this->replaceData($assignmentTraitFile);
 			} else {
@@ -82,6 +102,9 @@ class ModelTraitsTool extends Tool
 		$mutatorsTraitFile = $this->modelTraitsPath . '/Mutators/' . $this->PascalCaseModelName . 'Mutators.php';
 		if(!file_exists($mutatorsTraitFile)) {
 			$templateFile = $this->modelTraitsTemplatePath . '/Mutators/MutatorsTemplate.txt';
+			if ($this->simulated($templateFile, $mutatorsTraitFile)) {
+				return $this;
+			}
 			if(copy($templateFile, $mutatorsTraitFile)) {
 				$this->replaceData($mutatorsTraitFile);
 			} else {
@@ -96,6 +119,9 @@ class ModelTraitsTool extends Tool
 		$operationsTraitFile = $this->modelTraitsPath . '/Operations/' . $this->PascalCaseModelName . 'Operations.php';
 		if(!file_exists($operationsTraitFile)) {
 			$templateFile = $this->modelTraitsTemplatePath . '/Operations/OperationsTemplate.txt';
+			if ($this->simulated($templateFile, $operationsTraitFile)) {
+				return $this;
+			}
 			if(copy($templateFile, $operationsTraitFile)) {
 				$this->applyBlocks($operationsTraitFile);
 				$this->replaceData($operationsTraitFile);
@@ -111,6 +137,9 @@ class ModelTraitsTool extends Tool
 		$relationsTraitFile = $this->modelTraitsPath . '/Relations/' . $this->PascalCaseModelName . 'Relations.php';
 		if(!file_exists($relationsTraitFile)) {
 			$templateFile = $this->modelTraitsTemplatePath . '/Relations/RelationsTemplate.txt';
+			if ($this->simulated($templateFile, $relationsTraitFile)) {
+				return $this;
+			}
 			if(copy($templateFile, $relationsTraitFile)) {
 				// Los traits se copian sin pasar por generate(), así que los
 				// bloques de metas se resuelven aquí.
@@ -193,6 +222,9 @@ class ModelTraitsTool extends Tool
 		$storageTraitFile = $this->modelTraitsPath . '/Storage/' . $this->PascalCaseModelName . 'Storage.php';
 		if(!file_exists($storageTraitFile)) {
 			$templateFile = $this->modelTraitsTemplatePath . '/Storage/StorageTemplate.txt';
+			if ($this->simulated($templateFile, $storageTraitFile)) {
+				return $this;
+			}
 			if(copy($templateFile, $storageTraitFile)) {
 				$this->applyBlocks($storageTraitFile);
 				$this->replaceData($storageTraitFile);
