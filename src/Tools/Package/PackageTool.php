@@ -57,10 +57,12 @@ class PackageTool extends Tool
 		$namespace = trim($namespace, '\\') . '\\';
 
 		// Lo que usa el código generado: los modelos, los traits de innoboxrr;
-		// los índices y filtros, search-surge.
+		// los índices y filtros, search-surge; el guardado de metas, que aplana
+		// los grupos anidados del formulario, support.
 		$require = [
 			'illuminate/support' => $rules['laravel']['illuminate'],
 			'innoboxrr/search-surge' => $internal['innoboxrr/search-surge'],
+			'innoboxrr/support' => $internal['innoboxrr/support'],
 			'innoboxrr/traits' => $internal['innoboxrr/traits'],
 		] + ($generated['require'] ?? []);
 
