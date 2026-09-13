@@ -71,12 +71,16 @@ final class DeclaredShapeContractTest extends TestCase
         $this->assertSame(['index', 'show', 'export'], $document->model('AuditEvent')['actions']);
     }
 
+    /**
+     * Quitar update quita también su masiva; bulkDelete se queda porque delete
+     * sigue.
+     */
     public function test_except_quita_esas_acciones(): void
     {
         ['document' => $document] = $this->parse($this->model(['routes' => ['except' => ['update', 'restore', 'forceDelete']]]));
 
         $this->assertSame(
-            ['policies', 'policy', 'index', 'show', 'create', 'delete', 'export'],
+            ['policies', 'policy', 'index', 'show', 'create', 'delete', 'export', 'bulkDelete'],
             $document->model('AuditEvent')['actions']
         );
     }
