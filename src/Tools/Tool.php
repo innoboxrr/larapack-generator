@@ -11,6 +11,7 @@ use Innoboxrr\LarapackGenerator\Exceptions\MakerException;
 use Innoboxrr\LarapackGenerator\Support\Declaration;
 use Innoboxrr\LarapackGenerator\Support\Generation;
 use Innoboxrr\LarapackGenerator\Support\Manifest;
+use Innoboxrr\LarapackGenerator\Support\MigrationTimestamp;
 use Innoboxrr\LarapackGenerator\Support\StubBlocks;
 
 class Tool
@@ -270,6 +271,32 @@ class Tool
 			Generation::record($exists ? 'overwrite' : 'create', $destination, $stub);
 
 			return true;
+		}
+
+		/**
+		 * La ruta de una migración de creación: la que ya exista para esa
+		 * tabla o, si no hay, una nueva con la hora.
+		 *
+		 * El nombre lleva la hora, así que comprobar si existía por nombre exacto
+		 * no la encontraba nunca: cada importación añadía otra
+		 * `create_<tabla>_table` y `migrate` fallaba con "table already exists".
+		 * Reutilizarla deja que generate() decida como con cualquier archivo:
+		 * omitir, regenerar con --force o conservar lo editado.
+		 *
+		 * @param  string  $name  Sin la hora: `create_products_table`.
+		 */
+		protected function migrationFile(string $directory, string $name): string
+		{
+			$pattern = '/^\d{4}_\d{2}_\d{2}_\d{6}_' . preg_quote($name, '/') . '\.php$/';
+
+			$existing = array_values(array_filter(
+				glob($directory . '/*_' . $name . '.php') ?: [],
+				fn (string $file): bool => (bool) preg_match($pattern, basename($file))
+			));
+
+			sort($existing);
+
+			return $existing[0] ?? $directory . '/' . MigrationTimestamp::next() . '_' . $name . '.php';
 		}
 
 		protected function manifest(): Manifest

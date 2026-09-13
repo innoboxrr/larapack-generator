@@ -73,10 +73,8 @@ class ModelMetasTool extends Tool
 		// Añade 3 segundos a la fecha actual
 		// La migración de metas tiene que correr después de la del modelo,
 		// que ya se pidió antes: el contador lo garantiza sin sumar segundos.
-		$timestamp = MigrationTimestamp::next();
-		
-		$migrationMetasFile = $this->migrationMetasPath . '/' . $timestamp . '_create_' . $this->snake_case_model_name . '_metas_table.php';
-		
+		$migrationMetasFile = $this->migrationFile($this->migrationMetasPath, 'create_' . $this->snake_case_model_name . '_metas_table');
+
 		return $this->generate($this->migrationMetasTemplatePath . '/MigrationTemplate.txt', $migrationMetasFile);
 	}	
 

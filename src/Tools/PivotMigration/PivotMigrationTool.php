@@ -3,6 +3,7 @@
 namespace Innoboxrr\LarapackGenerator\Tools\PivotMigration;
 
 use Innoboxrr\LarapackGenerator\Tools\Tool;
+use Innoboxrr\LarapackGenerator\Support\Generation;
 use Innoboxrr\LarapackGenerator\Support\MigrationTimestamp;
 use Innoboxrr\LarapackGenerator\Exceptions\MakerException;
 
@@ -30,14 +31,21 @@ class PivotMigrationTool extends Tool
 		$this->migrationName = $migrationName;
 		$this->setMigrationPath()
 			->setPivotMigrationTemplatePath();
-		$migrationFile = $this->migrationPath . '/' . MigrationTimestamp::next() . '_create_' . $migrationName . '_table.php';
+		// La que ya exista para esta tabla: con la hora en el nombre, importar
+		// otra vez creaba una segunda migración de la misma tabla.
+		$migrationFile = $this->migrationFile($this->migrationPath, 'create_' . $migrationName . '_table');
 		if(!file_exists($migrationFile)) {
 			$templateFile = $this->migrationTemplatePath . '/MigrationTemplate.txt';
+			if (Generation::isDryRun()) {
+				Generation::record('create', $migrationFile, $templateFile);
+				return true;
+			}
 			if(copy($templateFile, $migrationFile)) {
 				$this->replaceMigrationData($migrationFile);
 				if(self::isFromJsonImporter()) {
 					$this->processFileWithJson($migrationFile);
 				}
+				Generation::record('create', $migrationFile, $templateFile);
 			} else {
 				throw MakerException::copyFailed($templateFile, $migrationFile);
 			}

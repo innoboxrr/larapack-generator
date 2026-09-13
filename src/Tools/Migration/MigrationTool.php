@@ -30,8 +30,8 @@ class MigrationTool extends Tool
 			->setMigrationPath()
 			->setMigrationTemplatePath();
 
-		$migrationFile = $this->migrationPath . '/' . MigrationTimestamp::next() . '_create_' . $this->plural_snake_case_model_name . '_table.php';
-		// PENDIENTE: Cambiar esto para que en lugar de esta validación verifique si no existe esta misma clase en las migraciones de la aplicación
+		$migrationFile = $this->migrationFile($this->migrationPath, 'create_' . $this->plural_snake_case_model_name . '_table');
+
 		return $this->generate($this->migrationTemplatePath . '/MigrationTemplate.txt', $migrationFile);
 	}
 
