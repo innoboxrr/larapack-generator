@@ -27,8 +27,8 @@
         "vue-router": "^4.5.0"
     },
     "dependencies": {
-        "innoboxrr-form-core": "^2.6.0",
-        "innoboxrr-form-elements": "^6.4.0",
+        "innoboxrr-form-core": "^2.7.0",
+        "innoboxrr-form-elements": "^6.5.0",
         "innoboxrr-http-request": "^2.0.0",
         "innoboxrr-i18n": "^1.1.0",
         "innoboxrr-js-validator": "^2.0.0",
