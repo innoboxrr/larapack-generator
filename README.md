@@ -863,10 +863,6 @@ php artisan route:json        (innoboxrr/routes-to-json)
 
 Si se añade un endpoint, hay que volver a exportar `routes.json`.
 
-Si el paquete es privado, la aplicación lo declara como repositorio `vcs` en su
-`composer.json` —también los privados de los que dependa— y necesita
-credenciales para leerlo (ver [Dependencias privadas](#dependencias-privadas-composer_auth)).
-
 ### Frontend con Vue
 
 El módulo se instala como cualquier paquete npm (publicado, o con
@@ -1023,62 +1019,6 @@ un repositorio cuyo permiso por defecto sea de sólo lectura, sin esa línea, no
 arranca el workflow y no deja log.
 
 `larapack:new` genera los dos, junto con `VERSION` en 0.1.0.
-
-### Dependencias privadas: `COMPOSER_AUTH`
-
-Un paquete que depende de otro **privado** necesita que Composer pueda leerlo en
-la CI. El workflow de tests toma las credenciales del secreto `COMPOSER_AUTH`.
-Sin él, el log muestra `COMPOSER_AUTH:` vacío seguido de
-`Authentication failed for 'https://github.com/<organización>/<repositorio>.git/'`.
-
-1. **Crea un token** de GitHub con lectura sobre los repositorios privados de los
-   que dependen los paquetes. Un token clásico con el permiso `repo`, de una
-   cuenta con acceso a todas las organizaciones implicadas, sirve para todos. Un
-   token *fine-grained* sólo alcanza los repositorios de un único propietario:
-   úsalo únicamente si todas las dependencias privadas son de la misma
-   organización.
-2. **Guárdalo como secreto de Actions** llamado `COMPOSER_AUTH`, con este valor:
-
-   ```json
-   {"github-oauth": {"github.com": "EL_TOKEN"}}
-   ```
-
-   En la organización (*Settings → Secrets and variables → Actions → New
-   organization secret*, dando acceso a los repositorios que lo necesitan) o en
-   cada repositorio (*Settings → Secrets and variables → Actions → New repository
-   secret*). **En el plan GitHub Free los repositorios privados no pueden leer
-   secretos de organización**: si la organización está en Free, el secreto va en
-   cada repositorio. Desde la terminal, con `gh` autenticado con permisos de
-   administración:
-
-   ```
-   gh secret set COMPOSER_AUTH --org <organización> --visibility all
-   gh secret set COMPOSER_AUTH --repo <organización>/<repositorio>
-   ```
-
-   `gh` pide el valor sin mostrarlo.
-3. **Pásalo al workflow reutilizable.** `innoboxrr/.github` vive en la
-   organización innoboxrr, y `secrets: inherit` no cruza organizaciones, así que un
-   repositorio de otra organización lo pasa explícitamente:
-
-   ```yaml
-   jobs:
-       tests:
-           uses: innoboxrr/.github/.github/workflows/php-tests.yml@main
-           secrets:
-               COMPOSER_AUTH: ${{ secrets.COMPOSER_AUTH }}
-   ```
-
-Composer necesita además cada repositorio privado declarado como `vcs` en el
-`composer.json` del paquete, incluidos los que sólo son dependencias de otras
-dependencias.
-
-En local, las credenciales van en la configuración global de Composer, nunca en
-un `auth.json` dentro del repositorio:
-
-```
-composer config --global github-oauth.github.com EL_TOKEN
-```
 
 ---
 
