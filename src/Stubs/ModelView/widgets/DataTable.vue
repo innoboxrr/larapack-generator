@@ -1,7 +1,7 @@
 <template>
 
     <DataTable
-        title="PascalCaseModelName"
+        ref="table"
         :data-url="dataUrl"
         data-method="get"
         :policy-url="policyUrl"
@@ -13,7 +13,6 @@
         :hide-columns="hideColumns"
         :card-wrapper="cardWrapper"
         :show-topbar="showTopbar"
-        :show-title="showTitle"
         :has-actions="hasActions"
         :has-filter="hasFilter">
 
@@ -38,14 +37,6 @@
         showTopbar: {
             type: Boolean,
             default: true,
-        },
-        showTitle: {
-            type: Boolean,
-            default: true,
-        },
-        showBreadcrumb: {
-            type: Boolean,
-            default: false,
         },
         hasActions: {
             type: Boolean,
@@ -75,6 +66,8 @@
         },
     })
 
+    const table = ref(null)
+
     const dataUrl = route(`${model.API_ROUTE_PREFIX}index`)
     const policyUrl = route(`${model.API_ROUTE_PREFIX}policies`)
 
@@ -88,5 +81,11 @@
         ...props.externalFilters,
         // Filtros propios del widget
     }))
+
+    // Quien monta la tabla la recarga tras un alta sin remontarla, así que
+    // conserva la página, el orden y los filtros.
+    defineExpose({
+        refresh: () => table.value?.refresh(),
+    })
 
 </script>

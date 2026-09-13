@@ -2,19 +2,32 @@
 
     <div id="AdminPluralPascalCaseModelNameWrapper">
 
-        <div v-if="isIndex" class="fe-section-sm">
+        <!-- El detalle de un registro, y su edición, son una página propia. -->
+        <RouterView v-if="isRecord" />
+
+        <div v-else class="fe-section-sm">
 
             <Breadcrumbs :pages="breadcrumbs" />
 
-            <DataTable
-                :show-title="false"
-                :hide-columns="hideColumns"
-                :key="crudKey" />
+            <DataTable ref="table" :hide-columns="hideColumns" />
 
-        </div>
+            <!-- @larapack:if create -->
+            <!-- El alta se abre encima de la tabla, que sigue ahí detrás con su
+                 página, su orden y sus filtros: al cerrar, el usuario está
+                 donde lo dejó. -->
+            <DrawerComponent
+                :open="isCreating"
+                :title="t('Create PluralPascalCaseModelName')"
+                @update:open="(open) => open || backToIndex()">
+                <RouterView @update-data="onCreated" />
+            </DrawerComponent>
+            <!-- @larapack:endif -->
 
-        <div v-else>
-            <RouterView @update-data="refresh" />
+            <CommandPaletteComponent
+                v-model:open="paletteOpen"
+                :items="commands"
+                :placeholder="t('Search a command')" />
+
         </div>
 
     </div>
@@ -25,6 +38,12 @@
 
     import { computed, ref } from 'vue'
     import { RouterView, useRoute, useRouter } from 'vue-router'
+    import t from 'innoboxrr-i18n'
+    import { CommandPaletteComponent } from 'innoboxrr-form-elements'
+    // @larapack:if create
+    import { DrawerComponent } from 'innoboxrr-form-elements'
+    import { notifySuccess } from 'innoboxrr-form-core'
+    // @larapack:endif
 
     import DataTable from '../widgets/DataTable.vue'
 
@@ -33,15 +52,56 @@
     const route = useRoute()
     const router = useRouter()
 
-    // Forzar el remontaje del datatable es la forma de recargarlo tras una
-    // alta o una baja hecha en una vista hija.
-    const crudKey = ref(0)
+    // La tabla se recarga en su sitio. Antes se la remontaba cambiándole la
+    // key, y eso la devolvía a la primera página y sin filtros.
+    const table = ref(null)
 
-    const refresh = () => crudKey.value++
+    const paletteOpen = ref(false)
 
-    const isIndex = computed(() => route.name === 'AdminPluralPascalCaseModelName')
+    const isRecord = computed(() => [
+        'AdminShowPascalCaseModelName',
+        'AdminEditPascalCaseModelName',
+    ].includes(route.name))
 
+    // @larapack:if create
+    const isCreating = computed(() => route.name === 'AdminCreatePascalCaseModelName')
+
+    // @larapack:endif
     const hideColumns = computed(() => [])
+
+    const backToIndex = () => router.push({ name: 'AdminPluralPascalCaseModelName' })
+
+    // @larapack:if create
+    const onCreated = () => {
+
+        notifySuccess(t('PascalCaseModelName created'))
+
+        backToIndex()
+
+        table.value?.refresh()
+
+    }
+
+    // @larapack:endif
+    // Ctrl+K o Cmd+K, desde cualquier sitio del índice.
+    const commands = computed(() => [
+        // @larapack:if create
+        {
+            id: 'create',
+            label: t('Create PluralPascalCaseModelName'),
+            group: 'PluralPascalCaseModelName',
+            icon: 'plus',
+            action: () => router.push({ name: 'AdminCreatePascalCaseModelName' }),
+        },
+        // @larapack:endif
+        {
+            id: 'refresh',
+            label: t('Refresh'),
+            group: 'PluralPascalCaseModelName',
+            icon: 'refresh',
+            action: () => table.value?.refresh(),
+        },
+    ])
 
     const breadcrumbs = computed(() => [
         {

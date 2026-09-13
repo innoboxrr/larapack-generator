@@ -1,30 +1,29 @@
 <template>
 
-    <div class="flex justify-center items-center">
-        <div class="max-w-2xl w-full">
-            <div class="card bg-white dark:bg-slate-600 border rounded-lg px-8 pt-6 pb-8 mb-4 dark:border-slate-800">
-
-                <EditForm
-                    :key="route.params.id"
-                    :kebabcasemodelname-id="route.params.id"
-                    @submit="onUpdated" />
-
-            </div>
-        </div>
-    </div>
+    <EditForm
+        :key="route.params.id"
+        :kebabcasemodelname-id="route.params.id"
+        @submit="onUpdated" />
 
 </template>
 
 <script setup>
 
+    /**
+     * La edición de PascalCaseModelName.
+     *
+     * Vive dentro del drawer que el detalle abre sobre la ficha. Como el alta,
+     * no decide a dónde ir después: avisa con `updateData`, y el detalle cierra
+     * el drawer, recarga el registro y se lo dice al usuario.
+     */
+
     import { onMounted } from 'vue'
-    import { useRoute, useRouter } from 'vue-router'
+    import { useRoute } from 'vue-router'
 
     import EditForm from '../forms/EditForm.vue'
     import { getPolicy } from '../index'
 
     const route = useRoute()
-    const router = useRouter()
 
     const emit = defineEmits(['updateData'])
 
@@ -38,15 +37,6 @@
 
     })
 
-    const onUpdated = (camelCaseModelName) => {
-
-        emit('updateData', camelCaseModelName)
-
-        router.push({
-            name: 'AdminShowPascalCaseModelName',
-            params: { id: camelCaseModelName.id },
-        })
-
-    }
+    const onUpdated = (camelCaseModelName) => emit('updateData', camelCaseModelName)
 
 </script>

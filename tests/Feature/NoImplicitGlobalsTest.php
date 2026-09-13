@@ -136,7 +136,9 @@ final class NoImplicitGlobalsTest extends TestCase
 
     public function test_las_migas_estan_en_las_mismas_vistas_en_vue_y_react(): void
     {
-        $vistas = ['AdminView', 'CreateView', 'ShowView'];
+        // El alta ya no es una página: se abre en un drawer sobre el índice,
+        // cuyas migas siguen a la vista detrás.
+        $vistas = ['AdminView', 'ShowView'];
 
         foreach ($vistas as $vista) {
             $vue = $this->read("resources/vue/src/models/post/views/{$vista}.vue");

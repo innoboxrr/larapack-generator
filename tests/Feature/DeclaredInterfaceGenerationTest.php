@@ -101,6 +101,29 @@ final class DeclaredInterfaceGenerationTest extends TestCase
     }
 
     /**
+     * Los drawers y el comando de alta cuelgan de su acción: un modelo que no
+     * se crea ni se edita no abre un drawer vacío ni ofrece un comando que
+     * lleva a una ruta que no existe.
+     */
+    #[DataProvider('frameworks')]
+    public function test_los_drawers_solo_existen_para_lo_que_se_puede_hacer(string $framework, string $ext): void
+    {
+        $readOnly = "resources/{$framework}/src/models/audit-event";
+
+        $index = $this->project->read("{$readOnly}/views/AdminView.{$ext}");
+
+        $this->assertStringNotContainsString('<DrawerComponent', $index);
+        $this->assertStringNotContainsString('AdminCreateAuditEvent', $index);
+        $this->assertStringContainsString('<CommandPaletteComponent', $index);
+
+        $this->assertStringNotContainsString('<DrawerComponent', $this->project->read("{$readOnly}/views/ShowView.{$ext}"));
+
+        // Grant se crea pero no se edita.
+        $this->assertStringContainsString('<DrawerComponent', $this->project->read("resources/{$framework}/src/models/grant/views/AdminView.{$ext}"));
+        $this->assertStringNotContainsString('<DrawerComponent', $this->project->read("resources/{$framework}/src/models/grant/views/ShowView.{$ext}"));
+    }
+
+    /**
      * El criterio de aceptación literal: el index.js no exporta create ni
      * update.
      */

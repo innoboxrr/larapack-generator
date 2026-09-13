@@ -5,7 +5,13 @@ import route from 'innoboxrr-route-resolver'
 import FilterForm from '../forms/FilterForm.jsx'
 import * as model from '../index'
 
+/**
+ * `ref` llega hasta la tabla (React 19 lo pasa como prop): quien la monta la
+ * recarga con `ref.current.refresh()` tras un alta, sin remontarla, así que
+ * conserva la página, el orden y los filtros.
+ */
 export default function PascalCaseModelNameDataTable({
+    ref = null,
     showTopbar = true,
     hasActions = true,
     hasFilter = true,
@@ -26,6 +32,7 @@ export default function PascalCaseModelNameDataTable({
 
     return (
         <DataTable
+            ref={ref}
             dataUrl={dataUrl}
             dataMethod="get"
             policyUrl={policyUrl}

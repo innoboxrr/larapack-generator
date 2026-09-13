@@ -1,13 +1,18 @@
 import { useEffect } from 'react'
-import { useNavigate, useOutletContext, useParams } from 'react-router-dom'
-import { buildPath } from 'innoboxrr-react-datatable'
+import { useOutletContext, useParams } from 'react-router-dom'
 
 import EditForm from '../forms/EditForm.jsx'
 import { getPolicy } from '../index'
 
+/**
+ * La edición de PascalCaseModelName.
+ *
+ * Vive dentro del drawer que el detalle abre sobre la ficha. No decide a dónde
+ * ir después: avisa con `onUpdateData`, y el detalle cierra el drawer, recarga
+ * el registro y se lo dice al usuario.
+ */
 export default function EditView() {
     const { id } = useParams()
-    const navigate = useNavigate()
     const { onUpdateData } = useOutletContext() ?? {}
 
     useEffect(() => {
@@ -18,23 +23,12 @@ export default function EditView() {
         })
     }, [id])
 
-    const onUpdated = (camelCaseModelName) => {
-        onUpdateData?.(camelCaseModelName)
-
-        navigate(buildPath('AdminShowPascalCaseModelName', { id: camelCaseModelName.id }))
-    }
-
+    // La clave fuerza a remontar el formulario al cambiar de registro: si no,
+    // conservaría el estado del anterior.
     return (
-        <div className="flex justify-center items-center">
-            <div className="max-w-2xl w-full">
-                <div className="card bg-white dark:bg-slate-600 border rounded-lg px-8 pt-6 pb-8 mb-4 dark:border-slate-800">
-
-                    {/* La clave fuerza a remontar el formulario al cambiar de
-                        registro: si no, conservaria el estado del anterior. */}
-                    <EditForm key={id} camelCaseModelNameId={id} onSubmit={onUpdated} />
-
-                </div>
-            </div>
-        </div>
+        <EditForm
+            key={id}
+            camelCaseModelNameId={id}
+            onSubmit={(camelCaseModelName) => onUpdateData?.(camelCaseModelName)} />
     )
 }

@@ -168,10 +168,12 @@ final class GeneratesReactModuleTest extends TestCase
      */
     public function test_navega_por_nombre_de_ruta_y_no_por_una_ruta_escrita_a_mano(): void
     {
-        $create = $this->project->read(self::REACT . '/views/CreateView.jsx');
+        // El alta ya no navega: avisa al índice, que cierra su drawer. Quien
+        // resuelve rutas por nombre es el detalle.
+        $show = $this->project->read(self::REACT . '/views/ShowView.jsx');
 
-        $this->assertStringContainsString("import { buildPath } from 'innoboxrr-react-datatable'", $create);
-        $this->assertStringContainsString("buildPath('AdminShowPost', { id: post.id })", $create);
+        $this->assertStringContainsString("import { buildPath } from 'innoboxrr-react-datatable'", $show);
+        $this->assertStringContainsString("buildPath('AdminShowPost', { id: post.id })", $show);
 
         $routes = $this->project->read(self::REACT . '/routes/index.js');
 
