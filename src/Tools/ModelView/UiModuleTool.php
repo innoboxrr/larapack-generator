@@ -248,6 +248,7 @@ abstract class UiModuleTool extends Tool
 		return $model['props'] ?? [];
 	}
 
+
 	// MODULO DEL MODELO
 
 	/**
@@ -256,9 +257,19 @@ abstract class UiModuleTool extends Tool
 	protected function processModelModule(string $file): void
 	{
 		$columns = '';
+		$bulkUpdates = '';
 		$sortColumn = 'id';
 
+		$declaration = \Innoboxrr\LarapackGenerator\Support\Declaration::of((string) $this->ModelName);
+		$bulkUpdate = $this->declares('bulkUpdate');
+
 		foreach ($this->props() as $prop) {
+			$enum = ! empty($prop['enum']) && is_array($prop['enum']) ? $prop['enum'] : null;
+
+			if ($bulkUpdate && $enum !== null && ! empty($prop['updatable']) && ! in_array($prop['name'], $declaration['secret'], true)) {
+				$bulkUpdates .= $this->bulkUpdateActions($prop['name'], $enum);
+			}
+
 			if (empty($prop['datatable'])) {
 				continue;
 			}
@@ -277,8 +288,12 @@ abstract class UiModuleTool extends Tool
 
 			// La tabla enseñaba el valor guardado (`published`) en lugar de la
 			// etiqueta que el formulario ya usaba para el mismo campo.
-			if (! empty($prop['enum']) && is_array($prop['enum'])) {
-				$columns .= "        parser: (value) => ({ " . $this->enumLabels($prop['enum']) . " })[value] ?? value,\n";
+			if ($enum !== null) {
+				$columns .= "        parser: (value) => ({ " . $this->enumLabels($enum) . " })[value] ?? value,\n";
+			} elseif ($bulkUpdate && $this->editsInline($prop, $declaration['secret'])) {
+				// Se edita en su celda y se guarda sólo ese campo.
+				$columns .= "        component: 'ClickToEdit',\n";
+				$columns .= "        parser: (value, row) => ({ value, label: t('{$label}'), save: (next) => updateField(row.id, '{$prop['name']}', next) }),\n";
 			}
 
 			$columns .= "    },\n";
@@ -287,6 +302,8 @@ abstract class UiModuleTool extends Tool
 		$content = file_get_contents($file);
 
 		$content = str_replace('//DATA_TABLE_COLUMNS//' . "\n", $columns, $content);
+
+		$content = str_replace('//BULK_UPDATE_ACTIONS//' . "\n", $bulkUpdates, $content);
 
 		// Se sustituye tambien la linea del valor por defecto para no acabar
 		// con dos claves de ordenamiento en el mismo objeto.
@@ -417,6 +434,50 @@ abstract class UiModuleTool extends Tool
 	 *
 	 * @param  array<string|int, string>  $enum
 	 */
+	/**
+	 * Una columna que se edita en su celda: texto de una línea que el
+	 * formulario ya edita con un campo de texto. El texto largo no cabe en una
+	 * celda, un enum tiene sus acciones masivas y un secreto no sale por la API.
+	 *
+	 * @param  array<string, mixed>  $prop
+	 * @param  array<int, string>  $secret
+	 */
+	protected function editsInline(array $prop, array $secret): bool
+	{
+		return ! empty($prop['updatable'])
+			&& ! empty($prop['form'])
+			&& in_array($prop['type'] ?? null, ['string', 'char'], true)
+			&& ($prop['form_component'] ?? 'TextInputComponent') === 'TextInputComponent'
+			&& ! in_array($prop['name'], $secret, true);
+	}
+
+	/**
+	 * Una acción masiva por cada valor del enum: "Estado: Publicado" pone ese
+	 * valor en todos los seleccionados.
+	 *
+	 * @param  array<string|int, string>  $enum
+	 */
+	protected function bulkUpdateActions(string $name, array $enum): string
+	{
+		$field = $this->label($name);
+		$actions = '';
+
+		foreach ($enum as $value => $label) {
+			$value = $this->escape((string) $value);
+
+			$actions .= "    {\n";
+			$actions .= "        id: '{$name}-{$value}',\n";
+			$actions .= "        name: t('{$field}') + ': ' + t('" . $this->escape((string) $label) . "'),\n";
+			$actions .= "        success: t('Records updated'),\n";
+			$actions .= "        callback: 'bulkUpdateModels',\n";
+			$actions .= "        icon: 'edit',\n";
+			$actions .= "        params: { {$name}: '{$value}' },\n";
+			$actions .= "    },\n";
+		}
+
+		return $actions;
+	}
+
 	protected function enumLabels(array $enum): string
 	{
 		$pairs = [];

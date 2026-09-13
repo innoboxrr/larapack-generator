@@ -79,10 +79,36 @@ export const crudActions = () => [
     {
         id: 'export',
         name: t('Export'),
+        // El archivo llega después, por notificación: sin este aviso, pedir la
+        // exportación desde la barra no decía nada.
+        success: t('The export is being prepared. You will be notified when it is ready.'),
         callback: 'exportModel',
         icon: 'download',
         route: false,
         policy: false,
+        params: {},
+    },
+    // @larapack:endif
+]
+
+/**
+ * Acciones de la barra que aparece al seleccionar filas.
+ *
+ * La tabla llama a `model[callback](ids, rows, params)` y después recarga. Los
+ * ids incluyen los seleccionados en otras páginas.
+ */
+export const bulkActions = () => [
+    // @larapack:if bulkUpdate
+//BULK_UPDATE_ACTIONS//
+    // @larapack:endif
+    // @larapack:if bulkDelete
+    {
+        id: 'bulkDelete',
+        name: t('Delete'),
+        success: t('Records deleted'),
+        callback: 'bulkDeleteModels',
+        icon: 'delete',
+        danger: true,
         params: {},
     },
     // @larapack:endif
@@ -252,6 +278,51 @@ export const exportModel = async (data = {}) => {
     return makeHttpRequest('post', route(API_ROUTE_PREFIX + 'export'), {
         _token: csrfToken(),
         ...data,
+    }, {}, 0, 1500)
+}
+// @larapack:endif
+// @larapack:if bulkUpdate
+
+/**
+ * Cambia `data` en todos los `ids`. Sólo viajan los campos que cambian: la API
+ * valida cada uno con las reglas de update y no exige los que no llegan.
+ */
+export const bulkUpdateModels = (ids, rows = [], data = {}) => {
+    return makeHttpRequest('put', route(API_ROUTE_PREFIX + 'bulk.update'), {
+        _token: csrfToken(),
+        ids,
+        data,
+    }, {}, 0, 1500)
+}
+
+/**
+ * Guarda un solo campo, desde su celda de la tabla. Si la API lo rechaza, el
+ * error lleva el mensaje de la regla y la celda lo enseña sin cerrarse.
+ */
+export const updateField = async (modelId, field, value) => {
+    try {
+        return await bulkUpdateModels([modelId], [], { [field]: value })
+    } catch (error) {
+        const response = error?.response?.data ?? {}
+
+        throw new Error(response.errors?.[`data.${field}`]?.[0] ?? response.message ?? t('Could not save'))
+    }
+}
+// @larapack:endif
+// @larapack:if bulkDelete
+
+export const bulkDeleteModels = async (ids) => {
+    await confirmOrCancel({
+        title: t('Confirm operation'),
+        message: t('Are you sure you want to delete the selected items?'),
+        confirmLabel: t('Yes, delete'),
+        cancelLabel: t('Cancel'),
+        variant: 'danger',
+    })
+
+    return makeHttpRequest('delete', route(API_ROUTE_PREFIX + 'bulk.delete'), {
+        _token: csrfToken(),
+        ids,
     }, {}, 0, 1500)
 }
 // @larapack:endif

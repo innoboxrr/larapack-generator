@@ -6,7 +6,8 @@
         data-method="get"
         :policy-url="policyUrl"
         policy-method="get"
-        :model="model"
+        :model="tableModel"
+        :selectable="selectable"
         :external-filters="mergedExternalFilters"
         :form-filters="formFilters"
         :extra-params="extraParams"
@@ -29,11 +30,23 @@
 
     import { computed, ref } from 'vue'
     import DataTable from 'innoboxrr-vue-datatable'
+    import { ClickToEditComponent } from 'innoboxrr-form-elements'
     import route from 'innoboxrr-route-resolver'
 
     import { tableLabels } from '../../../i18n.js'
     import FilterForm from '../forms/FilterForm.vue'
     import * as model from '../index'
+
+    // Las columnas que se editan en su celda piden `component: 'ClickToEdit'`.
+    // El contrato no importa el componente porque es el mismo para Vue y para
+    // React: se lo pone aquí cada framework.
+    const tableModel = {
+        ...model,
+        dataTableComponents: () => ({ ClickToEdit: ClickToEditComponent }),
+    }
+
+    // Las casillas sólo salen si hay algo que hacer con lo seleccionado.
+    const selectable = model.bulkActions().length > 0
 
     const props = defineProps({
         showTopbar: {
