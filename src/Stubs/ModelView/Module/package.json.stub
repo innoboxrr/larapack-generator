@@ -14,7 +14,8 @@
     ],
     "sideEffects": [
         "*.css",
-        "*.vue"
+        "*.vue",
+        "src/theme.js"
     ],
     "scripts": {
         "build": "vite build",

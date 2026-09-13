@@ -13,7 +13,8 @@
         "src"
     ],
     "sideEffects": [
-        "*.css"
+        "*.css",
+        "src/theme.js"
     ],
     "scripts": {
         "build": "vite build",

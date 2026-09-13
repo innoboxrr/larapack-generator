@@ -89,6 +89,21 @@ final class GeneratedModuleDependenciesTest extends TestCase
         }
     }
 
+    /**
+     * La aplicación importa el tema con `import 'modulo/src/theme.js'`, sin
+     * usar nada de lo que exporta. Si el package.json del módulo no lo declara
+     * con efectos, Vite lo descarta entero, y con él la hoja de estilos: el
+     * piloto en una aplicación Laravel nueva salió sin ningún estilo.
+     */
+    public function test_el_tema_no_se_descarta_al_compilar_la_aplicacion(): void
+    {
+        foreach (['resources/vue/package.json', 'resources/react/package.json'] as $manifest) {
+            $decoded = json_decode($this->read($manifest), true);
+
+            $this->assertContains('src/theme.js', $decoded['sideEffects'] ?? [], "{$manifest} deja que el bundler descarte el tema.");
+        }
+    }
+
     private function assertDependenciesMatch(string $manifest): void
     {
         $declared = $this->dependenciesOf($manifest);
