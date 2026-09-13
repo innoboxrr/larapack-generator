@@ -10,6 +10,10 @@
  */
 
 import makeHttpRequest from 'innoboxrr-http-request'
+// @larapack:if delete|forceDelete|export
+import { RequestCancelledError } from 'innoboxrr-http-request'
+import { confirmAction } from 'innoboxrr-form-core'
+// @larapack:endif
 import route from 'innoboxrr-route-resolver'
 import t from 'innoboxrr-i18n'
 
@@ -129,6 +133,23 @@ export const getPolicy = (policy, modelId = null) => {
 }
 // @larapack:endif
 
+// @larapack:if delete|forceDelete|export
+/**
+ * Pregunta antes de lo que no se deshace, con el diálogo del tema
+ * (ConfirmHostComponent). Antes lo hacía un SweetAlert con sus propios colores
+ * escritos aquí, que no seguía el tema ni el modo oscuro.
+ *
+ * Cancelar rechaza con RequestCancelledError, lo mismo que hacía aquel diálogo:
+ * la tabla y las vistas lo reconocen y no avisan de una operación que el
+ * usuario decidió no hacer.
+ */
+const confirmOrCancel = async (options) => {
+    if (! await confirmAction(options)) {
+        throw new RequestCancelledError()
+    }
+}
+
+// @larapack:endif
 // CRUD
 // @larapack:if index
 
@@ -177,19 +198,19 @@ export const updateModel = (modelId, data) => {
  * (`_method`) solo se aplica a peticiones POST de formulario, no a un cuerpo
  * JSON, asi que enviar POST aqui devolvia 405.
  */
-export const deleteModel = (data) => {
+export const deleteModel = async (data) => {
+    await confirmOrCancel({
+        title: t('Confirm operation'),
+        message: t('Are you sure you want to delete this item?'),
+        confirmLabel: t('Yes, delete'),
+        cancelLabel: t('Cancel'),
+        variant: 'danger',
+    })
+
     return makeHttpRequest('delete', route(API_ROUTE_PREFIX + 'delete'), {
         _token: csrfToken(),
         snake_case_model_name_id: data.id,
-    }, {}, 0, 1500, {
-        title: t('Confirm operation'),
-        text: t('Are you sure you want to delete this item?'),
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonColor: '#3085d6',
-        cancelButtonColor: '#d33',
-        confirmButtonText: t('Yes, delete'),
-    })
+    }, {}, 0, 1500)
 }
 // @larapack:endif
 // @larapack:if restore
@@ -203,35 +224,34 @@ export const restoreModel = (data) => {
 // @larapack:endif
 // @larapack:if forceDelete
 
-export const forceDeleteModel = (data) => {
+export const forceDeleteModel = async (data) => {
+    await confirmOrCancel({
+        title: t('Confirm operation'),
+        message: t('This will permanently delete the item.'),
+        confirmLabel: t('Yes, delete permanently'),
+        cancelLabel: t('Cancel'),
+        variant: 'danger',
+    })
+
     return makeHttpRequest('delete', route(API_ROUTE_PREFIX + 'force.delete'), {
         _token: csrfToken(),
         snake_case_model_name_id: data.id,
-    }, {}, 0, 1500, {
-        title: t('Confirm operation'),
-        text: t('This will permanently delete the item.'),
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonColor: '#3085d6',
-        cancelButtonColor: '#d33',
-        confirmButtonText: t('Yes, delete permanently'),
-    })
+    }, {}, 0, 1500)
 }
 // @larapack:endif
 // @larapack:if export
 
-export const exportModel = (data = {}) => {
+export const exportModel = async (data = {}) => {
+    await confirmOrCancel({
+        title: t('Confirm operation'),
+        message: t('Are you sure you want to export this item?'),
+        confirmLabel: t('Yes, continue'),
+        cancelLabel: t('Cancel'),
+    })
+
     return makeHttpRequest('post', route(API_ROUTE_PREFIX + 'export'), {
         _token: csrfToken(),
         ...data,
-    }, {}, 0, 1500, {
-        title: t('Confirm operation'),
-        text: t('Are you sure you want to export this item?'),
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonColor: '#3085d6',
-        cancelButtonColor: '#d33',
-        confirmButtonText: t('Yes, continue'),
-    })
+    }, {}, 0, 1500)
 }
 // @larapack:endif

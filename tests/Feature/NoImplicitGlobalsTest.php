@@ -113,10 +113,25 @@ final class NoImplicitGlobalsTest extends TestCase
 
         $this->assertStringContainsString("icon: 'plus'", $contract);
         $this->assertStringContainsString("icon: 'download'", $contract);
+    }
 
-        // Los de SweetAlert no son nuestros: 'warning' es su propio
-        // vocabulario y tiene que seguir llegándole tal cual.
-        $this->assertStringContainsString("icon: 'warning'", $contract);
+    /**
+     * Borrar y exportar preguntaban con un SweetAlert que traía sus propios
+     * colores escritos en el contrato: no seguía el tema ni el modo oscuro. La
+     * confirmación es ahora la del tema, y cancelar sigue rechazando con
+     * RequestCancelledError para que nadie avise de lo que no se hizo.
+     */
+    public function test_las_confirmaciones_son_las_del_tema(): void
+    {
+        $contract = $this->read('resources/vue/src/models/post/index.js');
+
+        $this->assertStringContainsString("import { confirmAction } from 'innoboxrr-form-core'", $contract);
+        $this->assertStringContainsString('throw new RequestCancelledError()', $contract);
+        $this->assertStringContainsString("variant: 'danger'", $contract);
+
+        foreach (['confirmButtonColor', 'showCancelButton', "icon: 'warning'"] as $sweetAlert) {
+            $this->assertStringNotContainsString($sweetAlert, $contract);
+        }
     }
 
     public function test_las_dos_ramas_generan_los_componentes_compartidos(): void

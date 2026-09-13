@@ -124,6 +124,20 @@ final class DeclaredInterfaceGenerationTest extends TestCase
     }
 
     /**
+     * Sin borrar ni exportar no hay nada que confirmar, y el contrato no importa
+     * lo que no usa.
+     */
+    public function test_el_contrato_solo_importa_la_confirmacion_si_la_usa(): void
+    {
+        $readOnly = $this->project->read('resources/vue/src/models/audit-event/index.js');
+
+        $this->assertStringNotContainsString('confirmAction', $readOnly);
+        $this->assertStringNotContainsString('RequestCancelledError', $readOnly);
+
+        $this->assertStringContainsString('confirmOrCancel', $this->project->read('resources/vue/src/models/grant/index.js'));
+    }
+
+    /**
      * El criterio de aceptación literal: el index.js no exporta create ni
      * update.
      */
