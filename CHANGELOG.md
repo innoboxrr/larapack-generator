@@ -1,5 +1,63 @@
 # Changelog
 
+## 7.3.0
+
+Lo generado ya no sólo compila: arranca y funciona. Hasta ahora los tests de
+LaraPack leían los archivos que produce; ninguno los ejecutaba. Ahora hay una
+suite `EndToEnd` que hace lo que haría quien sigue la guía: escribe un
+laraimport, valida, genera API, interfaz, proveedores y configuración, instala
+el paquete en una aplicación Laravel y lo usa. Migra, llama a cada ruta con el
+nombre que usa el front, autentica, autoriza, crea, lee, modifica, borra,
+exporta, corre `larapack:verify` y corre los tests que genera el propio paquete.
+
+La primera vez pasaron 4 de 13. Todo lo que sigue salió de ahí.
+
+### Lo que no funcionaba
+
+- **El paquete no creaba sus tablas.** El `AppServiceProvider` generado traía
+  comentadas la carga de migraciones, vistas y configuración.
+- **Cualquier petición autorizada daba 500.** La Policy tipaba el usuario como
+  `App\Models\User` y llamaba a `isAdmin()`. Un paquete no conoce el usuario de
+  quien lo instala: ahora tipa el contrato `Authenticatable` y consulta
+  `isAdmin()` sólo si existe.
+- **Las factories no insertaban.** Sólo cuatro tipos de columna tenían valor; un
+  `decimal` o un `boolean` salían `null` y la clave foránea valía siempre `1`.
+  Ahora cada tipo del esquema tiene uno, y un `foreignId` hacia un modelo del
+  mismo archivo usa la factory de ese modelo.
+- **El borrado permanente mentía.** `forceDeleteModel()` hacía `abort(403)`
+  escondido en el modelo, mientras la API de políticas le decía al front que el
+  administrador podía. Sigue naciendo apagado, pero en la Policy
+  (`$exceptAbilities`), que es donde se ve y donde se enciende.
+- **Los tests generados no podían pasar.** El `TestCase` no registraba el
+  paquete, usaba un token de ejemplo y un `Models\User` que no existe; las URLs
+  se escribían a mano y no coincidían con las rutas de un modelo de dos
+  palabras; y el de inmutabilidad dependía del reloj. Ahora el `TestCase` lee
+  los proveedores del `composer.json`, migra, autentica con Sanctum y abre la
+  autorización, y las rutas se llaman por nombre. En un paquete se genera además
+  `tests/User.php`.
+- **El módulo Vue no compilaba fuera de su aplicación.** Sus rutas importaban
+  `@router/middleware`, un alias que sólo existe en la aplicación que lo define.
+  Ahora declaran `meta: { auth: true }`, lo mismo que las de React ya llevaban
+  en `handle`, y es el router del anfitrión el que lo lee. **Si tu aplicación
+  protegía las rutas del módulo leyendo `meta.middleware`, pasa a leer
+  `meta.auth`.**
+
+La suite también compila los módulos Vue y React generados con su propio
+`vite.config`: lo que aporta el anfitrión queda externo, y todo lo demás tiene
+que resolver. Con el stub de rutas anterior, esa prueba falla justo en
+`@router/middleware`; se comprobó antes de corregirlo.
+
+Y la aplicación de la prueba es la que describe la guía, incluido
+`JsonResource::withoutWrapping()`: el índice tiene que llegar con `data`, `meta`
+y `links` en la raíz, que es lo que lee el datatable.
+
+### Si ya tienes un paquete generado
+
+Nada se sobrescribe sin `--force`, y lo editado a mano se conserva siempre. Para
+recibir los arreglos de un archivo que no tocaste, regenera con `--force`.
+Revisa a mano, si los editaste, `AppServiceProvider`, las Policies, las
+factories, `tests/TestCase.php` y los tests de endpoints.
+
 ## 7.2.0
 
 `larapack:audit` detecta el `composer.json` que fija su propia `version`, y lo
