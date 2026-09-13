@@ -137,6 +137,7 @@ class Tool
 		{
 			return [
 				// EN PANTALLA
+				'displayPropName' => Declaration::of((string) $this->ModelName)['display'],
 				'SingularModelLabel' => (string) $this->SingularModelLabel,
 				'PluralModelLabel' => (string) $this->PluralModelLabel,
 				// PLURALES

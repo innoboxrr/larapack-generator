@@ -40,6 +40,7 @@ final class SemanticValidator
             ...self::routes($models),
             ...self::secrets($models, $raw['models'] ?? []),
             ...self::metas($models, $raw['models'] ?? []),
+            ...self::display($models),
         ];
     }
 
@@ -166,6 +167,46 @@ final class SemanticValidator
                         'message' => "Reglas para {$request['name']}, pero {$model['name']} no tiene {$action}: no se genera ese request y las reglas no se usan.",
                     ];
                 }
+            }
+        }
+
+        return $findings;
+    }
+
+    /**
+     * `display` tiene que ser una columna que la API devuelva: una que no existe
+     * o una secreta dejarían la ficha, las migas y la pestaña sin nombre.
+     *
+     * @param  array<int, array<string, mixed>>  $models
+     * @return array<int, array<string, mixed>>
+     */
+    private static function display(array $models): array
+    {
+        $findings = [];
+
+        foreach ($models as $index => $model) {
+            if (empty($model['display']) || $model['display'] === 'id') {
+                continue;
+            }
+
+            $prop = collect($model['props'])->firstWhere('name', $model['display']);
+
+            if ($prop === null) {
+                $findings[] = [
+                    'level' => self::ERROR,
+                    'path' => "/models/{$index}/display",
+                    'message' => "'{$model['name']}' usa display: '{$model['display']}', que no es ninguna de sus columnas.",
+                ];
+
+                continue;
+            }
+
+            if (! empty($prop['secret'])) {
+                $findings[] = [
+                    'level' => self::ERROR,
+                    'path' => "/models/{$index}/display",
+                    'message' => "'{$model['display']}' es secret: nunca sale por la API, así que no puede nombrar a un registro en pantalla.",
+                ];
             }
         }
 

@@ -24,21 +24,23 @@ final class Declaration
     public const FLAGS = ['immutable', 'secret', 'metas'];
 
     /**
-     * @var array<string, array{actions: array<int, string>, immutable: bool, secret: array<int, string>, metas: bool}>
+     * @var array<string, array{actions: array<int, string>, immutable: bool, secret: array<int, string>, metas: bool, display: string}>
      */
     private static array $models = [];
 
     /**
      * @param  array<int, string>  $actions
      * @param  array<int, string>  $secret
+     * @param  string  $display  La columna que nombra a un registro en pantalla.
      */
-    public static function set(string $model, array $actions, bool $immutable = false, array $secret = [], bool $metas = false): void
+    public static function set(string $model, array $actions, bool $immutable = false, array $secret = [], bool $metas = false, string $display = 'name'): void
     {
         self::$models[$model] = [
             'actions' => array_values(array_intersect(Actions::ALL, $actions)),
             'immutable' => $immutable,
             'secret' => array_values($secret),
             'metas' => $metas,
+            'display' => $display,
         ];
     }
 
@@ -74,12 +76,16 @@ final class Declaration
             $model['actions'] ?? Actions::resolve($model),
             ! empty($model['immutable']),
             $secret,
-            ! empty($model['metas'])
+            ! empty($model['metas']),
+            $model['display'] ?? 'name'
         );
     }
 
     /**
-     * @return array{actions: array<int, string>, immutable: bool, secret: array<int, string>, metas: bool}
+     * Sin laraimport no se conocen las columnas: se nombra por `name`, como
+     * siempre.
+     *
+     * @return array{actions: array<int, string>, immutable: bool, secret: array<int, string>, metas: bool, display: string}
      */
     public static function of(string $model): array
     {
@@ -88,6 +94,7 @@ final class Declaration
             'immutable' => false,
             'secret' => [],
             'metas' => false,
+            'display' => 'name',
         ];
     }
 

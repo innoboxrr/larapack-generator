@@ -59,6 +59,10 @@
                     "description": "Metas que solo escribe el sistema, con setMeta() o setMetas(). El formulario no las escribe ni las borra aunque lleguen en la petición o estén en editable_metas.",
                     "items": { "$ref": "#/$defs/snakeCase" }
                 },
+                "display": {
+                    "$ref": "#/$defs/snakeCase",
+                    "description": "La columna que identifica a un registro en pantalla: el título de la ficha, las migas y la pestaña. Sin la clave se usa name, luego title, luego la primera columna de texto y, si no hay, id."
+                },
                 "load_relations": {
                     "type": "array",
                     "default": [],

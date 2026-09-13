@@ -124,6 +124,8 @@ final class ImportDocument
             if (! empty($model['metas'])) {
                 $document['models'][$index]['props'] = self::withPayload($document['models'][$index]['props']);
             }
+
+            $document['models'][$index]['display'] = self::displayOf($document['models'][$index]);
         }
 
         foreach ($document['models'] as $index => $model) {
@@ -141,6 +143,52 @@ final class ImportDocument
         }
 
         return $document;
+    }
+
+    /**
+     * Los tipos de columna que se leen como un nombre.
+     */
+    private const TEXT_TYPES = ['string', 'char', 'text', 'tinyText', 'mediumText', 'longText'];
+
+    /**
+     * La columna con la que la interfaz nombra a un registro.
+     *
+     * Las vistas leían siempre `.name`: un modelo sin esa columna —un producto
+     * con `title`, un pedido con `number`— se enseñaba en la ficha, las migas y
+     * la pestaña con el nombre del modelo en lugar del registro. Lo declarado
+     * manda; si no, `name`, `title`, la primera columna de texto que no sea
+     * secreta (antes las de la tabla), e `id` si no hay ninguna.
+     *
+     * @param  array<string, mixed>  $model
+     */
+    private static function displayOf(array $model): string
+    {
+        if (! empty($model['display'])) {
+            return $model['display'];
+        }
+
+        $props = array_values(array_filter(
+            $model['props'],
+            fn (array $prop): bool => empty($prop['secret']) && $prop['name'] !== 'payload'
+        ));
+
+        $names = array_column($props, 'name');
+
+        foreach (['name', 'title'] as $conventional) {
+            if (in_array($conventional, $names, true)) {
+                return $conventional;
+            }
+        }
+
+        $texts = array_values(array_filter($props, fn (array $prop): bool => in_array($prop['type'], self::TEXT_TYPES, true)));
+
+        foreach ($texts as $prop) {
+            if (! empty($prop['datatable'])) {
+                return $prop['name'];
+            }
+        }
+
+        return $texts[0]['name'] ?? 'id';
     }
 
     /**
