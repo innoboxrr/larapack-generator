@@ -41,6 +41,21 @@ class MigrationTool extends Tool
 
         $migrationFile = $this->migrationFile($this->migrationPath, 'create_'.$this->plural_snake_case_model_name.'_table');
 
+        // Una migración de creación que no generó LaraPack —la de `users` que
+        // trae Laravel— no se compara con el laraimport: lleva lo que este no
+        // expresa (rememberToken(), unique()) y se daba por editada a mano, con
+        // el consejo de escribir una alteración que quitaría esas columnas.
+        if (is_file($migrationFile) && ! $this->manifest()->knows($migrationFile)) {
+            Generation::record(
+                'skipped',
+                $migrationFile,
+                $this->migrationTemplatePath.'/MigrationTemplate.txt',
+                'no la generó LaraPack: el esquema lo decide esa migración'
+            );
+
+            return false;
+        }
+
         // Una tabla que ya existe no cambia reescribiendo su migración de
         // creación: quien ya la migró no la vuelve a crear. Lo que cambió en
         // el laraimport va en una migración de alteración.
