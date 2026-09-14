@@ -204,7 +204,15 @@ class PascalCaseModelNameEndpointsTest extends TestCase
 
         $records = PascalCaseModelName::factory()->count(2)->create();
 
-        $data = PascalCaseModelName::factory()->make()->getAttributes();
+        // Un mismo valor no cabe en varias filas de una columna única, como el
+        // email de users en una aplicación: esas no se cambian en lote.
+        $unique = collect(\Illuminate\Support\Facades\Schema::getIndexes((new PascalCaseModelName)->getTable()))
+            ->where('unique', true)
+            ->pluck('columns')
+            ->flatten()
+            ->all();
+
+        $data = \Illuminate\Support\Arr::except(PascalCaseModelName::factory()->make()->getAttributes(), $unique);
 
         if ($data === []) {
             $this->markTestSkipped('La factory no define campos que cambiar.');

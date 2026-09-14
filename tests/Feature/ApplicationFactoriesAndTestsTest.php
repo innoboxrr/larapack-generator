@@ -211,6 +211,29 @@ final class ApplicationFactoriesAndTestsTest extends TestCase
         }
     }
 
+    // EDICIÓN EN LOTE
+
+    /**
+     * Una aplicación trae `users.email` único, y el test de edición en lote
+     * ponía el mismo valor en dos usuarios: la base lo rechazaba y respondía 500.
+     */
+    public function test_en_una_aplicacion_la_edicion_en_lote_no_repite_valores_de_columnas_unicas(): void
+    {
+        $this->import(FakeProject::application(), ['User', 'Product']);
+
+        foreach (['User', 'Product'] as $model) {
+            $test = $this->project->read("tests/Feature/Models/{$model}EndpointsTest.php");
+
+            $this->assertSame(
+                1,
+                preg_match('/public function test_\w+_bulk_update_endpoint\(\): void\s*\{(.*?)\n    \}/s', $test, $method),
+                "{$model}EndpointsTest no prueba la edición en lote."
+            );
+
+            $this->assertStringContainsString("->where('unique', true)", $method[1], "{$model}EndpointsTest pone el mismo valor en varias filas sin apartar las columnas únicas.");
+        }
+    }
+
     // AYUDAS
 
     /**
