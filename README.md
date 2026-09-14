@@ -1910,6 +1910,6 @@ nuestro trabajo y te gustaría apoyarnos, considera inscribirte en uno de nuestr
 cursos de pago.
 
 Te recomendamos especialmente el curso
-[Desarrollo de Paquetes en Laravel](https://laravelers.com/course/275).
+[Desarrollo de Paquetes en Laravel](https://profe.mx/app/course/2/domina-la-creacion-de-paquetes-en-laravel).
 
 Gracias por tu apoyo.
