@@ -19,6 +19,11 @@ use Symfony\Component\Console\Command\Command;
 final class ApplicationFactoriesAndTestsTest extends TestCase
 {
     /**
+     * El archivo de rutas de cada modelo lleva su nombre en snake_case.
+     */
+    private const ROUTE_FILES = ['User' => 'user', 'Product' => 'product', 'OrderLine' => 'order_line'];
+
+    /**
      * @param  array<int, string>  $models
      */
     private function import(FakeProject $project, array $models): void
@@ -160,7 +165,75 @@ final class ApplicationFactoriesAndTestsTest extends TestCase
         $this->assertStringContainsString('namespace Acme\\Shop\\Tests;', $this->project->read('tests/User.php'));
     }
 
+    // RUTAS
+
+    public function test_en_una_aplicacion_los_tests_llaman_a_las_rutas_que_registra_el_proveedor(): void
+    {
+        $this->import(FakeProject::application(), ['User', 'Product', 'OrderLine']);
+
+        $this->assertTestsCallRegisteredRoutes('app/Providers/RouteServiceProvider.php', ['User', 'Product', 'OrderLine']);
+    }
+
+    public function test_en_un_paquete_los_tests_llaman_a_las_rutas_que_registra_el_proveedor(): void
+    {
+        $this->import(FakeProject::library('Acme\\Shop\\'), ['Product', 'OrderLine']);
+
+        $this->assertTestsCallRegisteredRoutes('src/Providers/RouteServiceProvider.php', ['Product', 'OrderLine']);
+    }
+
     // AYUDAS
+
+    /**
+     * Cada endpoint al que llama el test generado de un modelo, resuelto a su
+     * URI con lo que registra el RouteServiceProvider generado: el prefijo y el
+     * nombre que antepone a cada archivo de routes/api/models, y la ruta y el
+     * nombre que declara ese archivo.
+     *
+     * @param  array<int, string>  $models
+     */
+    private function assertTestsCallRegisteredRoutes(string $provider, array $models): void
+    {
+        $source = $this->project->read($provider);
+
+        $this->assertSame(1, preg_match('/->prefix\(\'([^\']*)\'\s*\.\s*\$name\)/', $source, $prefix), "{$provider} no antepone un prefijo a cada archivo de rutas.");
+        $this->assertSame(1, preg_match('/->as\(\'([^\']*)\'\s*\.\s*\$name\s*\.\s*\'\.\'\)/', $source, $as), "{$provider} no antepone un nombre a cada archivo de rutas.");
+
+        foreach ($models as $model) {
+            $file = self::ROUTE_FILES[$model];
+            $base = $prefix[1].$file;
+            $namePrefix = $as[1].$file.'.';
+
+            preg_match_all('/Route::\w+\(\'([^\']+)\'[^;]*?->name\(\'([^\']+)\'\)/s', $this->project->read("routes/api/models/{$file}.php"), $declared);
+
+            $paths = array_combine($declared[2], $declared[1]);
+            $test = $this->project->read("tests/Feature/Models/{$model}EndpointsTest.php");
+            $uris = [];
+
+            // Por nombre, como el front.
+            preg_match_all('/\broute\(\'([^\']+)\'/', $test, $names);
+
+            foreach ($names[1] as $name) {
+                $this->assertStringStartsWith($namePrefix, $name, "{$model}EndpointsTest llama a la ruta {$name}, y el proveedor nombra las de {$file}.php {$namePrefix}*.");
+
+                $action = substr($name, strlen($namePrefix));
+
+                $this->assertArrayHasKey($action, $paths, "{$model}EndpointsTest llama a la ruta {$name}, que routes/api/models/{$file}.php no declara.");
+
+                $uris[] = $base.'/'.$paths[$action];
+            }
+
+            // Por URI escrita en el test.
+            preg_match_all('#\'/?(api/[^\']*)\'#', $test, $literals);
+            array_push($uris, ...$literals[1]);
+
+            $this->assertNotEmpty($uris, "{$model}EndpointsTest no llama a ningún endpoint.");
+
+            foreach ($uris as $uri) {
+                $this->assertStringStartsWith($base.'/', $uri, "{$model}EndpointsTest llama a {$uri}, y el proveedor registra las rutas de {$file}.php en {$base}/.");
+                $this->assertContains(substr($uri, strlen($base) + 1), $paths, "{$model}EndpointsTest llama a {$uri}, que routes/api/models/{$file}.php no declara.");
+            }
+        }
+    }
 
     private function assertNoGeneratedFileMentions(string $namespace): void
     {
