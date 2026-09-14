@@ -50,9 +50,11 @@ php artisan larapack:<comando>                    # dentro de una app Laravel
 php vendor/bin/builder larapack:<comando>         # también fuera de Laravel
 ```
 
-Todos aceptan `--format=json` (parséalo, no raspes el texto), `--root=<ruta>`
-para decir sobre qué proyecto trabajar, y los generadores aceptan además
-`--force` y `--dry-run`. Con `--format=json` la salida es un único documento,
+Casi todos aceptan `--format=json` (parséalo, no raspes el texto; no lo tienen
+`schema`, que ya emite JSON, `skill` ni `remove-full-model`) y `--root=<ruta>`
+para decir sobre qué proyecto trabajar (no lo tienen `new`, `schema` ni `audit`,
+que reciben la ruta como argumento). Los generadores aceptan además `--force` y
+`--dry-run`. Con `--format=json` la salida es un único documento,
 también si algo falla: mira `ok`, y si es `false`, `error` o `findings` dicen
 por qué.
 
@@ -199,7 +201,7 @@ src/Models/Filters/<Model>/ManagedFilter.php       ← HUECO (visibilidad)
 src/Models/Filters/<Model>/{Id,Creation,Updated,EagerLoading}Filter.php
 
 src/Http/Controllers/<Model>Controller.php         delega en las requests
-src/Http/Requests/<Model>/*.php                    10 requests; rules() ← HUECO
+src/Http/Requests/<Model>/*.php                    una por acción (12); rules() ← HUECO
 src/Http/Resources/Models/<Model>Resource.php      ← HUECO (forma de la respuesta)
 src/Http/Events/<Model>/Events/*.php               6 eventos
 src/Http/Events/<Model>/Listeners/*/*.php          ← HUECO (efectos secundarios)
@@ -209,7 +211,7 @@ src/Observers/<Model>Observer.php                  ← HUECO
 src/Exports/<Plural>Exports.php
 src/Notifications/<Model>/ExportNotification.php
 
-routes/api/models/<snake>.php                      10 rutas; order_line.php, no order-line.php
+routes/api/models/<snake>.php                      una ruta por acción (12); order_line.php, no order-line.php
 database/migrations/*_create_<plural>_table.php
 database/migrations/*_create_<model>_metas_table.php solo si metas: true
 database/factories/<Model>Factory.php              ← HUECO (datos de prueba)
@@ -478,8 +480,9 @@ toca el otro. Vale igual para Vue y para React: el archivo es el mismo.
 `RouteServiceProvider`:
 
 ```
-api.<namespace en puntos>.<kebab del modelo>.
+api.<namespace en puntos>.<modelo en snake_case>.
 api.acme.blog.post.
+api.acme.shop.order_line.
 ```
 
 `larapack:verify` comprueba justamente esto.

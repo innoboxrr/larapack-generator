@@ -93,7 +93,7 @@
                     "type": "object",
                     "additionalProperties": false,
                     "minProperties": 1,
-                    "description": "Qué acciones genera el modelo. Sin esta clave, las diez. Quitar una acción quita todo lo que cuelga de ella: su ruta, su request, su método del controlador, su evento, su test y, en la interfaz, su formulario y su vista.",
+                    "description": "Qué acciones genera el modelo. Sin esta clave, las doce. Quitar una acción quita todo lo que cuelga de ella: su ruta, su request, su método del controlador, su evento, su test y, en la interfaz, su formulario y su vista.",
                     "properties": {
                         "only": {
                             "type": "array",

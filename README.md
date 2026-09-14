@@ -103,12 +103,15 @@ El binario mantiene los nombres antiguos (`make:*`, `json:importer`) como alias.
 En Artisan no se registran porque `make:model`, `make:policy`, `make:factory` y
 `make:observer` son comandos del propio Laravel.
 
-Todos aceptan `--root=<ruta>` para decir sobre qué proyecto se trabaja. Sin esa
+Casi todos aceptan `--root=<ruta>` para decir sobre qué proyecto se trabaja; no
+lo tienen `larapack:new` (recibe el directorio como argumento),
+`larapack:schema` ni `larapack:audit` (recibe la ruta como argumento). Sin esa
 opción la raíz se descubre subiendo directorios desde el paquete hasta dar con
 un `vendor/autoload.php`: dentro de una aplicación o de un paquete que lo tenga
 instalado eso da la raíz correcta; con el binario sobre un clon del propio
 generador, da el generador. Los generadores aceptan además `--force` y
-`--dry-run`, y todos `--format=json`.
+`--dry-run`. `--format=json` lo aceptan todos salvo `larapack:schema` (que ya
+emite JSON), `larapack:skill` y `larapack:remove-full-model`.
 
 ---
 
@@ -133,6 +136,8 @@ construcción.
 ```
 # 1. Crear el paquete. Deja composer.json con la línea base, proveedores,
 #    configuración, phpunit.xml.dist, los workflows, VERSION y la guía para agentes.
+#    `vendor/bin/builder` sale de un proyecto que ya tenga LaraPack instalado (una
+#    aplicación, otro paquete) o de un clon de este repositorio con composer install.
 php vendor/bin/builder larapack:new acme/catalogo packages/catalogo
 cd packages/catalogo
 composer install          # LaraPack queda en require-dev del paquete nuevo
@@ -1431,8 +1436,9 @@ PHP, `illuminate/*`, testbench y dependencias internas.
 **La publicación.** `bump-patch.yml` publicaba en cada push sin correr tests.
 Sustitúyelo por `tests.yml` y `release.yml` (ver
 [La CI y la publicación](#la-ci-y-la-publicación)) y crea un archivo `VERSION`
-con la versión actual. Para ver los archivos exactos,
-`larapack:new vendor/x --dry-run` en un directorio vacío.
+con la versión actual. Para ver los archivos exactos, crea un paquete de
+referencia fuera del tuyo con `larapack:new vendor/x /tmp/referencia` y cópialos
+de ahí: `--dry-run` construye en un directorio temporal y lo borra al terminar.
 
 ### De 7.0 a 7.1
 
@@ -1857,6 +1863,7 @@ larapack:migration               Crea una nueva migración.
 larapack:model                   Crea un nuevo modelo.
 larapack:model-traits            Crea traits para el modelo.
 larapack:observer                Crea un observer.
+larapack:pivot-migration         Crea la migración de una tabla pivote.
 larapack:policy                  Crea una nueva política.
 larapack:providers               Crea todos los proveedores de servicio.
 larapack:requests                Crea una clase de requests.
@@ -1866,8 +1873,12 @@ larapack:route-service-provider  Crea un proveedor de servicio de rutas.
 larapack:test                    Crea una nueva clase de test.
 ```
 
-Opciones comunes: `--root=<ruta>` en todos; `--force` y `--dry-run` en los
-generadores; `--format=json` en todos.
+Opciones comunes: `--root=<ruta>` en todos salvo `new`, `schema` y `audit`;
+`--force` y `--dry-run` en los generadores; `--format=json` en todos salvo
+`schema`, `skill` y `remove-full-model`. Con `--format=json` la salida es un
+único documento JSON, también cuando algo falla. La referencia completa de cada
+comando, con sus argumentos y opciones, está en
+<https://innoboxrr.github.io/docs/larapack/comandos>.
 
 ---
 
