@@ -5,6 +5,8 @@ namespace Innoboxrr\LarapackGenerator\Tests\EndToEnd;
 use Composer\Autoload\ClassLoader;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Route;
@@ -156,6 +158,33 @@ final class GeneratedPackageTest extends TestCase
 
         foreach ($providers as $provider) {
             $this->assertTrue(class_exists($provider), "{$provider} está declarado y no existe.");
+        }
+    }
+
+    /**
+     * Una aplicación Laravel 13 nueva guarda la caché en la base de datos, y la
+     * tabla no existe hasta `migrate`. Un proveedor que leyera la caché al
+     * arrancar impediría migrar la aplicación que instala el paquete.
+     */
+    public function test_los_proveedores_arrancan_sin_la_tabla_de_cache(): void
+    {
+        $this->app['config']->set('cache.default', 'database');
+        $this->app['config']->set('cache.stores.database.table', 'cache_sin_migrar');
+        $this->app->forgetInstance('cache');
+        $this->app->forgetInstance('cache.store');
+        Cache::clearResolvedInstances();
+
+        foreach (self::composer()['extra']['laravel']['providers'] ?? [] as $provider) {
+            $this->app->call([new $provider($this->app), 'boot']);
+        }
+
+        foreach (glob(self::$project->path.'/src/Http/Events/*/Events/*.php') ?: [] as $event) {
+            $model = basename(dirname($event, 2));
+            $class = self::NS.'Http\\Events\\'.$model.'\\Events\\'.basename($event, '.php');
+
+            if (glob(dirname($event, 2).'/Listeners/'.basename($event, '.php').'/*.php')) {
+                $this->assertTrue(Event::hasListeners($class), "{$class} tiene listeners y no se registraron.");
+            }
         }
     }
 

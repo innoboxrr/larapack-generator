@@ -2,7 +2,6 @@
 
 namespace Namespace\Providers;
 
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\ServiceProvider;
 
@@ -19,15 +18,15 @@ class EventServiceProvider extends ServiceProvider
         $this->registerEvents();
     }
 
+    /**
+     * Sin caché: recorrer Http/Events cuesta unos pocos glob, y leer la caché al
+     * arrancar rompe `migrate` en una aplicación nueva (CACHE_STORE=database
+     * todavía no tiene su tabla). Además la clave era la misma en todos los
+     * paquetes generados, así que uno recibía los listeners de otro.
+     */
     protected function registerEvents(): void
     {
-        $events = Cache::remember(
-            'events_and_listeners',
-            now()->addDay(),
-            fn (): array => $this->discoverEvents()
-        );
-
-        foreach ($events as $event => $listeners) {
+        foreach ($this->discoverEvents() as $event => $listeners) {
             foreach ($listeners as $listener) {
                 Event::listen($event, $listener);
             }
