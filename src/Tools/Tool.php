@@ -42,6 +42,10 @@ class Tool
 
     protected $testsNamespace;
 
+    protected $configKey;
+
+    protected $excelViewPrefix;
+
     // MODEL NAME
     protected $ModelName;
 
@@ -116,6 +120,8 @@ class Tool
         $this->slashLowerNamespace = str_replace('\\', '/', $this->lowerNamespace);
         $this->databaseNamespace = $this->outsideSourceNamespace('Database');
         $this->testsNamespace = $this->outsideSourceNamespace('Tests');
+        $this->configKey = $this->configKey();
+        $this->excelViewPrefix = $this->excelViewPrefix();
         $this->setModelNames($ModelName);
 
         return $this;
@@ -132,6 +138,32 @@ class Tool
     private function outsideSourceNamespace(string $directory): string
     {
         return app_dir_name() == 'src' ? $this->namespace.$directory : $directory;
+    }
+
+    /**
+     * La clave de la configuración de lo generado, y el nombre de su archivo en
+     * config/.
+     *
+     * Un paquete tiene la suya, con su nombre (`acmeshop`). En una aplicación el
+     * namespace sin separación es `app`, y `config('app.*')` y `config/app.php`
+     * son de Laravel: ahí la clave es `larapack`.
+     */
+    private function configKey(): string
+    {
+        return app_dir_name() == 'src' ? $this->namespaceWithoutSeparation : 'larapack';
+    }
+
+    /**
+     * El prefijo de las vistas de exportación, que se generan en
+     * resources/views/excel.
+     *
+     * Un paquete las registra con su namespace (`acmeshop::excel.`) en su
+     * AppServiceProvider. Una aplicación no registra `app::`: sus vistas se
+     * piden sin namespace.
+     */
+    private function excelViewPrefix(): string
+    {
+        return app_dir_name() == 'src' ? $this->namespaceWithoutSeparation.'::excel.' : 'excel.';
     }
 
     // MODEL NAME
@@ -199,6 +231,9 @@ class Tool
             'namespaceWithoutSeparation' => $this->namespaceWithoutSeparation,
             'lowerNamespace' => $this->lowerNamespace,
             'slashLowerNamespace' => $this->slashLowerNamespace,
+            // CONFIGURACIÓN Y VISTAS
+            'larapackConfigKey' => $this->configKey,
+            'excelViewPrefix' => $this->excelViewPrefix,
         ];
     }
 

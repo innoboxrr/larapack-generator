@@ -119,20 +119,7 @@ final class GeneratedApplicationTest extends TestCase
         $root = self::$project->path;
         $junit = $root.'/junit.xml';
 
-        $process = new Process([
-            PHP_BINARY,
-            ...$this->inheritedExtensions(),
-            dirname(__DIR__, 2).'/vendor/phpunit/phpunit/phpunit',
-            '--bootstrap', $this->autoloadBootstrap(),
-            '--configuration', $root.'/phpunit.xml',
-            '--log-junit', $junit,
-            '--do-not-cache-result',
-            '--colors=never',
-        ], $root, null, null, 300);
-
-        $process->run();
-
-        $output = $process->getOutput().$process->getErrorOutput();
+        [$process, $output] = $this->phpunit($junit);
 
         $this->assertTrue($process->isSuccessful(), "Los tests generados fallan:\n".$output);
 
@@ -151,7 +138,57 @@ final class GeneratedApplicationTest extends TestCase
         $this->assertSame(0, (int) $report->testsuite['skipped'], "Hay tests generados que se saltan:\n".$output);
     }
 
+    /**
+     * Sin simular la notificación: el archivo se genera de verdad, con la vista
+     * y el disco por defecto. Los tests generados simulan la notificación, así
+     * que nunca renderizaban la exportación, y en una aplicación fallaba con
+     * "No hint path defined for [app]": la vista se pedía como `app::excel.`,
+     * un namespace que sólo registra el proveedor de un paquete.
+     *
+     * El test lo escribe la aplicación (tests/Application/ExportTest.php), fuera
+     * de las suites de su phpunit.xml, y se ejecuta aparte.
+     */
+    public function test_la_exportacion_genera_el_archivo_en_el_disco_local(): void
+    {
+        $junit = self::$project->path.'/junit-export.xml';
+
+        [$process, $output] = $this->phpunit($junit, self::$project->path.'/tests/Application/ExportTest.php');
+
+        $this->assertTrue($process->isSuccessful(), "La exportación no genera el archivo:\n".$output);
+
+        $report = simplexml_load_file($junit);
+
+        $this->assertNotFalse($report, "PHPUnit no dejó el informe:\n".$output);
+        $this->assertSame(1, (int) $report->testsuite['tests'], "No se ejecutó el test de la exportación:\n".$output);
+    }
+
     // AYUDAS
+
+    /**
+     * PHPUnit en un proceso aparte, con la configuración de la aplicación.
+     *
+     * @return array{0: Process, 1: string}
+     */
+    private function phpunit(string $junit, ?string $test = null): array
+    {
+        $root = self::$project->path;
+
+        $process = new Process([
+            PHP_BINARY,
+            ...$this->inheritedExtensions(),
+            dirname(__DIR__, 2).'/vendor/phpunit/phpunit/phpunit',
+            '--bootstrap', $this->autoloadBootstrap(),
+            '--configuration', $root.'/phpunit.xml',
+            '--log-junit', $junit,
+            '--do-not-cache-result',
+            '--colors=never',
+            ...($test === null ? [] : [$test]),
+        ], $root, null, null, 300);
+
+        $process->run();
+
+        return [$process, $process->getOutput().$process->getErrorOutput()];
+    }
 
     /**
      * Lo que trae `laravel/laravel` y usa lo generado, y lo que la aplicación
@@ -266,16 +303,71 @@ final class GeneratedApplicationTest extends TestCase
                 }
 
                 /**
-                 * database/ es el de la aplicación, el usuario es App\Models\User y
-                 * las respuestas van sin el envoltorio `data`.
+                 * database/ y resources/views son los de la aplicación (lo que
+                 * dejan config/database.php y config/view.php de Laravel), el
+                 * usuario es App\Models\User y las respuestas van sin el
+                 * envoltorio `data`.
                  */
                 protected function defineEnvironment($app): void
                 {
                     $app->useDatabasePath(dirname(__DIR__).'/database');
 
+                    $app['config']->set('view.paths', [dirname(__DIR__).'/resources/views']);
+
                     $app['config']->set('auth.providers.users.model', \App\Models\User::class);
 
                     JsonResource::withoutWrapping();
+                }
+            }
+
+            PHP);
+
+        mkdir($root.'/tests/Application', 0777, true);
+
+        file_put_contents($root.'/tests/Application/ExportTest.php', <<<'PHP'
+            <?php
+
+            namespace Tests\Application;
+
+            use App\Models\Product;
+            use App\Models\User;
+            use Illuminate\Foundation\Testing\RefreshDatabase;
+            use Illuminate\Support\Facades\Exceptions;
+            use Illuminate\Support\Facades\Gate;
+            use Illuminate\Support\Facades\Storage;
+            use Tests\TestCase;
+            use Throwable;
+
+            /**
+             * Exportar de verdad: sin simular la notificación, con la vista y el
+             * disco que trae lo generado.
+             */
+            final class ExportTest extends TestCase
+            {
+                use RefreshDatabase;
+
+                public function test_la_exportacion_deja_el_archivo_en_el_disco_local(): void
+                {
+                    Storage::fake('local');
+                    $exceptions = Exceptions::fake();
+                    Gate::before(fn () => true);
+
+                    $this->actingAs(User::factory()->create(), 'sanctum');
+
+                    Product::factory()->count(2)->create();
+
+                    $response = $this->postJson(route('api.app.product.export'));
+
+                    // La request informa del fallo con un mensaje genérico; la
+                    // causa es lo que reportó.
+                    $this->assertSame([], array_map(
+                        fn (Throwable $exception): string => $exception::class.': '.$exception->getMessage(),
+                        $exceptions->reported()
+                    ), 'La exportación falló.');
+
+                    $response->assertOk();
+
+                    $this->assertCount(1, Storage::disk('local')->files('exports'), 'La exportación no dejó el archivo en el disco local.');
                 }
             }
 

@@ -18,8 +18,8 @@ class PluralPascalCaseModelNameExports implements FromView
     {
         return view(
             config(
-                'namespaceWithoutSeparation.excel_view', 
-                'namespaceWithoutSeparation::excel.'
+                'larapackConfigKey.excel_view', 
+                'excelViewPrefix'
             ) . 'snake_case_model_name', 
             [
                 'plural_snake_case_model_name' => $this->getQuery(),
