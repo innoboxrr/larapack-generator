@@ -1314,8 +1314,9 @@ versión hasta la última.
 | 7.7.1 | Bajo | La ficha nombra al registro por su columna | [7.7 → 7.8](#de-77-a-78) y siguiente |
 | 7.8 | Bajo | Nada; datatables 3.1 y Vite 8 en el módulo | [7.8 → 7.9](#de-78-a-79) y siguientes |
 | 7.9 | Bajo | El proveedor de eventos se regenera | [7.9 → 7.10](#de-79-a-710) y siguiente |
-| 7.10.0 | Nada en un paquete; bajo en una aplicación | En una aplicación, factories y tests a regenerar | [7.10.0 → 7.10.1](#de-7100-a-7101) |
-| 7.10.1 | — | Estás al día | — |
+| 7.10.0 | Nada en un paquete; bajo en una aplicación | En una aplicación, factories y tests a regenerar | [7.10.0 → 7.10.1](#de-7100-a-7101) y siguiente |
+| 7.10.1 | Nada en un paquete; bajo en una aplicación | En una aplicación, la exportación y su notificación a regenerar | [7.10.1 → 7.10.2](#de-7101-a-7102) |
+| 7.10.2 | — | Estás al día | — |
 
 Las notas completas de cada versión están en `CHANGELOG.md`.
 
@@ -1779,6 +1780,28 @@ mano:
 - **Registra el `EventServiceProvider`** en `bootstrap/providers.php` si no lo
   tenías (`larapack:event-service-provider` lo crea): sin él la exportación no
   avisa.
+
+### De 7.10.1 a 7.10.2
+
+No cambia el contrato. En un paquete no hay nada que hacer: lo generado es lo
+mismo.
+
+**En una aplicación generada con 7.10.0 o 7.10.1** cada exportación fallaba al
+renderizar ("No hint path defined for [app]"), y su notificación leía
+`app.notification_via` y `app.export_disk`, dentro de la configuración de
+Laravel. Regenera o corrige a mano:
+
+- **Exportación y notificación.** `larapack:import --dry-run` y después
+  `larapack:import --force`: se regeneran `app/Exports/<Plural>Exports.php` y
+  `app/Notifications/<Modelo>/ExportNotification.php`. Los que editaste se
+  conservan: cambia `config('app.excel_view', 'app::excel.')` por
+  `config('larapack.excel_view', 'excel.')`, y `app.notification_via` y
+  `app.export_disk` por `larapack.notification_via` y `larapack.export_disk`.
+- **Configuración.** Si añadiste `excel_view`, `notification_via` o
+  `export_disk` a `config/app.php`, llévalos a `config/larapack.php`
+  (`larapack:config` lo crea) y quítalos de `config/app.php`.
+- **La migración de `users`.** Nada: `larapack:import` ya no la da por editada a
+  mano ni pide una alteración contra ella.
 
 ---
 

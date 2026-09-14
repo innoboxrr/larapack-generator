@@ -1,5 +1,38 @@
 # Changelog
 
+## 7.10.2
+
+Lo que encontró el piloto de la aplicación base al exportar dentro de una
+aplicación, y un aviso falso en cada importación. Lo que se genera en un paquete
+no cambia.
+
+- **La exportación renderiza en una aplicación.** Pedía su vista como
+  `app::excel.<modelo>` con `config('app.excel_view')`: nadie registra las vistas
+  `app::` y cada exportación fallaba con "No hint path defined for [app]". Ahora
+  pide `excel.<modelo>`, la vista que genera en `resources/views/excel`.
+- **La configuración de LaraPack no va dentro de la de Laravel.** En una
+  aplicación, la exportación y su notificación leen `larapack.excel_view`,
+  `larapack.notification_via` y `larapack.export_disk`, y `larapack:config`
+  escribe `config/larapack.php`. Antes todo apuntaba a `config/app.php`. En un
+  paquete la clave y el archivo siguen siendo los del paquete.
+- **La migración de `users` de Laravel ya no se da por editada a mano.** Una
+  migración de creación que LaraPack no generó se omite («no la generó
+  LaraPack»), en lugar de conservarse con el consejo de escribir una alteración
+  que quitaría `remember_token` o el índice único de `email`. Una que generó
+  LaraPack y se editó sigue pidiendo la alteración.
+- **`GeneratedApplicationTest` exporta de verdad**, sin simular la notificación,
+  y comprueba que el archivo queda en el disco local.
+- **La guía nombra bien el archivo de rutas:** `routes/api/models/<snake>.php`
+  (`order_line.php`), no `<kebab>`.
+
+### Para proyectos existentes
+
+Una aplicación generada con 7.10.0 o 7.10.1 tiene que regenerar con `--force` los
+archivos de exportación de `app/Exports` y `app/Notifications`, o cambiar a mano
+el prefijo de la vista (`app::excel.` por `excel.`) y la clave de configuración
+(`app.` por `larapack.`). Ver «De 7.10.1 a 7.10.2» en la guía de actualización
+del README. Un paquete no tiene que hacer nada.
+
 ## 7.10.1
 
 Lo que encontró el piloto de la aplicación base al ejecutar los tests que LaraPack
