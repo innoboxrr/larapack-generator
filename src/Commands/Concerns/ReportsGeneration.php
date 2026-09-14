@@ -62,6 +62,7 @@ trait ReportsGeneration
 
         if ($this->wantsJson($input)) {
             $this->writeJson($output, [
+                'ok' => true,
                 'dryRun' => Generation::isDryRun(),
                 'formatted' => $formatted,
                 'summary' => $summary,

@@ -70,9 +70,7 @@ class MakeFullModelCommand extends Command
         $invalid = $this->declareShape($modelName, $input);
 
         if ($invalid !== null) {
-            $output->writeln("<error>{$invalid}</error>");
-
-            return Command::FAILURE;
+            return $this->reportFailure($input, $output, $invalid);
         }
 
         // La UI es opcional y no excluyente: el mismo laraimport puede generar

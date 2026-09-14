@@ -2,6 +2,7 @@
 
 namespace Innoboxrr\LarapackGenerator\Commands;
 
+use Innoboxrr\LarapackGenerator\Commands\Concerns\WritesJson;
 use Innoboxrr\LarapackGenerator\Support\Ecosystem;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
@@ -19,6 +20,8 @@ use Symfony\Component\Console\Output\OutputInterface;
  */
 class AuditCommand extends Command
 {
+    use WritesJson;
+
     protected function configure(): void
     {
         $this->setName('larapack:audit')
@@ -34,9 +37,7 @@ class AuditCommand extends Command
         $path = realpath((string) $input->getArgument('path'));
 
         if ($path === false) {
-            $output->writeln('<fg=red>La ruta indicada no existe.</>');
-
-            return Command::FAILURE;
+            return $this->reportFailure($input, $output, 'La ruta indicada no existe.');
         }
 
         $ecosystem = new Ecosystem;
@@ -50,13 +51,13 @@ class AuditCommand extends Command
         $warnings = $this->count($findings, Ecosystem::WARNING);
         $failed = $errors > 0 || ($input->getOption('strict') && $warnings > 0);
 
-        if ($input->getOption('format') === 'json') {
-            $output->writeln((string) json_encode([
+        if ($this->wantsJson($input)) {
+            $this->writeJson($output, [
                 'ok' => ! $failed,
                 'errors' => $errors,
                 'warnings' => $warnings,
                 'findings' => $findings,
-            ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+            ]);
 
             return $failed ? Command::FAILURE : Command::SUCCESS;
         }

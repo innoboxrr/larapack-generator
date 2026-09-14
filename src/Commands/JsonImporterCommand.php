@@ -63,9 +63,9 @@ class JsonImporterCommand extends Command
         }
 
         if ($document === null) {
-            $output->writeln("\n<error>El laraimport no es válido; no se ha generado nada.</error>");
+            $progress->writeln('');
 
-            return Command::FAILURE;
+            return $this->reportFailure($input, $output, 'El laraimport no es válido; no se ha generado nada.', extra: ['findings' => $findings]);
         }
 
         Tool::setFromJsonImporter(true);

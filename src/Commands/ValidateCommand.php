@@ -3,6 +3,7 @@
 namespace Innoboxrr\LarapackGenerator\Commands;
 
 use Innoboxrr\LarapackGenerator\Commands\Concerns\TargetsProject;
+use Innoboxrr\LarapackGenerator\Commands\Concerns\WritesJson;
 use Innoboxrr\LarapackGenerator\Support\Import\ImportDocument;
 use Innoboxrr\LarapackGenerator\Support\Import\SemanticValidator;
 use Symfony\Component\Console\Command\Command;
@@ -21,6 +22,7 @@ use Symfony\Component\Console\Output\OutputInterface;
 class ValidateCommand extends Command
 {
     use TargetsProject;
+    use WritesJson;
 
     protected function configure(): void
     {
@@ -52,15 +54,15 @@ class ValidateCommand extends Command
 
         $failed = $errors > 0 || ($input->getOption('strict') && $warnings > 0);
 
-        if ($input->getOption('format') === 'json') {
-            $output->writeln(json_encode([
+        if ($this->wantsJson($input)) {
+            $this->writeJson($output, [
                 'ok' => ! $failed,
                 'file' => $path,
                 'errors' => $errors,
                 'warnings' => $warnings,
                 'models' => $document ? array_column($document->models(), 'name') : [],
                 'findings' => $findings,
-            ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+            ]);
 
             return $failed ? Command::FAILURE : Command::SUCCESS;
         }

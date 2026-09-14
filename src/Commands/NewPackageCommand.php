@@ -55,17 +55,13 @@ class NewPackageCommand extends Command
         $name = (string) $input->getArgument('name');
 
         if (! preg_match(self::NAME, $name)) {
-            $output->writeln("<error>«{$name}» no es un nombre de paquete válido para Composer.</error> Usa vendor/paquete, en minúsculas.");
-
-            return Command::FAILURE;
+            return $this->reportFailure($input, $output, "«{$name}» no es un nombre de paquete válido para Composer.", 'Usa vendor/paquete, en minúsculas.');
         }
 
         $namespace = trim(str_replace('/', '\\', (string) ($input->getOption('namespace') ?? self::namespaceFor($name))), '\\');
 
         if (! preg_match(self::NAMESPACE, $namespace)) {
-            $output->writeln("<error>«{$namespace}» no es un namespace válido.</error> Usa Vendor\\Paquete, con cada parte en PascalCase.");
-
-            return Command::FAILURE;
+            return $this->reportFailure($input, $output, "«{$namespace}» no es un namespace válido.", 'Usa Vendor\\Paquete, con cada parte en PascalCase.');
         }
 
         $package = explode('/', $name)[1];
@@ -75,9 +71,7 @@ class NewPackageCommand extends Command
         // decisiones. Rehacerlo por encima es exactamente lo que no se puede
         // deshacer; para generar dentro de él están los demás comandos.
         if (is_file($directory.'/composer.json')) {
-            $output->writeln("<error>{$directory} ya tiene composer.json.</error> Para generar dentro de un proyecto existente usa larapack:import o larapack:providers con --root.");
-
-            return Command::FAILURE;
+            return $this->reportFailure($input, $output, "{$directory} ya tiene composer.json.", 'Para generar dentro de un proyecto existente usa larapack:import o larapack:providers con --root.');
         }
 
         $description = (string) ($input->getOption('description') ?? "{$package}: paquete Laravel generado con LaraPack.");
@@ -90,9 +84,7 @@ class NewPackageCommand extends Command
         $target = $dryRun ? sys_get_temp_dir().'/larapack-new-'.bin2hex(random_bytes(6)) : $directory;
 
         if (! is_dir($target) && ! mkdir($target, 0777, true) && ! is_dir($target)) {
-            $output->writeln("<error>No se pudo crear {$target}.</error>");
-
-            return Command::FAILURE;
+            return $this->reportFailure($input, $output, "No se pudo crear {$target}.");
         }
 
         Generation::reset();
@@ -112,7 +104,7 @@ class NewPackageCommand extends Command
             }
         }
 
-        if (! $dryRun && $input->getOption('format') !== 'json') {
+        if (! $dryRun && ! $this->wantsJson($input)) {
             $output->writeln('');
             $output->writeln('  <info>Siguiente:</info>');
             $output->writeln("    cd {$directory}");
