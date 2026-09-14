@@ -1319,8 +1319,9 @@ versión hasta la última.
 | 7.8 | Bajo | Nada; datatables 3.1 y Vite 8 en el módulo | [7.8 → 7.9](#de-78-a-79) y siguientes |
 | 7.9 | Bajo | El proveedor de eventos se regenera | [7.9 → 7.10](#de-79-a-710) y siguiente |
 | 7.10.0 | Nada en un paquete; bajo en una aplicación | En una aplicación, factories y tests a regenerar | [7.10.0 → 7.10.1](#de-7100-a-7101) y siguiente |
-| 7.10.1 | Nada en un paquete; bajo en una aplicación | En una aplicación, la exportación y su notificación a regenerar | [7.10.1 → 7.10.2](#de-7101-a-7102) |
-| 7.10.2 | — | Estás al día | — |
+| 7.10.1 | Nada en un paquete; bajo en una aplicación | En una aplicación, la exportación y su notificación a regenerar | [7.10.1 → 7.10.2](#de-7101-a-7102) y siguiente |
+| 7.10.2 | Bajo | Nada; el contrato del modelo deja de mandar el token CSRF por GET | [7.10.2 → 7.10.3](#de-7102-a-7103) |
+| 7.10.3 | — | Estás al día | — |
 
 Las notas completas de cada versión están en `CHANGELOG.md`.
 
@@ -1806,6 +1807,22 @@ Laravel. Regenera o corrige a mano:
   (`larapack:config` lo crea) y quítalos de `config/app.php`.
 - **La migración de `users`.** Nada: `larapack:import` ya no la da por editada a
   mano ni pide una alteración contra ella.
+
+### De 7.10.2 a 7.10.3
+
+No cambia el contrato ni lo que se genera en PHP.
+
+- **La salida de `--format=json`.** Es un único documento, también cuando algo
+  falla (`"ok": false` y `"error"`). Si tu CI o tu agente recortaba el progreso
+  de `larapack:import` antes de decodificar, ya no hace falta. Los avisos del
+  laraimport van en `findings`.
+- **El token CSRF en GET.** El contrato del modelo
+  (`models/<entidad>/index.js`) ya no manda `_token` en `getPolicies`,
+  `getPolicy`, `indexModel` ni `showModel`. Si no lo editaste,
+  `larapack:import --vue --force` (o `--react`) lo regenera; si lo editaste,
+  quita `_token: csrfToken(),` de esas cuatro llamadas. Las escrituras lo siguen
+  mandando. Sube también `innoboxrr-vue-datatable` o `innoboxrr-react-datatable`
+  a 3.1.1, que hace lo mismo con las peticiones de la tabla.
 
 ---
 

@@ -1,5 +1,40 @@
 # Changelog
 
+## 7.10.3
+
+Un agente que parsea `--format=json` ya puede decodificar la salida entera, y el
+módulo generado deja de mandar el token CSRF en la query. Lo que se genera en PHP
+no cambia.
+
+- **`--format=json` es un único documento.** `larapack:import` escribía su
+  progreso ("Processing model: ...") y los avisos del laraimport antes del
+  informe, y el JSON no se podía decodificar. Ahora los avisos van dentro, en
+  `findings`, y el progreso no se escribe: tampoco en stderr, que un agente suele
+  leer junto con la salida.
+- **Los errores también son JSON.** Con `--format=json`, un nombre inválido en
+  `larapack:new`, una ruta que no existe en `larapack:audit`, `--only` junto a
+  `--except` en `larapack:full-model`, un laraimport inválido, una `--root` que
+  no existe o un argumento que falta responden `{"ok": false, "error": "..."}`
+  con código de salida distinto de cero, en lugar de texto o de una salida
+  vacía. El informe de los generadores lleva `"ok": true`, como ya llevaban
+  `validate`, `verify` y `audit`.
+- **Sin `_token` en las peticiones GET del módulo generado.** `getPolicies`,
+  `getPolicy`, `indexModel` y `showModel` lo mandaban, e `innoboxrr-http-request`
+  pone los datos de GET y HEAD en la query: el token acababa en la URL, en el
+  historial y en los logs del servidor. Las escrituras lo siguen mandando. Es lo
+  mismo que hicieron `innoboxrr-vue-datatable` e `innoboxrr-react-datatable`
+  3.1.1 con las peticiones de la tabla.
+- **`JsonOutputTest`** ejecuta con `--format=json` cada comando que lo acepta, al
+  generar, al simular y al fallar, y decodifica la salida entera.
+  `ForeignCreateMigrationTest` ya no busca dónde empieza el JSON.
+
+### Para proyectos existentes
+
+Lo que leía la salida de LaraPack recortando el texto antes del JSON ya no lo
+necesita. El contrato del modelo se regenera con `larapack:import --vue --force`
+(o `--react`); si lo editaste, quita `_token: csrfToken(),` de sus cuatro
+llamadas GET. Ver «De 7.10.2 a 7.10.3» en la guía de actualización del README.
+
 ## 7.10.2
 
 Lo que encontró el piloto de la aplicación base al exportar dentro de una
