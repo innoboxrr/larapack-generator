@@ -90,6 +90,39 @@ final class ApplicationExportTest extends TestCase
         $this->assertStringContainsString("config('acmeshop.export_disk', 'local')", $notification);
     }
 
+    // LA CONFIGURACIÓN
+
+    public function test_en_una_aplicacion_larapack_config_no_toca_la_configuracion_de_laravel(): void
+    {
+        $project = $this->useProject(FakeProject::application());
+
+        mkdir($project->path.'/config');
+        $laravel = "<?php\n\n// config/app.php de Laravel\nreturn ['name' => 'Laravel'];\n";
+        file_put_contents($project->path.'/config/app.php', $laravel);
+
+        foreach ([[], ['--force' => true]] as $options) {
+            $this->assertSame(Command::SUCCESS, $this->runCommand('larapack:config', $options), $this->lastOutput);
+
+            $this->assertSame($laravel, $project->read('config/app.php'), 'larapack:config escribió en config/app.php.');
+        }
+
+        $config = $project->read('config/larapack.php');
+
+        $this->assertStringContainsString("'excel_view' => 'excel.'", $config);
+        $this->assertStringContainsString("'notification_via' => ['mail']", $config);
+        $this->assertStringContainsString("'export_disk' => 'local'", $config);
+    }
+
+    public function test_en_un_paquete_larapack_config_escribe_la_configuracion_del_paquete(): void
+    {
+        $project = $this->useProject(FakeProject::library('Acme\\Shop\\'));
+
+        $this->assertSame(Command::SUCCESS, $this->runCommand('larapack:config'), $this->lastOutput);
+
+        $this->assertStringContainsString("'excel_view' => 'acmeshop::excel.'", $project->read('config/acmeshop.php'));
+        $this->assertFalse($project->has('config/larapack.php'));
+    }
+
     // AYUDAS
 
     /**

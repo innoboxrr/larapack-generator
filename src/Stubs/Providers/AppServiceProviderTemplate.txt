@@ -12,8 +12,8 @@ class AppServiceProvider extends ServiceProvider
 
         // La configuracion la genera larapack:config, que puede no haberse
         // ejecutado todavia: sin el archivo no hay nada que fusionar.
-        if (is_file(__DIR__ . '/../../config/namespaceWithoutSeparation.php')) {
-            $this->mergeConfigFrom(__DIR__ . '/../../config/namespaceWithoutSeparation.php', 'namespaceWithoutSeparation');
+        if (is_file(__DIR__ . '/../../config/larapackConfigKey.php')) {
+            $this->mergeConfigFrom(__DIR__ . '/../../config/larapackConfigKey.php', 'larapackConfigKey');
         }
 
     }
@@ -36,8 +36,8 @@ class AppServiceProvider extends ServiceProvider
 
             $this->publishes([__DIR__ . '/../../resources/views' => resource_path('views/vendor/namespaceWithoutSeparation')], 'views');
 
-            if (is_file(__DIR__ . '/../../config/namespaceWithoutSeparation.php')) {
-                $this->publishes([__DIR__ . '/../../config/namespaceWithoutSeparation.php' => config_path('namespaceWithoutSeparation.php')], 'config');
+            if (is_file(__DIR__ . '/../../config/larapackConfigKey.php')) {
+                $this->publishes([__DIR__ . '/../../config/larapackConfigKey.php' => config_path('larapackConfigKey.php')], 'config');
             }
 
         }

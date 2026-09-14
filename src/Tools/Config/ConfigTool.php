@@ -42,7 +42,7 @@ class ConfigTool extends Tool
 
         $this->setUp();
 
-        $configFile = $this->configPath.'/'.$this->namespaceWithoutSeparation.'.php';
+        $configFile = $this->configPath.'/'.$this->configKey.'.php';
 
         return $this->generate($this->configTemplatePath.'/ConfigTemplate.txt', $configFile);
 
@@ -53,7 +53,7 @@ class ConfigTool extends Tool
 
         $this->setUp();
 
-        $path = $this->configPath.'/'.$this->namespaceWithoutSeparation.'.php';
+        $path = $this->configPath.'/'.$this->configKey.'.php';
 
         return (file_exists($path)) ? $this->dropFile($path) : false;
 

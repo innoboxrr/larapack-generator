@@ -4,7 +4,7 @@ return [
 
 	'user_class' => 'App\Models\User',
 
-	'excel_view' => 'namespaceWithoutSeparation::excel.',
+	'excel_view' => 'excelViewPrefix',
 
 	// Por dónde avisa la exportación. `database` necesita la tabla de
 	// notificaciones de la aplicación: php artisan make:notifications-table
