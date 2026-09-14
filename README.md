@@ -1184,8 +1184,16 @@ namespace `App\`.
 - La API queda en `routes/api/models/<modelo>.php`, con el prefijo
   `api/app/<modelo>` y los nombres `api.app.<modelo>.*`.
 - `larapack:route-service-provider` crea `app/Providers/RouteServiceProvider.php`,
-  que carga esos archivos. **Regístralo en `bootstrap/providers.php`**: Laravel
-  no descubre proveedores en el `composer.json` de la aplicación.
+  que carga esos archivos, y `larapack:event-service-provider` crea
+  `app/Providers/EventServiceProvider.php`, que conecta los listeners de
+  `app/Http/Events`. **Registra los dos en `bootstrap/providers.php`**: Laravel
+  no descubre proveedores en el `composer.json` de la aplicación, y sin el de
+  eventos la exportación nunca avisa a quien la pidió.
+- Las factories van a `Database\Factories` y los tests a `Tests\Feature\Models`,
+  los namespaces que ya declara el `composer.json` de Laravel. Los tests extienden
+  el `tests/TestCase.php` de la aplicación, así que no cuentan con él: inician
+  sesión en Sanctum con la factory del modelo de `auth.providers.users.model` y
+  abren la autorización en su propio `setUp()`.
 - El módulo de la interfaz va a `resources/<ui>/src`, sin `package.json` ni
   `vite.config.js`: se compila con los de la aplicación, que tiene que declarar
   las dependencias del módulo.
