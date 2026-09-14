@@ -1300,8 +1300,10 @@ versión hasta la última.
 | 7.6 | Medio si usas metas; bajo si no | Metas conectadas; traits y support 2.1 | [7.6 → 7.7](#de-76-a-77) y siguiente |
 | 7.7.0 | Bajo | La exportación trae Excel y usa el disco `local` | [7.7.0 → 7.7.1](#de-770-a-771) y siguiente |
 | 7.7.1 | Bajo | La ficha nombra al registro por su columna | [7.7 → 7.8](#de-77-a-78) y siguiente |
-| 7.8 | Bajo | Nada; datatables 3.1 y Vite 8 en el módulo | [7.8 → 7.9](#de-78-a-79) |
-| 7.9 | — | Estás al día | — |
+| 7.8 | Bajo | Nada; datatables 3.1 y Vite 8 en el módulo | [7.8 → 7.9](#de-78-a-79) y siguientes |
+| 7.9 | Bajo | El proveedor de eventos se regenera | [7.9 → 7.10](#de-79-a-710) y siguiente |
+| 7.10.0 | Nada en un paquete; bajo en una aplicación | En una aplicación, factories y tests a regenerar | [7.10.0 → 7.10.1](#de-7100-a-7101) |
+| 7.10.1 | — | Estás al día | — |
 
 Las notas completas de cada versión están en `CHANGELOG.md`.
 
@@ -1740,6 +1742,31 @@ migrate` fallaba antes de crear la tabla de la caché. Y como la clave era la
 misma en todos los paquetes, uno recibía los listeners de otro. Si lo editaste,
 quita el `Cache::remember('events_and_listeners', ...)` y recorre
 `discoverEvents()` directamente.
+
+### De 7.10.0 a 7.10.1
+
+No cambia el contrato. En un paquete no hay nada que hacer: lo generado es lo
+mismo.
+
+**En una aplicación generada con 7.10.0** las factories estaban en
+`App\Database\Factories` y los tests en `App\Tests`, que la aplicación no carga,
+y los tests llamaban a URIs que no existen y sin sesión. Regenera o corrige a
+mano:
+
+- **Factories y modelos.** `larapack:import --dry-run` y después
+  `larapack:import --force`. Los que editaste se conservan: cambia
+  `App\Database\Factories` por `Database\Factories` en la factory y en el `use`
+  del modelo.
+- **Tests.** No se pisan nunca, tampoco con `--force`. Si no los tocaste, borra
+  `tests/Feature/Models/<Modelo>EndpointsTest.php` y vuelve a importar. Si los
+  editaste, cambia `App\Tests` por `Tests`, llama a las rutas con
+  `route('api.app.<modelo>.<acción>')` e inicia sesión antes de cada llamada, como
+  hace el test nuevo.
+- **`tests/TestCase.php`.** Si lo creó LaraPack 7.10.0, porque la aplicación no
+  tenía uno, extiende `Orchestra\Testbench\TestCase`: bórralo y vuelve a importar.
+- **Registra el `EventServiceProvider`** en `bootstrap/providers.php` si no lo
+  tenías (`larapack:event-service-provider` lo crea): sin él la exportación no
+  avisa.
 
 ---
 

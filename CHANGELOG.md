@@ -1,5 +1,39 @@
 # Changelog
 
+## 7.10.1
+
+Lo que encontró el piloto de la aplicación base al ejecutar los tests que LaraPack
+genera dentro de una aplicación: fallaban 23 de 25. Lo que se genera en un paquete
+no cambia.
+
+- **Factories en `Database\Factories`.** Dentro de una aplicación se generaban en
+  `App\Database\Factories`, que el `composer.json` de Laravel no carga, y el
+  modelo las importaba desde ahí: ningún modelo encontraba su factory.
+- **Tests en `Tests\`.** Se generaban en `App\Tests\Feature\Models`. Y si faltaba
+  `tests/TestCase.php` se creaba el de un paquete, que arranca Testbench; ahora es
+  el de Laravel.
+- **Rutas por nombre.** Los tests llamaban a `/api/<modelo>/...` y el
+  `RouteServiceProvider` registra `api/app/<modelo>/...`: cada llamada daba 404.
+  Ahora usan `route('api.app.<modelo>.*')`, como los de un paquete y el front.
+- **Con sesión y autorización.** Las rutas piden `auth:sanctum` y los tests de una
+  aplicación nunca iniciaban sesión. Ahora crean el usuario con la factory de
+  `auth.providers.users.model`, abren la autorización en `setUp()` y prueban lo
+  mismo que los de un paquete, acciones masivas incluidas.
+- **La edición en lote aparta las columnas únicas.** Ponía el mismo `email` a dos
+  usuarios, y `users.email` es único en la migración de Laravel.
+- **`GeneratedApplicationTest`** ejecuta los tests generados en una aplicación
+  Laravel simulada, como `GeneratedPackageTest` en un paquete. La guía pide ahora
+  registrar también el `EventServiceProvider` en una aplicación: sin él la
+  exportación no avisa.
+
+### Para proyectos existentes
+
+Una aplicación generada con 7.10.0 tiene que regenerar sus factories y sus tests,
+o corregir el namespace a mano. Las factories y los modelos se regeneran con
+`larapack:import --force`. Los tests no se pisan nunca, tampoco con `--force`: hay
+que borrarlos antes de volver a importar. Ver «De 7.10.0 a 7.10.1» en la guía de
+actualización del README. Un paquete no tiene que hacer nada.
+
 ## 7.10.0
 
 El usuario que inicia sesión, y lo necesario para generar dentro de una
