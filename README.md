@@ -70,8 +70,9 @@ La regla que se desprende de todo esto guía el resto del documento:
 - Lo generado no depende de `App\Models\User`: las políticas reciben el usuario
   de la aplicación sea cual sea su clase. Lo que sí espera de la aplicación está
   en [Montar un paquete en una aplicación](#montar-un-paquete-en-una-aplicación).
-- La exportación usa el disco de `export_disk` en la configuración del paquete;
-  por defecto `local`, que tiene cualquier aplicación.
+- La exportación usa el disco de `export_disk` en la configuración del paquete
+  (en una aplicación, `config/larapack.php`); por defecto `local`, que tiene
+  cualquier aplicación.
 - Si el usuario de la aplicación define `isAdmin()`, las políticas dejan pasar al
   administrador; si no lo define, deciden sus métodos. Sin sistema de roles, un
   mínimo:
@@ -740,7 +741,7 @@ src/Observers/<Model>Observer.php                  ← hueco
 src/Exports/<Plural>Exports.php
 src/Notifications/<Model>/ExportNotification.php
 
-routes/api/models/<kebab>.php
+routes/api/models/<snake>.php                      order_line.php, no order-line.php
 database/migrations/*_create_<plural>_table.php
 database/migrations/*_create_<model>_metas_table.php sólo si metas: true
 database/factories/<Model>Factory.php              ← hueco (datos de prueba)
@@ -1181,8 +1182,9 @@ LaraPack también genera en una aplicación Laravel, sin paquete de por medio:
 cuando el `composer.json` es de tipo `project`, escribe en `app/` con el
 namespace `App\`.
 
-- La API queda en `routes/api/models/<modelo>.php`, con el prefijo
-  `api/app/<modelo>` y los nombres `api.app.<modelo>.*`.
+- La API queda en `routes/api/models/<modelo>.php`, con el nombre del modelo en
+  snake_case: `OrderLine` va a `order_line.php`, con el prefijo
+  `api/app/order_line` y los nombres `api.app.order_line.*`.
 - `larapack:route-service-provider` crea `app/Providers/RouteServiceProvider.php`,
   que carga esos archivos, y `larapack:event-service-provider` crea
   `app/Providers/EventServiceProvider.php`, que conecta los listeners de
@@ -1194,6 +1196,16 @@ namespace `App\`.
   el `tests/TestCase.php` de la aplicación, así que no cuentan con él: inician
   sesión en Sanctum con la factory del modelo de `auth.providers.users.model` y
   abren la autorización en su propio `setUp()`.
+- La exportación pide sus vistas sin namespace (`excel.<modelo>`, en
+  `resources/views/excel`) y lee `larapack.notification_via`,
+  `larapack.export_disk` y `larapack.excel_view`. Sin `config/larapack.php`
+  funciona con los valores por defecto: correo y disco `local`. Para cambiarlos,
+  `larapack:config` lo crea; nunca escribe en `config/app.php`, que es de
+  Laravel.
+- Una migración de creación que LaraPack no generó, como la de `users` que trae
+  Laravel, no se compara con el laraimport: `larapack:import` la omite («no la
+  generó LaraPack») y no escribe alteraciones contra ella. Si `users` necesita
+  más columnas, escribe tú la migración.
 - El módulo de la interfaz va a `resources/<ui>/src`, sin `package.json` ni
   `vite.config.js`: se compila con los de la aplicación, que tiene que declarar
   las dependencias del módulo.

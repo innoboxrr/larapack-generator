@@ -207,7 +207,7 @@ src/Observers/<Model>Observer.php                  ← HUECO
 src/Exports/<Plural>Exports.php
 src/Notifications/<Model>/ExportNotification.php
 
-routes/api/models/<kebab>.php                      10 rutas
+routes/api/models/<snake>.php                      10 rutas; order_line.php, no order-line.php
 database/migrations/*_create_<plural>_table.php
 database/migrations/*_create_<model>_metas_table.php solo si metas: true
 database/factories/<Model>Factory.php              ← HUECO (datos de prueba)
