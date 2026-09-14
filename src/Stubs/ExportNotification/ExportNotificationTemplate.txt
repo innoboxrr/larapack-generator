@@ -34,7 +34,7 @@ class ExportNotification extends Notification
      */
     public function via(object $notifiable): array
     {
-        return config('namespaceWithoutSeparation.notification_via', ['mail']);
+        return config('larapackConfigKey.notification_via', ['mail']);
     }
 
     public function toMail(object $notifiable): MailMessage
@@ -91,7 +91,7 @@ class ExportNotification extends Notification
      */
     private function disk(): string
     {
-        return config('namespaceWithoutSeparation.export_disk', 'local');
+        return config('larapackConfigKey.export_disk', 'local');
     }
 
     private function getSubject(): string

@@ -63,6 +63,33 @@ final class ApplicationExportTest extends TestCase
         );
     }
 
+    // LA NOTIFICACIÓN
+
+    public function test_en_una_aplicacion_la_notificacion_no_lee_la_configuracion_de_laravel(): void
+    {
+        $this->import(FakeProject::application());
+
+        $notification = $this->project->read('app/Notifications/OrderLine/ExportNotification.php');
+
+        $this->assertStringContainsString("config('larapack.notification_via', ['mail'])", $notification);
+        $this->assertStringContainsString("config('larapack.export_disk', 'local')", $notification);
+
+        // `app.name` es de Laravel y se lee a propósito; nada más de `app.*`.
+        preg_match_all("/config\\('app\\.(\\w+)/", $notification, $keys);
+
+        $this->assertSame(['name'], array_values(array_unique($keys[1])), 'La notificación lee claves de LaraPack dentro de config/app.php.');
+    }
+
+    public function test_en_un_paquete_la_notificacion_sigue_leyendo_la_configuracion_del_paquete(): void
+    {
+        $this->import(FakeProject::library('Acme\\Shop\\'));
+
+        $notification = $this->project->read('src/Notifications/OrderLine/ExportNotification.php');
+
+        $this->assertStringContainsString("config('acmeshop.notification_via', ['mail'])", $notification);
+        $this->assertStringContainsString("config('acmeshop.export_disk', 'local')", $notification);
+    }
+
     // AYUDAS
 
     /**
