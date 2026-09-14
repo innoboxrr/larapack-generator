@@ -23,6 +23,10 @@ export const API_ROUTE_PREFIX = 'api.dotNamespacesnake_case_model_name.'
  * Se lee bajo demanda y no al importar el modulo: el meta tag puede no existir
  * todavia (o nunca, en una prueba) y antes eso reventaba la carga del modulo.
  *
+ * Solo lo mandan las escrituras. innoboxrr-http-request envia los datos de GET
+ * y HEAD en la query, asi que el token acababa en la URL, en el historial y en
+ * los logs del servidor, y Laravel no lo pide para leer.
+ *
  * @returns {string}
  */
 export const csrfToken = () => {
@@ -143,7 +147,6 @@ export const dataTableSort = () => ({
 
 export const getPolicies = (modelId = null) => {
     return makeHttpRequest('get', route(API_ROUTE_PREFIX + 'policies'), {
-        _token: csrfToken(),
         id: modelId,
     }, {}, 3, 1500)
 }
@@ -152,7 +155,6 @@ export const getPolicies = (modelId = null) => {
 
 export const getPolicy = (policy, modelId = null) => {
     return makeHttpRequest('get', route(API_ROUTE_PREFIX + 'policy'), {
-        _token: csrfToken(),
         policy,
         id: modelId,
     }, {}, 3, 1500)
@@ -181,7 +183,6 @@ const confirmOrCancel = async (options) => {
 
 export const indexModel = (params = {}) => {
     return makeHttpRequest('get', route(API_ROUTE_PREFIX + 'index'), {
-        _token: csrfToken(),
         ...params,
     }, {}, 3, 1500)
 }
@@ -190,7 +191,6 @@ export const indexModel = (params = {}) => {
 
 export const showModel = (modelId, loadRelations = [], loadCounts = [], data = {}) => {
     return makeHttpRequest('get', route(API_ROUTE_PREFIX + 'show'), {
-        _token: csrfToken(),
         snake_case_model_name_id: modelId,
         load_relations: loadRelations,
         load_counts: loadCounts,

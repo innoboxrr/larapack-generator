@@ -70,6 +70,33 @@ final class GeneratesReactModuleTest extends TestCase
         );
     }
 
+    /**
+     * innoboxrr-http-request manda los datos de GET y HEAD en la query: el token
+     * CSRF acababa en la URL, en el historial y en los logs del servidor, y
+     * Laravel no lo pide para leer. Las escrituras lo siguen mandando.
+     */
+    public function test_por_get_no_manda_el_token_csrf(): void
+    {
+        foreach ([self::VUE, self::REACT] as $module) {
+            $contract = $this->project->read($module.'/index.js');
+
+            preg_match_all("/makeHttpRequest\\('(\\w+)', route\\([^)]*\\), \\{(.*?)\\}, \\{\\}/s", $contract, $calls, PREG_SET_ORDER);
+
+            $verbs = array_column($calls, 1);
+
+            $this->assertContains('get', $verbs, "{$module}: no se encontró ninguna petición GET.");
+            $this->assertContains('post', $verbs, "{$module}: no se encontró ninguna petición POST.");
+
+            foreach ($calls as [$call, $verb, $body]) {
+                if (in_array($verb, ['get', 'head'], true)) {
+                    $this->assertStringNotContainsString('_token', $body, "{$module}: una petición {$verb} manda el token CSRF en la query:\n{$call}");
+                } else {
+                    $this->assertStringContainsString('_token: csrfToken()', $body, "{$module}: una petición {$verb} no manda el token CSRF:\n{$call}");
+                }
+            }
+        }
+    }
+
     public function test_los_dos_modulos_tienen_la_misma_estructura(): void
     {
         $this->assertSame(
