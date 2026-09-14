@@ -401,6 +401,7 @@ dice lo que se decide de verdad:
 | `pivots[]` | Migraciones de tablas pivote, sin modelo. |
 | `routes` | Qué acciones genera el modelo: `only` o `except`. Sin la clave, todas. |
 | `immutable` | La fila no cambia una vez creada. |
+| `authenticatable` | El modelo es el usuario que inicia sesión. Ver [El usuario que inicia sesión](#el-usuario-que-inicia-sesión). |
 
 ### Un modelo completo
 
@@ -674,6 +675,43 @@ php artisan larapack:full-model AuditEvent --only=policies,index,show --immutabl
 ```
 
 ---
+
+### El usuario que inicia sesión
+
+`"authenticatable": true` genera el modelo con el que se inicia sesión, con la
+misma arquitectura que cualquier otro: API, políticas, tests y su módulo en el
+administrador. Lo que cambia respecto a un modelo normal:
+
+- hereda de `Illuminate\Foundation\Auth\User` y usa `Notifiable` y
+  `HasApiTokens`, así que la aplicación necesita `laravel/sanctum`;
+- `password` y `remember_token` van a `$hidden`, y quedan fuera de la tabla y de
+  la exportación;
+- si están declarados, `email_verified_at` se castea a `datetime` y `password` a
+  `hashed`: se guarda cifrada sin que el controlador lo haga;
+- `isAdmin()` compara el correo con `config('auth.admins')`, que es lo que
+  consulta el `before()` de cada política. La aplicación define esa lista en
+  `config/auth.php`.
+
+`larapack:validate` falla si no declara `email` y `password`: sin ellos nadie
+puede iniciar sesión.
+
+```json
+{
+    "models": [
+        {
+            "name": "User",
+            "authenticatable": true,
+            "routes": { "except": ["create"] },
+            "props": [
+                { "name": "name", "type": "string", "datatable": true },
+                { "name": "email", "type": "string", "datatable": true },
+                { "name": "email_verified_at", "type": "timestamp", "nullable": true, "fillable": false },
+                { "name": "password", "type": "string", "updatable": false }
+            ]
+        }
+    ]
+}
+```
 
 ## Qué se genera y dónde va tu código
 
@@ -1136,6 +1174,24 @@ Desde una vista React se navega con `buildPath('AdminShowProduct', { id })` de
 `innoboxrr-react-datatable`, nunca con una ruta escrita a mano.
 
 ---
+
+### Generar dentro de la aplicación
+
+LaraPack también genera en una aplicación Laravel, sin paquete de por medio:
+cuando el `composer.json` es de tipo `project`, escribe en `app/` con el
+namespace `App\`.
+
+- La API queda en `routes/api/models/<modelo>.php`, con el prefijo
+  `api/app/<modelo>` y los nombres `api.app.<modelo>.*`.
+- `larapack:route-service-provider` crea `app/Providers/RouteServiceProvider.php`,
+  que carga esos archivos. **Regístralo en `bootstrap/providers.php`**: Laravel
+  no descubre proveedores en el `composer.json` de la aplicación.
+- El módulo de la interfaz va a `resources/<ui>/src`, sin `package.json` ni
+  `vite.config.js`: se compila con los de la aplicación, que tiene que declarar
+  las dependencias del módulo.
+
+`innoboxrr/laravel-setup` parte de aquí: genera el usuario de la aplicación base
+con `authenticatable` y monta su administrador.
 
 ## La línea base y la publicación
 
@@ -1664,6 +1720,18 @@ con `vendor/bin/pint` en su propio commit.
 **El teléfono de Vue valida por país**, como el de React: un número de 10 dígitos
 que no es válido para su país deja de pasar, y uno español de 9 empieza a pasar.
 Lo que emite no cambia.
+
+### De 7.9 a 7.10
+
+No cambia el contrato: `authenticatable` es nuevo y opcional.
+
+**Regenera el proveedor de eventos** con `larapack:event-service-provider
+--force`, primero con `--dry-run`. El anterior leía la caché al arrancar: en una
+aplicación con `CACHE_STORE=database`, lo que trae Laravel 13, `php artisan
+migrate` fallaba antes de crear la tabla de la caché. Y como la clave era la
+misma en todos los paquetes, uno recibía los listeners de otro. Si lo editaste,
+quita el `Cache::remember('events_and_listeners', ...)` y recorre
+`discoverEvents()` directamente.
 
 ---
 

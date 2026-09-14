@@ -103,6 +103,7 @@ Lo que conviene saber sin tener que leer el esquema entero:
 | `routes` | Qué acciones genera el modelo: `only` o `except`. Sin la clave, todas. |
 | `immutable` | La fila no cambia una vez creada: sin `update`, `delete`, `restore` ni `forceDelete`, y el modelo lanza si algo lo intenta. Crear sigue permitido. |
 | `props[].secret` | Nunca sale por la API: va a `$hidden`, fuera de la exportación y de la tabla. Se escribe, no se lee. |
+| `authenticatable` | El modelo es el usuario que inicia sesión: hereda de `Illuminate\Foundation\Auth\User`, con `Notifiable`, `HasApiTokens` e `isAdmin()` (lee `config('auth.admins')`). `password` y `remember_token` van a `$hidden` y fuera de la tabla y la exportación. Exige declarar `email` y `password`. |
 
 Tres cosas se resuelven solas — **no intentes arreglarlas a mano**:
 
