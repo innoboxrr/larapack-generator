@@ -38,6 +38,8 @@ class Tool
 
     protected $slashLowerNamespace;
 
+    protected $databaseNamespace;
+
     // MODEL NAME
     protected $ModelName;
 
@@ -110,9 +112,23 @@ class Tool
         $this->namespaceWithoutSeparation = str_replace('.', '', mb_strtolower($this->dotNamespace));
         $this->lowerNamespace = mb_strtolower($this->namespace);
         $this->slashLowerNamespace = str_replace('\\', '/', $this->lowerNamespace);
+        $this->databaseNamespace = $this->outsideSourceNamespace('Database');
         $this->setModelNames($ModelName);
 
         return $this;
+    }
+
+    /**
+     * El namespace de un directorio de la raíz que no es src/ ni app/, sin
+     * separador final.
+     *
+     * Un paquete lo declara en su composer.json bajo su propio namespace
+     * (`Acme\Shop\Database\Factories\`). Una aplicación Laravel trae el suyo sin
+     * `App\` delante (`Database\Factories\`): con `App\` no lo carga nadie.
+     */
+    private function outsideSourceNamespace(string $directory): string
+    {
+        return app_dir_name() == 'src' ? $this->namespace.$directory : $directory;
     }
 
     // MODEL NAME
@@ -170,6 +186,8 @@ class Tool
             'dotModelName' => $this->dotModelName,
             'ModelName' => $this->ModelName,
             // NAMESPACE
+            // Más largo que `Namespace\`, así que strtr() lo prefiere.
+            'Namespace\\Database' => $this->databaseNamespace,
             'Namespace\\' => $this->namespace,
             'dotNamespace' => $this->dotNamespace,
             'kebabNamespace' => $this->kebabNamespace,
