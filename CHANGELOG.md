@@ -1,5 +1,29 @@
 # Changelog
 
+## 7.10.0
+
+El usuario que inicia sesión, y lo necesario para generar dentro de una
+aplicación y no sólo en un paquete.
+
+- **`authenticatable`.** Un modelo con `"authenticatable": true` hereda de
+  `Illuminate\Foundation\Auth\User` con `Notifiable`, `HasApiTokens` e
+  `isAdmin()` (lee `config('auth.admins')`). `password` y `remember_token` van a
+  `$hidden` y fuera de la tabla y la exportación, y `email_verified_at` y
+  `password` se castean a `datetime` y `hashed`. `larapack:validate` exige
+  `email` y `password`.
+- **Módulos dentro de una aplicación.** El módulo de la interfaz ya no escribe su
+  `package.json` ni su `vite.config.js` cuando el proyecto es una aplicación:
+  pisaban los de la aplicación.
+- **El proveedor de eventos generado no lee la caché al arrancar.** Con
+  `CACHE_STORE=database`, lo de Laravel 13, rompía `migrate` en una aplicación
+  nueva, y la clave `events_and_listeners` era la misma en todos los paquetes.
+- **La línea base pide `innoboxrr/larapack-generator ^7.10`.** Un paquete nuevo
+  nace con ella, y `larapack:audit` avisa (sin fallar) a quien sigue en `^7.0`.
+
+### Para proyectos existentes
+
+Ver «De 7.9 a 7.10» en la guía de actualización del README.
+
 ## 7.9.0
 
 Lo que faltaba para trabajar como en una aplicación de escritorio, y la puerta de
