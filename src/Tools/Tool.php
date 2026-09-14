@@ -40,6 +40,8 @@ class Tool
 
     protected $databaseNamespace;
 
+    protected $testsNamespace;
+
     // MODEL NAME
     protected $ModelName;
 
@@ -113,6 +115,7 @@ class Tool
         $this->lowerNamespace = mb_strtolower($this->namespace);
         $this->slashLowerNamespace = str_replace('\\', '/', $this->lowerNamespace);
         $this->databaseNamespace = $this->outsideSourceNamespace('Database');
+        $this->testsNamespace = $this->outsideSourceNamespace('Tests');
         $this->setModelNames($ModelName);
 
         return $this;
@@ -186,8 +189,9 @@ class Tool
             'dotModelName' => $this->dotModelName,
             'ModelName' => $this->ModelName,
             // NAMESPACE
-            // Más largo que `Namespace\`, así que strtr() lo prefiere.
+            // Más largos que `Namespace\`, así que strtr() los prefiere.
             'Namespace\\Database' => $this->databaseNamespace,
+            'Namespace\\Tests' => $this->testsNamespace,
             'Namespace\\' => $this->namespace,
             'dotNamespace' => $this->dotNamespace,
             'kebabNamespace' => $this->kebabNamespace,

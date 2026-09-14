@@ -124,7 +124,14 @@ class TestTool extends Tool
 
         $testCaseFile = $this->testCasePath.'/TestCase.php';
 
-        if ($this->copyOnce($this->testTemplatePath.'/TestCaseTemplate.txt', $testCaseFile)) {
+        // Una aplicacion trae el suyo; si falta, el de Laravel. El de un paquete
+        // arranca Testbench y autentica con tests/User.php, que en una
+        // aplicacion no se genera.
+        $templateName = (app_dir_name() == 'src') ?
+            '/TestCaseTemplate.txt' :
+            '/TestCaseProjectTemplate.txt';
+
+        if ($this->copyOnce($this->testTemplatePath.$templateName, $testCaseFile)) {
 
             $this->replaceData($testCaseFile);
 

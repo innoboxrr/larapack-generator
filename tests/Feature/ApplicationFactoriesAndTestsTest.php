@@ -106,6 +106,60 @@ final class ApplicationFactoriesAndTestsTest extends TestCase
         }
     }
 
+    // TESTS
+
+    public function test_en_una_aplicacion_los_tests_estan_en_tests(): void
+    {
+        $this->import(FakeProject::application(), ['User', 'Product', 'OrderLine']);
+
+        foreach (['User', 'Product', 'OrderLine'] as $model) {
+            $test = $this->project->read("tests/Feature/Models/{$model}EndpointsTest.php");
+
+            $this->assertStringContainsString('namespace Tests\\Feature\\Models;', $test, "{$model}EndpointsTest no está en el namespace que carga la aplicación.");
+            $this->assertStringContainsString('use Tests\\TestCase;', $test);
+        }
+
+        // Sin TestCase en la aplicación se genera el de Laravel, no el de un
+        // paquete: ese arranca Testbench y usa un usuario que aquí no existe.
+        $testCase = $this->project->read('tests/TestCase.php');
+
+        $this->assertStringContainsString('namespace Tests;', $testCase);
+        $this->assertStringContainsString('use Illuminate\\Foundation\\Testing\\TestCase as BaseTestCase;', $testCase);
+        $this->assertStringNotContainsString('Orchestra', $testCase);
+        $this->assertFalse($this->project->has('tests/User.php'), 'Una aplicación ya tiene su usuario.');
+
+        $this->assertNoGeneratedFileMentions('App\\Tests');
+    }
+
+    public function test_en_una_aplicacion_no_se_pisa_el_testcase_que_ya_tiene(): void
+    {
+        $project = FakeProject::application();
+        mkdir($project->path.'/tests');
+        file_put_contents($project->path.'/tests/TestCase.php', "<?php\n\nnamespace Tests;\n\n// el de la aplicación\n");
+
+        $this->import($project, ['Product']);
+
+        $this->assertStringContainsString('// el de la aplicación', $this->project->read('tests/TestCase.php'));
+    }
+
+    public function test_en_un_paquete_los_tests_siguen_en_el_namespace_del_paquete(): void
+    {
+        $this->import(FakeProject::library('Acme\\Shop\\'), ['Product', 'OrderLine']);
+
+        foreach (['Product', 'OrderLine'] as $model) {
+            $test = $this->project->read("tests/Feature/Models/{$model}EndpointsTest.php");
+
+            $this->assertStringContainsString('namespace Acme\\Shop\\Tests\\Feature\\Models;', $test);
+            $this->assertStringContainsString('use Acme\\Shop\\Tests\\TestCase;', $test);
+        }
+
+        $testCase = $this->project->read('tests/TestCase.php');
+
+        $this->assertStringContainsString('namespace Acme\\Shop\\Tests;', $testCase);
+        $this->assertStringContainsString('Orchestra\\Testbench\\TestCase', $testCase);
+        $this->assertStringContainsString('namespace Acme\\Shop\\Tests;', $this->project->read('tests/User.php'));
+    }
+
     // AYUDAS
 
     private function assertNoGeneratedFileMentions(string $namespace): void
