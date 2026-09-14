@@ -19,6 +19,7 @@ use Symfony\Component\Console\Output\OutputInterface;
 trait ReportsGeneration
 {
     use TargetsProject;
+    use WritesJson;
 
     protected function addGenerationOptions(): void
     {
@@ -40,7 +41,10 @@ trait ReportsGeneration
         Generation::dryRun((bool) $input->getOption('dry-run'));
     }
 
-    protected function reportGeneration(InputInterface $input, OutputInterface $output): void
+    /**
+     * @param  array<string, mixed>  $extra  lo que el comando añade al informe JSON
+     */
+    protected function reportGeneration(InputInterface $input, OutputInterface $output, array $extra = []): void
     {
         $summary = Generation::summary();
         $entries = Generation::log();
@@ -56,8 +60,8 @@ trait ReportsGeneration
             new Manifest
         );
 
-        if ($input->getOption('format') === 'json') {
-            $output->writeln(json_encode([
+        if ($this->wantsJson($input)) {
+            $this->writeJson($output, [
                 'dryRun' => Generation::isDryRun(),
                 'formatted' => $formatted,
                 'summary' => $summary,
@@ -67,7 +71,7 @@ trait ReportsGeneration
                     'stub' => $entry['stub'],
                     'reason' => $entry['reason'],
                 ], $entries),
-            ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+            ] + $extra);
 
             return;
         }

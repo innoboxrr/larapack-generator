@@ -13,6 +13,7 @@ use Symfony\Component\Console\Input\ArrayInput;
 use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
+use Symfony\Component\Console\Output\NullOutput;
 use Symfony\Component\Console\Output\OutputInterface;
 
 class JsonImporterCommand extends Command
@@ -46,8 +47,14 @@ class JsonImporterCommand extends Command
             $findings = [...$findings, ...SemanticValidator::interface($document->toArray())];
         }
 
+        // Con --format=json la salida es el informe y nada más: quien la lee la
+        // decodifica entera. Tampoco va a stderr, porque un agente suele leer
+        // las dos salidas juntas. El progreso no dice nada que el informe no
+        // diga, y los avisos van dentro de él.
+        $progress = $this->wantsJson($input) ? new NullOutput : $output;
+
         foreach ($findings as $finding) {
-            $output->writeln(sprintf(
+            $progress->writeln(sprintf(
                 '  %s <fg=cyan>%s</> %s',
                 $finding['level'] === SemanticValidator::ERROR ? '<fg=red>error</>' : '<comment>aviso</comment>',
                 $finding['path'],
@@ -73,7 +80,7 @@ class JsonImporterCommand extends Command
             // Los modelos vienen ordenados por sus dependencias, así que las
             // migraciones quedan en un orden que `migrate` puede ejecutar.
             foreach ($document->models() as $model) {
-                $output->writeln("Processing model: {$model['name']}");
+                $progress->writeln("Processing model: {$model['name']}");
 
                 $this->callMakeFullModelCommand(
                     $model['name'],
@@ -82,12 +89,12 @@ class JsonImporterCommand extends Command
                         'react' => (bool) $input->getOption('react'),
                     ],
                     $model['metas'],
-                    $output
+                    $progress
                 );
             }
 
             foreach ($document->pivots() as $pivot) {
-                $output->writeln("Processing pivot: {$pivot['name']}");
+                $progress->writeln("Processing pivot: {$pivot['name']}");
 
                 (new PivotMigrationTool)->create($pivot['name']);
             }
@@ -101,8 +108,8 @@ class JsonImporterCommand extends Command
 
         }
 
-        $output->writeln('<info>JSON import completed successfully</info>');
-        $this->reportGeneration($input, $output);
+        $progress->writeln('<info>JSON import completed successfully</info>');
+        $this->reportGeneration($input, $output, ['findings' => $findings]);
 
         return Command::SUCCESS;
     }

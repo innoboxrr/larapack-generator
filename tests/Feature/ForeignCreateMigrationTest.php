@@ -125,9 +125,7 @@ final class ForeignCreateMigrationTest extends TestCase
             return null;
         }
 
-        // El importador escribe su progreso antes del informe.
-        $start = strpos($this->lastOutput, "{\n");
-        $report = $start === false ? null : json_decode(substr($this->lastOutput, $start), true);
+        $report = json_decode($this->lastOutput, true, flags: JSON_THROW_ON_ERROR);
 
         $this->assertIsArray($report, "La salida no era JSON:\n".$this->lastOutput);
 
