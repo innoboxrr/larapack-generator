@@ -181,7 +181,71 @@ final class ApplicationFactoriesAndTestsTest extends TestCase
         $this->assertTestsCallRegisteredRoutes('src/Providers/RouteServiceProvider.php', ['Product', 'OrderLine']);
     }
 
+    // SESIÓN
+
+    /**
+     * Las rutas piden sesión en Sanctum y las políticas nacen cerradas: un test
+     * que no inicia sesión recibe 401, y uno que no abre la autorización, 403.
+     */
+    public function test_en_una_aplicacion_los_tests_inician_sesion_y_abren_la_autorizacion(): void
+    {
+        $this->import(FakeProject::application(), ['User', 'Product', 'OrderLine']);
+
+        foreach (['User', 'Product', 'OrderLine'] as $model) {
+            $test = $this->project->read("tests/Feature/Models/{$model}EndpointsTest.php");
+
+            // El TestCase es el de la aplicación: el test no puede contar con él.
+            $this->assertStringContainsString('Gate::before(fn () => true);', $test, "{$model}EndpointsTest no abre la autorización.");
+            $this->assertEndpointTestsSignIn($model, $test);
+        }
+    }
+
+    public function test_en_un_paquete_los_tests_inician_sesion_y_abren_la_autorizacion(): void
+    {
+        $this->import(FakeProject::library('Acme\\Shop\\'), ['Product', 'OrderLine']);
+
+        $this->assertStringContainsString('Gate::before(fn () => true);', $this->project->read('tests/TestCase.php'));
+
+        foreach (['Product', 'OrderLine'] as $model) {
+            $this->assertEndpointTestsSignIn($model, $this->project->read("tests/Feature/Models/{$model}EndpointsTest.php"));
+        }
+    }
+
     // AYUDAS
+
+    /**
+     * Cada test que llama a un endpoint inicia sesión, salvo uno: el que
+     * comprueba que sin sesión no se entra.
+     */
+    private function assertEndpointTestsSignIn(string $model, string $test): void
+    {
+        preg_match_all('/public function (test_\w+)\(\): void\s*\{(.*?)\n    \}/s', $test, $methods, PREG_SET_ORDER);
+
+        $this->assertNotEmpty($methods, "{$model}EndpointsTest no tiene tests.");
+
+        $guests = 0;
+
+        foreach ($methods as [, $name, $body]) {
+            if (! preg_match('/\broute\(/', $body)) {
+                continue;
+            }
+
+            $signsIn = (bool) preg_match('/\$this->signIn\w*\(\)/', $body);
+
+            if (str_ends_with($name, '_requiere_sesion')) {
+                $guests++;
+
+                $this->assertFalse($signsIn, "{$model}EndpointsTest::{$name} inicia sesión y dice comprobar que sin ella no se entra.");
+                $this->assertStringContainsString('->assertUnauthorized()', $body);
+
+                continue;
+            }
+
+            $this->assertTrue($signsIn, "{$model}EndpointsTest::{$name} llama a un endpoint sin iniciar sesión: recibe 401.");
+        }
+
+        $this->assertSame(1, $guests, "{$model}EndpointsTest no comprueba que sin sesión no se entra.");
+    }
 
     /**
      * Cada endpoint al que llama el test generado de un modelo, resuelto a su
