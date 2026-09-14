@@ -52,7 +52,9 @@ php vendor/bin/builder larapack:<comando>         # también fuera de Laravel
 
 Todos aceptan `--format=json` (parséalo, no raspes el texto), `--root=<ruta>`
 para decir sobre qué proyecto trabajar, y los generadores aceptan además
-`--force` y `--dry-run`.
+`--force` y `--dry-run`. Con `--format=json` la salida es un único documento,
+también si algo falla: mira `ok`, y si es `false`, `error` o `findings` dicen
+por qué.
 
 ## Paso 1: el contrato
 

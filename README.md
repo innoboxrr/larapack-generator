@@ -235,6 +235,10 @@ escribe un JSON que `larapack:validate` acepta o rechaza con un mensaje concreto
 genera, y comprueba su propio trabajo con `larapack:verify`. Los tres comandos
 devuelven `--format=json` y un código de salida distinto de cero cuando algo
 falla, así que el agente puede iterar solo, sin preguntar y sin raspar texto.
+Con `--format=json` la salida es un único documento JSON y nada más, también
+cuando algo falla: `ok` dice si salió bien y, si el comando ni siquiera pudo
+ejecutarse (un argumento que falta, una raíz que no existe), `error` dice por
+qué.
 
 ### Preparar el proyecto
 
