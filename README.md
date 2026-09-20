@@ -386,10 +386,152 @@ dice lo que se decide de verdad:
 }
 ```
 
+### Las claves ajenas: `restrict` por omisión
+
+`->constrained()` sale con `ON UPDATE RESTRICT ON DELETE RESTRICT`, que es lo
+mismo que hace Laravel y lo que hace la base. **Borrar la fila padre falla** en
+vez de llevarse en silencio lo que cuelga de ella.
+
+Para pedir otra cosa, dos claves por propiedad con los cuatro valores de SQL
+—`cascade`, `restrict`, `set null`, `no action`—:
+
+```json
+{
+    "models": [
+        {
+            "name": "Category",
+            "props": [
+                { "name": "name", "type": "string" }
+            ]
+        },
+        {
+            "name": "Product",
+            "props": [
+                { "name": "name", "type": "string" },
+                { "name": "category_id", "type": "foreignId", "constraint": "categories" },
+                { "name": "replaces_id", "type": "foreignId", "constraint": "products",
+                  "nullable": true, "on_delete": "set null" }
+            ]
+        }
+    ]
+}
+```
+
+```php
+// category_id: lo que sale solo. Borrar la categoría FALLA.
+$table->foreignId('category_id')->constrained('categories')
+      ->onUpdate('restrict')->onDelete('restrict');
+
+// replaces_id: lo que se pidió. El producto se queda sin sustituto,
+// no desaparece.
+$table->foreignId('replaces_id')->nullable()->constrained('products')
+      ->onUpdate('restrict')->onDelete('set null');
+```
+
+**Los pivotes son la excepción y van en `cascade`**, que ahí sí es lo correcto:
+una fila pivote no significa nada sin sus dos lados.
+
+::: warning Por qué el valor por omisión no es `cascade`
+Además de llevarse la historia, una columna con acción referencial **no admite
+un `CHECK`** (MySQL 3823) **ni puede sostener una columna generada `STORED`**
+(MySQL 1215). Con cascada por omisión, media integridad del esquema es
+inexpresable, y eso no se descubre hasta que el `migrate` falla.
+:::
+
+`set null` exige que la columna sea `nullable`. Si no lo es, se dice al validar
+—con el nombre de la columna delante— en vez de dejar que MySQL responda un
+`1215` que no explica cuál de las claves es.
+
+### `table_prefix`: varios paquetes en una sola base de datos
+
+Por omisión la tabla sale del nombre del modelo: `Student` da `students`. En una
+aplicación suelta eso está bien. En un ecosistema donde varios paquetes comparten
+**una sola base**, no: `students`, `groups`, `subjects`, `programs` o `terms` son
+los primeros nombres que se le ocurren a cualquiera, y el segundo paquete que los
+quiera choca con el primero.
+
+La salida conocida es prefijar el nombre de la **clase** —`AcademicsStudent`—,
+que resuelve la colisión a costa de tartamudear en cada `use`, cada relación y
+cada prueba. El prefijo es infraestructura de persistencia; no tiene por qué
+subir al nombre de dominio:
+
+```json
+{
+    "table_prefix": "academics_",
+    "models": [
+        { "name": "Student", "props": [ { "name": "code", "type": "string" } ] }
+    ]
+}
+```
+
+```php
+class Student extends Model
+{
+    protected $table = 'academics_students';
+}
+```
+
+| Lleva prefijo | No lo lleva |
+|---|---|
+| `Schema::create` y el resto de la migración | Una clave ajena hacia fuera: `users`, `parties`, la tabla de otro paquete |
+| El `$table` del modelo y el de su `Meta` | El nombre de la clase, del controlador, de la ruta y del módulo de interfaz |
+| El `->constrained()` de una clave ajena hacia una tabla **de este mismo archivo** | La variable de Blade y la clave del array en la exportación a Excel |
+| El nombre del **archivo** de migración: `create_academics_students_table` | |
+| La tabla de metas y las tablas pivote de este archivo | |
+
+**El `constraint` se sigue escribiendo sin prefijo**, igual que el nombre del
+modelo al que apunta. El generador decide: si la tabla es de este archivo, la
+prefija; si apunta fuera, la deja. Eso es lo que permite mezclar las dos cosas
+sin pensar:
+
+```json
+{
+    "table_prefix": "academics_",
+    "models": [
+        {
+            "name": "Student",
+            "props": [
+                { "name": "code", "type": "string" }
+            ]
+        },
+        {
+            "name": "Enrollment",
+            "props": [
+                { "name": "scope_id", "type": "foreignId", "constraint": "scopes" },
+                { "name": "student_id", "type": "foreignId", "constraint": "students" }
+            ]
+        }
+    ]
+}
+```
+
+`scopes` es del anfitrión y `students` es de este archivo, así que la migración
+de `Enrollment` sale con una de cada:
+
+```php
+$table->foreignId('scope_id')->constrained('scopes');
+$table->foreignId('student_id')->constrained('academics_students');
+```
+
+> **La barra baja final es opcional.** `"academics"` y `"academics_"` dan lo
+> mismo, para que nadie acabe con `academicsstudents` sin entender por qué.
+
+> **Sin la clave, la generación es idéntica a como era.** El prefijo vacío no
+> toca ni un byte, y por eso esto no rompe ningún proyecto que ya exista.
+
+Dos efectos que conviene saber: los nombres de las restricciones que genera
+Laravel —`<tabla>_<columna>_foreign`— quedan también separados entre paquetes, lo
+que quita otra colisión silenciosa; y como MySQL limita el identificador a 64
+caracteres, un prefijo muy largo sobre una tabla y una columna muy largas puede
+pasarse. Si ocurre, el fallo sale en `migrate` y se arregla nombrando la
+restricción a mano en una alteración.
+
 ### Las claves que más se usan
 
 | Clave | Para qué |
 |---|---|
+| `table_prefix` | Prefijo de **todas** las tablas del archivo. Ver arriba. Sin la clave, nada cambia. |
+| `props[].on_delete` / `on_update` | Acción referencial de un `foreignId`. Por omisión `restrict` en un modelo y `cascade` en un pivote. |
 | `props[].type` | Tipo de columna de la migración. Enum cerrado. |
 | `props[].constraint` | Tabla a la que apunta un `foreignId`. Obligatoria si el tipo lo es. |
 | `props[].nullable` | La columna admite `null`. |

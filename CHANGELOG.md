@@ -1,5 +1,125 @@
 # Changelog
 
+## 8.0.0
+
+Dos cambios en las tablas que genera: un paquete puede declarar el prefijo de
+las suyas, y **las claves ajenas dejan de salir en cascada**.
+
+### CAMBIO QUE ROMPE: `restrict` por omision en las claves ajenas
+
+Hasta aqui el generador emitia esto en TODA clave ajena, sin forma ninguna de
+declarar otra cosa:
+
+```php
+->constrained('categories')->onUpdate('cascade')->onDelete('cascade')
+```
+
+**Eso no es lo que hace Laravel.** `->constrained()` a secas deja la accion a la
+base, que en MySQL es `RESTRICT`. El generador la pisaba, y con tres
+consecuencias:
+
+1. **Borrar una fila padre se llevaba en silencio la historia que colgaba de
+   ella.** En un control escolar real, borrar un plan de estudios se habria
+   llevado el kardex de los egresados.
+2. **Impedia expresar integridad.** MySQL prohibe un `CHECK` (error 3823) y una
+   columna generada `STORED` (error 1215) sobre una columna con accion
+   referencial. Con cascada, media integridad del esquema es inexpresable.
+3. **En una clave ajena nullable casi siempre esta mal.** Una columna
+   `decided_by_user_id` es nullable porque puede que no se sepa quien; con
+   cascada, borrar el usuario borra el registro de auditoria.
+
+En el proyecto donde se detecto costo **siete migraciones** escritas en parte
+para deshacerlo, y **259 claves ajenas reconstruidas a mano**.
+
+**Ahora:** `restrict` por omision en los modelos, `cascade` por omision en los
+**pivotes** —la unica excepcion, y ahi si es correcta: una fila pivote no
+significa nada sin sus dos lados—. Y dos claves nuevas por propiedad:
+
+```json
+{ "name": "enrollment_id", "type": "foreignId", "constraint": "enrollments",
+  "on_delete": "cascade" }
+```
+
+Los valores son los cuatro de SQL: `cascade`, `restrict`, `set null` y
+`no action`. **La accion se escribe siempre en la migracion, aunque sea la que
+haria la base**, para que quien la lea no tenga que saberse el valor por omision
+de MySQL de memoria.
+
+**Un `set null` sobre una columna que no admite nulos ya no llega a MySQL.** Lo
+rechazaba con un 1215 pelado, sin decir cual de las claves era; ahora se dice al
+validar, con el nombre de la columna delante.
+
+**QUE HACER AL ACTUALIZAR.** Las tablas que ya existen **no se tocan**: el
+generador reutiliza la migracion de creacion que ya esta escrita y, cuando
+detecta que una clave ajena cambio, deja un comentario diciendo que se escriba
+la alteracion a mano en vez de alterar un esquema desplegado. El cambio afecta a
+las tablas **nuevas**. Si tu proyecto dependia de la cascada, declarala:
+`"on_delete": "cascade"`.
+
+### `table_prefix`: varios paquetes en una sola base de datos
+
+**Un laraimport sin la clave nueva genera exactamente lo mismo que antes.**
+
+- **`table_prefix` en la raiz del laraimport.** El nombre de la tabla salia solo
+  del nombre del modelo: `Student` daba `students`. En un ecosistema donde varios
+  paquetes comparten base, `students`, `groups`, `subjects`, `programs` o `terms`
+  son los primeros nombres que se le ocurren a cualquiera, y el segundo paquete
+  que los quiera choca con el primero. La unica salida era prefijar el nombre de
+  la CLASE, que resuelve la colision a costa de tartamudear en cada `use`, cada
+  relacion y cada prueba.
+
+  ```json
+  { "table_prefix": "academics_", "models": [ { "name": "Student", ... } ] }
+  ```
+
+  La clase sigue siendo `Student`; la tabla es `academics_students`.
+
+- **Que lleva prefijo.** `Schema::create` y el resto de la migracion · el
+  `$table` del modelo y el de su `Meta` · el `->constrained()` de una clave ajena
+  que apunte a una tabla **de este mismo archivo** · el nombre del archivo de
+  migracion, que es lo que guarda la tabla `migrations` · la tabla de metas y las
+  pivote declaradas aqui.
+
+- **Que NO lo lleva.** Una clave ajena hacia fuera —`users`, `parties`, la tabla
+  de otro paquete— se deja intacta: prefijarla crearia una restriccion contra una
+  tabla que no existe, y el fallo saldria en `migrate`, lejos de su causa.
+  Tampoco lo llevan el nombre de la clase, del controlador, de la ruta ni del
+  modulo de interfaz, ni la variable de Blade y la clave de array de la
+  exportacion a Excel, que usaban el mismo marcador sin nombrar una tabla.
+
+- **El `constraint` se sigue escribiendo sin prefijo**, igual que el nombre del
+  modelo al que apunta. Lo resuelve el generador, asi que un archivo puede
+  mezclar claves hacia dentro y hacia fuera sin pensar en ello.
+
+- **La barra baja final es opcional.** `"academics"` y `"academics_"` dan lo
+  mismo: escribir el primero y acabar con `academicsstudents` seria una trampa
+  silenciosa.
+
+- **La migracion de metas nombra su tabla CUANDO hay prefijo.** Tenia
+  `->constrained()` sin argumento y Laravel deducia la tabla del nombre de la
+  columna; esa deduccion no conoce el prefijo. Con prefijo se escribe explicita;
+  sin el, la linea sale exactamente como salia. Escribirla explicita SIEMPRE
+  producia el mismo esquema pero distinto texto, y `GeneratedOutputSnapshotTest`
+  lo caza en sus dos casos importados: es justo la garantia que se queria.
+
+- **`@larapack:if` admite la barra baja** en el nombre de la condicion. No la
+  admitia, asi que `table_prefix` se leia como `table` y el stub moria con
+  «condicion desconocida».
+
+- **Aviso cuando una regla nombra una tabla sin prefijo.** Una regla
+  `unique:students` o `exists:students` escrita a mano en `requests[]` es el
+  unico sitio que el prefijo no puede resolver solo: es una cadena libre y
+  reescribirla seria adivinar —puede apuntar a otra tabla del anfitrion llamada
+  igual—. Ahora se avisa con el nombre correcto al lado. Sin el aviso, la
+  validacion consultaria una tabla que no existe y el error saldria en
+  produccion con un SQLSTATE.
+
+- **`TablePrefixTest`** fija lo que puede romperse en silencio: que una clave
+  ajena hacia fuera no se prefije, que sin la clave no cambie nada, y que el
+  prefijo no sobreviva a la orden —es estado estatico, y colarse en la
+  importacion siguiente seria invisible—.
+
+
 ## 7.10.3
 
 Un agente que parsea `--format=json` ya puede decodificar la salida entera, y el

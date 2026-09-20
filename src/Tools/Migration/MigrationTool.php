@@ -5,6 +5,7 @@ namespace Innoboxrr\LarapackGenerator\Tools\Migration;
 use Innoboxrr\LarapackGenerator\Exceptions\MakerException;
 use Innoboxrr\LarapackGenerator\Support\Generation;
 use Innoboxrr\LarapackGenerator\Support\MigrationTimestamp;
+use Innoboxrr\LarapackGenerator\Support\TablePrefix;
 use Innoboxrr\LarapackGenerator\Tools\Tool;
 
 class MigrationTool extends Tool
@@ -39,7 +40,7 @@ class MigrationTool extends Tool
             ->setMigrationPath()
             ->setMigrationTemplatePath();
 
-        $migrationFile = $this->migrationFile($this->migrationPath, 'create_'.$this->plural_snake_case_model_name.'_table');
+        $migrationFile = $this->migrationFile($this->migrationPath, 'create_'.$this->tableName().'_table');
 
         // Una migración de creación que no generó LaraPack —la de `users` que
         // trae Laravel— no se compara con el laraimport: lleva lo que este no
@@ -111,7 +112,7 @@ class MigrationTool extends Tool
             return false;
         }
 
-        $destination = $this->migrationPath.'/'.$this->alterTimestamp($createFile).'_alter_'.$this->plural_snake_case_model_name.'_table.php';
+        $destination = $this->migrationPath.'/'.$this->alterTimestamp($createFile).'_alter_'.$this->tableName().'_table.php';
 
         if (Generation::isDryRun()) {
             Generation::record('create', $destination, $stub);
@@ -206,7 +207,7 @@ class MigrationTool extends Tool
      */
     private function alterFiles(): array
     {
-        $files = glob($this->migrationPath.'/*_alter_'.$this->plural_snake_case_model_name.'_table.php') ?: [];
+        $files = glob($this->migrationPath.'/*_alter_'.$this->tableName().'_table.php') ?: [];
 
         sort($files);
 
@@ -253,7 +254,7 @@ class MigrationTool extends Tool
         $this->init($ModelName)
             ->setMigrationPath()
             ->setMigrationTemplatePath();
-        $migrationFilename = MigrationTimestamp::next().'_drop_'.$this->plural_snake_case_model_name.'_table.php';
+        $migrationFilename = MigrationTimestamp::next().'_drop_'.$this->tableName().'_table.php';
         $migrationFile = $this->migrationPath.'/'.$migrationFilename;
         // Solo proceder en caso de los archivos no existan
         if (! file_exists($migrationFile)) {
@@ -323,7 +324,13 @@ class MigrationTool extends Tool
         }
 
         if ($prop['type'] === 'foreignId' && ! is_null($prop['constraint'])) {
-            $column .= "->constrained('{$prop['constraint']}')->onUpdate('cascade')->onDelete('cascade')";
+            // El `constraint` del laraimport se escribe SIN prefijo, igual que
+            // el nombre del modelo al que apunta. Aquí se resuelve: si la tabla
+            // es de este archivo, lleva prefijo; si apunta fuera —`users`, la
+            // tabla del anfitrión, la de otro paquete— se deja como está.
+            $table = TablePrefix::constraint($prop['constraint']);
+
+            $column .= "->constrained('{$table}')".$this->referentialActions($prop);
         }
 
         return $column.';';

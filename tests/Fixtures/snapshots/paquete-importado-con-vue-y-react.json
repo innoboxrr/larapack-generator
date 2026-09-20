@@ -1,9 +1,9 @@
 {
-    ".larapack/manifest.json": "b0d7f9f88dbc74282228908f96128c6fd14f2eb05873a337fc6d737180684cc4",
+    ".larapack/manifest.json": "c75a45c445db2fb38985c478de6a522a3a6ba0b5c15e80e1f0be8834728674e1",
     "composer.json": "dded2aaddb25ff97b89a8b0e047bfd8284706098a414f9124356b235318c7edb",
     "database/factories/PostFactory.php": "529d50ee7d10748822c8bc4527847a60ad7640e4e836ecbbd320e65b92f58ac3",
     "database/migrations/TIMESTAMP_create_post_metas_table.php": "4fc21c51de1f59f0bd72b814d69aec13e45cef9ec46b601c5af02947cd6e9a19",
-    "database/migrations/TIMESTAMP_create_posts_table.php": "c6ff538d95f298744ed4d96953057feb7588b853441fc5d5ff52fc3270c7451f",
+    "database/migrations/TIMESTAMP_create_posts_table.php": "6ce08938f017d26a4f7aa55767088c7a22b18378cd3a2426605043ffce901ceb",
     "lang/es.json": "998c873927b0842b02aa4c7cb66baa4514e58d8c5a1151d58654b8d47c0b0cd8",
     "phpunit.xml": "f6db3f43a1c6534f412241999f60e50566def886338a6cefeb740a67261cb720",
     "resources/react/index.js": "83a5155bd1a23d032e3d916be94d88c115f5d101568fc9207f11d89a40ab1d8c",

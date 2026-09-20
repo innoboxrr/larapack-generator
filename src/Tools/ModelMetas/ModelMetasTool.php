@@ -76,7 +76,7 @@ class ModelMetasTool extends Tool
         // Añade 3 segundos a la fecha actual
         // La migración de metas tiene que correr después de la del modelo,
         // que ya se pidió antes: el contador lo garantiza sin sumar segundos.
-        $migrationMetasFile = $this->migrationFile($this->migrationMetasPath, 'create_'.$this->snake_case_model_name.'_metas_table');
+        $migrationMetasFile = $this->migrationFile($this->migrationMetasPath, 'create_'.$this->metasTableName().'_table');
 
         return $this->generate($this->migrationMetasTemplatePath.'/MigrationTemplate.txt', $migrationMetasFile);
     }
@@ -123,7 +123,7 @@ class ModelMetasTool extends Tool
     private function removeMigrationMetas()
     {
         date_default_timezone_set('UTC');
-        $migrationFilename = MigrationTimestamp::next().'_drop_'.$this->snake_case_model_name.'_metas_table.php';
+        $migrationFilename = MigrationTimestamp::next().'_drop_'.$this->metasTableName().'_table.php';
         $migrationFile = $this->migrationMetasPath.'/'.$migrationFilename;
 
         return $this->generate($this->migrationMetasTemplatePath.'/DropTemplate.txt', $migrationFile);

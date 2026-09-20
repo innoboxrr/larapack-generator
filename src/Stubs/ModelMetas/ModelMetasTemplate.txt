@@ -16,6 +16,10 @@ class PascalCaseModelNameMeta extends Model
 
     use HasFactory;
 
+    // @larapack:if table_prefix
+    protected $table = 'table_name_metas';
+
+    // @larapack:endif
     protected $guarded = [];
 
     public function camelCaseModelName(): BelongsTo

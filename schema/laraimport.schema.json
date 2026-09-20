@@ -16,6 +16,12 @@
             "const": 1,
             "default": 1
         },
+        "table_prefix": {
+            "type": "string",
+            "default": "",
+            "pattern": "^$|^[a-z][a-z0-9]*(_[a-z0-9]+)*_?$",
+            "description": "Prefijo para TODAS las tablas de este archivo: sus modelos, sus metas y sus pivotes. Existe porque en un ecosistema donde varios paquetes comparten una sola base de datos, nombres como students, groups o terms chocan; con el prefijo, la clase sigue llamandose Student y la tabla es academics_students. Se prefija Schema::create, el $table del modelo, el ->constrained() de una clave ajena que apunte a una tabla de este mismo archivo y el nombre del archivo de migracion. NO se prefija una clave ajena que apunte fuera (users, parties, la tabla de otro paquete). La barra baja final es opcional: academics y academics_ dan lo mismo. Sin esta clave, la generacion es identica a como era."
+        },
         "models": {
             "type": "array",
             "minItems": 1,
@@ -136,6 +142,16 @@
                 "default": {
                     "type": ["string", "number", "boolean", "null"],
                     "default": null
+                },
+                "on_delete": {
+                    "enum": ["cascade", "restrict", "set null", "no action"],
+                    "default": "restrict",
+                    "description": "Que le pasa a esta fila cuando se borra aquella a la que apunta. Por omision restrict: borrar la fila padre FALLA, que es lo que hace Laravel y lo que hace la base. Poner cascade significa que la historia que cuelga de aqui desaparece sin avisar, y ademas impide que MySQL admita un CHECK (error 3823) o una columna generada STORED (error 1215) sobre esta columna. \"set null\" exige que la columna sea nullable."
+                },
+                "on_update": {
+                    "enum": ["cascade", "restrict", "set null", "no action"],
+                    "default": "restrict",
+                    "description": "Que le pasa a esta columna cuando cambia la clave a la que apunta. Por omision restrict. Con claves numericas que no cambian nunca da igual; con una clave natural, no."
                 },
                 "constraint": {
                     "type": ["string", "null"],
@@ -271,6 +287,8 @@
                 "type": { "$ref": "#/$defs/columnType" },
                 "nullable": { "type": "boolean", "default": false },
                 "default": { "type": ["string", "number", "boolean", "null"], "default": null },
+                "on_delete": { "enum": ["cascade", "restrict", "set null", "no action"], "default": "cascade" },
+                "on_update": { "enum": ["cascade", "restrict", "set null", "no action"], "default": "cascade" },
                 "constraint": { "type": ["string", "null"], "default": null }
             },
             "allOf": [

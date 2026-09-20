@@ -11,7 +11,7 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('plural_snake_case_model_name', function (Blueprint $table) {
+        Schema::create('table_name', function (Blueprint $table) {
             $table->id();
             //EDIT//
             $table->timestamps();
@@ -26,6 +26,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('plural_snake_case_model_name');
+        Schema::dropIfExists('table_name');
     }
 };

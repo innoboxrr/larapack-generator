@@ -13,6 +13,7 @@ use Innoboxrr\LarapackGenerator\Support\Generation;
 use Innoboxrr\LarapackGenerator\Support\Manifest;
 use Innoboxrr\LarapackGenerator\Support\MigrationTimestamp;
 use Innoboxrr\LarapackGenerator\Support\StubBlocks;
+use Innoboxrr\LarapackGenerator\Support\TablePrefix;
 
 class Tool
 {
@@ -206,6 +207,15 @@ class Tool
             'displayPropName' => Declaration::of((string) $this->ModelName)['display'],
             'SingularModelLabel' => (string) $this->SingularModelLabel,
             'PluralModelLabel' => (string) $this->PluralModelLabel,
+            // LA TABLA
+            //
+            // Va aparte del plural en snake porque NO son lo mismo: el plural
+            // es también el nombre de una variable de Blade y una clave de
+            // array en las plantillas de exportación, y ésas no llevan prefijo.
+            // Separarlos es lo que impide que `table_prefix` se cuele donde no
+            // nombra una tabla.
+            'table_name_metas' => TablePrefix::table($this->snake_case_model_name.'_metas'),
+            'table_name' => TablePrefix::table($this->plural_snake_case_model_name),
             // PLURALES
             'pluralModelName' => $this->pluralModelName,
             'plural_snake_case_model_name' => $this->plural_snake_case_model_name,
@@ -379,6 +389,53 @@ class Tool
     protected function manifest(): Manifest
     {
         return $this->manifest ??= new Manifest;
+    }
+
+    /**
+     * La tabla del modelo actual, con el prefijo del laraimport si lo declara.
+     *
+     * Es lo que va en `Schema::create`, en el `$table` del modelo y en el
+     * NOMBRE del archivo de migración. Lo último importa: `migrations` guarda
+     * ese nombre, así que dos paquetes con un modelo `Student` dejarían dos
+     * filas `create_students_table` y nadie sabría cuál es cuál.
+     */
+    protected function tableName(): string
+    {
+        return TablePrefix::table($this->plural_snake_case_model_name);
+    }
+
+    /**
+     * La tabla de metas del modelo actual. Es una tabla más del paquete, así
+     * que lleva el mismo prefijo: `academics_student_metas`.
+     */
+    protected function metasTableName(): string
+    {
+        return TablePrefix::table($this->snake_case_model_name.'_metas');
+    }
+
+    /**
+     * `->onUpdate(...)->onDelete(...)` de una clave ajena.
+     *
+     * ────────────────────────────────────────────────────────────────────────
+     * POR QUÉ SE ESCRIBEN SIEMPRE, AUNQUE `restrict` SEA LO QUE HARÍA LA BASE.
+     *
+     * Quien abra la migración tiene que poder leer la regla sin saberse de
+     * memoria el valor por omisión de MySQL. Una regla que no está escrita se
+     * acaba suponiendo, y la suposición cómoda —«bah, seguro que cascada»— es
+     * justo la que costó siete migraciones de reparación.
+     * ────────────────────────────────────────────────────────────────────────
+     *
+     * EL VALOR POR OMISIÓN LO DECIDE EL ESQUEMA, y es distinto según el sitio:
+     * `restrict` en un modelo, `cascade` en un pivote. Aquí sólo se lee.
+     *
+     * @param  array<string, mixed>  $prop
+     */
+    protected function referentialActions(array $prop): string
+    {
+        $onUpdate = is_string($prop['on_update'] ?? null) ? $prop['on_update'] : 'restrict';
+        $onDelete = is_string($prop['on_delete'] ?? null) ? $prop['on_delete'] : 'restrict';
+
+        return "->onUpdate('{$onUpdate}')->onDelete('{$onDelete}')";
     }
 
     // FORMA DECLARADA

@@ -43,7 +43,112 @@ final class SemanticValidator
             ...self::metas($models, $raw['models'] ?? []),
             ...self::display($models),
             ...self::authenticatable($models),
+            ...self::prefixedRules($document),
+            ...self::referentialActions($models, $pivots),
         ];
+    }
+
+    /**
+     * `set null` sobre una columna que no admite nulos.
+     *
+     * MySQL lo rechaza al crear la tabla con un 1215 pelado, que no dice cuál
+     * de las claves ajenas es ni por qué. Aquí se dice antes de escribir nada, y
+     * con el nombre de la columna delante.
+     *
+     * @param  array<int, array<string, mixed>>  $models
+     * @param  array<int, array<string, mixed>>  $pivots
+     * @return array<int, array<string, mixed>>
+     */
+    private static function referentialActions(array $models, array $pivots): array
+    {
+        $findings = [];
+
+        foreach ([['models', $models], ['pivots', $pivots]] as [$section, $entries]) {
+            foreach ($entries as $index => $entry) {
+                foreach ($entry['props'] as $position => $prop) {
+                    if ($prop['type'] !== 'foreignId') {
+                        continue;
+                    }
+
+                    foreach (['on_delete', 'on_update'] as $key) {
+                        if (($prop[$key] ?? null) !== 'set null' || ! empty($prop['nullable'])) {
+                            continue;
+                        }
+
+                        $findings[] = [
+                            'level' => self::ERROR,
+                            'path' => "/{$section}/{$index}/props/{$position}/{$key}",
+                            'message' => "'{$prop['name']}' declara {$key}: 'set null' y no es nullable: "
+                                .'la base no puede poner NULL donde no cabe. Añade "nullable": true o '
+                                .'usa "restrict".',
+                        ];
+                    }
+                }
+            }
+        }
+
+        return $findings;
+    }
+
+    /**
+     * Una regla `unique:` o `exists:` que nombra una tabla de este archivo SIN
+     * el prefijo.
+     *
+     * ES EL ÚNICO SITIO DONDE EL PREFIJO NO SE PUEDE RESOLVER SOLO. Las reglas
+     * son cadenas libres que escribe quien hace el contrato; reescribirlas aquí
+     * sería adivinar —`unique:students` puede apuntar a otra tabla llamada
+     * igual en la aplicación anfitriona— así que se avisa y se deja decidir.
+     *
+     * Lo que no se avisa se paga tarde: la validación consulta una tabla que no
+     * existe, y el error sale en producción con un SQLSTATE, no aquí.
+     *
+     * @param  array<string, mixed>  $document
+     * @return array<int, array<string, mixed>>
+     */
+    private static function prefixedRules(array $document): array
+    {
+        $prefix = is_string($document['table_prefix'] ?? null) ? $document['table_prefix'] : '';
+
+        if ($prefix === '') {
+            return [];
+        }
+
+        $models = $document['models'] ?? [];
+        $tables = array_map(fn (array $model): string => self::tableOf($model['name']), $models);
+
+        $findings = [];
+
+        foreach ($models as $index => $model) {
+            foreach ($model['requests'] ?? [] as $position => $request) {
+                foreach ($request['rules'] ?? [] as $field => $rules) {
+                    foreach ((array) $rules as $rule) {
+                        if (! is_string($rule)) {
+                            continue;
+                        }
+
+                        foreach (['unique', 'exists'] as $kind) {
+                            if (! preg_match('/\b'.$kind.':([A-Za-z0-9_]+)/', $rule, $matches)) {
+                                continue;
+                            }
+
+                            if (! in_array($matches[1], $tables, true)) {
+                                continue;
+                            }
+
+                            $findings[] = [
+                                'level' => self::WARNING,
+                                'path' => "/models/{$index}/requests/{$position}/rules/{$field}",
+                                'message' => "'{$kind}:{$matches[1]}' nombra una tabla de este archivo sin el prefijo "
+                                    ."'{$prefix}'. Escribe '{$kind}:{$prefix}{$matches[1]}' o, mejor, la clase del "
+                                    .'modelo, que no depende del prefijo.',
+                            ];
+                        }
+                    }
+                }
+            }
+        }
+
+        return $findings;
     }
 
     /**

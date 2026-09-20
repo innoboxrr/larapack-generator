@@ -1,5 +1,5 @@
 {
-    ".larapack/manifest.json": "de73cbdb3a6c4bea3784de75bc053654d767fb4331dd0b5cca0134e58bf81d47",
+    ".larapack/manifest.json": "65765159dba6c15cf4e73ee3955ed40b0b2a903033dd66d8ece931ead6f0cbc7",
     "app/Exports/PostsExports.php": "a97c5a9dae98855146962123dd97ed71047424212feb3e77e98be71f187970cc",
     "app/Http/Controllers/PostController.php": "ef7dcefe0c5c179fafbcd576b8ccc31a6a629b8285bc5301b8fe8fcb3362fd6f",
     "app/Http/Events/Post/Events/CreateEvent.php": "b531b60a72d788e63e33524c450dc6ab634ee4bfbd6a4294cac0f8f75bc34e2b",
@@ -46,7 +46,7 @@
     "composer.json": "3dc27145e1dd3e9b862739f1be2d3d2003762ae157d6da76f076e9882089609c",
     "database/factories/PostFactory.php": "5a62460236f0fbd9fa3889055a7ab08a43dfea669f9ccb85406ea0aea26c8369",
     "database/migrations/TIMESTAMP_create_post_metas_table.php": "4fc21c51de1f59f0bd72b814d69aec13e45cef9ec46b601c5af02947cd6e9a19",
-    "database/migrations/TIMESTAMP_create_posts_table.php": "c6ff538d95f298744ed4d96953057feb7588b853441fc5d5ff52fc3270c7451f",
+    "database/migrations/TIMESTAMP_create_posts_table.php": "6ce08938f017d26a4f7aa55767088c7a22b18378cd3a2426605043ffce901ceb",
     "lang/es.json": "998c873927b0842b02aa4c7cb66baa4514e58d8c5a1151d58654b8d47c0b0cd8",
     "phpunit.xml": "672e4f061e937abe5637e51734fe9831e04df5c2f1aa6c02c413782a4f61cc60",
     "resources/views/excel/post.blade.php": "70c55a41b3b9abd92814109a64c89944c9b8baeba111a46af598c1986265c32b",

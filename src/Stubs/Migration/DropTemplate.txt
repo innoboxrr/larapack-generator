@@ -11,7 +11,7 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::dropIfExists('plural_snake_case_model_name');
+        Schema::dropIfExists('table_name');
     }
 
     /**
