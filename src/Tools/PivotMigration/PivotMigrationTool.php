@@ -5,6 +5,7 @@ namespace Innoboxrr\LarapackGenerator\Tools\PivotMigration;
 use Innoboxrr\LarapackGenerator\Exceptions\MakerException;
 use Innoboxrr\LarapackGenerator\Support\Generation;
 use Innoboxrr\LarapackGenerator\Support\MigrationTimestamp;
+use Innoboxrr\LarapackGenerator\Support\TablePrefix;
 use Innoboxrr\LarapackGenerator\Tools\Tool;
 
 class PivotMigrationTool extends Tool
@@ -36,7 +37,7 @@ class PivotMigrationTool extends Tool
             ->setPivotMigrationTemplatePath();
         // La que ya exista para esta tabla: con la hora en el nombre, importar
         // otra vez creaba una segunda migración de la misma tabla.
-        $migrationFile = $this->migrationFile($this->migrationPath, 'create_'.$migrationName.'_table');
+        $migrationFile = $this->migrationFile($this->migrationPath, 'create_'.TablePrefix::table($migrationName).'_table');
         if (! file_exists($migrationFile)) {
             $templateFile = $this->migrationTemplatePath.'/MigrationTemplate.txt';
             if (Generation::isDryRun()) {
@@ -67,7 +68,7 @@ class PivotMigrationTool extends Tool
         date_default_timezone_set('UTC');
         $this->setMigrationPath()
             ->setPivotMigrationTemplatePath();
-        $migrationFilename = MigrationTimestamp::next().'_drop_'.$migrationName.'_table.php';
+        $migrationFilename = MigrationTimestamp::next().'_drop_'.TablePrefix::table($migrationName).'_table.php';
         $migrationFile = $this->migrationPath.'/'.$migrationFilename;
         // Solo proceder en caso de los archivos no existan
         if (! file_exists($migrationFile)) {
@@ -87,7 +88,7 @@ class PivotMigrationTool extends Tool
     private function replaceMigrationData($migrationFile)
     {
         $content = file_get_contents($migrationFile);
-        $content = str_replace('migration_name', $this->migrationName, $content);
+        $content = str_replace('migration_name', TablePrefix::table($this->migrationName), $content);
         file_put_contents($migrationFile, $content);
     }
 
@@ -139,7 +140,17 @@ class PivotMigrationTool extends Tool
 
         // Agregar restricciones de clave foránea si las hay
         if ($prop['type'] === 'foreignId' && ! is_null($prop['constraint'])) {
-            $column .= "->constrained('{$prop['constraint']}')->onUpdate('cascade')->onDelete('cascade')";
+            // Igual que en las migraciones de modelo: sin prefijo en el
+            // contrato, y resuelto aqui segun sea tabla propia o ajena.
+            $table = TablePrefix::constraint($prop['constraint']);
+
+            // Y en cascada por omision, que aqui SI es lo correcto: una fila
+            // pivote no significa nada sin sus dos lados. Es la unica excepcion
+            // al `restrict` por omision de los modelos, y la declara el esquema.
+            $column .= "->constrained('{$table}')".$this->referentialActions($prop + [
+                'on_update' => 'cascade',
+                'on_delete' => 'cascade',
+            ]);
         }
 
         return $column.';';

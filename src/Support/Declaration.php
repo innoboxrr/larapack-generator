@@ -20,8 +20,13 @@ final class Declaration
 {
     /**
      * Las condiciones de los stubs que no son una acción.
+     *
+     * `table_prefix` es la única que no mira al modelo sino al archivo entero:
+     * dice si el laraimport declaró prefijo de tablas. Vive aquí porque es
+     * donde los stubs preguntan, y porque esta lista es la que comprueba que
+     * ningún stub use una condición que no existe.
      */
-    public const FLAGS = ['immutable', 'secret', 'metas', 'authenticatable'];
+    public const FLAGS = ['immutable', 'secret', 'metas', 'authenticatable', 'table_prefix'];
 
     /**
      * @var array<string, array{actions: array<int, string>, immutable: bool, secret: array<int, string>, metas: bool, display: string, authenticatable: bool}>
@@ -124,6 +129,10 @@ final class Declaration
             $condition === 'secret' => $declaration['secret'] !== [],
             $condition === 'metas' => $declaration['metas'],
             $condition === 'authenticatable' => $declaration['authenticatable'],
+            // No es del modelo sino del archivo entero, pero se resuelve aquí
+            // porque es donde los stubs preguntan. Sin `table_prefix`, el bloque
+            // desaparece y el modelo sale byte a byte como salía antes.
+            $condition === 'table_prefix' => TablePrefix::get() !== '',
             default => throw new MakerException("Condición de stub desconocida: '{$condition}'."),
         };
     }

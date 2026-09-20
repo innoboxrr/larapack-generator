@@ -11,7 +11,7 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::dropIfExists('snake_case_model_name_metas');
+        Schema::dropIfExists('table_name_metas');
     }
 
     /**
@@ -22,7 +22,7 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::create('snake_case_model_name_metas', function (Blueprint $table) {
+        Schema::create('table_name_metas', function (Blueprint $table) {
             $table->id();
             $table->string('key');
             $table->longText('value');

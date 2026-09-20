@@ -14,11 +14,18 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('snake_case_model_name_metas', function (Blueprint $table) {
+        Schema::create('table_name_metas', function (Blueprint $table) {
             $table->id();
             $table->string('key');
             $table->longText('value');
+            // @larapack:if table_prefix
+            // La tabla, explícita: sin argumento Laravel la deduce del nombre
+            // de la columna, y esa deducción no conoce el `table_prefix`.
+            $table->foreignId('snake_case_model_name_id')->constrained('table_name')->onDelete('cascade');
+            // @larapack:endif
+            // @larapack:if !table_prefix
             $table->foreignId('snake_case_model_name_id')->constrained()->onDelete('cascade');
+            // @larapack:endif
             $table->timestamps();
 
             $table->unique(['key', 'snake_case_model_name_id'], 'unique_key_snake_case_model_name_id');
@@ -31,10 +38,10 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::table('snake_case_model_name_metas', function (Blueprint $table) {
+        Schema::table('table_name_metas', function (Blueprint $table) {
             $table->dropUnique('unique_key_snake_case_model_name_id');
         });
 
-        Schema::dropIfExists('snake_case_model_name_metas');
+        Schema::dropIfExists('table_name_metas');
     }
 };

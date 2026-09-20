@@ -11,7 +11,7 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('plural_snake_case_model_name', function (Blueprint $table) {
+        Schema::table('table_name', function (Blueprint $table) {
             //UP//
         });
     }
@@ -21,7 +21,7 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::table('plural_snake_case_model_name', function (Blueprint $table) {
+        Schema::table('table_name', function (Blueprint $table) {
             //DOWN//
         });
     }

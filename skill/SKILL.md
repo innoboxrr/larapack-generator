@@ -87,8 +87,10 @@ Lo que conviene saber sin tener que leer el esquema entero:
 
 | Clave | Para qué |
 |---|---|
+| `table_prefix` | Prefijo de **todas** las tablas del archivo. Ver abajo. Sin la clave, nada cambia. |
 | `props[].type` | Tipo de columna de la migración. Enum cerrado. |
-| `props[].constraint` | Tabla a la que apunta un `foreignId`. Obligatoria si el tipo lo es. |
+| `props[].constraint` | Tabla a la que apunta un `foreignId`. Obligatoria si el tipo lo es. Se escribe **sin prefijo**. |
+| `props[].on_delete` / `on_update` | Acción referencial. Por omisión `restrict` en un modelo, `cascade` en un pivote. |
 | `props[].cast` | Va al `casts()` del modelo. |
 | `props[].fillable` / `creatable` / `updatable` | Arrays del modelo. Por defecto `true`. |
 | `props[].exports_cols` | Columna de la exportación a Excel. |
@@ -108,6 +110,50 @@ Lo que conviene saber sin tener que leer el esquema entero:
 | `immutable` | La fila no cambia una vez creada: sin `update`, `delete`, `restore` ni `forceDelete`, y el modelo lanza si algo lo intenta. Crear sigue permitido. |
 | `props[].secret` | Nunca sale por la API: va a `$hidden`, fuera de la exportación y de la tabla. Se escribe, no se lee. |
 | `authenticatable` | El modelo es el usuario que inicia sesión: hereda de `Illuminate\Foundation\Auth\User`, con `Notifiable`, `HasApiTokens` e `isAdmin()` (lee `config('auth.admins')`). `password` y `remember_token` van a `$hidden` y fuera de la tabla y la exportación. Exige declarar `email` y `password`. |
+
+### Las claves ajenas restringen por omisión
+
+`->constrained()` sale con `ON DELETE RESTRICT`: borrar la fila padre **falla**.
+No lo cambies a `cascade` sin una razón, y menos «para que no dé error al
+borrar»: ese error es la protección.
+
+```json
+{ "name": "order_id", "type": "foreignId", "constraint": "orders",
+  "on_delete": "cascade" }
+```
+
+Dos cosas que conviene saber antes de poner `cascade`:
+
+- Se lleva en silencio todo lo que cuelga. Si en esa tabla hay historia
+  —transiciones, auditoría, un kárdex— la borras sin avisar.
+- Una columna con acción referencial **no admite un `CHECK`** (MySQL 3823) **ni
+  sostiene una columna generada `STORED`** (MySQL 1215). Poner `cascade` te deja
+  sin poder expresar esas invariantes, y no te enteras hasta el `migrate`.
+
+Los pivotes van en `cascade` por omisión y está bien: una fila pivote no
+significa nada sin sus dos lados.
+
+### `table_prefix`, si el paquete comparte base con otros
+
+Si lo que generas es un paquete que va a convivir con otros en **una sola base
+de datos**, declara el prefijo. Sin él, `Student` da la tabla `students` y el
+siguiente paquete que quiera un `Student` choca:
+
+```json
+{
+    "table_prefix": "academics_",
+    "models": [ { "name": "Student", "props": [ ... ] } ]
+}
+```
+
+La clase sigue llamándose `Student`; la tabla es `academics_students`. **No
+prefijes el nombre del modelo** —`AcademicsStudent`— para conseguir lo mismo:
+tartamudea en cada `use` y en cada relación, y es justo lo que esta clave existe
+para evitar.
+
+El `constraint` se escribe **siempre sin prefijo**. El generador decide: si la
+tabla es de este archivo, la prefija; si apunta fuera —`users`, la tabla del
+anfitrión, la de otro paquete— la deja como está.
 
 Tres cosas se resuelven solas — **no intentes arreglarlas a mano**:
 

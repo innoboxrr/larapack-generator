@@ -6,6 +6,7 @@ use Innoboxrr\LarapackGenerator\Commands\Concerns\ReportsGeneration;
 use Innoboxrr\LarapackGenerator\Support\Declaration;
 use Innoboxrr\LarapackGenerator\Support\Import\ImportDocument;
 use Innoboxrr\LarapackGenerator\Support\Import\SemanticValidator;
+use Innoboxrr\LarapackGenerator\Support\TablePrefix;
 use Innoboxrr\LarapackGenerator\Tools\PivotMigration\PivotMigrationTool;
 use Innoboxrr\LarapackGenerator\Tools\Tool;
 use Symfony\Component\Console\Command\Command;
@@ -71,6 +72,10 @@ class JsonImporterCommand extends Command
         Tool::setFromJsonImporter(true);
         Tool::setJsonContent($document->toArray());
 
+        // El prefijo de tablas, antes de generar nada: lo leen las migraciones,
+        // el modelo y las claves ajenas. Se limpia en el `finally` de abajo.
+        TablePrefix::fromDocument($document->toArray());
+
         foreach ($document->models() as $model) {
             Declaration::fromModel($model);
         }
@@ -105,6 +110,7 @@ class JsonImporterCommand extends Command
             // para el resto del proceso.
             Tool::setFromJsonImporter(false);
             Declaration::reset();
+            TablePrefix::reset();
 
         }
 

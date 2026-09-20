@@ -31,7 +31,10 @@ use Innoboxrr\LarapackGenerator\Exceptions\MakerException;
  */
 final class StubBlocks
 {
-    private const OPEN = '/@larapack:if\s+([A-Za-z|&!]+)/';
+    // La barra baja entra en el nombre de la condición: sin ella,
+    // `@larapack:if table_prefix` capturaba sólo `table` y el stub moría con
+    // «condición desconocida», que no dice dónde está el problema.
+    private const OPEN = '/@larapack:if\s+([A-Za-z_|&!]+)/';
 
     private const CLOSE = '/@larapack:endif\b/';
 

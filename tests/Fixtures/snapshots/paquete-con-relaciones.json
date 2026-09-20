@@ -1,10 +1,10 @@
 {
-    ".larapack/manifest.json": "5bf3aa7521460061ce5402ee989b07c6e8bd57978c35ba6dffdd535eb2d6357a",
+    ".larapack/manifest.json": "04d4901b1290e9b7a3d41df985b7187110d35ad2e512718a161283a55df193b6",
     "composer.json": "dded2aaddb25ff97b89a8b0e047bfd8284706098a414f9124356b235318c7edb",
     "database/factories/CategoryFactory.php": "088a11140f5ec27ef2b0dc5e88074fee459ea0c8f6332d15bb851981cec894fc",
     "database/factories/PostFactory.php": "ee422906bc1937dc2bbfaecf20954553ea5163c79269e2be66ba08cd3178d825",
     "database/migrations/TIMESTAMP_create_categories_table.php": "9273d2fe3f824bf9d76c05cd05573cb9f05eb6e8464c6812f46570747964092d",
-    "database/migrations/TIMESTAMP_create_posts_table.php": "d9d3682ff87d873031721fd2993807c0ff61483b4a017648135e20215887bac6",
+    "database/migrations/TIMESTAMP_create_posts_table.php": "5eb428d568e954d08160bfbeb46239b5f53541b69b7e859a6f09ab35f403523c",
     "lang/es.json": "998c873927b0842b02aa4c7cb66baa4514e58d8c5a1151d58654b8d47c0b0cd8",
     "phpunit.xml": "f6db3f43a1c6534f412241999f60e50566def886338a6cefeb740a67261cb720",
     "resources/react/index.js": "83a5155bd1a23d032e3d916be94d88c115f5d101568fc9207f11d89a40ab1d8c",
