@@ -244,6 +244,15 @@ final class Manifest
         return [$manifest['package'], ...array_values($manifest['models'])];
     }
 
+    /**
+     * La raíz del proyecto al que pertenece este manifiesto. Lo que `verify`
+     * comprueba fuera del manifiesto se busca a partir de ella.
+     */
+    public function root(): string
+    {
+        return $this->root ?? root_path();
+    }
+
     public function absolute(string $relative): string
     {
         return ($this->root ?? root_path()).'/'.$relative;

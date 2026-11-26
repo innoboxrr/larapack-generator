@@ -13,6 +13,9 @@ use Innoboxrr\LarapackGenerator\Support\Import\Actions;
  * determinista: que los archivos existan, que las entidades comparables
  * tengan los mismos componentes, y que los contratos entre el backend
  * generado y el módulo JS sigan cuadrando.
+ *
+ * La forma de los controladores también es determinista, y no depende del
+ * manifiesto: ControllerShape la comprueba en todos, generados o no.
  */
 final class Verifier
 {
@@ -38,15 +41,53 @@ final class Verifier
      */
     private const RESOURCE_KEYS = ['id', 'name', 'callback', 'icon', 'route', 'policy', 'params', 'to'];
 
+    /**
+     * Las comprobaciones que dependen del manifiesto. Sin modelos registrados
+     * no tienen nada que mirar.
+     */
+    private const MANIFEST_CHECKS = [
+        'empty-manifest', 'missing-file', 'customised', 'inconsistent-entity', 'route-prefix',
+        'route-not-declared', 'immutable-write', 'secret-exposed',
+    ];
+
+    /**
+     * Todo lo que `verify` sabe comprobar, por el nombre que lleva cada
+     * hallazgo en `check`. Es lo que acepta --check.
+     */
+    public const CHECKS = [...self::MANIFEST_CHECKS, ...ControllerShape::CHECKS];
+
     public function __construct(private ?Manifest $manifest = null)
     {
         $this->manifest ??= new Manifest;
     }
 
     /**
+     * @param  array<int, string>  $only  sólo estas comprobaciones; vacío, todas
      * @return array<int, array{level: string, check: string, model: string|null, file: string|null, message: string}>
      */
-    public function run(): array
+    public function run(array $only = []): array
+    {
+        $wants = fn (array $checks): bool => $only === [] || array_intersect($only, $checks) !== [];
+
+        $findings = [
+            ...($wants(self::MANIFEST_CHECKS) ? $this->manifestFindings() : []),
+            // La forma de los controladores no depende del manifiesto: la
+            // deriva está justo en los que el generador no escribió, y un
+            // proyecto sin nada generado también tiene controladores.
+            ...($wants(ControllerShape::CHECKS) ? (new ControllerShape($this->manifest->root()))->run() : []),
+        ];
+
+        if ($only === []) {
+            return $findings;
+        }
+
+        return array_values(array_filter($findings, fn (array $finding): bool => in_array($finding['check'], $only, true)));
+    }
+
+    /**
+     * @return array<int, array{level: string, check: string, model: string|null, file: string|null, message: string}>
+     */
+    private function manifestFindings(): array
     {
         $models = $this->manifest->models();
 
