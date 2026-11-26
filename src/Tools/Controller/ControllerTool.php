@@ -53,6 +53,60 @@ class ControllerTool extends Tool
         return $this->generate($this->controllerTemplatePath.'/ControllerTemplate.txt', $controllerFile);
     }
 
+    /**
+     * Un endpoint en el controlador es lo mismo que una acción CRUD: el método
+     * recibe su request y devuelve `$request->handle()`, nada más. Es la forma
+     * que los agentes respetaban en lo generado y perdían en lo escrito a mano.
+     *
+     * @return array<int, string>
+     */
+    protected function endpointCode(string $marker): array
+    {
+        $lines = [];
+
+        foreach ($this->endpoints() as $endpoint) {
+            if ($marker === 'ENDPOINT_REQUESTS') {
+                $lines[] = $endpoint['request'].',';
+            }
+
+            if ($marker === 'ENDPOINT_ACTIONS') {
+                array_push(
+                    $lines,
+                    '',
+                    "public function {$endpoint['name']}({$endpoint['request']} \$request)",
+                    '{',
+                    '    return $request->handle();',
+                    '}'
+                );
+            }
+        }
+
+        return $lines;
+    }
+
+    /**
+     * Un endpoint público sale de `auth:sanctum` por su nombre, y sólo él. La
+     * autorización no desaparece: la request sigue preguntando a la política.
+     */
+    protected function applyEndpoints(string $file): void
+    {
+        parent::applyEndpoints($file);
+
+        $public = array_column(array_filter($this->endpoints(), fn (array $endpoint): bool => $endpoint['public']), 'name');
+
+        if ($public === []) {
+            return;
+        }
+
+        $except = implode(', ', array_map(fn (string $name): string => "'{$name}'", $public));
+
+        file_put_contents($file, str_replace(
+            "new Middleware('auth:sanctum'),",
+            "new Middleware('auth:sanctum', except: [{$except}]),",
+            file_get_contents($file)
+        ));
+    }
+
     public function remove(string $ModelName)
     {
         $this->setUp($ModelName);

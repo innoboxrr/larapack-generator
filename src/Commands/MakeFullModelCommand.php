@@ -35,6 +35,9 @@ class MakeFullModelCommand extends Command
         'Resource',
         'Route',
         'Test',
+        // La request y el test de cada endpoint declarado. Sin endpoints no
+        // escribe nada.
+        'Endpoint',
     ];
 
     protected function configure(): void

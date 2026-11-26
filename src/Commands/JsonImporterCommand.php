@@ -4,10 +4,15 @@ namespace Innoboxrr\LarapackGenerator\Commands;
 
 use Innoboxrr\LarapackGenerator\Commands\Concerns\ReportsGeneration;
 use Innoboxrr\LarapackGenerator\Support\Declaration;
+use Innoboxrr\LarapackGenerator\Support\Generation;
 use Innoboxrr\LarapackGenerator\Support\Import\ImportDocument;
 use Innoboxrr\LarapackGenerator\Support\Import\SemanticValidator;
+use Innoboxrr\LarapackGenerator\Support\Manifest;
 use Innoboxrr\LarapackGenerator\Support\TablePrefix;
+use Innoboxrr\LarapackGenerator\Tools\Controller\ControllerTool;
+use Innoboxrr\LarapackGenerator\Tools\Endpoint\EndpointTool;
 use Innoboxrr\LarapackGenerator\Tools\PivotMigration\PivotMigrationTool;
+use Innoboxrr\LarapackGenerator\Tools\Route\RouteTool;
 use Innoboxrr\LarapackGenerator\Tools\Tool;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\ArrayInput;
@@ -80,6 +85,10 @@ class JsonImporterCommand extends Command
             Declaration::fromModel($model);
         }
 
+        foreach ($document->controllers() as $controller) {
+            Declaration::fromController($controller);
+        }
+
         try {
 
             // Los modelos vienen ordenados por sus dependencias, así que las
@@ -102,6 +111,20 @@ class JsonImporterCommand extends Command
                 $progress->writeln("Processing pivot: {$pivot['name']}");
 
                 (new PivotMigrationTool)->create($pivot['name']);
+            }
+
+            // Lo que no tiene modelo propio: sólo controlador, rutas y, por
+            // endpoint, su request y su test. Nada de tabla ni de política.
+            foreach ($document->controllers() as $controller) {
+                $progress->writeln("Processing controller: {$controller['name']}");
+
+                (new ControllerTool)->create($controller['name']);
+                (new RouteTool)->create($controller['name']);
+                (new EndpointTool)->create($controller['name']);
+
+                if (! Generation::isDryRun()) {
+                    (new Manifest)->declare($controller['name'], Declaration::toManifest($controller['name']));
+                }
             }
 
         } finally {

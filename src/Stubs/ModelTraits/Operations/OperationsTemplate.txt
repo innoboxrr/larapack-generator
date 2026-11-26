@@ -57,5 +57,6 @@ trait PascalCaseModelNameOperations
     }
     */
 // @larapack:endif
+    //ENDPOINT_OPERATIONS//
 
 }

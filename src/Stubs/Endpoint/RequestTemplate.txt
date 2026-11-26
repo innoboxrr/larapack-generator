@@ -1,0 +1,110 @@
+<?php
+
+namespace Namespace\Http\Requests\PascalCaseModelName;
+
+use Illuminate\Foundation\Http\FormRequest;
+// @larapack:if endpoint_model&endpoint_public
+use Illuminate\Support\Facades\Gate;
+// @larapack:endif
+// @larapack:if endpoint_gate
+use Illuminate\Support\Facades\Gate;
+// @larapack:endif
+// @larapack:if endpoint_model
+use Namespace\Models\PascalCaseModelName;
+// @larapack:endif
+
+/**
+ * endpointHttpVerb endpointUri: el endpoint endpointMethodName, declarado en el laraimport.
+ *
+ * El controlador sólo hace `return $request->handle();`. Todo lo que decide
+ * este endpoint vive aquí:
+ *
+// @larapack:if endpoint_model
+ *   authorize()  quién puede, preguntando a la política (endpointAbilityName).
+ *   rules()      qué tiene que llegar.
+ *   handle()     qué hace, delegando en PascalCaseModelName::endpointOperationName().
+ *                La lógica va en la operación del modelo, no aquí.
+// @larapack:endif
+// @larapack:if !endpoint_model
+ *   authorize()  quién puede.
+ *   rules()      qué tiene que llegar.
+ *   handle()     qué hace. Si es más que unas líneas, va en una clase de
+ *                Support/ y aquí sólo se la llama.
+// @larapack:endif
+ */
+class EndpointClassNameRequest extends FormRequest
+{
+
+    protected function prepareForValidation(): void
+    {
+        //
+    }
+
+    public function authorize(): bool
+    {
+// @larapack:if endpoint_model&endpoint_record
+
+        $camelCaseModelName = PascalCaseModelName::findOrFail($this->snake_case_model_name_id);
+
+// @larapack:endif
+// @larapack:if endpoint_model&endpoint_record&endpoint_public
+        // Público: puede no haber sesión. La política recibe ?User.
+        return Gate::forUser($this->user())->allows('endpointAbilityName', $camelCaseModelName);
+// @larapack:endif
+// @larapack:if endpoint_model&endpoint_record&!endpoint_public
+        return $this->user()->can('endpointAbilityName', $camelCaseModelName);
+// @larapack:endif
+// @larapack:if endpoint_model&!endpoint_record&endpoint_public
+
+        // Público: puede no haber sesión. La política recibe ?User.
+        return Gate::forUser($this->user())->allows('endpointAbilityName', PascalCaseModelName::class);
+// @larapack:endif
+// @larapack:if endpoint_model&!endpoint_record&!endpoint_public
+
+        return $this->user()->can('endpointAbilityName', PascalCaseModelName::class);
+// @larapack:endif
+// @larapack:if endpoint_gate
+
+        return Gate::forUser($this->user())->allows('endpointAbilityName');
+// @larapack:endif
+// @larapack:if !endpoint_model&!endpoint_gate
+
+        // Nace cerrado. Sin modelo no hay política que Laravel resuelva sola:
+        // decide aquí quién entra —un Gate, un permiso— o declara `ability`
+        // en el laraimport. Nunca `return true` sin pensarlo, tampoco en lo
+        // público.
+        return false;
+// @larapack:endif
+
+    }
+
+    public function rules(): array
+    {
+        return [
+// @larapack:if endpoint_id_in_body
+            'snake_case_model_name_id' => 'required|numeric',
+// @larapack:endif
+            //
+        ];
+    }
+
+    public function handle()
+    {
+// @larapack:if endpoint_model&endpoint_record
+
+        $camelCaseModelName = PascalCaseModelName::findOrFail($this->snake_case_model_name_id);
+
+        return $camelCaseModelName->endpointOperationName($this);
+// @larapack:endif
+// @larapack:if endpoint_model&!endpoint_record
+
+        return (new PascalCaseModelName)->endpointOperationName($this);
+// @larapack:endif
+// @larapack:if !endpoint_model
+
+        abort(501, 'endpointHttpVerb endpointUri todavía no está implementado.');
+// @larapack:endif
+
+    }
+
+}
