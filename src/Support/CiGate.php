@@ -14,7 +14,11 @@ use UnexpectedValueException;
  * Un hook se quita, y un agente que no lo tiene instalado no lo ve. La rama
  * protegida no depende de que nadie se acuerde de nada: un cambio que no pasa
  * `verify --strict` no entra, y uno que toca el candado espera la revisión
- * del dueño.
+ * del dueño. Con una condición: que todo entre por PR y nadie empuje como
+ * administrador saltándose la protección. Por eso la orden que se imprime
+ * pide `enforce_admins=true` salvo que se diga lo contrario: un orquestador
+ * que sube el SHA verificado directo a la rama con la cuenta del dueño se
+ * salta el check y la revisión en cada push.
  *
  * Todo lo que decide sale del proyecto —composer.json, composer.lock, git—, y
  * siempre igual para el mismo proyecto: el workflow de dos ejecuciones es el
@@ -39,6 +43,11 @@ final class CiGate
     private const CODEOWNERS = ['.github/CODEOWNERS', 'CODEOWNERS', 'docs/CODEOWNERS'];
 
     /**
+     * El runner por defecto: el alojado de GitHub.
+     */
+    public const DEFAULT_RUNNER = 'ubuntu-latest';
+
+    /**
      * La raíz es una aplicación si tiene Artisan; si no, un paquete.
      */
     public static function isApplication(string $root): bool
@@ -50,8 +59,9 @@ final class CiGate
      * El workflow de la puerta.
      *
      * @param  string|null  $branch  la rama por defecto; null, las dos habituales
+     * @param  list<string>  $runsOn  las etiquetas del runner (runsOn()); vacío, el alojado
      */
-    public static function workflow(string $root, ?string $branch): string
+    public static function workflow(string $root, ?string $branch, array $runsOn = []): string
     {
         $application = self::isApplication($root);
         [$php, $why] = self::phpVersion($root);
@@ -76,7 +86,7 @@ final class CiGate
             'jobs:',
             '    verify:',
             '        name: '.self::JOB,
-            '        runs-on: ubuntu-latest',
+            '        runs-on: '.self::runsOnYaml($runsOn),
             '',
             '        steps:',
             '            - uses: actions/checkout@v5',
@@ -106,6 +116,133 @@ final class CiGate
             '            - name: Contrato de LaraPack',
             "              run: {$binary} larapack:verify --strict --format=json",
         ])."\n";
+    }
+
+    /**
+     * Las etiquetas del runner a partir de `--runs-on`: una por valor
+     * (`--runs-on=self-hosted --runs-on=linux`), o un solo valor con una
+     * lista JSON (`--runs-on='["self-hosted","linux"]'`).
+     *
+     * Sólo letras, dígitos, `.`, `_` y `-`: es lo que admite una etiqueta de
+     * runner, y lo que se puede escribir en el YAML sin comillas ni
+     * expresiones.
+     *
+     * @param  list<string>  $values
+     * @return list<string>
+     *
+     * @throws UnexpectedValueException si alguna no es una etiqueta
+     */
+    public static function runsOn(array $values): array
+    {
+        $values = array_values(array_filter(array_map('trim', $values), fn (string $value): bool => $value !== ''));
+
+        if (count($values) === 1 && str_starts_with($values[0], '[')) {
+            $decoded = json_decode($values[0], true);
+
+            if (! is_array($decoded) || ! array_is_list($decoded) || $decoded === []) {
+                throw new UnexpectedValueException('--runs-on con [ tiene que ser una lista JSON de etiquetas, como \'["self-hosted","linux"]\'.');
+            }
+
+            $values = $decoded;
+        }
+
+        $labels = [];
+
+        foreach ($values as $label) {
+            if (! is_string($label) || preg_match('/^[A-Za-z0-9._-]{1,100}$/', $label) !== 1) {
+                throw new UnexpectedValueException('--runs-on: «'.(is_string($label) ? $label : json_encode($label)).'» no es una etiqueta de runner (letras, dígitos, ., _ y -).');
+            }
+
+            $labels[] = $label;
+        }
+
+        return array_values(array_unique($labels));
+    }
+
+    /**
+     * @param  list<string>  $labels
+     */
+    private static function runsOnYaml(array $labels): string
+    {
+        return match (count($labels)) {
+            0 => self::DEFAULT_RUNNER,
+            1 => $labels[0],
+            default => '['.implode(', ', $labels).']',
+        };
+    }
+
+    /**
+     * Dónde corren los otros workflows del proyecto: el `runs-on` de cada uno,
+     * con los archivos que lo usan. Un proyecto que se quedó sin minutos de
+     * los runners alojados y corre todo en los suyos no quiere un job más en
+     * `ubuntu-latest`: o gasta minutos de pago en cada PR, o no arranca nunca
+     * y el check exigido no llega.
+     *
+     * Sólo se lee, sin interpretar expresiones: un `runs-on: ${{ … }}` se
+     * enseña tal cual, sin proponerlo.
+     *
+     * @return array<string, list<string>> el valor tal como está escrito => archivos
+     */
+    public static function otherRunners(string $root): array
+    {
+        $found = [];
+        $files = [
+            ...(glob(self::join($root, '.github/workflows/*.yml')) ?: []),
+            ...(glob(self::join($root, '.github/workflows/*.yaml')) ?: []),
+        ];
+        sort($files, SORT_STRING);
+
+        foreach ($files as $file) {
+            if (basename($file) === basename(self::WORKFLOW)) {
+                continue;
+            }
+
+            $lines = file($file, FILE_IGNORE_NEW_LINES) ?: [];
+
+            foreach ($lines as $index => $line) {
+                if (preg_match('/^(\s*)runs-on:\s*(.*)$/', (string) preg_replace('/(^|\s)#.*$/', '', $line), $match) !== 1) {
+                    continue;
+                }
+
+                $value = trim($match[2]);
+
+                // La lista en bloque: `runs-on:` y debajo `- etiqueta`.
+                if ($value === '') {
+                    $items = [];
+
+                    for ($next = $index + 1; isset($lines[$next]) && preg_match('/^\s*-\s*(\S.*?)\s*$/', (string) preg_replace('/(^|\s)#.*$/', '', $lines[$next]), $item) === 1; $next++) {
+                        $items[] = trim($item[1], '\'"');
+                    }
+
+                    $value = $items === [] ? '' : '['.implode(', ', $items).']';
+                }
+
+                if ($value !== '' && ! in_array(basename($file), $found[$value] ?? [], true)) {
+                    $found[$value][] = basename($file);
+                }
+            }
+        }
+
+        return $found;
+    }
+
+    /**
+     * Las etiquetas de un `runs-on` escrito en YAML, si son sólo etiquetas
+     * (`[self-hosted, linux]` o `ubuntu-latest`); null si es otra cosa —una
+     * expresión, un grupo—.
+     *
+     * @return list<string>|null
+     */
+    public static function labelsOf(string $value): ?array
+    {
+        $inner = preg_match('/^\[(.*)\]$/', $value, $match) === 1 ? $match[1] : $value;
+        $labels = array_map(fn (string $label): string => trim(trim($label), '\'"'), explode(',', $inner));
+
+        try {
+            return $labels === [''] ? null : self::runsOn($labels);
+        } catch (UnexpectedValueException) {
+            return null;
+        }
     }
 
     /**
@@ -315,39 +452,64 @@ final class CiGate
     }
 
     /**
+     * Si la rama se puede escribir tal cual en la orden que se imprime. Un
+     * nombre de rama de git admite `;`, `$`, `&`, `|`, paréntesis y comillas
+     * invertidas, y lo decide el remoto: una orden que el dueño va a pegar en
+     * su terminal no puede llevar eso. Lo que no pasa se sustituye por un
+     * marcador que rellena él.
+     */
+    public static function isSafeBranch(string $branch): bool
+    {
+        return preg_match('#^[A-Za-z0-9._][A-Za-z0-9._/-]*$#', $branch) === 1 && ! str_contains($branch, '..');
+    }
+
+    /**
      * La orden que protege la rama, para que la corra el dueño. Nunca se
      * ejecuta desde aquí.
      *
      * Una sola línea con los campos de `gh api` y no un heredoc: se copia y se
      * pega igual en bash, en zsh y en PowerShell, y un heredoc sangrado no
-     * termina nunca. Cada campo va entre comillas simples porque los
-     * corchetes son un patrón de la shell (zsh falla si no coincide con nada).
+     * termina nunca. Cada argumento va entre comillas simples —el endpoint
+     * también—: los corchetes son un patrón de la shell (zsh falla si no
+     * coincide con nada), y el repositorio y la rama salen de git.
      *
-     * PUT sustituye la protección entera: con `strict: false` no obliga a
-     * rebasar cada PR, y con `enforce_admins: false` el administrador puede
-     * fusionar su propio cambio del candado —GitHub no deja aprobar un PR
-     * propio—.
+     * PUT sustituye la protección entera. Con `strict: false` no obliga a
+     * rebasar cada PR. Con `enforce_admins: true` —lo de fábrica— ni un
+     * administrador se salta el check ni la revisión: es lo que hace que la
+     * puerta valga cuando alguien empuja directo a la rama con una cuenta de
+     * administrador. El precio es que GitHub no deja aprobar un PR propio, así
+     * que los PR del agente tienen que salir de una cuenta que no sea la del
+     * único dueño de código.
      */
-    public static function protectionCommand(string $repository, string $branch): string
+    public static function protectionCommand(string $repository, string $branch, bool $enforceAdmins = true): string
     {
         // -F convierte true, false, null y los números a su tipo JSON; -f
         // manda el texto tal cual, que es lo que necesita el nombre del check.
         $fields = [
             ['-F', 'required_status_checks[strict]=false'],
             ['-f', 'required_status_checks[contexts][]='.self::JOB],
-            ['-F', 'enforce_admins=false'],
+            ['-F', 'enforce_admins='.($enforceAdmins ? 'true' : 'false')],
             ['-F', 'required_pull_request_reviews[require_code_owner_reviews]=true'],
             ['-F', 'required_pull_request_reviews[required_approving_review_count]=1'],
             ['-F', 'restrictions=null'],
         ];
 
-        $command = "gh api --method PUT repos/{$repository}/branches/{$branch}/protection";
+        $command = 'gh api --method PUT '.self::shellQuote("repos/{$repository}/branches/{$branch}/protection");
 
         foreach ($fields as [$flag, $value]) {
-            $command .= " {$flag} '{$value}'";
+            $command .= " {$flag} ".self::shellQuote($value);
         }
 
         return $command;
+    }
+
+    /**
+     * Entre comillas simples, para bash, zsh y PowerShell: una comilla simple
+     * dentro se cierra, se escapa y se vuelve a abrir.
+     */
+    public static function shellQuote(string $value): string
+    {
+        return "'".str_replace("'", "'\\''", $value)."'";
     }
 
     private static function lowerBound(mixed $constraint): ?string

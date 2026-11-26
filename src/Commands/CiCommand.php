@@ -4,6 +4,7 @@ namespace Innoboxrr\LarapackGenerator\Commands;
 
 use Innoboxrr\LarapackGenerator\Commands\Concerns\TargetsProject;
 use Innoboxrr\LarapackGenerator\Support\CiGate;
+use Innoboxrr\LarapackGenerator\Support\Guard;
 use Innoboxrr\LarapackGenerator\Support\HandRolledLock;
 use Innoboxrr\LarapackGenerator\Support\UnifiedDiff;
 use RuntimeException;
@@ -12,6 +13,7 @@ use Symfony\Component\Console\Formatter\OutputFormatter;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
+use UnexpectedValueException;
 
 /**
  * Pone `larapack:verify --strict` como puerta de la rama en un proyecto que ya
@@ -28,7 +30,16 @@ use Symfony\Component\Console\Output\OutputInterface;
  *
  * Lo que no puede hacer —proteger la rama— lo imprime como una orden de `gh`
  * para que la corra el dueño del repositorio. Nunca la ejecuta: cambia quién
- * puede fusionar, y eso no lo decide un comando ni un agente.
+ * puede fusionar, y eso no lo decide un comando ni un agente. La orden pide
+ * `enforce_admins=true` (--no-enforce-admins lo quita, con aviso): sin él,
+ * quien empuja como administrador se salta la puerta.
+ *
+ * Con --runs-on el job corre en los runners del proyecto; sin él, en el
+ * alojado de GitHub, y si otros workflows corren en otro sitio, lo dice.
+ *
+ * Si el workflow no se puede escribir (difiere y no hay --force), no se
+ * escribe nada: tampoco CODEOWNERS. Un intento fallido no deja el
+ * repositorio a medias.
  */
 class CiCommand extends Command
 {
@@ -42,7 +53,9 @@ class CiCommand extends Command
             ->setDescription('Crea el workflow que exige larapack:verify --strict y, con --owner, las líneas de CODEOWNERS')
             ->addOption('dry-run', null, InputOption::VALUE_NONE, 'Enseña lo que escribiría sin escribir nada')
             ->addOption('force', null, InputOption::VALUE_NONE, 'Sobrescribe .github/workflows/larapack.yml aunque difiera')
-            ->addOption('owner', null, InputOption::VALUE_REQUIRED | InputOption::VALUE_IS_ARRAY, 'Dueño en CODEOWNERS (repetible): @usuario, @organización/equipo o un correo');
+            ->addOption('owner', null, InputOption::VALUE_REQUIRED | InputOption::VALUE_IS_ARRAY, 'Dueño en CODEOWNERS (repetible): @usuario, @organización/equipo o un correo')
+            ->addOption('runs-on', null, InputOption::VALUE_REQUIRED | InputOption::VALUE_IS_ARRAY, 'Etiqueta del runner (repetible) o una lista JSON: --runs-on=self-hosted --runs-on=linux, o --runs-on=\'["self-hosted","linux"]\'. Sin ella, '.CiGate::DEFAULT_RUNNER)
+            ->addOption('enforce-admins', null, InputOption::VALUE_NEGATABLE, 'En la orden de protección: que tampoco un administrador se salte la puerta (de fábrica; --no-enforce-admins lo quita)', true);
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
@@ -62,34 +75,84 @@ class CiCommand extends Command
             }
         }
 
+        try {
+            $runsOn = CiGate::runsOn(array_map('strval', (array) $input->getOption('runs-on')));
+        } catch (UnexpectedValueException $e) {
+            $output->writeln('<error>'.OutputFormatter::escape($e->getMessage()).'</error>');
+
+            return Command::FAILURE;
+        }
+
         $branch = CiGate::defaultBranch($root);
         $top = CiGate::gitTop($root);
 
         try {
-            $ok = $this->workflow($root, $branch, $dryRun, (bool) $input->getOption('force'), $output);
-            $codeowners = $this->codeowners($root, $owners, $dryRun, $output);
+            $ok = $this->workflow($root, $branch, $runsOn, $dryRun, (bool) $input->getOption('force'), $output);
+            // Si el workflow no se escribe, CODEOWNERS tampoco: se enseña lo
+            // que se añadiría y nada más.
+            $codeowners = $this->codeowners($root, $owners, $dryRun || ! $ok, $output);
         } catch (RuntimeException $e) {
             $output->writeln('<error>'.OutputFormatter::escape($e->getMessage()).'</error>');
 
             return Command::FAILURE;
         }
 
+        if (! $ok) {
+            $output->writeln("\n  <error>No se escribió nada.</error> Mira el diff de ".CiGate::WORKFLOW.' y corre de nuevo con --force si lo quieres así.');
+        }
+
+        if ($runsOn === []) {
+            $this->suggestRunners($root, $output);
+        }
+
         if ($top !== null && rtrim($top, '/') !== rtrim($root, '/')) {
             $output->writeln("\n  <comment>Ojo:</comment> la raíz del repositorio git es ".OutputFormatter::escape($top).'. GitHub sólo lee .github/ en esa raíz: lo de aquí sirve si este proyecto se publica como repositorio propio.');
         }
 
-        $this->manualSteps($root, $branch, $codeowners, $output);
+        $this->manualSteps($root, $branch, $codeowners, (bool) $input->getOption('enforce-admins'), $output);
 
         return $ok ? Command::SUCCESS : Command::FAILURE;
     }
 
     /**
+     * Sin --runs-on el job va al runner alojado. Si los demás workflows del
+     * proyecto corren en otro sitio —los suyos, porque se acabaron los
+     * minutos—, se dice y se propone la opción.
+     */
+    private function suggestRunners(string $root, OutputInterface $output): void
+    {
+        $others = array_filter(
+            CiGate::otherRunners($root),
+            fn (string $value): bool => $value !== CiGate::DEFAULT_RUNNER,
+            ARRAY_FILTER_USE_KEY
+        );
+
+        if ($others === []) {
+            return;
+        }
+
+        $output->writeln("\n  <comment>Runner:</comment> el job va a ".CiGate::DEFAULT_RUNNER.', y otros workflows del proyecto corren en otro sitio:');
+
+        foreach ($others as $value => $files) {
+            $labels = CiGate::labelsOf((string) $value);
+            $output->writeln('    runs-on: '.OutputFormatter::escape((string) $value).' ('.OutputFormatter::escape(implode(', ', $files)).')'
+                .($labels === null ? '' : ' -> --runs-on='.CiGate::shellQuote((string) json_encode($labels, JSON_UNESCAPED_SLASHES))));
+        }
+
+        $output->writeln([
+            '  Si los runners alojados no te sirven —sin minutos, o verify tarda en un monorepo—, corre de nuevo con',
+            '  --runs-on: un job que no arranca deja el check exigido sin llegar, y ningún PR se fusiona.',
+        ]);
+    }
+
+    /**
+     * @param  list<string>  $runsOn
      * @return bool si el workflow quedó (o quedaría) como lo genera LaraPack
      */
-    private function workflow(string $root, ?string $branch, bool $dryRun, bool $force, OutputInterface $output): bool
+    private function workflow(string $root, ?string $branch, array $runsOn, bool $dryRun, bool $force, OutputInterface $output): bool
     {
         $file = "{$root}/".CiGate::WORKFLOW;
-        $wanted = CiGate::workflow($root, $branch);
+        $wanted = CiGate::workflow($root, $branch, $runsOn);
         $current = is_file($file) ? (string) file_get_contents($file) : null;
 
         if ($current === $wanted) {
@@ -164,9 +227,16 @@ class CiCommand extends Command
         return $relative;
     }
 
-    private function manualSteps(string $root, ?string $branch, string $codeowners, OutputInterface $output): void
+    private function manualSteps(string $root, ?string $branch, string $codeowners, bool $enforceAdmins, OutputInterface $output): void
     {
         $repository = CiGate::repository($root) ?? 'DUEÑO/REPOSITORIO';
+
+        if ($branch !== null && ! CiGate::isSafeBranch($branch)) {
+            $output->writeln("\n  <comment>Ojo:</comment> la rama por defecto del remoto tiene caracteres que no se escriben en una orden de shell («"
+                .OutputFormatter::escape(Guard::inline($branch)).'»): la orden lleva RAMA en su lugar. Escríbela tú.');
+            $branch = null;
+        }
+
         $branch ??= 'RAMA';
 
         $output->writeln([
@@ -183,14 +253,34 @@ class CiCommand extends Command
             '',
         ]);
 
-        $output->writeln('     '.CiGate::protectionCommand($repository, $branch), OutputInterface::OUTPUT_RAW);
+        $output->writeln('     '.CiGate::protectionCommand($repository, $branch, $enforceAdmins), OutputInterface::OUTPUT_RAW);
 
         $output->writeln([
             '',
             '     PUT sustituye la protección entera: si la rama ya exige otros checks o revisiones,',
-            "     míralos antes (gh api repos/{$repository}/branches/{$branch}/protection) y añádelos a la orden.",
-            '     Si los PR del agente salen con la cuenta del dueño, GitHub no deja que se apruebe a sí mismo:',
-            '     el administrador fusiona saltándose la revisión, y el aviso queda a la vista en el PR.',
+            '     míralos antes (gh api '.CiGate::shellQuote("repos/{$repository}/branches/{$branch}/protection").') y añádelos a la orden.',
+            '',
+        ]);
+
+        if ($enforceAdmins) {
+            $output->writeln([
+                '     enforce_admins=true: tampoco un administrador se salta el check ni la revisión. La puerta sólo',
+                '     vale si nadie entra por fuera de ella: con false, un push directo a '.$branch.' con una cuenta de',
+                '     administrador —un orquestador que sube el SHA ya verificado con la cuenta del dueño— no pasa por',
+                '     verify --strict ni por la revisión del candado.',
+                '     El precio: GitHub no deja aprobar un PR propio. Los PR del agente tienen que salir de una cuenta',
+                '     que no sea la del dueño (un bot sin administración), o hace falta un segundo dueño de código.',
+                '     Si aun así lo quieres sin ella: --no-enforce-admins.',
+            ]);
+
+            return;
+        }
+
+        $output->writeln([
+            '     <comment>Ojo: enforce_admins=false.</comment> La puerta sólo vale mientras todo entre por PR y nadie',
+            '     empuje como administrador: un push directo a '.$branch.' con una cuenta de administrador —un',
+            '     orquestador que sube el SHA verificado con la cuenta del dueño— se salta verify --strict y la',
+            '     revisión del candado, y GitHub sólo lo deja anotado. Quita --no-enforce-admins para cerrarla.',
         ]);
     }
 
