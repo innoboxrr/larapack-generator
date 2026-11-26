@@ -2,6 +2,7 @@
 
 namespace Innoboxrr\LarapackGenerator\Support;
 
+use JsonException;
 use RuntimeException;
 use stdClass;
 
@@ -81,7 +82,16 @@ final class AgentHooks
         // Sin cambios no se reescribe: reformatear el archivo de otro sólo
         // para dejarlo igual es ruido en su diff.
         if ($added !== []) {
-            self::write($target, (string) json_encode($settings, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)."\n");
+            // Con el `false` de json_encode pegado a "\n" el archivo se
+            // quedaba vacío: un `1e999` en el settings (que json_decode lee
+            // como INF) borraba los permisos y los hooks del proyecto.
+            try {
+                $json = json_encode($settings, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+            } catch (JsonException $e) {
+                throw new RuntimeException("{$target}: no se puede volver a escribir sin perder datos ({$e->getMessage()}). Añade los hooks a mano; no se toca.");
+            }
+
+            self::write($root, $target, $json."\n");
         }
 
         return ['target' => $target, 'added' => $added, 'present' => $present];
@@ -145,7 +155,7 @@ final class AgentHooks
         $block = self::BEGIN."\n".self::agentsBlock($skillPath).self::END."\n";
 
         if (! is_file($absolute)) {
-            self::write($absolute, $block);
+            self::write($root, $absolute, $block);
 
             return ['target' => $absolute, 'action' => 'created'];
         }
@@ -158,7 +168,7 @@ final class AgentHooks
 
         if ($begin === false || $end === false) {
             $separator = $current === '' ? '' : (str_ends_with($current, "\n") ? "\n" : "\n\n");
-            self::write($absolute, $current.$separator.$block);
+            self::write($root, $absolute, $current.$separator.$block);
 
             return ['target' => $absolute, 'action' => 'appended'];
         }
@@ -173,7 +183,7 @@ final class AgentHooks
             return ['target' => $absolute, 'action' => 'unchanged'];
         }
 
-        self::write($absolute, $updated);
+        self::write($root, $absolute, $updated);
 
         return ['target' => $absolute, 'action' => 'updated'];
     }
@@ -296,8 +306,10 @@ final class AgentHooks
         return $decoded;
     }
 
-    private static function write(string $file, string $contents): void
+    private static function write(string $root, string $file, string $contents): void
     {
+        self::assertInside($root, $file);
+
         $directory = dirname($file);
 
         if (! is_dir($directory) && ! mkdir($directory, 0777, true) && ! is_dir($directory)) {
@@ -307,5 +319,82 @@ final class AgentHooks
         if (file_put_contents($file, $contents) === false) {
             throw new RuntimeException("No se pudo escribir {$file}.");
         }
+    }
+
+    /**
+     * Que escribir `$file` no acabe fuera del proyecto por un enlace
+     * simbólico.
+     *
+     * Un repositorio puede traer `.claude/settings.json` —o `.claude`, o
+     * `AGENTS.md`— como enlace. Si apuntaba al `~/.claude/settings.json` de
+     * quien lo clona, `larapack:skill --hooks` añadía los hooks a su
+     * configuración global: desde entonces, cada edición en cualquier proyecto
+     * ejecutaba su `artisan` o su `vendor/bin/builder`.
+     *
+     * Se resuelve el camino real del archivo, o del primer antecesor que
+     * existe, y tiene que quedar dentro de la raíz; un enlace roto en el
+     * camino cuenta como fuera. Un enlace que se queda dentro (AGENTS.md →
+     * CLAUDE.md) vale, y una ruta que ya sale del proyecto por escrito
+     * (`--path=../x`) también: eso lo pidió quien ejecuta el comando.
+     */
+    public static function assertInside(string $root, string $file): void
+    {
+        $realRoot = realpath($root);
+
+        if ($realRoot === false) {
+            return;
+        }
+
+        $realRoot = rtrim(str_replace('\\', '/', $realRoot), '/');
+
+        if (! self::within(self::lexical(str_replace('\\', '/', $file)), $realRoot)
+            && ! self::within(self::lexical(str_replace('\\', '/', $file)), rtrim(self::lexical(str_replace('\\', '/', $root)), '/'))) {
+            return;
+        }
+
+        $path = $file;
+
+        while (! file_exists($path)) {
+            if (is_link($path)) {
+                throw new RuntimeException("{$file}: {$path} es un enlace simbólico roto; no se escribe a través de él. Hazlo a mano si es lo que quieres.");
+            }
+
+            $parent = dirname($path);
+
+            if ($parent === $path) {
+                return;
+            }
+
+            $path = $parent;
+        }
+
+        $real = str_replace('\\', '/', (string) realpath($path));
+
+        if (! self::within($real, $realRoot)) {
+            throw new RuntimeException("{$file} lleva fuera del proyecto, a {$real}: no se escribe a través de un enlace simbólico. Hazlo a mano si es lo que quieres.");
+        }
+    }
+
+    private static function within(string $path, string $root): bool
+    {
+        return $path === $root || str_starts_with($path, $root.'/');
+    }
+
+    /**
+     * La ruta con `.` y `..` resueltos sobre el texto, sin mirar el disco.
+     */
+    private static function lexical(string $path): string
+    {
+        $parts = [];
+
+        foreach (explode('/', $path) as $index => $part) {
+            if ($part === '..' && $parts !== [] && end($parts) !== '' && end($parts) !== '..') {
+                array_pop($parts);
+            } elseif ($part !== '.' && ($part !== '' || $index === 0)) {
+                $parts[] = $part;
+            }
+        }
+
+        return implode('/', $parts);
     }
 }

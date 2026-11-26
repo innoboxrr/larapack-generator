@@ -53,6 +53,13 @@ final class Skill
     {
         $absolute = self::absolute($target);
 
+        // Una ruta relativa es del proyecto, y tiene que quedarse en él aunque
+        // `.claude` sea un enlace (AgentHooks::assertInside()). Una absoluta
+        // la eligió quien ejecuta el comando.
+        if (! self::isAbsolute($target)) {
+            AgentHooks::assertInside(root_path(), $absolute);
+        }
+
         if (file_exists($absolute) && ! $force) {
             // Puede haberse ampliado con reglas del proyecto; sobrescribir
             // sin avisar se llevaría por delante ese trabajo.
@@ -80,9 +87,14 @@ final class Skill
     {
         $normalised = str_replace('\\', '/', $target);
 
-        $isAbsolute = str_starts_with($normalised, '/')
-            || preg_match('/^[A-Za-z]:\//', $normalised) === 1;
+        return self::isAbsolute($target) ? $normalised : root_path().'/'.ltrim($normalised, '/');
+    }
 
-        return $isAbsolute ? $normalised : root_path().'/'.ltrim($normalised, '/');
+    private static function isAbsolute(string $target): bool
+    {
+        $normalised = str_replace('\\', '/', $target);
+
+        return str_starts_with($normalised, '/')
+            || preg_match('/^[A-Za-z]:\//', $normalised) === 1;
     }
 }
