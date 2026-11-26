@@ -2,7 +2,8 @@
 
 namespace Namespace\Tests\Feature\Endpoints\PascalCaseModelName;
 
-// @larapack:if endpoint_model&endpoint_public&endpoint_record
+use Illuminate\Support\Facades\Gate;
+// @larapack:if endpoint_model&endpoint_record
 use Namespace\Models\PascalCaseModelName;
 // @larapack:endif
 use Namespace\Tests\TestCase;
@@ -39,10 +40,39 @@ class EndpointClassNameTest extends TestCase
         $camelCaseModelName = PascalCaseModelName::factory()->create();
 // @larapack:endif
 
-        $this->json('endpointHttpVerb', route('api.dotNamespacesnake_case_model_name.endpointRouteName'endpointPublicRouteArgs), endpointPublicPayload)
+        $this->json('endpointHttpVerb', route('api.dotNamespacesnake_case_model_name.endpointRouteName'endpointRecordRouteArgs), endpointRecordPayload)
             ->assertForbidden();
 
     }
 // @larapack:endif
+
+    /**
+     * Con sesión pero con la autorización negando, responde 403: prueba que
+     * authorize() pregunta, y no deja entrar a cualquiera con sesión. Uno que
+     * devolviera true respondería otra cosa.
+     *
+     * Se cambia la puerta por una nueva cuyo único before() niega: gana a
+     * cualquier Gate::before() que haya abierto el TestCase, y la política ni
+     * se consulta, así que esta prueba no cambia cuando escribas quién entra.
+     */
+    public function test_con_sesion_pregunta_a_la_autorizacion(): void
+    {
+
+        $this->signIn();
+// @larapack:if endpoint_model&endpoint_record
+
+        $camelCaseModelName = PascalCaseModelName::factory()->create();
+// @larapack:endif
+
+        Gate::swap(new \Illuminate\Auth\Access\Gate(
+            $this->app,
+            fn () => auth()->user(),
+            beforeCallbacks: [fn ($user = null) => false],
+        ));
+
+        $this->json('endpointHttpVerb', route('api.dotNamespacesnake_case_model_name.endpointRouteName'endpointRecordRouteArgs), endpointRecordPayload)
+            ->assertForbidden();
+
+    }
 
 }
