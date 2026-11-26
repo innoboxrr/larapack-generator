@@ -390,9 +390,13 @@ class InstalledModulesController extends Controller
 
 class InstalledModulesRequest extends FormRequest
 {
+    // authorize() corre ANTES que rules(): un scope_id inválido se deja a rules() (422, como el original); uno válido y ajeno, 404.
     public function authorize(): bool
     {
-        return in_array((int) $this->scope_id, app(CurrentSchool::class)->enterableScopes($this->user()), true);
+        $scope = filter_var($this->input('scope_id'), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+
+        return $scope === false
+            || in_array($scope, app(CurrentSchool::class)->enterableScopes($this->user()), true);
     }
 
     // Por una escuela ajena, 404 y no 403: que no se sepa cuáles hay.
@@ -408,7 +412,7 @@ class InstalledModulesRequest extends FormRequest
 
     public function handle(): JsonResponse
     {
-        return response()->json(Module::installedIn((int) $this->scope_id)); // operación del modelo
+        return response()->json(Module::installedIn($this->integer('scope_id'))); // ya validado; operación del modelo
     }
 }
 ```

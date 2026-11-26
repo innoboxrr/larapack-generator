@@ -83,8 +83,8 @@ final class NewPackageCommandTest extends TestCase
 
         $settings = json_decode($this->project->read('.claude/settings.json'), true);
 
-        $this->assertSame('php "$CLAUDE_PROJECT_DIR/vendor/bin/builder" larapack:guard', $settings['hooks']['PostToolUse'][0]['hooks'][0]['command']);
-        $this->assertSame('php "$CLAUDE_PROJECT_DIR/vendor/bin/builder" larapack:guard --stop', $settings['hooks']['Stop'][0]['hooks'][0]['command']);
+        $this->assertSame('[ ! -f "$CLAUDE_PROJECT_DIR/vendor/bin/builder" ] || php "$CLAUDE_PROJECT_DIR/vendor/bin/builder" larapack:guard', $settings['hooks']['PostToolUse'][0]['hooks'][0]['command']);
+        $this->assertSame('[ ! -f "$CLAUDE_PROJECT_DIR/vendor/bin/builder" ] || php "$CLAUDE_PROJECT_DIR/vendor/bin/builder" larapack:guard --stop', $settings['hooks']['Stop'][0]['hooks'][0]['command']);
     }
 
     /**

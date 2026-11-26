@@ -2,6 +2,7 @@
 
 namespace Innoboxrr\LarapackGenerator\Commands;
 
+use Innoboxrr\LarapackGenerator\Support\ControllerShape;
 use Innoboxrr\LarapackGenerator\Support\Guard;
 use Innoboxrr\LarapackGenerator\Support\Manifest;
 use Symfony\Component\Console\Command\Command;
@@ -20,11 +21,13 @@ use Throwable;
  * encuentra errores en él, el comando sale con código 2: Claude Code lo trata
  * como bloqueante y devuelve la salida de error al modelo, que la lee en el
  * momento en que todavía tiene el archivo delante. Con `--stop` hace lo mismo
- * al terminar el turno, sobre el proyecto entero.
+ * al terminar el turno, sobre el proyecto entero, pero sólo retiene por lo que
+ * tocó la sesión.
  *
  * Todo lo demás —un archivo que no es arquitectura, una entrada vacía o rota,
- * un proyecto sin LaraPack— sale con 0 y sin decir nada: un hook que estorba
- * en cada edición acaba desactivado.
+ * lo de vendor/, un proyecto sin manifiesto fuera de sus controladores— sale
+ * con 0 y sin decir nada: un hook que estorba en cada edición acaba
+ * desactivado.
  */
 class GuardCommand extends Command
 {
@@ -44,14 +47,33 @@ class GuardCommand extends Command
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
+        $root = $input->getOption('root');
+
+        if (is_string($root) && $root !== '') {
+            $resolved = realpath($root);
+
+            // Ignorarlo en silencio dejaría a un hook mal configurado
+            // verificando otro proyecto, o ninguno, sin que nadie lo note. Con
+            // 1 Claude Code se lo enseña al usuario sin bloquear al agente.
+            if ($resolved === false || ! is_dir($resolved)) {
+                $this->stderr($output)->writeln(
+                    "larapack:guard: --root={$root} no existe o no es un directorio; no se comprobó nada. Corrige el comando del hook.",
+                    OutputInterface::OUTPUT_RAW
+                );
+
+                return Command::FAILURE;
+            }
+
+            $root = str_replace('\\', '/', $resolved);
+        } else {
+            $root = null;
+        }
+
         $payload = $this->payload($input);
 
         if ($payload === null) {
             return Command::SUCCESS;
         }
-
-        $root = $input->getOption('root');
-        $root = is_string($root) && $root !== '' ? (realpath($root) ?: null) : null;
 
         try {
             $stop = $input->getOption('stop')
@@ -78,19 +100,36 @@ class GuardCommand extends Command
         $reminders = [];
 
         foreach (Guard::touchedFiles($payload) as $file) {
+            if (Guard::isThirdParty($file)) {
+                continue;
+            }
+
             $project = $root ?? Guard::projectOf($file);
 
             if ($project === null || ($relative = Guard::relative($project, $file)) === null) {
                 continue;
             }
 
-            $manifest = (new Manifest($project))->snapshot();
+            // Para el hook de fin de turno: es de esta sesión aunque luego se
+            // confirme, y aunque hoy no sea arquitectura.
+            Guard::remember($payload, $file);
+
+            $manifest = new Manifest($project);
+            $managed = is_file($manifest->path());
+
+            // Sin manifiesto sólo queda lo que `verify` comprueba igual sin
+            // él: la forma de los controladores (Guard::isShapeFile()).
+            if (! $managed && ! Guard::isShapeFile($relative)) {
+                continue;
+            }
+
+            $manifest = $manifest->snapshot();
 
             if (! Guard::watches($relative, $manifest)) {
                 continue;
             }
 
-            $errors = Guard::errorsFor(Guard::findings($project), $relative);
+            $errors = Guard::errorsFor(Guard::findings($project, $managed ? [] : ControllerShape::CHECKS), $relative);
 
             if ($errors !== []) {
                 $messages[] = Guard::message("LaraPack: {$relative} se sale del contrato.", $errors, $project);
@@ -98,8 +137,10 @@ class GuardCommand extends Command
                 continue;
             }
 
-            if (Guard::isHandWrittenController($relative, $manifest)) {
-                $reminders[] = Guard::controllerReminder($relative);
+            $reminder = Guard::reminderFor($relative, $file, $manifest);
+
+            if ($reminder !== null) {
+                $reminders[] = $reminder;
             }
         }
 
@@ -113,12 +154,12 @@ class GuardCommand extends Command
             // Con 0, Claude Code lee la salida estándar como JSON: el texto
             // llega al modelo junto al resultado de la herramienta, sin
             // bloquear nada.
-            $output->writeln((string) json_encode([
+            $this->json($output, [
                 'hookSpecificOutput' => [
                     'hookEventName' => 'PostToolUse',
                     'additionalContext' => implode("\n\n", $reminders),
                 ],
-            ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), OutputInterface::OUTPUT_RAW);
+            ]);
         }
 
         return Command::SUCCESS;
@@ -128,6 +169,12 @@ class GuardCommand extends Command
      * Al terminar el turno, el proyecto entero: lo mismo que
      * `larapack:verify --format=json`, pero con el código que Claude Code
      * entiende como «todavía no has terminado».
+     *
+     * Sólo retienen el turno los errores de lo que tocó esta sesión
+     * (Guard::sessionFiles()). Los demás se le enseñan al usuario sin
+     * bloquear: con varias consolas sobre el mismo proyecto, retener a una
+     * por lo que otra dejó a medias la mandaría a «arreglar» trabajo ajeno, y
+     * un proyecto con errores antiguos retendría cada turno de cada sesión.
      *
      * @param  array<string, mixed>  $payload
      */
@@ -141,25 +188,64 @@ class GuardCommand extends Command
 
         $project = $root ?? Guard::projectOf(Guard::workingDirectory($payload));
 
-        if ($project === null || ! is_file((new Manifest($project))->path())) {
+        if ($project === null) {
             return Command::SUCCESS;
         }
 
-        $errors = Guard::errorsFor(Guard::findings($project));
+        // Sin manifiesto, como en la edición, sólo la forma de los
+        // controladores: es lo único que verify mira sin él.
+        $managed = is_file((new Manifest($project))->path());
+        $errors = Guard::errorsFor(Guard::findings($project, $managed ? [] : ControllerShape::CHECKS));
 
         if ($errors === []) {
             return Command::SUCCESS;
         }
 
-        $this->stderr($output)->writeln(
-            Guard::message(sprintf(
-                'LaraPack: larapack:verify encuentra %s; la tarea no ha terminado.',
-                count($errors) === 1 ? 'un error' : count($errors).' errores'
-            ), $errors, $project),
-            OutputInterface::OUTPUT_RAW
-        );
+        $sessionFiles = Guard::sessionFiles($payload, $project);
+        [$blocking, $others] = Guard::partition($errors, $sessionFiles);
+
+        if ($blocking === []) {
+            // Con 0 y un JSON en la salida estándar, systemMessage es un aviso
+            // para el usuario; el turno termina.
+            $this->json($output, ['systemMessage' => Guard::message(sprintf(
+                'LaraPack: larapack:verify encuentra %s en archivos que esta sesión no tocó; no retienen el turno.',
+                $this->errors(count($others))
+            ), $others, $project)]);
+
+            return Command::SUCCESS;
+        }
+
+        // Sin forma de saber qué tocó la sesión, retiene todo, y no se dice
+        // que sea suyo.
+        $message = Guard::message(sprintf(
+            'LaraPack: larapack:verify encuentra %s%s; la tarea no ha terminado.',
+            $this->errors(count($blocking)),
+            $sessionFiles === null ? '' : ' en lo que tocó esta sesión'
+        ), $blocking, $project);
+
+        if ($others !== []) {
+            $message .= "\n".sprintf(
+                'Además hay %s en archivos que esta sesión no tocó: no son tuyos ni te retienen; no los corrijas sin que te lo pidan.',
+                $this->errors(count($others))
+            );
+        }
+
+        $this->stderr($output)->writeln($message, OutputInterface::OUTPUT_RAW);
 
         return self::BLOCK;
+    }
+
+    private function errors(int $count): string
+    {
+        return $count === 1 ? 'un error' : "{$count} errores";
+    }
+
+    /**
+     * @param  array<string, mixed>  $document
+     */
+    private function json(OutputInterface $output, array $document): void
+    {
+        $output->writeln((string) json_encode($document, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), OutputInterface::OUTPUT_RAW);
     }
 
     /**

@@ -254,14 +254,23 @@ final class VerifyTest extends TestCase
         $this->runCommand('larapack:full-model', ['name' => 'Product']);
 
         $verifier = new Verifier;
+        $checks = fn (): array => array_column($verifier->run(), 'check');
 
         $this->assertSame([], array_filter($verifier->run(), fn (array $f): bool => $f['level'] === Verifier::ERROR));
 
+        // Lo que cambia es el manifiesto, no el disco: borrar un archivo no
+        // lo probaría, porque missing-file lo ve aunque la instantánea fuera
+        // la de la primera pasada. Con Product olvidado, una instantánea
+        // vieja seguiría echando en falta su política; una nueva sólo ve un
+        // manifiesto vacío.
         unlink($this->project->path.'/src/Policies/ProductPolicy.php');
 
-        $missing = array_values(array_filter($verifier->run(), fn (array $f): bool => $f['check'] === 'missing-file'));
+        $this->assertContains('missing-file', $checks());
 
-        $this->assertSame('src/Policies/ProductPolicy.php', $missing[0]['file'] ?? null);
+        (new Manifest)->forget('Product');
+
+        $this->assertNotContains('missing-file', $checks());
+        $this->assertContains('empty-manifest', $checks());
     }
 
     public function test_una_instantanea_del_manifiesto_no_vuelve_al_disco(): void
