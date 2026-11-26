@@ -8,6 +8,8 @@ No es un andamiador que arranca un proyecto y desaparece. Es la **autoridad
 arquitectónica** del ecosistema innoboxrr: define cómo se estructura un paquete
 o una aplicación, lo genera siempre igual y comprueba que siga siendo así.
 
+¿Vas a cambiar el generador? Cómo está hecho, en [ARCHITECTURE](ARCHITECTURE.md); cómo se prueba y se publica, en [CONTRIBUTING](CONTRIBUTING.md).
+
 ## Índice
 
 1. [Por qué existe](#por-qué-existe)
