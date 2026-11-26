@@ -1,5 +1,28 @@
 # Changelog
 
+## 9.1.0 (sin publicar)
+
+### Documentación para mantener el generador
+
+- **`ARCHITECTURE.md`**: el recorrido completo de `laraimport.json` a la
+  guardia —esquema, valores por omisión, validación semántica, importación,
+  herramientas, plantillas, formateo, manifiesto, `verify`, hooks y `fix`—,
+  cómo se registra un comando, los principios de diseño, el mapa de directorios
+  y qué tocar para cada tipo de cambio (un tipo de columna, una clave, una
+  plantilla, una acción, un check, una opción). Hasta ahora eso sólo se sabía
+  leyendo los docblocks de `src/Support/`, y quien no fuera su autor no tenía
+  por dónde empezar.
+- **`CONTRIBUTING.md`**: preparar el entorno, la suite, las fotos
+  (`LARAPACK_UPDATE_SNAPSHOTS`), las pruebas de punta a punta
+  (`LARAPACK_SKIP_UI_BUILD`, `LARAPACK_PINT`), Pint y Larastan, la convención
+  de commits, qué cuenta como cambio que rompe y cómo se publica.
+- **`ArchitectureDocTest`** comprueba que cada enlace relativo, cada ruta del
+  repositorio y cada `Clase::miembro` que citan los dos documentos sigan
+  existiendo. Un mapa que ya no corresponde con el código es peor que no tener
+  mapa, y sin el test envejecería en silencio.
+
+No cambia nada de lo que se genera ni de lo que comprueban los comandos.
+
 ## 9.0.0
 
 Los agentes respetaban `return $request->handle();` en los controladores que
