@@ -78,8 +78,8 @@ Todo determinista, a partir de la declaración. Lo que se escribe a mano va **s�
 | Pieza | Qué sale | ¿Hueco? |
 |---|---|---|
 | Controlador del modelo | `public function publish(PublishRequest $request) { return $request->handle(); }` y su `use`. `except:` en `auth:sanctum` si es público. | No. Se regenera con `--force`. |
-| Rutas `routes/api/models/<modelo>.php` | `Route::post('publish', [...])->name('publish')`, con `->middleware([...])` si se declaró. Nombre de ruta: `importRoster` → `import.roster`, como `forceDelete` → `force.delete`. | No. |
-| `Http/Requests/<Modelo>/PublishRequest.php` | `authorize()` pregunta a la política (`can('publish', $course)`); `rules()` con el identificador si es `record` y vacío si no; `handle()` busca el registro y delega en `$course->publishModel($this)`. | Sí: `rules()` y lo que necesite `authorize()`/`handle()`. Un archivo editado no se pisa. |
+| Rutas `routes/api/models/<modelo>.php` | `Route::post('publish', [...])->name('publish')`, detrás de las CRUD, con `->whereNumber('<modelo>_id')` si el identificador va en la URI y `->middleware([...])` si se declaró. Nombre de ruta: `importRoster` → `import.roster`, como `forceDelete` → `force.delete`. | No. |
+| `Http/Requests/<Modelo>/PublishRequest.php` | `authorize()` pregunta a la política (`can('publish', $course)`; `Gate::forUser()` si es público); `rules()` con `<modelo>_id` si es `record` y el identificador no va en la URI, vacío si no; `handle()` busca el registro y delega en `$course->publishModel($this)`. | Sí: `rules()` y lo que necesite `authorize()`/`handle()`. Un archivo editado no se pisa. |
 | Política del modelo | `public function publish(User $user, Course $course): Response\|bool { return false; }`. `collection` no recibe el modelo; `public` recibe `?User`. Una `ability` CRUD (`update`, `view`, …) no genera método: reutiliza el que hay. | Sí. **Nace denegando.** |
 | Trait `Operations` del modelo | `public function publishModel($request)` que lanza `LogicException` hasta que se escriba. Sólo al crear el trait: un trait existente no se toca (ver `verify`). | Sí. Aquí va la lógica. |
 | `tests/Feature/Endpoints/<Modelo>/PublishTest.php` | Un invitado recibe 401; si es público, la política lo cierra y recibe 403. | Sí. |
@@ -127,10 +127,12 @@ Semántica (errores salvo que se diga):
 | Código | Detecta |
 |---|---|
 | `endpoint-missing` | Un endpoint declarado al que le falta su método del controlador, su ruta, su request, su método de la política o su operación en el trait `Operations`. El mensaje dice cuál y qué escribir o regenerar. |
-| `route-not-declared` | (ampliado) Un método público del controlador, una ruta con nombre o un `*Request.php` de la carpeta del modelo que no es ni una acción CRUD declarada ni un endpoint declarado. |
-| `controller-logic` | Un método del controlador generado cuyo cuerpo no es `return $request->handle();`. |
+| `route-not-declared` | (ampliado) Un método público del controlador (un `__invoke`, un constructor que inyecta un servicio), una ruta con nombre, una ruta sin nombre o un `*Request.php` de la carpeta del modelo que no es ni una acción CRUD declarada ni un endpoint declarado. |
+| `controller-logic` | Un método del controlador generado —de un endpoint o de una acción CRUD— cuyo cuerpo no es `return $request->handle();`. Los cuerpos se leen con el tokenizador, no con una expresión regular. |
 
-`controller-logic` es la comprobación que faltaba. Antes de esto, editar el controlador generado sólo daba un `customised` informativo.
+`controller-logic` es la comprobación que faltaba. Antes de esto, editar el controlador generado sólo daba un `customised` informativo. **Es un cambio de comportamiento:** un proyecto que ya metió lógica en un controlador generado, o le añadió un método, pasa de `verify` en verde a `verify` en rojo. Es lo que se quiere —es exactamente la deriva—, pero conviene publicarlo como tal.
+
+Lo que sigue sin verse es un controlador escrito a mano que **no** está en el manifiesto. Con `controllers[]` ya no hay motivo para escribirlo; detectarlo es otra comprobación (sección 7).
 
 ---
 
@@ -166,3 +168,7 @@ Semántica (errores salvo que se diga):
 - **El trait `Operations` sólo recibe la operación al crearse.** Es código del proyecto: añadir métodos a uno existente sería escribir en un archivo que no es del generador. Si falta, `verify` lo dice con `endpoint-missing` y el nombre exacto del método.
 - **Tampoco se añade a una política ya editada**, por la misma regla de `--force`. `verify` lo dice igual.
 - **Las rutas de `controllers[]` van en `routes/api/models/`**: es el directorio que el `RouteServiceProvider` ya recorre, así que no hay que regenerar el proveedor de ningún proyecto existente. Por eso un controlador no puede llamarse como un modelo.
+- **El identificador en la URI lo exige la ruta, no `rules()`.** Las reglas validan el cuerpo y la query, no los parámetros de ruta: `'course_id' => 'required'` con `{course_id}/publish` rechazaría todas las peticiones. Se genera `->whereNumber('course_id')` y la request lo lee igual (`$this->course_id` cae en el parámetro de ruta).
+- **El código de los endpoints se inserta después de sustituir los tokens.** Un endpoint `renameModelName` contiene el token `ModelName`; si pasara por `strtr()` saldría roto.
+- **`larapack:full-model` suelto no conoce los endpoints**, igual que no conoce las columnas: regenerar un modelo con él deja el controlador sin los métodos de sus endpoints y `verify` lo marca con `endpoint-missing`. Los endpoints se generan con `larapack:import`.
+- **Las piezas de un endpoint no cuentan para `inconsistent-entity`**, como las metas: cada modelo declara los suyos. Un `controllers[]` sólo se compara con otros controladores.
