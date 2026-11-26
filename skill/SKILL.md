@@ -108,6 +108,8 @@ Lo que conviene saber sin tener que leer el esquema entero:
 | `requests[]` | Reglas de `CreateRequest` y `UpdateRequest`. Solo esos dos. |
 | `pivots[]` | Migraciones de tablas pivote, sin modelo. |
 | `routes` | Qué acciones genera el modelo: `only` o `except`. Sin la clave, todas. |
+| `endpoints` | Lo que no es una de las doce acciones: publicar, archivar, importar. Ver «Endpoints que no son CRUD». |
+| `controllers` | En la raíz: endpoints sin modelo (un escritorio, un asistente, un webhook). |
 | `immutable` | La fila no cambia una vez creada: sin `update`, `delete`, `restore` ni `forceDelete`, y el modelo lanza si algo lo intenta. Crear sigue permitido. |
 | `props[].secret` | Nunca sale por la API: va a `$hidden`, fuera de la exportación y de la tabla. Se escribe, no se lee. |
 | `authenticatable` | El modelo es el usuario que inicia sesión: hereda de `Illuminate\Foundation\Auth\User`, con `Notifiable`, `HasApiTokens` e `isAdmin()` (lee `config('auth.admins')`). `password` y `remember_token` van a `$hidden` y fuera de la tabla y la exportación. Exige declarar `email` y `password`. |
@@ -223,7 +225,8 @@ distintas y las dos importan:
   un modelo `immutable` que pide una escritura, un campo de formulario sin
   `create` ni `update` donde vivir, un `secret` que pide salir en la tabla o
   en la exportación, metas declaradas sin `metas: true`, una meta editable y
-  protegida a la vez, y un `payload` que pide escribirse desde la petición.
+  protegida a la vez, un `payload` que pide escribirse desde la petición, y
+  endpoints que chocan con una acción CRUD, entre sí o con un modelo.
 
 Si vas a generar la interfaz, añade `--vue` o `--react`: también avisa de lo que
 las vistas necesitan y el modelo no declara.
@@ -305,7 +308,7 @@ estas cosas de ella. Si falta alguna, no es un defecto del paquete:
 | Usuario `Notifiable` | La exportación avisa al usuario por notificación. El de Laravel ya lo es. |
 | `isAdmin()` en el usuario, opcional | `before()` de cada Policy deja pasar al administrador. Sin el método nadie lo es y deciden los métodos de la Policy. |
 | `$middleware->statefulApi()` en `bootstrap/app.php` | El administrador llama a la API con la sesión. Sin esto, cada petición responde 401. |
-| `vue-router` 4 y `pinia` 3 (o `react-router-dom` 7 y `zustand` 5) | Son los que declara el módulo. Sin versión, npm instala hoy majors que no acepta. |
+| `vue-router` 4 y `pinia` 3 o 4 (o `react-router-dom` 7 y `zustand` 5) | Son los que declara el módulo. Sin versión, npm instala hoy majors que no acepta. |
 | `JsonResource::withoutWrapping()` | El datatable espera `data`, `meta` y `links` en la raíz. Ver «El contrato front ↔ back». |
 | `ToastRegionComponent` y `ConfirmHostComponent`, montados una vez | Ahí se pintan los avisos tras crear, guardar o borrar y la confirmación antes de borrar o exportar. Sin ellos los avisos no se ven y la confirmación cae en `window.confirm`. |
 | `addTranslations(translations)` del módulo y `setLocale()`, una vez | Todo texto del módulo es una clave en inglés. Sin cargar sus traducciones la pantalla sale en inglés; la aplicación carga las suyas después para poder corregirlas. |
@@ -321,14 +324,14 @@ salirse.
 
 | Hueco | Qué va ahí |
 |---|---|
-| `Traits/Operations/` | La lógica de negocio del modelo. Es el sitio por defecto. Con metas, también la forma de `payload` en `buildPayload()`. |
+| `Traits/Operations/` | La lógica de negocio del modelo. Es el sitio por defecto. Con metas, también la forma de `payload` en `buildPayload()`; con endpoints, su `<name>Model($request)`. |
 | `Traits/Relations/` | Relaciones que el JSON no declara (through, morph, condicionales). |
 | `Traits/Storage/` | Subida y borrado de archivos del modelo. |
 | `Traits/Mutators/` | Accessors y mutators. |
-| `Filters/<Model>/ManagedFilter::canView` | **Quién puede ver qué.** Sin esto el índice lo devuelve todo. |
+| `Filters/<Model>/ManagedFilter::canView` | **Quién puede ver qué.** Sin esto el índice lo devuelve todo. El IndexRequest fuerza `managed`: no lo quites ni lo dejes al cliente. Acota también al administrador; cubre ese caso aquí. |
 | `Policies/<Model>Policy` | Autorización por acción. Nace cerrada: sólo pasa el administrador, y ni él borra para siempre hasta que saques `forceDelete` de `$exceptAbilities`. No lo encierres en el modelo: la API de políticas no lo vería y el front ofrecería un botón que falla. |
 | `Requests/*/rules()` | Reglas que no vengan del JSON. Nunca toques nada fuera del array. |
-| `Resources/<Model>Resource` | La forma exacta de la respuesta y su array `actions`. |
+| `Resources/<Model>Resource` | La forma exacta de la respuesta y su array `actions`. Un accessor que pida la interfaz con `appends[]` se añade a `$appendable`; nunca pases `appends` de la petición sin filtrar. |
 | `Events/*/Listeners/` | Efectos secundarios: notificaciones, colas, integraciones. |
 | `Observers/` | Ciclo de vida del modelo. |
 | `Factories/` | Datos de prueba realistas. Las generadas ya insertan: cada columna tiene un valor que la base acepta y cada `foreignId` hacia un modelo del archivo usa su factory. |
@@ -343,13 +346,43 @@ la clase que le corresponda.
 - El `Controller`. Delega en las requests y no tiene lógica. Si necesitas algo
   distinto, va en la request. Vale también para los que escribes a mano: ver
   abajo.
-- El archivo de rutas. Sale del generador; si falta un endpoint, se añade al
-  generador, no al archivo.
+- El archivo de rutas. Sale del generador; si falta un endpoint, se declara
+  (ver abajo), no se añade al archivo.
 - `$fillable`, `$creatable`, `$updatable`, `$export_cols`,
   `$loadable_relations`, `$loadable_counts`, `casts()`. **Salen del JSON.**
   Editarlos a mano los desincroniza del contrato y `larapack:verify` lo dirá.
 - Los archivos con el marcador `//RULES//`, `//IMPORTS//`, `//EDIT//` fuera de
   su marcador.
+
+### Endpoints que no son CRUD: decláralos
+
+Publicar, archivar, importar, un escritorio, un asistente, un webhook: **antes
+de escribir un controlador, declara el endpoint** y genera. En el modelo, con
+`endpoints`; si no tiene modelo, en `controllers` en la raíz:
+
+```json
+{ "name": "Course", "props": [ ... ], "endpoints": [
+    { "name": "publish", "method": "post" },
+    { "name": "importRoster", "method": "post", "target": "collection" },
+    { "name": "certificate", "method": "get", "uri": "{course_id}/certificate",
+      "public": true, "middleware": ["throttle:30,1"] }
+] }
+```
+
+```json
+"controllers": [ { "name": "Desk", "endpoints": [ { "name": "overview", "method": "get", "ability": "viewDesk" } ] } ]
+```
+
+Sale el método del controlador (sólo `return $request->handle();`), la ruta,
+`<Name>Request`, la habilidad en la política (nace en `false`) y un test. Tu
+código va en `rules()` de la request, en el método de la política y en
+`<name>Model($request)` del trait `Operations`; en un `controllers[]`, en
+`handle()` delegando en una clase de soporte. Un endpoint `public` lleva
+`throttle:`. Lee `endpoints` y `controllers` en `larapack:schema` antes de
+declararlos.
+
+Escribe un controlador a mano sólo si no cabe en la declaración, y entonces
+con el patrón de la sección siguiente.
 
 ### Endpoints que LaraPack no genera
 
@@ -439,24 +472,46 @@ generado con su hash. Detecta:
   con el `->as(...)` del `RouteServiceProvider`. El front está llamando a una
   ruta que no existe.
 - **`route-not-declared`** (error): existe una ruta, un método, un request o una
-  vista de una acción que el modelo no declara. Alguien la escribió a mano:
-  declárala en el JSON o retírala.
+  vista de una acción o un endpoint que el modelo no declara. Si alguien la
+  escribió a mano, declárala en el JSON o retírala; si la quitaste del JSON, el
+  mensaje dice qué regenerar y qué borrar.
+- **`endpoint-missing`** (error): a un endpoint declarado le falta una pieza.
+  El mensaje dice el método exacto que escribir.
 - **`immutable-write`** (error): un modelo `immutable` tiene un camino de
   escritura, o su modelo perdió la guarda de `booted()`.
 - **`secret-exposed`** (error): una columna `secret` volvió a salir por la API,
   la exportación o la tabla.
 
-Código distinto de cero = aún no has terminado.
+Y en **todos** los controladores, generados o no, con o sin manifiesto:
+
+- **`controller-shape`** (error): una acción hace algo más que
+  `return $request->handle();` (recibe `Request` base, llama a `validate()`,
+  consulta, arma la respuesta), o hay lógica en `__call`, en el constructor o en
+  `middleware()`. Mueve el trabajo a la request.
+- **`request-handle`** (error): la request de la acción no tiene `handle()`.
+- **`controller-concern`** (error si lo usa un controlador, aviso si no): un
+  trait con lógica en `Http/Controllers`. Va en `Http/Requests/Concerns`.
+- **`hand-rolled`** (aviso): una acción con `#[HandRolled('razón')]`. **Nunca lo
+  añadas para que `verify` pase**: es una excepción que aprueba el dueño del
+  proyecto, y con `--strict` falla igual.
+- **`route-closure`** (aviso): una ruta con un closure con cuerpo.
+- **`index-managed`** y **`resource-appends`** (aviso): una request que lista sin
+  forzar `managed`, o un Resource que pasa `appends` del cliente sin
+  `$appendable`. Es código de antes de 9.0: no lo copies, corrígelo.
+
+`--check=<nombre>` (repetible) corre sólo esas. Código distinto de cero = aún no
+has terminado.
 
 ### La guardia automática
 
-Con `larapack:skill --hooks`, Claude Code ejecuta `larapack:guard` después de
-cada `Write` o `Edit`. Si el archivo es un controlador, una request, una ruta,
-una policy, una migración o algo generado que no es un hueco, le pasa las
-comprobaciones de `larapack:verify`; si encuentran errores **en ese archivo**,
-la edición vuelve con el motivo y la regla. A un controlador escrito a mano le
-recuerda el patrón de `handle()`. Al terminar el turno, `larapack:guard --stop`
-verifica el proyecto entero y no te deja darlo por terminado con errores.
+Si el proyecto la tiene instalada (`larapack:skill --hooks`), corre sola:
+Claude Code ejecuta `larapack:guard` después de cada `Write` o `Edit`. Si el
+archivo es un controlador, una request, una ruta, una policy, una migración o
+algo generado que no es un hueco, le pasa las comprobaciones de
+`larapack:verify`; si encuentran errores **en ese archivo**, la edición vuelve
+con el motivo y la regla. A un controlador escrito a mano le recuerda el patrón
+de `handle()`. Al terminar el turno, `larapack:guard --stop` verifica el
+proyecto y no te deja darlo por terminado con errores en lo que tocaste.
 
 Si te bloquea, corrige el archivo o el `laraimport.json`. **No toques el hook
 ni lo rodees.** Sin hooks —Codex y otros agentes leen el bloque de LaraPack en
@@ -660,10 +715,14 @@ valor)`, que va a `bulk.update` con sólo ese campo.
 
 - **Escribir el modelo a mano "porque es solo uno".** Ese es el primero de los
   treinta.
+- **Escribir un controlador para un endpoint que se puede declarar.** Va en
+  `endpoints` o en `controllers`.
 - **Meter lógica en un controlador escrito a mano "porque no es generado".**
   Validar, autorizar o consultar en un asistente, un webhook o una ruta pública
   es la misma deriva: va en su `FormRequest`, y el controlador hace
   `return $request->handle();`.
+- **Añadir `#[HandRolled]` para que `verify` pase.** La excepción la decide el
+  dueño del proyecto, no tú.
 - **Rellenar todas las claves del JSON.** Declara lo que decides; el resto son
   defaults del esquema.
 - **Generar todas las acciones y borrar las que sobran.** Declara `routes` o
