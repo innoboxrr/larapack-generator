@@ -61,7 +61,7 @@ class EndpointTool extends Tool
 
         $path = root_path().'/tests/Feature/Endpoints/'.$this->PascalCaseModelName;
 
-        return is_dir($path) ? $this->dropDir($path) : false;
+        return $this->dropModelDir($path);
     }
 
     /**

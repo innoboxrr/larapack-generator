@@ -114,8 +114,11 @@ class Tool
      * borraba entero el directorio padre de cada carpeta del modelo: todos los
      * requests, todos los filtros y todos los eventos del paquete. El esquema
      * ya lo exige en el laraimport; esto lo exige también al comando suelto.
+     *
+     * Termina en `\z` y no en `$`: `$` también casa delante de un salto de
+     * línea final, y «Post\n» pasaba y acababa en nombres de archivo y de clase.
      */
-    public const MODEL_NAME = '/^[A-Za-z][A-Za-z0-9_]*$/';
+    public const MODEL_NAME = '/^[A-Za-z][A-Za-z0-9_]*\z/';
 
     public static function isValidModelName(string $name): bool
     {
@@ -596,8 +599,34 @@ class Tool
         return unlink($file);
     }
 
+    /**
+     * Borra la carpeta de un modelo, si existe.
+     *
+     * init() deja pasar el nombre vacío porque lo usan las herramientas del
+     * paquete, que no nombran ningún modelo. Al quitar, un nombre vacío
+     * convierte `Http/Requests/<Modelo>` en `Http/Requests/` y se llevaba
+     * todos los requests del paquete: aquí no se admite. Sólo lo frenaba
+     * RemoveFullModelCommand; un remove() llamado desde otro sitio no.
+     */
+    protected function dropModelDir(string $path): bool
+    {
+        $name = (string) $this->ModelName;
+
+        if (! self::isValidModelName($name)) {
+            throw MakerException::invalidModelName($name);
+        }
+
+        return (is_dir($path) || is_link($path)) ? $this->dropDir($path) : false;
+    }
+
     protected function dropDir(string $path)
     {
+        // Si la carpeta misma es un enlace, se quita el enlace: recorrerlo
+        // vaciaba el destino y luego rmdir() fallaba sobre el enlace.
+        if (is_link($path)) {
+            return unlink($path);
+        }
+
         $files = glob($path.'/{,.}[!.,!..]*', GLOB_MARK | GLOB_BRACE) ?: [];
         foreach ($files as $file) {
             // GLOB_MARK pone `/` a los directorios, también a un enlace que

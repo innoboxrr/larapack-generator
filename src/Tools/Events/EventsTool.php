@@ -135,6 +135,6 @@ class EventsTool extends Tool
             ->setEventsPath();
         $path = $this->eventsPath.'/'.$this->PascalCaseModelName;
 
-        return (file_exists($path)) ? $this->dropDir($path) : false;
+        return $this->dropModelDir($path);
     }
 }

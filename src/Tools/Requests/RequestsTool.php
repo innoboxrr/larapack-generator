@@ -82,7 +82,7 @@ class RequestsTool extends Tool
 
         $path = $this->requestPath.'/'.$this->PascalCaseModelName;
 
-        return (file_exists($path)) ? $this->dropDir($path) : false;
+        return $this->dropModelDir($path);
     }
 
     /**

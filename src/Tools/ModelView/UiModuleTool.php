@@ -220,7 +220,7 @@ abstract class UiModuleTool extends Tool
 
         $path = $this->modulePath();
 
-        return file_exists($path) ? $this->dropDir($path) : false;
+        return $this->dropModelDir($path);
     }
 
     /**
