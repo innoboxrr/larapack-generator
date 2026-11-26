@@ -229,20 +229,26 @@ error en cada edición, no.
 ### Dependencias
 
 - **Pisos de los paquetes `innoboxrr-*` del módulo generado**, en
-  `ecosystem.json` y en los `package.json`: `innoboxrr-form-elements ^6.8.0`,
-  `innoboxrr-react-form-elements ^3.8.0`, `innoboxrr-vue-datatable ^3.1.1`,
-  `innoboxrr-react-datatable ^3.1.1` e `innoboxrr-js-validator ^2.0.1`.
-- **El módulo Vue acepta `pinia ^3.0.0 || ^4.0.0`.** `vue-router` se queda en
-  `^4.5.0`: `innoboxrr-vue-datatable` lo declara así como peer, y npm no instala
-  la 5 hasta que lo amplíe.
+  `ecosystem.json` y en los `package.json`, a las versiones que migraron a
+  Vite 8 y Vitest 5: `innoboxrr-form-core ^2.9.0`, `innoboxrr-form-elements
+  ^6.9.0`, `innoboxrr-react-form-elements ^3.9.0`, `innoboxrr-vue-datatable
+  ^3.2.0`, `innoboxrr-react-datatable ^3.2.0`, `innoboxrr-http-request ^2.1.0`,
+  `innoboxrr-i18n ^1.3.0`, `innoboxrr-locale-generator ^2.1.0`,
+  `innoboxrr-js-validator ^2.1.0` e `innoboxrr-route-resolver ^2.1.0`.
+- **El módulo Vue acepta `vue-router ^4.5.0 || ^5.0.0` y `pinia ^3.0.0 ||
+  ^4.0.0`.** La 5 instala desde `innoboxrr-vue-datatable` 3.2.0, que amplió su
+  peer; con la 3.1.1 npm fallaba con ERESOLVE.
 - **`php.matrix` documenta 8.3, 8.4 y 8.5**, como la CI.
 - **El Resource lee `appends` con `input()`**, no con `Request::get()`, que
   Laravel 13 marca obsoleto. `StubsAvoidDeprecatedApisTest` impide que una
   plantilla vuelva a usarlo.
-- **La línea base JS de los paquetes npm sigue en Vite 7 y Vitest 3.** Vitest 5
-  con Vite 8 ya se instala con npm 10, pero los paquetes publicados declaran
-  `vitest ^3` y `larapack:audit` los rechazaría a todos. Subirla queda como plan,
-  junto con su migración y con Node 22.12 o superior, que Vitest 5 exige.
+- **CAMBIO QUE ROMPE (para los paquetes npm del ecosistema): la línea base JS
+  pasa a Vite 8 y Vitest 5, y `node.engines` a `>=22.12`.** Vitest 5 exige Node
+  `^22.12 || >=24`, y Node 20 es EOL desde 2026-04-30. Los diez paquetes
+  `innoboxrr-*` ya migraron (versiones de arriba) y su CI prueba Node 22 y 24
+  con `node-versions: '["22", "24"]'`. Un paquete npm propio que siga en
+  `vitest ^3` o `engines >=20` sale ahora en `larapack:audit`: sube sus
+  `devDependencies`, su `engines` y el `node-versions` de su `tests.yml`.
 - **`ecosystem.json` pide `innoboxrr/larapack-generator ^9.0`.**
 
 ### Otros cambios

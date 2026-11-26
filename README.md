@@ -1458,16 +1458,15 @@ Si se añade un endpoint, hay que volver a exportar `routes.json`.
 
 El módulo se instala como cualquier paquete npm (publicado, o con
 `"file:vendor/acme/catalogo/resources/vue"` mientras se desarrolla). Necesita
-`vue`, `vue-router` 4 y `pinia` 3 o 4 en la aplicación, y el plugin de Vue en
+`vue`, `vue-router` 4 o 5 y `pinia` 3 o 4 en la aplicación, y el plugin de Vue en
 Vite:
 
 ```
-npm install vue vue-router@4 pinia @vitejs/plugin-vue
+npm install vue vue-router pinia @vitejs/plugin-vue
 ```
 
-`npm install vue-router` sin versión instala hoy vue-router 5, que el módulo
-todavía no declara: `innoboxrr-vue-datatable` pide `vue-router ^4.5` y npm
-rechaza la 5 hasta que lo amplíe. Instalado desde una carpeta, conviene decirle
+vue-router 5 instala desde `innoboxrr-vue-datatable` 3.2.0, que es el piso del
+módulo. Instalado desde una carpeta, conviene decirle
 a Vite que use una sola copia de cada uno:
 
 ```js

@@ -280,16 +280,15 @@ final class GeneratesVueModuleTest extends TestCase
      * Se mantiene la major anterior porque la mayoria de las aplicaciones
      * sigue en ella.
      *
-     * Con pinia 4 ya instala. vue-router 5 todavia no: innoboxrr-vue-datatable
-     * 3.1.1 declara `vue-router: ^4.5.0` como peer y npm falla con ERESOLVE,
-     * asi que anunciarlo aqui seria prometer algo que no se puede instalar.
-     * Se amplia cuando esa libreria publique el suyo.
+     * vue-router 5 instala desde innoboxrr-vue-datatable 3.2.0, que amplio su
+     * peer a `^4.5.0 || ^5.0.0`; por eso el piso del modulo es esa version. Con
+     * la 3.1.1 npm fallaba con ERESOLVE.
      */
     public function test_los_peers_aceptan_las_majors_vigentes_del_router_y_del_store(): void
     {
         $peers = json_decode($this->project->read('resources/vue/package.json'), true)['peerDependencies'];
 
-        $this->assertSame('^4.5.0', $peers['vue-router']);
+        $this->assertSame('^4.5.0 || ^5.0.0', $peers['vue-router']);
         $this->assertSame('^3.0.0 || ^4.0.0', $peers['pinia']);
     }
 

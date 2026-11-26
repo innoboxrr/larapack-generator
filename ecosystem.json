@@ -16,13 +16,13 @@
         "larastan/larastan": "^3.0"
     },
     "node": {
-        "engines": ">=20",
+        "engines": ">=22.12",
         "ci": "22"
     },
-    "$comment-js": "La cadena de pruebas de los paquetes npm. Sigue en Vite 7 y Vitest 3. Vitest 5 con Vite 8 ya se instala con npm 10, pero los paquetes publicados declaran vitest ^3 (y cuatro, vite ^7.1): subirla aqui haria que larapack:audit los rechazara a todos. Queda como plan, con la migracion de esos paquetes y Node >=22.12, que pide Vitest 5. El modulo generado ya pide Vite 8, el de Laravel 13, porque no instala Vitest.",
+    "$comment-js": "La cadena de pruebas de los paquetes npm: Vite 8 y Vitest 5 desde la 9.0.0, cuando los diez paquetes innoboxrr-* migraron y publicaron. Vitest 5 exige Node ^22.12 || >=24, y Node 20 es EOL desde 2026-04-30: por eso engines sube a >=22.12 y la CI de cada paquete prueba 22 y 24. El modulo generado pide Vite 8, el de Laravel 13.",
     "js": {
-        "vite": "^7.1.0",
-        "vitest": "^3.0.0",
+        "vite": "^8.0.0",
+        "vitest": "^5.0.0",
         "vue": "^3.5.0",
         "react": "^19.0.0"
     },
@@ -34,16 +34,16 @@
     },
     "$comment-internalNpm": "Las versiones que el modulo generado declara. Viven aqui para que no se desfasen en silencio dentro de los stubs: hay un test que compara ambos.",
     "internalNpm": {
-        "innoboxrr-form-core": "^2.8.0",
-        "innoboxrr-form-elements": "^6.8.0",
-        "innoboxrr-react-form-elements": "^3.8.0",
-        "innoboxrr-vue-datatable": "^3.1.1",
-        "innoboxrr-react-datatable": "^3.1.1",
-        "innoboxrr-http-request": "^2.0.0",
-        "innoboxrr-i18n": "^1.2.0",
-        "innoboxrr-locale-generator": "^2.0.0",
-        "innoboxrr-js-validator": "^2.0.1",
-        "innoboxrr-route-resolver": "^2.0.0"
+        "innoboxrr-form-core": "^2.9.0",
+        "innoboxrr-form-elements": "^6.9.0",
+        "innoboxrr-react-form-elements": "^3.9.0",
+        "innoboxrr-vue-datatable": "^3.2.0",
+        "innoboxrr-react-datatable": "^3.2.0",
+        "innoboxrr-http-request": "^2.1.0",
+        "innoboxrr-i18n": "^1.3.0",
+        "innoboxrr-locale-generator": "^2.1.0",
+        "innoboxrr-js-validator": "^2.1.0",
+        "innoboxrr-route-resolver": "^2.1.0"
     },
     "$comment-generated": "Lo que usa el codigo generado y no es de la linea base. larapack:new lo declara desde aqui, y la suite EndToEnd lo instala para probar lo generado.",
     "generated": {
