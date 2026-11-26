@@ -2,12 +2,7 @@
 
 namespace Innoboxrr\LarapackGenerator\Support;
 
-use FilesystemIterator;
 use Innoboxrr\LarapackGenerator\Attributes\HandRolled;
-use RecursiveCallbackFilterIterator;
-use RecursiveDirectoryIterator;
-use RecursiveIteratorIterator;
-use SplFileInfo;
 
 /**
  * La forma de todos los controladores del proyecto, también los que el
@@ -29,6 +24,11 @@ use SplFileInfo;
  * código del controlador sin pasar por una acción: __call, el constructor y
  * los middleware en closure. Y, fuera de los controladores, para los closures
  * con cuerpo de routes/*.php, que son acciones sin controlador.
+ *
+ * Qué se recorre lo decide ProjectSources, que también explica lo que queda
+ * fuera a propósito: Livewire, Filament y los controladores que no cuelgan de
+ * `Http/Controllers` no tienen el patrón FormRequest::handle() que se
+ * comprueba aquí.
  *
  * Lo que de verdad no puede seguir la forma se declara con
  * #[HandRolled('razón')] y se lista como aviso en cada ejecución: con
@@ -69,8 +69,6 @@ final class ControllerShape
      */
     private const FRAMEWORK_HOOKS = ['callaction', 'getmiddleware'];
 
-    private const SKIPPED_DIRECTORIES = ['vendor', 'node_modules'];
-
     /**
      * Los métodos del router que registran una ruta con su acción.
      */
@@ -82,28 +80,7 @@ final class ControllerShape
      */
     private const OPAQUE_TOKENS = [T_FUNCTION, T_FN, T_INCLUDE, T_INCLUDE_ONCE, T_REQUIRE, T_REQUIRE_ONCE, T_EVAL, T_EXIT, '`'];
 
-    private string $root;
-
-    /**
-     * La raíz y la de cada paquete local: donde se buscan sus routes/.
-     *
-     * @var list<string>
-     */
-    private array $roots = [];
-
-    /**
-     * Prefijo PSR-4 => directorios absolutos, de la raíz y de cada paquete
-     * local. Con esto se encuentra el archivo de una request sin cargar el
-     * autoloader del proyecto.
-     *
-     * @var array<string, list<string>>
-     */
-    private array $autoload = [];
-
-    /**
-     * @var list<string>
-     */
-    private array $sources = [];
+    private ProjectSources $project;
 
     /**
      * @var array<string, list<ClassOutline>>
@@ -117,9 +94,7 @@ final class ControllerShape
 
     public function __construct(string $root)
     {
-        // Real, como los directorios que se recorren: si no, una raíz con un
-        // enlace simbólico dejaría las rutas sin relativizar.
-        $this->root = rtrim(str_replace('\\', '/', realpath($root) ?: $root), '/');
+        $this->project = new ProjectSources($root);
     }
 
     /**
@@ -127,11 +102,9 @@ final class ControllerShape
      */
     public function run(): array
     {
-        $this->discover();
-
         $findings = [];
         $requests = [];
-        $files = $this->controllerFiles();
+        $files = $this->project->files('/Http/Controllers/');
 
         // Qué controladores usa cada trait: decide si un trait de
         // Http/Controllers mete lógica en un controlador o sólo está mal
@@ -147,7 +120,7 @@ final class ControllerShape
         }
 
         foreach ($files as $file) {
-            $relative = $this->relative($file);
+            $relative = $this->project->relative($file);
 
             foreach ($this->outline($file) as $class) {
                 if (! in_array($class['kind'], ['class', 'trait'], true)) {
@@ -382,7 +355,7 @@ final class ControllerShape
                     continue;
                 }
 
-                $findings[] = $this->finding(Verifier::WARNING, self::ROUTE_CLOSURE, $this->relative($file),
+                $findings[] = $this->finding(Verifier::WARNING, self::ROUTE_CLOSURE, $this->project->relative($file),
                     "La ruta de la línea {$closure['line']} lleva su acción en un closure ({$closure['call']}()): es una acción sin controlador, y nada de lo que verify comprueba en los controladores la alcanza. "
                     .'Llévala a un controlador cuya acción sea `return $request->handle();` con un FormRequest propio (o usa Route::view() si sólo pinta una vista).');
             }
@@ -419,9 +392,9 @@ final class ControllerShape
     {
         $files = [];
 
-        foreach ($this->roots as $root) {
+        foreach ($this->project->roots() as $root) {
             if (is_dir($root.'/routes')) {
-                $files = [...$files, ...$this->phpFiles($root.'/routes')];
+                $files = [...$files, ...$this->project->phpFiles($root.'/routes')];
             }
         }
 
@@ -646,8 +619,8 @@ final class ControllerShape
     private function checkRequestHandles(string $request, string $where, string $controller, array &$findings): void
     {
         $handles = $this->handles($request, []);
-        $file = $this->locate($request);
-        $relative = $file === null ? $controller : $this->relative($file);
+        $file = $this->project->locate($request);
+        $relative = $file === null ? $controller : $this->project->relative($file);
 
         if ($handles === false && $file === null) {
             $findings[] = $this->finding(Verifier::ERROR, self::REQUEST_HANDLE, $relative,
@@ -682,7 +655,7 @@ final class ControllerShape
         // Bajo un prefijo PSR-4 del proyecto, no encontrarla es saber que no
         // existe. Fuera de ellos (vendor) no se sabe: no se carga para verlo.
         if ($outline === null) {
-            return $this->handles[$key] = $this->ownedByProject($class) ? false : null;
+            return $this->handles[$key] = $this->project->owns($class) ? false : null;
         }
 
         foreach ($outline['methods'] as $method) {
@@ -711,7 +684,7 @@ final class ControllerShape
      */
     private function classOutline(string $class): ?array
     {
-        $file = $this->locate($class);
+        $file = $this->project->locate($class);
 
         foreach ($file === null ? [] : $this->outline($file) as $outline) {
             if (strcasecmp($outline['fqcn'], $class) === 0) {
@@ -720,86 +693,6 @@ final class ControllerShape
         }
 
         return null;
-    }
-
-    /**
-     * Si la clase cae bajo un prefijo PSR-4 del proyecto. El prefijo vacío no
-     * cuenta: es un directorio de respaldo para cualquier nombre, y no
-     * encontrar ahí una clase no dice que no exista.
-     */
-    private function ownedByProject(string $class): bool
-    {
-        foreach (array_keys($this->autoload) as $prefix) {
-            if ($prefix !== '' && self::hasPrefix($class, (string) $prefix)) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    /**
-     * PHP no distingue mayúsculas en los nombres de clase: una request
-     * importada como `app\Http\...` es la misma.
-     */
-    private static function hasPrefix(string $class, string $prefix): bool
-    {
-        return strncasecmp($class, $prefix, strlen($prefix)) === 0;
-    }
-
-    private function locate(string $class): ?string
-    {
-        $prefixes = array_keys($this->autoload);
-
-        // El prefijo más largo primero: `App\Models\` gana a `App\`.
-        usort($prefixes, fn (string $a, string $b): int => strlen($b) <=> strlen($a));
-
-        foreach ($prefixes as $prefix) {
-            $prefix = (string) $prefix;
-
-            if (! self::hasPrefix($class, $prefix)) {
-                continue;
-            }
-
-            $path = str_replace('\\', '/', substr($class, strlen($prefix))).'.php';
-
-            foreach ($this->autoload[$prefix] as $directory) {
-                $file = is_file($directory.'/'.$path) ? $directory.'/'.$path : self::findIgnoringCase($directory, $path);
-
-                if ($file !== null) {
-                    return $file;
-                }
-            }
-        }
-
-        return null;
-    }
-
-    /**
-     * El archivo de un nombre escrito con otras mayúsculas que su ruta. Sólo
-     * se busca cuando la ruta exacta no existe.
-     */
-    private static function findIgnoringCase(string $directory, string $path): ?string
-    {
-        foreach (explode('/', $path) as $segment) {
-            $match = null;
-
-            foreach (is_dir($directory) ? (scandir($directory) ?: []) : [] as $entry) {
-                if (strcasecmp($entry, $segment) === 0) {
-                    $match = $entry;
-
-                    break;
-                }
-            }
-
-            if ($match === null) {
-                return null;
-            }
-
-            $directory .= '/'.$match;
-        }
-
-        return is_file($directory) ? $directory : null;
     }
 
     /**
@@ -852,139 +745,11 @@ final class ControllerShape
     }
 
     /**
-     * La raíz y los paquetes locales: los repositorios `path` de su
-     * composer.json y, aunque no estén declarados, `packages/*`. De cada uno,
-     * sus directorios PSR-4; sin composer.json, `app` y `src`.
-     */
-    private function discover(): void
-    {
-        $roots = [$this->root];
-        $composer = $this->composer($this->root);
-
-        foreach ((array) ($composer['repositories'] ?? []) as $repository) {
-            if (is_array($repository) && ($repository['type'] ?? null) === 'path' && is_string($repository['url'] ?? null)) {
-                $url = $repository['url'];
-                $pattern = str_starts_with($url, '/') ? $url : $this->root.'/'.$url;
-
-                $roots = [...$roots, ...(glob($pattern, GLOB_ONLYDIR) ?: [])];
-            }
-        }
-
-        $roots = [...$roots, ...(glob($this->root.'/packages/*', GLOB_ONLYDIR) ?: [])];
-        $seen = [];
-
-        foreach ($roots as $root) {
-            $real = realpath($root);
-
-            if ($real === false || isset($seen[$real])) {
-                continue;
-            }
-
-            $seen[$real] = true;
-            $this->roots[] = str_replace('\\', '/', $real);
-            $psr4 = (array) ($this->composer($real)['autoload']['psr-4'] ?? []);
-            $declared = $psr4 !== [];
-
-            if (! $declared) {
-                $psr4 = ['' => ['app', 'src']];
-            }
-
-            foreach ($psr4 as $prefix => $directories) {
-                foreach ((array) $directories as $directory) {
-                    $absolute = realpath($real.'/'.$directory);
-
-                    if ($absolute === false || ! is_dir($absolute)) {
-                        continue;
-                    }
-
-                    $absolute = str_replace('\\', '/', $absolute);
-
-                    // Un prefijo vacío declarado (`"": "src/"`) es un respaldo
-                    // donde buscar. El supuesto, sin composer.json, no: no se
-                    // sabe qué espacio de nombres corresponde a app/.
-                    if ($prefix !== '' || $declared) {
-                        $this->autoload[(string) $prefix][] = $absolute;
-                    }
-
-                    $this->sources[] = $absolute;
-                }
-            }
-        }
-
-        $this->sources = array_values(array_unique($this->sources));
-    }
-
-    /**
-     * @return list<string>
-     */
-    private function controllerFiles(): array
-    {
-        $files = [];
-
-        foreach ($this->sources as $source) {
-            foreach ($this->phpFiles($source) as $real => $path) {
-                if (str_contains(substr($path, strlen($source)), '/Http/Controllers/')) {
-                    $files[$real] = $path;
-                }
-            }
-        }
-
-        $files = array_values($files);
-        sort($files);
-
-        return $files;
-    }
-
-    /**
-     * Los .php de un directorio, sin vendor, node_modules ni ocultos: ruta
-     * real => ruta tal como se recorrió.
-     *
-     * @return array<string, string>
-     */
-    private function phpFiles(string $directory): array
-    {
-        $files = [];
-        $iterator = new RecursiveIteratorIterator(new RecursiveCallbackFilterIterator(
-            new RecursiveDirectoryIterator($directory, FilesystemIterator::SKIP_DOTS),
-            fn (SplFileInfo $file): bool => ! $file->isDir()
-                || ! (in_array($file->getFilename(), self::SKIPPED_DIRECTORIES, true) || str_starts_with($file->getFilename(), '.'))
-        ));
-
-        foreach ($iterator as $file) {
-            /** @var SplFileInfo $file */
-            if ($file->getExtension() === 'php') {
-                $path = str_replace('\\', '/', $file->getPathname());
-                $files[(string) ($file->getRealPath() ?: $path)] = $path;
-            }
-        }
-
-        return $files;
-    }
-
-    /**
      * @return list<ClassOutline>
      */
     private function outline(string $file): array
     {
         return $this->outlines[$file] ??= PhpOutline::ofFile($file)->classes();
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function composer(string $directory): array
-    {
-        $file = $directory.'/composer.json';
-        $decoded = is_file($file) ? json_decode((string) file_get_contents($file), true) : null;
-
-        return is_array($decoded) ? $decoded : [];
-    }
-
-    private function relative(string $file): string
-    {
-        $file = str_replace('\\', '/', $file);
-
-        return str_starts_with($file, $this->root.'/') ? substr($file, strlen($this->root) + 1) : $file;
     }
 
     /**

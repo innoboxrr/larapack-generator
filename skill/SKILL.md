@@ -501,7 +501,10 @@ Y en **todos** los controladores, generados o no, con o sin manifiesto:
 - **`route-closure`** (aviso): una ruta con un closure con cuerpo.
 - **`index-managed`** y **`resource-appends`** (aviso): una request que lista sin
   forzar `managed`, o un Resource que pasa `appends` del cliente sin
-  `$appendable`. Es código de antes de 9.0: no lo copies, corrígelo.
+  `$appendable`. Es código de antes de 9.0: no lo copies, y no lo edites
+  archivo por archivo: `larapack:fix index-managed resource-appends` lo arregla
+  igual en todos (`--dry-run` enseña el diff). Sólo lo que devuelva como
+  `skipped` se arregla a mano, siguiendo la razón que da.
 
 `--check=<nombre>` (repetible) corre sólo esas. Código distinto de cero = aún no
 has terminado.
