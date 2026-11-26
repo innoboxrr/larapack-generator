@@ -601,7 +601,8 @@ final class GuardTest extends TestCase
         $this->assertNull(Guard::stateDirectoryIn($this->temporary, null, false));
         $this->assertSame([], array_values(array_diff(scandir($this->temporary) ?: [], ['.', '..'])), 'No debía crear nada.');
 
-        $this->assertSame($this->temporary.'/larapack-guard', Guard::stateDirectoryIn($this->temporary, null, true));
+        // La ruta sale con las barras normalizadas, como el resto de la guardia.
+        $this->assertSame(str_replace('\\', '/', $this->temporary).'/larapack-guard', Guard::stateDirectoryIn($this->temporary, null, true));
     }
 
     private function requirePosix(): void

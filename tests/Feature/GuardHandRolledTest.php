@@ -165,7 +165,8 @@ final class GuardHandRolledTest extends TestCase
 
         // La ruta que se nombra es la del candado, ya resuelta.
         $this->assertSame(
-            [$this->project->path.'/.larapack/hand-rolled.lock'],
+            // La guardia normaliza las barras: en Windows el temporal llega con `\`.
+            [str_replace('\\', '/', $this->project->path).'/.larapack/hand-rolled.lock'],
             Guard::touchedLocks(['tool_input' => ['command' => 'mv /tmp/x ./.larapack//./hand-rolled.lock'], 'cwd' => $this->project->path])
         );
     }
