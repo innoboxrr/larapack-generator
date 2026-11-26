@@ -168,11 +168,21 @@ final class AgentHooks
      * filtro que sólo deja pasar de más: lo que la guardia bloquea siempre
      * contiene alguna de esas palabras, porque el comando sólo acepta esas
      * acciones escritas así y el candado se llama así.
+     *
+     * Las busca también en la entrada sin comillas ni barras invertidas
+     * (`bare`): la shell quita las comillas de en medio de una palabra, y
+     * `appr''ove` o `hand"-"rolled` son las mismas palabras. Y deja pasar
+     * siempre una barra invertida seguida de salto de línea (en el JSON,
+     * `\\\n`): la continuación de línea puede partir una palabra por
+     * cualquier sitio, y quitarla aquí con la shell no es fiable.
      */
     private static function preCommand(string $binary): string
     {
-        return 'input=$(cat); case "$input" in *approve*|*revoke*|*[Hh][Aa][Nn][Dd]-[Rr][Oo][Ll][Ll][Ee][Dd]*) '
-            ."printf '%s' \"\$input\" | { {$binary} larapack:guard --pre; };; esac";
+        $filter = <<<'SH'
+        input=$(cat); bare=$(printf '%s' "$input" | tr -d '\\"'"'"); case "$input $bare" in *approve*|*revoke*|*[Hh][Aa][Nn][Dd]-[Rr][Oo][Ll][Ll][Ee][Dd]*|*'\\\'[nr]*)
+        SH;
+
+        return $filter." printf '%s' \"\$input\" | { {$binary} larapack:guard --pre; };; esac";
     }
 
     /**

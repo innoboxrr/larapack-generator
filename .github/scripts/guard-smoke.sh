@@ -145,6 +145,20 @@ for form in unix windows; do
 
     run_pre "$form" 'git status' || fail "[$form] una orden cualquiera no debe bloquear (código $?): $(cat "$WORK/stderr")"
     echo "ok [$form] orden cualquiera: 0"
+
+    # El filtro de la shell busca también sin comillas ni barras: la shell
+    # quita las de en medio de una palabra, y una continuación de línea la
+    # parte por cualquier sitio. Ninguna de estas formas contiene `approve`
+    # tal cual.
+    for split in "php artisan l:h appr''ove --all" $'php artisan :h appr\\\nove --all'; do
+        code=0; run_pre "$form" "$split" || code=$?
+        [ "$code" = 2 ] || fail "[$form] «$split» debe salir con 2 y salió con $code: $(cat "$WORK/stderr")"
+    done
+    echo "ok [$form] aprobar con la palabra partida: 2 (bloquea)"
+
+    code=0; run_pre "$form" "echo '[]' > .larapack/hand\"-\"rolled.lock" || code=$?
+    [ "$code" = 2 ] || fail "[$form] redirigir al candado debe salir con 2 y salió con $code: $(cat "$WORK/stderr")"
+    echo "ok [$form] redirigir al candado: 2 (bloquea)"
 done
 
 # Sin vendor/bin/builder (antes del composer install) el hook no puede fallar

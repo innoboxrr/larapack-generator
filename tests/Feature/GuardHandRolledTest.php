@@ -79,6 +79,16 @@ final class GuardHandRolledTest extends TestCase
             "bash <<EOF\nphp artisan larapack:hand-rolled approve --all\nEOF",
             "/bin/sh > log <<'X'\ncd app\nphp artisan larapack:hand-rolled revoke Y\nX\necho ok",
             "cat > notas.md <<EOF\napprove\nEOF\nphp artisan larapack:hand-rolled approve --all",
+            // Symfony admite el espacio de nombres vacío como abreviatura.
+            'php artisan :hand-rolled approve --all',
+            'php vendor/bin/builder :h approve X',
+            // La continuación de línea: la shell quita la barra y el salto,
+            // también en medio de una palabra.
+            "php artisan larapack:hand-rolled approve\\\n  --all",
+            "php artisan larapack:hand-rolled appr\\\nove --all",
+            "php artisan larapack:hand-\\\nrolled revoke X",
+            "php artisan larapack:hand-rolled \"appr\\\nove\" --all",
+            "php artisan l:h appr''ove --all",
         ];
     }
 
@@ -103,7 +113,61 @@ final class GuardHandRolledTest extends TestCase
             "cat > docs/aprobar.md <<'EOF'\nphp artisan larapack:hand-rolled approve --all\nEOF\ngit add docs",
             "cat <<-EOF > x\n\tphp artisan larapack:hand-rolled revoke X\n\tEOF\n",
             "bash <<EOF\ngit status\nEOF",
+            // Una barra invertida entre comillas simples no continúa nada.
+            "echo 'larapack:hand-rolled appr\\\nove'",
+            // Leer el candado, o devolverlo a como estaba, no es escribirlo.
+            'git checkout -- .larapack/hand-rolled.lock',
+            'sed -n 1p .larapack/hand-rolled.lock',
+            'cat .larapack/hand-rolled.lock > /tmp/copia',
+            'grep -c target .larapack/hand-rolled.lock >/dev/null 2>&1',
+            'cp .env.example .env',
+            "php -r 'echo PHP_VERSION;'",
+            'echo hand-rolled.lock',
         ];
+    }
+
+    /**
+     * Las órdenes de Bash que escriben el candado sin pasar por el comando.
+     *
+     * @return list<string>
+     */
+    public static function lockWrites(): array
+    {
+        return [
+            "echo '[]' > .larapack/hand-rolled.lock",
+            "echo '[]' >> .larapack/hand-rolled.lock",
+            'echo [] 1>.larapack/hand-rolled.lock',
+            "cat > .larapack/hand-rolled.lock <<EOF\n[]\nEOF",
+            "printf '[]' | tee .larapack/hand-rolled.lock",
+            'sudo tee -a .larapack/Hand-Rolled.lock < /tmp/x',
+            'cp /tmp/x .larapack/hand-rolled.lock',
+            'mv /tmp/x ./.larapack//hand-rolled.lock',
+            'cd .larapack && echo [] > hand-rolled.lock',
+            "sed -i 's/a/b/' .larapack/hand-rolled.lock",
+            'perl -pi -e s/a/b/ .larapack/hand-rolled.lock',
+            'dd if=/tmp/x of=.larapack/hand-rolled.lock',
+            "php -r \"file_put_contents('.larapack/hand-rolled.lock', '[]');\"",
+            "python3 -c \"open('.larapack/hand-rolled.lock', 'w').write('[]')\"",
+            'bash -c "echo [] > .larapack/hand-rolled.lock"',
+            "bash <<EOF\necho [] > .larapack/hand-rolled.lock\nEOF",
+            'echo [] > .larapack/x/../hand-rolled.lock',
+        ];
+    }
+
+    public function test_el_hook_previo_bloquea_escribir_el_candado_desde_bash(): void
+    {
+        foreach (self::lockWrites() as $command) {
+            $this->assertNotSame([], Guard::touchedLocks(['tool_input' => ['command' => $command], 'cwd' => $this->project->path]), $command);
+            $this->assertSame(GuardCommand::BLOCK, $this->bash($command), $command);
+            $this->assertStringContainsString('es la aprobación del dueño del proyecto', $this->stderr, $command);
+            $this->assertStringNotContainsString('los corre el dueño del proyecto, no un agente', $this->stderr, $command);
+        }
+
+        // La ruta que se nombra es la del candado, ya resuelta.
+        $this->assertSame(
+            [$this->project->path.'/.larapack/hand-rolled.lock'],
+            Guard::touchedLocks(['tool_input' => ['command' => 'mv /tmp/x ./.larapack//./hand-rolled.lock'], 'cwd' => $this->project->path])
+        );
     }
 
     public function test_el_hook_previo_bloquea_cada_forma_de_aprobar(): void
@@ -136,6 +200,14 @@ final class GuardHandRolledTest extends TestCase
             ['Edit', ['file_path' => $this->project->path.'/.larapack/Hand-Rolled.lock']],
             ['MultiEdit', ['file_path' => $this->project->path.'/src/X.php', 'edits' => [['file_path' => $lock]]]],
             ['Write', ['file_path' => $this->project->path.'/packages/billing/.larapack/hand-rolled.lock']],
+            // La misma ruta escrita de otra forma: sin normalizar, se escapaba.
+            ['Write', ['file_path' => $this->project->path.'/.larapack//hand-rolled.lock']],
+            ['Write', ['file_path' => $this->project->path.'/.larapack/./hand-rolled.lock']],
+            ['Write', ['file_path' => $this->project->path.'/src/../.larapack/hand-rolled.lock']],
+            ['Write', ['file_path' => $this->project->path.'/.larapack/nada/../hand-rolled.lock']],
+            ['Write', ['file_path' => './.larapack/hand-rolled.lock']],
+            ['Write', ['file_path' => str_replace('/', '\\', $lock)]],
+            ['Write', ['file_path' => $lock.'.']],
         ] as [$tool, $input]) {
             $code = $this->guard(['hook_event_name' => 'PreToolUse', 'tool_name' => $tool, 'tool_input' => $input]);
 
@@ -176,16 +248,28 @@ final class GuardHandRolledTest extends TestCase
 
     /**
      * Después ya está escrito: se bloquea igual, para que el agente lo lea, y
-     * se le pide que lo deshaga.
+     * se le pide que lo deshaga. Es lo único que ven los hooks de 9.0: su
+     * PostToolUse sólo casa con Write, Edit y MultiEdit, así que una orden de
+     * Bash nunca llega aquí. El payload es el que manda Claude Code tras un
+     * Write.
      */
     public function test_despues_de_la_herramienta_pide_deshacerlo(): void
     {
         $lock = $this->project->path.'/'.HandRolledLock::PATH;
+        mkdir(dirname($lock), 0777, true);
+        file_put_contents($lock, "[]\n");
 
-        $this->assertSame(GuardCommand::BLOCK, $this->guard(['hook_event_name' => 'PostToolUse', 'tool_name' => 'Write', 'tool_input' => ['file_path' => $lock]]));
-        $this->assertStringContainsString('Ya está hecho: deshazlo', $this->stderr);
+        $code = $this->guard([
+            'session_id' => 'abc123',
+            'transcript_path' => $this->project->path.'/transcript.jsonl',
+            'hook_event_name' => 'PostToolUse',
+            'tool_name' => 'Write',
+            'tool_input' => ['file_path' => $lock, 'content' => "[]\n"],
+            'tool_response' => ['filePath' => $lock, 'success' => true],
+        ]);
 
-        $this->assertSame(GuardCommand::BLOCK, $this->bash('php artisan larapack:hand-rolled approve --all', 'PostToolUse'));
+        $this->assertSame(GuardCommand::BLOCK, $code);
+        $this->assertStringContainsString('es la aprobación del dueño del proyecto', $this->stderr);
         $this->assertStringContainsString('Ya está hecho: deshazlo', $this->stderr);
     }
 
