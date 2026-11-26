@@ -232,7 +232,12 @@ Lo que salió, de más a menos grave:
   convierte `\r` en `\n`. Los saltos van como entidades numéricas.
 - **`larapack:fix --dry-run` sin memoria** (baja). El diff calculaba una tabla
   de n·m: dos cambios a 3000 líneas pedían 200 MB. Pasados 4 millones de celdas
-  la parte del medio sale entera, quitada y puesta; el diff sigue siendo exacto.
+  se parte por anclas, como el diff «patience» de git: las líneas que aparecen
+  una sola vez en cada lado, en su orden común más largo, no cambiaron, y entre
+  dos anclas queda un trozo pequeño. Dos cambios lejanos siguen saliendo en dos
+  trozos y no como el archivo entero quitado y puesto; eso queda sólo para un
+  archivo sin ninguna línea única. Memoria lineal, el mismo diff cada vez, y
+  exacto: una prueba por propiedades lo aplica al original.
 - **Mensajes**: una clave del laraimport que empieza por NUL o un número que
   JSON lee como INF daban «The data (null) must match the type: object». Se
   siguen rechazando, ahora diciendo por qué.
