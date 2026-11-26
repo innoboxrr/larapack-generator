@@ -309,19 +309,7 @@ class MigrationTool extends Tool
 
         if (array_key_exists('default', $prop) && $prop['default'] !== null) {
 
-            $default = $prop['default'];
-
-            // Determinar tipo de valor default
-            if (is_bool($default)) {
-                $default = $default ? 'true' : 'false';
-            } elseif (is_int($default) || is_float($default) || self::isCanonicalNumber($default)) {
-                // Un número se deja tal cual. Una cadena, sólo si al leerla
-                // como literal PHP da el mismo texto: is_numeric() también
-                // acepta "08" (en PHP un octal inválido: la migración no
-                // compilaba), "007" (el octal 7), " 1" o "1e3".
-            } else {
-                $default = self::phpString((string) $default);
-            }
+            $default = self::defaultLiteral($prop['default']);
 
             $column .= "->default({$default})";
         }
@@ -337,21 +325,5 @@ class MigrationTool extends Tool
         }
 
         return $column.';';
-    }
-
-    /**
-     * Una cadena que, pegada sin comillas, es un literal PHP con su mismo
-     * valor: `5`, `-12`, `1.5`. No lo son `08`, `007`, `1.50`, `1e3` ni una
-     * con espacios.
-     */
-    private static function isCanonicalNumber(mixed $value): bool
-    {
-        if (! is_string($value) || preg_match('/^-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?\z/', $value) !== 1) {
-            return false;
-        }
-
-        return str_contains($value, '.')
-            ? (string) (float) $value === $value
-            : (string) (int) $value === $value;
     }
 }

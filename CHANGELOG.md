@@ -213,9 +213,14 @@ Lo que salió, de más a menos grave:
   lanza al compilarlas: un 500 en cada petición con ese verbo que llegue hasta
   ella —también un 404— y `route:cache` roto. Ahora es un error de validación.
 - **Defaults numéricos en cadena** (baja). `is_numeric()` dejaba sin comillas
-  `"08"` (un octal inválido: la migración no compilaba), `"007"` (el octal 7),
-  `" 1"` o `"1e3"`. Ahora sólo va sin comillas el número canónico que vale lo
-  mismo.
+  `"08"` (un octal inválido: la migración no compilaba), `"007"` y `"01"` (los
+  octales 7 y 1), `" 1"` o `"1e3"`. Ahora va sin comillas sólo la cadena con
+  forma de número decimal sin ceros a la izquierda, sin exponente y sin
+  espacios (`-?(0|[1-9][0-9]*)(\.[0-9]+)?`); `"10.00"`, `"0.00"` y `"1.10"`
+  siguen saliendo `->default(10.00)` como en 9.0. Las demás van entre comillas.
+  El pivote usa ahora el mismo literal (`Tool::defaultLiteral()`): antes
+  escribía todo entre comillas, y `true` salía `'1'`, `false` salía `''`
+  —inválido para un `boolean` en MySQL estricto— y `0` salía `'0'`.
 - **Claves de traducción que nadie pide** (baja). `t('Dos\nlíneas')` daba la
   clave «Dosnlíneas»: ahora se decodifican los escapes de la cadena.
 - **El `value` de una opción con un salto de línea** (baja): el analizador HTML
@@ -246,7 +251,29 @@ profundidad); el hook vence por tiempo y deja pasar. Una clave de `enum`
 
 Regenerar cambia lo generado sólo donde había valores raros: etiquetas de enum
 con `&` o `}` en el formulario Vue, valores de enum con saltos de línea, y
-defaults como `"08"` o `"007"`. La guardia guarda su estado en otro directorio:
+defaults en cadena que no son un número decimal normal.
+
+**Los defaults que cambian, y la alteración que escriben.** Cambian sólo los
+`default` de modelo en cadena con ceros a la izquierda (`"01"`, `"007"`), con
+exponente (`"1e3"`) o con espacios (`" 1"`): la 9.0 los escribía sin comillas y
+ahora van entre comillas. `"08"` no compilaba, así que no hay migración de 9.0
+que lo tenga. `MigrationTool::alter()` compara las definiciones como texto: si
+la migración de creación no se editó a mano, el siguiente `larapack:import`
+escribe una `_alter_<tabla>_table` con `->change()` para esas columnas —y es lo
+correcto: `->default(01)` era el entero 1—; si se editó, la conserva y pide
+escribir la alteración. Ojo: `->change()` reescribe la definición entera de la
+columna, así que una longitud o precisión cambiada a mano en otra migración
+(una de invariantes, por ejemplo) se pierde; revisa la alteración antes de
+migrar. En school-management, de 1328 defaults de modelo en sus 82
+`laraimport.json` cambian dos, ambos de `packages/school-payroll`:
+`PayrollFiscalProfile.contract_type` (`01` → `'01'`) y `regime_type`
+(`02` → `'02'`), cuyas columnas lleva a `VARCHAR(2)` la migración
+`2026_10_11_053000_payroll_imss_and_stamping_invariants.php`: la alteración
+generada las devolvería a `VARCHAR(255)`. Los pivotes no tienen alteración: sólo
+cambia la migración de un pivote nuevo (en school-management ningún pivote
+declara `default`).
+
+La guardia guarda su estado en otro directorio:
 el de una sesión abierta antes de actualizar se pierde, y el hook de fin de
 turno sigue con git.
 
