@@ -1,6 +1,6 @@
 # Changelog
 
-## 9.1.0 (sin publicar)
+## 9.1.0
 
 Una menor: la CI pasa a ser la barrera de la arquitectura y las excepciones
 `#[HandRolled]` necesitan la aprobación del dueño, los tests generados prueban
