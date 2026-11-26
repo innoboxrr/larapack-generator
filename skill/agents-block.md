@@ -14,6 +14,9 @@ lee `{{skill}}` y sigue su flujo.
   canje de tokens. La autorización, la validación, las consultas y la respuesta
   van en un `FormRequest` (`authorize()`, `rules()`, `handle()`), que delega en
   la operación del modelo o en una clase de soporte.
+- **`#[HandRolled]` lo decide y lo aprueba el dueño del proyecto**, no tú: no lo
+  añadas para que `verify` pase, no edites `.larapack/hand-rolled.lock` y no
+  corras `larapack:hand-rolled approve` ni `revoke`.
 - **Antes de dar una tarea por terminada**, `larapack:validate --format=json` y
   `larapack:verify --format=json`, los dos con código de salida 0.
 

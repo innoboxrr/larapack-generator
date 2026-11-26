@@ -293,6 +293,13 @@ demás:
   retiene sólo por los errores de lo que tocó la sesión —lo que pasó por la
   guardia y lo que git ve sin confirmar—; lo demás lo dice sin bloquear, para
   que una consola no quede retenida por lo que otra dejó a medias.
+- **Antes de cada `Write`, `Edit` o `Bash`** → `larapack:guard --pre`. Impide
+  que el agente apruebe una excepción `#[HandRolled]`: editar
+  `.larapack/hand-rolled.lock` o correr `larapack:hand-rolled approve` o
+  `revoke` (también por alias, abreviatura o dentro de `bash -c`). Lee la orden
+  como la shell, sin ejecutarla, y la shell sólo arranca PHP si la entrada
+  contiene `approve`, `revoke` o `hand-rolled`. No es infranqueable: la barrera
+  real es la revisión del dueño en la rama protegida.
 
 La guardia nunca se bloquea a sí misma: una entrada vacía o rota, un archivo de
 `vendor/` o fuera de un proyecto salen con 0, y mientras no exista `vendor/` el
@@ -1150,7 +1157,9 @@ manifiesto:
 | `controller-shape` | error | Una acción de controlador que hace algo más que `return $request->handle();`: recibe `Request` o `FormRequest` base, llama a `validate()`, pasa una expresión a `handle()`. También `__call`, un constructor que hace algo más que asignar lo inyectado y registrar middleware, y un `middleware()` con un closure. |
 | `request-handle` | error | La request de una acción no define `handle()`. Una de `vendor/` sólo se informa. |
 | `controller-concern` | error / aviso | Un trait con lógica en `Http/Controllers`: error si lo usa un controlador, aviso si sólo lo usan requests (va en `Http/Requests/Concerns`). |
-| `hand-rolled` | aviso | Una acción marcada `#[HandRolled('razón')]`. Sin razón, error. |
+| `hand-rolled` | aviso / info | Una acción marcada `#[HandRolled('razón')]`: aviso sin candado; info si el dueño la aprobó en `.larapack/hand-rolled.lock`. Sin razón, error. |
+| `hand-rolled-unapproved` | error | Con candado: una excepción que no está aprobada, o cuya razón cambió desde que se aprobó. |
+| `hand-rolled-stale` | aviso | Con candado: una aprobación de algo que ya no lleva `#[HandRolled]`. |
 | `route-closure` | aviso | Un closure con cuerpo como acción de una ruta. |
 | `index-managed` | aviso | Una request que usa el `Builder` de SearchSurge sin forzar `managed`: el listado se salta `ManagedFilter::canView()`. |
 | `resource-appends` | aviso | Un `setAppends()` que recibe lo que manda el cliente sin una lista blanca. |
@@ -1237,9 +1246,27 @@ use Innoboxrr\LarapackGenerator\Attributes\HandRolled;
 class StripeWebhookController { ... }
 ```
 
-`verify` lo lista como aviso en cada ejecución, y con `--strict` falla. No es un
-arreglo que un agente aplique para pasar: es una excepción que aprueba una
-persona, y sigue a la vista.
+No es un arreglo que un agente aplique para pasar: es una excepción que aprueba
+una persona, y sigue a la vista. **La aprobación es un archivo**,
+`.larapack/hand-rolled.lock`, que el dueño mantiene con `larapack:hand-rolled`
+y comitea:
+
+```
+php artisan larapack:hand-rolled list                           # cada excepción y su estado
+php artisan larapack:hand-rolled approve --all                  # o una a una:
+php artisan larapack:hand-rolled approve TokenController::store # basta el final del nombre
+php artisan larapack:hand-rolled revoke InboundWebhookController
+```
+
+Guarda la razón junto al objetivo (`Clase` o `Clase::metodo`, con el nombre
+completo), ordenado y estable: cambiar la razón en el código invalida la
+aprobación. Sin candado, `verify` la lista como aviso y con `--strict` falla,
+como en 9.0. Con candado, lo aprobado se informa y `--strict` pasa; lo que no
+está aprobado es error (`hand-rolled-unapproved`) y lo aprobado que ya no está
+en el código, aviso (`hand-rolled-stale`). El candado es de la raíz sobre la que
+corre `verify`: un paquete con su propia CI lleva el suyo. Que sólo lo toque el
+dueño lo hacen CODEOWNERS y la rama protegida (`larapack:ci --owner`, en «La CI
+y la publicación») y, para los agentes, la guardia.
 
 `--check=<nombre>` se repite para correr varias; un nombre que no existe falla
 en vez de dar un verde falso.
@@ -1683,7 +1710,35 @@ tag si no existe. `permissions: contents: write` va en el propio `release.yml`:
 un repositorio cuyo permiso por defecto sea de sólo lectura, sin esa línea, no
 arranca el workflow y no deja log.
 
-`larapack:new` genera los dos, junto con `VERSION` en 0.1.0.
+`larapack:new` genera los dos, junto con `VERSION` en 0.1.0. Su `tests.yml`
+trae además el job **«LaraPack verify»**, que corre
+`larapack:verify --strict --format=json`.
+
+**La puerta de la rama.** Un hook se quita, y un agente sin hooks no lo ve. Lo
+que no depende de nadie es la rama protegida: exige el check «LaraPack verify»
+y la revisión de los dueños de código. En un proyecto que ya existe:
+
+```
+php artisan larapack:ci --dry-run                         # qué escribiría
+php artisan larapack:ci --owner=@organizacion/arquitectura
+```
+
+- Crea `.github/workflows/larapack.yml` con el job «LaraPack verify» (Artisan
+  en una aplicación, el builder en un paquete; el PHP de `config.platform.php`
+  o el mínimo con el que se instala `composer.lock`; las `ext-*` de
+  `composer.json`; `pull_request` y `push` a la rama por defecto de `origin`).
+  No edita otros workflows, y si el suyo difiere no lo pisa sin `--force`.
+- Con `--owner` (repetible: `@usuario`, `@organización/equipo` o un correo)
+  fusiona en el CODEOWNERS que GitHub ya lee `/.larapack/hand-rolled.lock`, el
+  workflow y el propio CODEOWNERS, sin duplicar ni tocar líneas ajenas. Sin
+  `--owner` no inventa un dueño.
+- Imprime lo que no puede hacer: proteger la rama con
+  `gh api --method PUT repos/{dueño}/{repo}/branches/{rama}/protection` y los
+  campos exactos. Nunca la ejecuta. PUT sustituye la protección entera: si ya
+  exige otros checks, se añaden a la orden.
+
+`larapack:audit` avisa con `verify-job` si la CI de un paquete que usa
+LaraPack no corre `larapack:verify --strict`.
 
 ---
 
@@ -1715,8 +1770,8 @@ versión hasta la última.
 | 7.10.1 | Nada en un paquete; bajo en una aplicación | En una aplicación, la exportación y su notificación a regenerar | [7.10.1 → 7.10.2](#de-7101-a-7102) y siguiente |
 | 7.10.2 | Bajo | Nada; el contrato del modelo deja de mandar el token CSRF por GET | [7.10.2 → 7.10.3](#de-7102-a-7103) y siguientes |
 | 7.10.3 | Bajo | Las tablas nuevas restringen las claves ajenas | [7.10 → 8.0](#de-710-a-80) y siguiente |
-| 8.0 | Medio, según cuántos controladores escribiste a mano | `verify` revisa todos los controladores; el Resource filtra `appends`; nombres de modelo | [8.0 → 9.0](#de-80-a-90) |
-| 9.0 | — | Estás al día | — |
+| 8.0 | Medio, según cuántos controladores escribiste a mano | `verify` revisa todos los controladores; el Resource filtra `appends`; nombres de modelo | [8.0 → 9.0](#de-80-a-90) y siguiente |
+| 9.0 | Bajo | Nada; la aprobación de `#[HandRolled]` y la puerta de la CI se activan a mano | [9.0 → 9.1](#de-90-a-91) |
 
 Las notas completas de cada versión están en `CHANGELOG.md`.
 
@@ -2331,6 +2386,27 @@ En el módulo Vue, `pinia` 4 ya vale; `vue-router` sigue en 4. Los pisos de los
 paquetes `innoboxrr-*` suben (`internalNpm` de `ecosystem.json`): alinéalos en
 `resources/<ui>/package.json` si está editado.
 
+### De 9.0 a 9.1
+
+Nada cambia hasta que lo actives: sin `.larapack/hand-rolled.lock`, `verify`
+trata `#[HandRolled]` como en 9.0. Lo hace **el dueño del proyecto**, una vez:
+
+```
+composer require innoboxrr/larapack-generator:"^9.1" --dev
+php artisan larapack:skill --force --hooks        # añade el hook PreToolUse
+php artisan larapack:hand-rolled list
+php artisan larapack:hand-rolled approve --all    # en school-management: InboundWebhookController y TokenController
+cat .larapack/hand-rolled.lock                     # revisa objetivos y razones
+php artisan larapack:verify --strict --format=json
+php artisan larapack:ci --owner=@<dueño-o-equipo>
+```
+
+Comitea el candado, `.github/` y `.claude/settings.json`, deja que el workflow
+corra una vez y protege la rama con la orden que imprime `larapack:ci`. Cada
+paquete con su propia CI lleva su propio candado (`--root=<paquete>`). Si esa CI
+corre `larapack:audit --strict`, añade antes el job (`larapack:ci`) o el aviso
+`verify-job` la pondrá en rojo.
+
 ---
 
 ## Referencia de comandos
@@ -2345,6 +2421,8 @@ larapack:fix                     Corrige index-managed y resource-appends en lo 
 larapack:audit                   Comprueba la línea base del ecosistema.
 larapack:skill                   Instala las instrucciones para un agente; con --hooks, la guardia.
 larapack:guard                   Hook para agentes: comprueba el archivo recién editado.
+larapack:hand-rolled             Lista, aprueba o retira las excepciones #[HandRolled] (el dueño).
+larapack:ci                      Crea el workflow «LaraPack verify» y, con --owner, CODEOWNERS.
 
 larapack:full-model              Crea un entorno completo de modelo.
 larapack:remove-full-model       Elimina todas las entidades de un modelo.
@@ -2378,7 +2456,7 @@ larapack:test                    Crea una nueva clase de test.
 
 Opciones comunes: `--root=<ruta>` en todos salvo `new`, `schema` y `audit`;
 `--force` y `--dry-run` en los generadores; `--format=json` en todos salvo
-`schema`, `skill`, `guard` y `remove-full-model`. Con `--format=json` la salida es un
+`schema`, `skill`, `guard`, `ci` y `remove-full-model`. Con `--format=json` la salida es un
 único documento JSON, también cuando algo falla. La referencia completa de cada
 comando, con sus argumentos y opciones, está en
 <https://innoboxrr.github.io/docs/larapack/comandos>.

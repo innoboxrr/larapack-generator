@@ -504,9 +504,16 @@ Y en **todos** los controladores, generados o no, con o sin manifiesto:
 - **`request-handle`** (error): la request de la acción no tiene `handle()`.
 - **`controller-concern`** (error si lo usa un controlador, aviso si no): un
   trait con lógica en `Http/Controllers`. Va en `Http/Requests/Concerns`.
-- **`hand-rolled`** (aviso): una acción con `#[HandRolled('razón')]`. **Nunca lo
-  añadas para que `verify` pase**: es una excepción que aprueba el dueño del
-  proyecto, y con `--strict` falla igual.
+- **`hand-rolled`** (aviso; info si está aprobada): una acción con
+  `#[HandRolled('razón')]`. **Nunca lo añadas para que `verify` pase**: es una
+  excepción que aprueba el dueño del proyecto, y con `--strict` falla igual.
+- **`hand-rolled-unapproved`** (error) y **`hand-rolled-stale`** (aviso): con
+  `.larapack/hand-rolled.lock`, una excepción sin aprobar o con la razón
+  cambiada, y una aprobación que ya no está en el código. **No son tuyos de
+  arreglar**: nunca edites el candado ni corras `larapack:hand-rolled approve`
+  o `revoke` —la guardia lo bloquea—. Devuelve la acción a
+  `return $request->handle();` o díselo al dueño. `larapack:hand-rolled list`
+  sí puedes correrlo.
 - **`route-closure`** (aviso): una ruta con un closure con cuerpo.
 - **`index-managed`** y **`resource-appends`** (aviso): una request que lista sin
   forzar `managed`, o un Resource que pasa `appends` del cliente sin
@@ -530,7 +537,9 @@ algo generado que no es un hueco, le pasa las comprobaciones de
 `larapack:verify`; si encuentran errores **en ese archivo**, la edición vuelve
 con el motivo y la regla. A un controlador escrito a mano le recuerda el patrón
 de `handle()`. Al terminar el turno, `larapack:guard --stop` verifica el
-proyecto y no te deja darlo por terminado con errores en lo que tocaste.
+proyecto y no te deja darlo por terminado con errores en lo que tocaste. Antes
+de cada `Write`, `Edit` o `Bash`, `larapack:guard --pre` impide tocar la
+aprobación de las excepciones: sólo el dueño del proyecto las aprueba.
 
 Si te bloquea, corrige el archivo o el `laraimport.json`. **No toques el hook
 ni lo rodees.** Sin hooks —Codex y otros agentes leen el bloque de LaraPack en
@@ -741,7 +750,8 @@ valor)`, que va a `bulk.update` con sólo ese campo.
   es la misma deriva: va en su `FormRequest`, y el controlador hace
   `return $request->handle();`.
 - **Añadir `#[HandRolled]` para que `verify` pase.** La excepción la decide el
-  dueño del proyecto, no tú.
+  dueño del proyecto, no tú. Tampoco la apruebas: `.larapack/hand-rolled.lock` y
+  `larapack:hand-rolled approve` son suyos, y la CI exige `verify --strict`.
 - **Rellenar todas las claves del JSON.** Declara lo que decides; el resto son
   defaults del esquema.
 - **Generar todas las acciones y borrar las que sobran.** Declara `routes` o
