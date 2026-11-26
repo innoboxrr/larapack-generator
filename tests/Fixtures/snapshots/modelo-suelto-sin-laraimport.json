@@ -1,5 +1,5 @@
 {
-    ".larapack/manifest.json": "483bbf2df8150b259844820ee2a382ffc17a43d6fe681de297cdadc860f36c74",
+    ".larapack/manifest.json": "3acb0a4c67946d7e4dca64fa25dc5e7cccd255a89fe2e0d03e952170f820b5fc",
     "composer.json": "dded2aaddb25ff97b89a8b0e047bfd8284706098a414f9124356b235318c7edb",
     "database/factories/ProductFactory.php": "0806ba1ba14cfe478dd6233d4d816f22c269cced3194a01cb9c2ffc95f9350b9",
     "database/migrations/TIMESTAMP_create_products_table.php": "f7a5e2cfbcaede43542bce452619a19f9a96e6d62d7c15f791f51618de0e4972",
@@ -75,7 +75,7 @@
     "src/Http/Requests/Product/DeleteRequest.php": "c2b962ecd08de2ce3ff38042895f339482fdfc4fa3ed14e7999100132f58b0f1",
     "src/Http/Requests/Product/ExportRequest.php": "17fb1c8b54884adbd8a72480a9aaea47b469916c478187b9200b098fd1281dcf",
     "src/Http/Requests/Product/ForceDeleteRequest.php": "ede73e5968eb524f9617f858f01a95f1ded08e91d7e912a2814a87cd4c3f4bbe",
-    "src/Http/Requests/Product/IndexRequest.php": "4d507f45d6121dab547351c02042b6dfb5386c0adfe49e2d67a49ee6cabdc5c3",
+    "src/Http/Requests/Product/IndexRequest.php": "c23c46dcde6cd1adf2bdc271efd2b31967c86e8eca2a3f184d2f8ef53037447b",
     "src/Http/Requests/Product/PoliciesRequest.php": "011ede5306bd21e27c9acf9394a2df8f7c741b096c8064f18eaf28ca024eb5fa",
     "src/Http/Requests/Product/PolicyRequest.php": "9d609f83419d80ea1bb6007d09de026e3260c691a71ec10519427a540e4cbec3",
     "src/Http/Requests/Product/RestoreRequest.php": "c1dd7d0d14f6b111ee4a4991868c6ec0cd82daab2faedd16f21f90614d8e9ec6",
