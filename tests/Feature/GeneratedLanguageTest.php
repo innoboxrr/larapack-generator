@@ -99,6 +99,31 @@ final class GeneratedLanguageTest extends TestCase
     }
 
     /**
+     * Un archivo del proyecto en Latin-1 en el mismo src —escrito a mano, en
+     * un editor de Windows— daba una clave que no es UTF-8, json_encode()
+     * devolvía false y el archivo de idioma se quedaba vacío: se perdían
+     * todas las traducciones escritas a mano. La clave se ignora y lo demás
+     * sigue.
+     */
+    public function test_un_archivo_en_latin1_no_vacia_el_archivo_de_idioma(): void
+    {
+        $path = 'resources/vue/src/locales/es.json';
+
+        $translations = $this->json($path);
+        $translations['Post'] = 'Entrada';
+        file_put_contents($this->project->path.'/'.$path, json_encode($translations, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+
+        file_put_contents($this->project->path.'/resources/vue/src/legacy.js', "export const title = t('canci\xF3n')\nexport const other = t('Archivo nuevo')\n");
+
+        $this->import();
+
+        $after = $this->json($path);
+
+        $this->assertSame('Entrada', $after['Post']);
+        $this->assertArrayHasKey('Archivo nuevo', $after);
+    }
+
+    /**
      * Los títulos se leen cuando el router los pide, no al importar las rutas:
      * el módulo puede cargarse antes de que la aplicación elija idioma.
      */

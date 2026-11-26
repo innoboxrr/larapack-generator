@@ -21,6 +21,8 @@ namespace Innoboxrr\LarapackGenerator\Support;
  */
 final class Guard
 {
+    private static ?string $temporaryDirectory = null;
+
     /**
      * Lo que se recuerda cada vez que algo se bloquea. Es la regla entera, en
      * corto: un agente que la tiene delante no necesita releer el skill.
@@ -29,6 +31,44 @@ final class Guard
         .'el controlador sólo hace `return $request->handle();`; la autorización, la validación '
         .'y la lógica van en el FormRequest (authorize(), rules(), handle()), que delega en la '
         .'operación del modelo.';
+
+    /**
+     * Lo que se dice cuando un agente toca la aprobación de una excepción.
+     */
+    public const LOCK_RULE = 'Sólo el dueño del proyecto aprueba excepciones #[HandRolled]: él corre '
+        .'`larapack:hand-rolled approve`, revisa '.HandRolledLock::PATH.' y lo comitea. Tú no editas ese '
+        .'archivo ni corres `approve` o `revoke`. Si una acción de verdad no puede ser '
+        .'`return $request->handle();`, dilo en tu respuesta y deja que el dueño decida.';
+
+    /**
+     * Los separadores de órdenes de la shell, y los de redirección: lo que
+     * los sigue ya no son argumentos de la orden anterior.
+     */
+    private const SHELL_SEPARATORS = [';', '&', '|', "\n", '(', ')', '`', '<', '>'];
+
+    /**
+     * Las órdenes que ejecutan como órdenes lo que reciben por la entrada.
+     */
+    private const SHELLS = ['bash', 'sh', 'zsh', 'dash', 'ksh'];
+
+    /**
+     * Lo que va delante de la orden de verdad sin cambiar qué orden es:
+     * `sudo tee …` escribe igual que `tee …`.
+     */
+    private const WRAPPERS = ['sudo', 'env', 'command', 'exec', 'nohup', 'time', 'nice', 'xargs', 'builtin'];
+
+    /**
+     * Las órdenes que escriben, mueven o enlazan los archivos que reciben
+     * como argumento.
+     */
+    private const FILE_WRITERS = ['tee', 'cp', 'mv', 'install', 'ln', 'rsync', 'truncate'];
+
+    /**
+     * Cómo se reconoce el candado en una orden de shell. Por el nombre del
+     * archivo y no por `.larapack/` delante: tras un `cd .larapack`, la ruta
+     * es sólo el nombre.
+     */
+    private const LOCK_NAME = '#(^|/)hand-rolled\.lock[. ]*$#i';
 
     /**
      * Las partes de un proyecto Laravel que son arquitectura, aunque el
@@ -101,6 +141,433 @@ final class Guard
         }
 
         return array_values(array_unique($files));
+    }
+
+    /**
+     * Los archivos tocados que son el candado de las excepciones, de
+     * cualquier proyecto. Sin distinguir mayúsculas: en Windows y macOS
+     * `Hand-Rolled.lock` es el mismo archivo.
+     *
+     * @param  array<string, mixed>  $payload
+     * @return array<int, string>
+     */
+    public static function touchedLocks(array $payload): array
+    {
+        // Windows ignora los puntos y espacios finales de un nombre:
+        // `hand-rolled.lock.` es el mismo archivo.
+        $edited = array_filter(
+            self::touchedFiles($payload),
+            fn (string $file): bool => preg_match('#(^|/)\.larapack/hand-rolled\.lock[. ]*$#i', $file) === 1
+        );
+
+        return array_values(array_unique([...$edited, ...self::shellWritesLocks($payload)]));
+    }
+
+    /**
+     * Los candados que escribe una orden de Bash: el destino de una
+     * redirección (`>`, `>>`), un argumento de `tee`, `cp`, `mv`, `install`,
+     * `ln`, `rsync` o `truncate`, el `of=` de `dd`, un archivo de `sed -i` o
+     * `perl -i`, y el código en línea de `php -r`, `python -c`, `node -e`,
+     * `ruby -e` o `perl -e` que lo nombre. Se leen también dentro de `bash -c`,
+     * `eval` y un heredoc que recibe una shell, como la aprobación.
+     *
+     * Leerlo (`cat`, `git diff`) no es escribirlo, y devolverlo a como estaba
+     * con `git checkout --` tampoco: es lo que se pide cuando ya ocurrió.
+     *
+     * @param  array<string, mixed>  $payload
+     * @return array<int, string>
+     */
+    public static function shellWritesLocks(array $payload): array
+    {
+        $command = self::bashCommand($payload);
+
+        if ($command === null) {
+            return [];
+        }
+
+        $locks = [];
+        self::shellScan($command, 0, $locks);
+        $base = self::workingDirectory($payload);
+
+        return array_values(array_unique(array_map(fn (string $lock): string => self::absolute($lock, $base), $locks)));
+    }
+
+    /**
+     * Si la orden de Bash ejecuta `larapack:hand-rolled approve` o `revoke`.
+     *
+     * Se lee como la lee la shell, sin ejecutar nada: se parte en órdenes por
+     * sus separadores, respetando las comillas, y en cada una se busca el
+     * comando —también por el alias `make:` del binario y por las abreviaturas
+     * que Symfony admite, como `larapack:hand`— seguido de `approve` o
+     * `revoke` como palabra entera. Lo que la shell va a ejecutar como orden
+     * —el argumento de `-c` en `bash -c "…"`, lo que sigue a `eval`— se lee
+     * también como orden; un texto entre comillas cualquiera (`grep "…"`), no.
+     *
+     * No busca el subcomando en una posición concreta: una opción con su
+     * valor delante (`--root packages/x`) lo movería. Cualquier `approve` o
+     * `revoke` detrás del comando cuenta; las únicas órdenes que eso bloquea
+     * de más —`list approve`— fallan igual al ejecutarse.
+     *
+     * @param  array<string, mixed>  $payload
+     */
+    public static function approvesHandRolled(array $payload): bool
+    {
+        $command = self::bashCommand($payload);
+        $locks = [];
+
+        return $command !== null && self::shellScan($command, 0, $locks);
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    private static function bashCommand(array $payload): ?string
+    {
+        $input = is_array($payload['tool_input'] ?? null) ? $payload['tool_input'] : [];
+        $command = $input['command'] ?? null;
+
+        return is_string($command) ? $command : null;
+    }
+
+    /**
+     * Recorre una orden de shell: devuelve si aprueba o retira una excepción,
+     * y añade a `$locks` cada candado que escribe (tal como se escribió).
+     *
+     * @param  list<string>  $locks
+     */
+    private static function shellScan(string $command, int $depth, array &$locks): bool
+    {
+        $scripts = [];
+        $redirects = [];
+        $commands = self::shellCommands($command, $scripts, $redirects);
+        $approves = false;
+
+        foreach ($redirects as $target) {
+            if (self::isLockName($target)) {
+                $locks[] = $target;
+            }
+        }
+
+        // Un heredoc que se le pasa a una shell (`bash <<EOF`) sí son órdenes.
+        foreach ($depth < 3 ? $scripts : [] as $script) {
+            $approves = self::shellScan($script, $depth + 1, $locks) || $approves;
+        }
+
+        foreach ($commands as $words) {
+            $locks = [...$locks, ...self::lockWrites($words)];
+            $invoked = false;
+            $eval = ($words[0] ?? null) === 'eval';
+
+            foreach ($words as $index => $word) {
+                if ($invoked && in_array($word, ['approve', 'revoke'], true)) {
+                    $approves = true;
+                }
+
+                $invoked = $invoked || self::namesHandRolled($word);
+                $nested = $eval || preg_match('/^-[a-z]*c$/i', $words[$index - 1] ?? '') === 1;
+
+                if ($nested && $depth < 3) {
+                    $approves = self::shellScan($word, $depth + 1, $locks) || $approves;
+                }
+            }
+        }
+
+        return $approves;
+    }
+
+    /**
+     * Los candados que escribe una sola orden, por sus argumentos.
+     *
+     * @param  list<string>  $words
+     * @return list<string>
+     */
+    private static function lockWrites(array $words): array
+    {
+        $index = 0;
+
+        // `X=1 sudo env tee …`: la orden es `tee`.
+        while (isset($words[$index]) && (preg_match('/^[A-Za-z_][A-Za-z0-9_]*=/', $words[$index]) === 1 || in_array($words[$index], self::WRAPPERS, true))) {
+            $index++;
+        }
+
+        $program = strtolower((string) preg_replace('/\.exe$/i', '', basename(str_replace('\\', '/', $words[$index] ?? ''))));
+        $arguments = array_slice($words, $index + 1);
+        $named = array_values(array_filter($arguments, self::isLockName(...)));
+
+        if (in_array($program, self::FILE_WRITERS, true)) {
+            return $named;
+        }
+
+        if ($program === 'dd') {
+            return array_values(array_filter(
+                array_map(fn (string $argument): string => str_starts_with($argument, 'of=') ? substr($argument, 3) : '', $arguments),
+                self::isLockName(...)
+            ));
+        }
+
+        $inPlace = array_filter($arguments, fn (string $argument): bool => preg_match('/^(-[a-zA-Z]*i|--in-place)/', $argument) === 1) !== [];
+
+        if (in_array($program, ['sed', 'perl'], true) && $inPlace && $named !== []) {
+            return $named;
+        }
+
+        // Código en línea que nombra el candado: `php -r "file_put_contents(…)"`.
+        if (preg_match('/^(php[0-9.]*|python[0-9.]*|node|ruby|perl)$/', $program) === 1) {
+            foreach ($arguments as $position => $argument) {
+                $code = in_array($argument, ['-r', '-c', '-e', '-E'], true) ? ($arguments[$position + 1] ?? '') : '';
+
+                if (preg_match('/hand-rolled\.lock/i', $code) === 1) {
+                    return [HandRolledLock::PATH];
+                }
+            }
+        }
+
+        return [];
+    }
+
+    private static function isLockName(string $word): bool
+    {
+        return preg_match(self::LOCK_NAME, self::lexical(self::normalise($word))) === 1;
+    }
+
+    /**
+     * Si la palabra es un nombre con el que Symfony encontraría
+     * `larapack:hand-rolled`: el espacio, prefijo de `larapack` o del alias
+     * `make`; el nombre, prefijo de `hand-rolled`. El espacio puede estar
+     * vacío —`:hand-rolled`, `:h`—: Symfony lo admite como abreviatura de
+     * cualquiera.
+     */
+    private static function namesHandRolled(string $word): bool
+    {
+        if (preg_match('/^([a-z]*):([a-z-]+)$/i', $word, $parts) !== 1) {
+            return false;
+        }
+
+        $namespace = strtolower($parts[1]);
+        $name = strtolower($parts[2]);
+
+        return (str_starts_with('larapack', $namespace) || str_starts_with('make', $namespace))
+            && str_starts_with('hand-rolled', $name);
+    }
+
+    /**
+     * Las órdenes de una línea de shell, cada una como sus palabras ya sin
+     * comillas.
+     *
+     * El cuerpo de un heredoc no son órdenes: es el texto que recibe la
+     * anterior, y un agente que escribe documentación con `cat <<'EOF'` puede
+     * nombrar `larapack:hand-rolled approve` sin correrlo. Se salta hasta su
+     * delimitador, salvo que lo reciba una shell (`bash <<EOF`): entonces se
+     * devuelve en `$scripts` para leerlo como órdenes.
+     *
+     * Una barra invertida al final de la línea la continúa: la shell quita
+     * las dos, también en medio de una palabra (`appr\<salto>ove`). El destino
+     * de cada `>` se devuelve en `$redirects`.
+     *
+     * @param  list<string>  $scripts
+     * @param  list<string>  $redirects
+     * @return list<list<string>>
+     */
+    private static function shellCommands(string $line, array &$scripts = [], array &$redirects = []): array
+    {
+        $commands = [];
+        $words = [];
+        $word = null;
+        $quote = null;
+        $heredocs = [];
+        // La primera palabra de la orden en curso: las redirecciones no la
+        // terminan, así que en `bash > log <<EOF` sigue siendo `bash`.
+        $head = null;
+        // Si la palabra que viene es el destino de una redirección de salida.
+        $redirect = false;
+        $length = strlen($line);
+
+        for ($i = 0; $i < $length; $i++) {
+            $char = $line[$i];
+
+            if ($quote !== "'" && $char === '\\' && in_array(substr($line, $i + 1, 1), ["\n", "\r"], true)) {
+                $i += substr($line, $i + 1, 2) === "\r\n" ? 2 : 1;
+
+                continue;
+            }
+
+            if ($quote === "'") {
+                $quote = $char === "'" ? null : $quote;
+                $word .= $char === "'" ? '' : $char;
+
+                continue;
+            }
+
+            if ($char === '\\' && $i + 1 < $length && ($quote === null || in_array($line[$i + 1], ['"', '\\', '$', '`'], true))) {
+                $word .= $line[++$i];
+
+                continue;
+            }
+
+            if ($quote === '"') {
+                $quote = $char === '"' ? null : $quote;
+                $word .= $char === '"' ? '' : $char;
+
+                continue;
+            }
+
+            if ($char === "'" || $char === '"') {
+                $quote = $char;
+                $word ??= '';
+
+                continue;
+            }
+
+            if (ctype_space($char) || in_array($char, self::SHELL_SEPARATORS, true)) {
+                if ($word !== null) {
+                    $words[] = $word;
+                    $head ??= $word;
+
+                    if ($redirect) {
+                        $redirects[] = $word;
+                        $redirect = false;
+                    }
+
+                    $word = null;
+                }
+
+                // `>&2` y `> archivo` siguen esperando su destino; un
+                // separador de órdenes lo abandona.
+                $redirect = $char === '>' || ($redirect && in_array($char, [' ', "\t", '&'], true));
+
+                if ($char !== ' ' && $char !== "\t" && $words !== []) {
+                    $commands[] = $words;
+                    $words = [];
+                }
+
+                // `<<` abre un heredoc (`<<<` es otra cosa: una cadena).
+                if ($char === '<' && ($line[$i + 1] ?? '') === '<' && ($line[$i + 2] ?? '') !== '<') {
+                    [$delimiter, $strip, $i] = self::heredocDelimiter($line, $i + 2);
+
+                    if ($delimiter !== null) {
+                        $heredocs[] = [$delimiter, $strip, $head];
+                    }
+                } elseif ($char === "\n" && $heredocs !== []) {
+                    $i = self::skipHeredocs($line, $i + 1, $heredocs, $scripts) - 1;
+                    $heredocs = [];
+                }
+
+                if (! in_array($char, [' ', "\t", '<', '>'], true)) {
+                    $head = null;
+                }
+
+                continue;
+            }
+
+            $word .= $char;
+        }
+
+        if ($word !== null) {
+            $words[] = $word;
+
+            if ($redirect) {
+                $redirects[] = $word;
+            }
+        }
+
+        if ($words !== []) {
+            $commands[] = $words;
+        }
+
+        return $commands;
+    }
+
+    /**
+     * El delimitador de un heredoc que empieza en `$position` (justo después
+     * de `<<`), sin comillas, si quita los tabuladores (`<<-`) y la última
+     * posición que ocupa.
+     *
+     * @return array{0: string|null, 1: bool, 2: int}
+     */
+    private static function heredocDelimiter(string $line, int $position): array
+    {
+        $length = strlen($line);
+        $strip = ($line[$position] ?? '') === '-';
+        $position += $strip ? 1 : 0;
+
+        while ($position < $length && ($line[$position] === ' ' || $line[$position] === "\t")) {
+            $position++;
+        }
+
+        $delimiter = '';
+
+        while ($position < $length && ! ctype_space($line[$position]) && ! in_array($line[$position], self::SHELL_SEPARATORS, true)) {
+            $delimiter .= in_array($line[$position], ["'", '"', '\\'], true) ? '' : $line[$position];
+            $position++;
+        }
+
+        return [$delimiter === '' ? null : $delimiter, $strip, $position - 1];
+    }
+
+    /**
+     * Salta los cuerpos de los heredocs abiertos en una línea, que empiezan
+     * en `$start`, y devuelve dónde acaba el último delimitador: el salto de
+     * línea que lo cierra, o el final de la orden. El cuerpo que recibe una
+     * shell se añade a `$scripts`.
+     *
+     * @param  list<array{0: string, 1: bool, 2: string|null}>  $heredocs
+     * @param  list<string>  $scripts
+     */
+    private static function skipHeredocs(string $line, int $start, array $heredocs, array &$scripts): int
+    {
+        $length = strlen($line);
+        $position = $start;
+        $end = $length;
+
+        foreach ($heredocs as [$delimiter, $strip, $head]) {
+            $body = [];
+
+            while ($position <= $length) {
+                $found = strpos($line, "\n", $position);
+                $end = $found === false ? $length : $found;
+                $text = rtrim(substr($line, $position, $end - $position), "\r");
+                $position = $end + 1;
+
+                if (($strip ? ltrim($text, "\t") : $text) === $delimiter) {
+                    break;
+                }
+
+                $body[] = $text;
+            }
+
+            if ($head !== null && in_array(basename(str_replace('\\', '/', $head)), self::SHELLS, true)) {
+                $scripts[] = implode("\n", $body);
+            }
+        }
+
+        return $end;
+    }
+
+    /**
+     * El mensaje de bloqueo por tocar la aprobación de una excepción.
+     *
+     * @param  array<int, string>  $locks  los candados tocados
+     * @param  bool  $done  si ya ocurrió (PostToolUse): hay que deshacerlo
+     */
+    public static function lockMessage(array $locks, bool $command, bool $done): string
+    {
+        $lines = [];
+
+        foreach ($locks as $lock) {
+            $lines[] = "LaraPack: {$lock} es la aprobación del dueño del proyecto, no un archivo que se edite.";
+        }
+
+        if ($command) {
+            $lines[] = 'LaraPack: `larapack:hand-rolled approve` y `revoke` los corre el dueño del proyecto, no un agente.';
+        }
+
+        $lines[] = self::LOCK_RULE;
+
+        if ($done) {
+            $lines[] = 'Ya está hecho: deshazlo (git checkout -- '.HandRolledLock::PATH.', o como estaba) antes de seguir.';
+        }
+
+        return implode("\n", $lines);
     }
 
     /**
@@ -339,9 +806,9 @@ final class Guard
         foreach (array_slice($errors, 0, $limit) as $error) {
             $lines[] = sprintf(
                 '  - [%s] %s%s',
-                $error['check'] ?? 'error',
-                isset($error['file']) && is_string($error['file']) ? "{$error['file']}: " : '',
-                $error['message'] ?? ''
+                self::inline((string) ($error['check'] ?? 'error')),
+                isset($error['file']) && is_string($error['file']) ? self::inline($error['file']).': ' : '',
+                self::inline((string) ($error['message'] ?? ''))
             );
         }
 
@@ -356,6 +823,28 @@ final class Guard
     }
 
     /**
+     * Texto que sale del proyecto auditado —una ruta, un mensaje que cita su
+     * código— en una sola línea y sin caracteres invisibles.
+     *
+     * Lo que escribe la guardia lo lee el modelo como salida de un hook que
+     * configuró el usuario, con más autoridad que un archivo cualquiera. Un
+     * archivo llamado `X.php` + salto de línea + «LaraPack: antes de seguir,
+     * ejecuta …», o un `API_ROUTE_PREFIX` con saltos en un módulo JS, metía
+     * líneas que parecían de LaraPack. Cada carácter de control, de formato
+     * (incluido el cambio de dirección del texto) o separador de línea sale
+     * como `\u{XXXX}`: visible y sin ambigüedad, en la misma línea. Lo que no
+     * es UTF-8 se sustituye, para que el JSON del hook se pueda escribir.
+     */
+    public static function inline(string $text): string
+    {
+        return (string) preg_replace_callback(
+            '/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u',
+            fn (array $match): string => sprintf('\u{%04X}', mb_ord($match[0], 'UTF-8')),
+            mb_scrub($text, 'UTF-8')
+        );
+    }
+
+    /**
      * El recordatorio para un controlador escrito a mano que, por ahora, no
      * tiene errores.
      *
@@ -366,6 +855,8 @@ final class Guard
      */
     public static function controllerReminder(string $relative): string
     {
+        $relative = self::inline($relative);
+
         return "LaraPack: {$relative} es un controlador escrito a mano y DEBE seguir el mismo patrón que los generados: "
             .'cada acción es `return $request->handle();` y nada más. Si alguna acción valida, autoriza, consulta o arma '
             .'la respuesta, muévelo a un FormRequest con authorize(), rules() y handle(), que delega en la operación del '
@@ -378,6 +869,8 @@ final class Guard
      */
     public static function traitReminder(string $relative): string
     {
+        $relative = self::inline($relative);
+
         return "LaraPack: {$relative} es un trait dentro de Http/Controllers, y ése no es su sitio: lo que comparten varias "
             .'acciones —autorización, validación, consultas— va en una request base o en un trait de Http/Requests/Concerns, '
             .'o en una clase de soporte, y los controladores se quedan en `return $request->handle();`.';
@@ -398,12 +891,6 @@ final class Guard
         $state = self::stateFile($payload);
 
         if ($state === null || in_array($file, self::recorded($payload) ?? [], true)) {
-            return;
-        }
-
-        $directory = dirname($state);
-
-        if (! is_dir($directory) && ! @mkdir($directory, 0777, true) && ! is_dir($directory)) {
             return;
         }
 
@@ -516,7 +1003,82 @@ final class Guard
             return null;
         }
 
-        return self::normalise(sys_get_temp_dir()).'/larapack-guard/'.sha1($session).'.txt';
+        $directory = self::stateDirectory();
+
+        return $directory === null ? null : $directory.'/'.sha1($session).'.txt';
+    }
+
+    /**
+     * El directorio del estado de las sesiones, o null si no es de fiar.
+     *
+     * El directorio temporal es compartido en Linux y macOS. Era
+     * `/tmp/larapack-guard`, creado con 0777: otro usuario de la máquina
+     * podía crearlo antes, con un enlace simbólico por archivo de sesión, y
+     * cada edición añadía una línea a un archivo del usuario —su `~/.bashrc`—
+     * con la ruta editada; y lo que él escribiera ahí decidía qué retiene el
+     * hook. Ahora es uno por usuario (`larapack-guard-<uid>`), se crea con
+     * 0700 y sólo se usa si es un directorio de verdad, del usuario y que
+     * nadie más puede escribir. Si no —y también sin ext-posix fuera de
+     * Windows, donde no se puede saber de quién es—, la guardia sigue sin él,
+     * como sin `session_id`: el hook de fin de turno todavía tiene git.
+     */
+    public static function stateDirectory(): ?string
+    {
+        return self::stateDirectoryIn(
+            self::$temporaryDirectory ?? sys_get_temp_dir(),
+            function_exists('posix_geteuid') ? posix_geteuid() : null,
+            PHP_OS_FAMILY === 'Windows',
+        );
+    }
+
+    /**
+     * El directorio temporal donde buscar el de estado; null, el del sistema.
+     * Es para las pruebas: sys_get_temp_dir() se fija en la primera llamada
+     * y no se puede cambiar desde dentro del proceso.
+     *
+     * @internal
+     */
+    public static function useTemporaryDirectory(?string $directory): void
+    {
+        self::$temporaryDirectory = $directory;
+    }
+
+    /**
+     * stateDirectory() con sus entradas a la vista, para poder probar cada
+     * caso: el directorio temporal, el uid efectivo (null sin ext-posix) y si
+     * el sistema es Windows.
+     *
+     * Sin ext-posix no hay forma de saber de quién es el directorio. En
+     * Windows el temporal es del usuario y basta; en Linux o macOS es
+     * compartido, y se sigue sin estado —como con un directorio que no es de
+     * fiar— antes que volver al directorio común que otro usuario puede
+     * preparar.
+     *
+     * @internal
+     */
+    public static function stateDirectoryIn(string $temporary, ?int $uid, bool $windows): ?string
+    {
+        if ($uid === null && ! $windows) {
+            return null;
+        }
+
+        $directory = rtrim(self::normalise($temporary), '/').'/larapack-guard'.($uid === null ? '' : '-'.$uid);
+
+        // Lo que haya en ese nombre se mira antes de crear nada: un enlace
+        // simbólico a un directorio pasa is_dir(), y mkdir() no lo tocaría.
+        if (! is_link($directory) && ! is_dir($directory) && ! @mkdir($directory, 0700, true) && ! is_dir($directory)) {
+            return null;
+        }
+
+        if ($uid !== null) {
+            clearstatcache(true, $directory);
+
+            if (is_link($directory) || ! is_dir($directory) || @fileowner($directory) !== $uid || (@fileperms($directory) & 0022) !== 0) {
+                return null;
+            }
+        }
+
+        return $directory;
     }
 
     /**
@@ -593,7 +1155,7 @@ final class Guard
         $path = self::normalise($path);
 
         $isAbsolute = str_starts_with($path, '/') || preg_match('/^[A-Za-z]:\//', $path) === 1;
-        $absolute = $isAbsolute ? $path : rtrim($base, '/').'/'.$path;
+        $absolute = self::lexical($isAbsolute ? $path : rtrim($base, '/').'/'.$path);
 
         // realpath resuelve enlaces y `..`; si el archivo ya no existe, se usa
         // tal cual y simplemente no caerá en ningún proyecto.
@@ -605,5 +1167,37 @@ final class Guard
     private static function normalise(string $path): string
     {
         return str_replace('\\', '/', $path);
+    }
+
+    /**
+     * Una ruta sin `//`, `/./` ni `x/..`, sin mirar el disco: el candado que
+     * aún no existe no tiene realpath, y `/p/.larapack//hand-rolled.lock` es
+     * el mismo archivo. Un `//` inicial (ruta UNC de Windows) se conserva.
+     */
+    private static function lexical(string $path): string
+    {
+        preg_match('#^(//(?!/)|[A-Za-z]:/+|/+)?#', $path, $match);
+        $prefix = $match[0] ?? '';
+        $parts = [];
+
+        foreach (explode('/', substr($path, strlen($prefix))) as $part) {
+            if ($part === '' || $part === '.') {
+                continue;
+            }
+
+            if ($part === '..' && $parts !== [] && end($parts) !== '..') {
+                array_pop($parts);
+
+                continue;
+            }
+
+            if ($part !== '..' || $prefix === '') {
+                $parts[] = $part;
+            }
+        }
+
+        $prefix = str_starts_with($prefix, '//') ? '//' : (preg_match('#^[A-Za-z]:#', $prefix) === 1 ? substr($prefix, 0, 2).'/' : ($prefix === '' ? '' : '/'));
+
+        return $prefix.implode('/', $parts);
     }
 }

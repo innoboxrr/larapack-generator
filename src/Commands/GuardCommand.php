@@ -28,6 +28,12 @@ use Throwable;
  * lo de vendor/, un proyecto sin manifiesto fuera de sus controladores— sale
  * con 0 y sin decir nada: un hook que estorba en cada edición acaba
  * desactivado.
+ *
+ * Con `--pre` (o el evento PreToolUse) es el hook de antes de la herramienta:
+ * sólo mira si va a tocar la aprobación de las excepciones —editar
+ * `.larapack/hand-rolled.lock` o correr `larapack:hand-rolled approve` o
+ * `revoke`— y, si es así, la impide. Después de la herramienta (PostToolUse)
+ * también lo bloquea, pero ya está hecho: sólo puede pedir que se deshaga.
  */
 class GuardCommand extends Command
 {
@@ -42,6 +48,7 @@ class GuardCommand extends Command
         $this->setName('larapack:guard')
             ->setDescription('Hook para agentes: comprueba contra el contrato el archivo que se acaba de editar')
             ->addOption('stop', null, InputOption::VALUE_NONE, 'Hook de fin de turno: verifica el proyecto entero')
+            ->addOption('pre', null, InputOption::VALUE_NONE, 'Hook de antes de la herramienta: impide tocar la aprobación de las excepciones #[HandRolled]')
             ->addOption('root', null, InputOption::VALUE_REQUIRED, 'Raíz del proyecto (por defecto, la del archivo tocado)');
     }
 
@@ -79,16 +86,67 @@ class GuardCommand extends Command
             $stop = $input->getOption('stop')
                 || in_array($payload['hook_event_name'] ?? null, ['Stop', 'SubagentStop'], true);
 
-            return $stop
-                ? $this->onStop($payload, $root, $output)
+            if ($stop) {
+                return $this->onStop($payload, $root, $output);
+            }
+
+            return $input->getOption('pre') || ($payload['hook_event_name'] ?? null) === 'PreToolUse'
+                ? $this->onPre($payload, $output)
                 : $this->onEdit($payload, $root, $output);
         } catch (Throwable $e) {
             // Un fallo de la guardia no debe bloquear al agente: con 1 Claude
             // Code se lo enseña al usuario y sigue.
-            $this->stderr($output)->writeln('larapack:guard falló: '.$e->getMessage(), OutputInterface::OUTPUT_RAW);
+            $this->stderr($output)->writeln(self::failure($e), OutputInterface::OUTPUT_RAW);
 
             return Command::FAILURE;
         }
+    }
+
+    /**
+     * La línea que se enseña cuando la guardia falla. El mensaje de la
+     * excepción puede citar texto del proyecto —una ruta, un valor del
+     * laraimport—, y va a un sitio que el modelo lee: en una sola línea, como
+     * todo lo que la guardia cita del proyecto (Guard::inline()).
+     *
+     * @internal
+     */
+    public static function failure(Throwable $e): string
+    {
+        return 'larapack:guard falló: '.Guard::inline($e->getMessage());
+    }
+
+    /**
+     * Antes de la herramienta: impide que un agente apruebe o retire una
+     * excepción #[HandRolled]. Nada más: lo demás se comprueba sobre lo
+     * escrito, después.
+     *
+     * Con 2 Claude Code no ejecuta la herramienta y le enseña al modelo el
+     * porqué.
+     *
+     * @param  array<string, mixed>  $payload
+     */
+    private function onPre(array $payload, OutputInterface $output): int
+    {
+        $message = $this->lockMessage($payload, false);
+
+        if ($message === null) {
+            return Command::SUCCESS;
+        }
+
+        $this->stderr($output)->writeln($message, OutputInterface::OUTPUT_RAW);
+
+        return self::BLOCK;
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    private function lockMessage(array $payload, bool $done): ?string
+    {
+        $locks = Guard::touchedLocks($payload);
+        $command = Guard::approvesHandRolled($payload);
+
+        return $locks === [] && ! $command ? null : Guard::lockMessage($locks, $command, $done);
     }
 
     /**
@@ -96,7 +154,8 @@ class GuardCommand extends Command
      */
     private function onEdit(array $payload, ?string $root, OutputInterface $output): int
     {
-        $messages = [];
+        $locked = $this->lockMessage($payload, true);
+        $messages = $locked === null ? [] : [$locked];
         $reminders = [];
 
         foreach (Guard::touchedFiles($payload) as $file) {
@@ -132,7 +191,7 @@ class GuardCommand extends Command
             $errors = Guard::errorsFor(Guard::findings($project, $managed ? [] : ControllerShape::CHECKS), $relative);
 
             if ($errors !== []) {
-                $messages[] = Guard::message("LaraPack: {$relative} se sale del contrato.", $errors, $project);
+                $messages[] = Guard::message('LaraPack: '.Guard::inline($relative).' se sale del contrato.', $errors, $project);
 
                 continue;
             }

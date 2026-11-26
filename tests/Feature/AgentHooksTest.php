@@ -68,6 +68,8 @@ final class AgentHooksTest extends TestCase
         $this->assertSame(['[ ! -f "$CLAUDE_PROJECT_DIR/vendor/bin/builder" ] || php "$CLAUDE_PROJECT_DIR/vendor/bin/builder" larapack:guard'], $this->commands('PostToolUse'));
         $this->assertSame(['[ ! -f "$CLAUDE_PROJECT_DIR/vendor/bin/builder" ] || php "$CLAUDE_PROJECT_DIR/vendor/bin/builder" larapack:guard --stop'], $this->commands('Stop'));
         $this->assertArrayNotHasKey('matcher', $settings['hooks']['Stop'][0], 'Stop no admite matcher.');
+        $this->assertSame('Write|Edit|MultiEdit|Bash', $settings['hooks']['PreToolUse'][0]['matcher']);
+        $this->assertStringContainsString('larapack:guard --pre', $this->commands('PreToolUse')[0]);
         $this->assertStringContainsString('Hooks añadidos', $this->lastOutput);
     }
 
@@ -121,6 +123,8 @@ final class AgentHooksTest extends TestCase
         $this->assertSame('https://json.schemastore.org/claude-code-settings.json', $settings['$schema']);
         $this->assertSame(['Bash(php artisan:*)'], $settings['permissions']['allow']);
         $this->assertSame('php scripts/generated_guard.php', $settings['hooks']['PreToolUse'][0]['hooks'][0]['command']);
+        $this->assertCount(2, $this->commands('PreToolUse'));
+        $this->assertStringContainsString('larapack:guard --pre', $this->commands('PreToolUse')[1]);
         $this->assertSame(['php scripts/docs_guard.php', '[ ! -f "$CLAUDE_PROJECT_DIR/vendor/bin/builder" ] || php "$CLAUDE_PROJECT_DIR/vendor/bin/builder" larapack:guard --stop'], $this->commands('Stop'));
         $this->assertCount(1, $this->commands('PostToolUse'));
     }
@@ -136,6 +140,7 @@ final class AgentHooksTest extends TestCase
         $this->assertSame($before, file_get_contents($this->settingsFile()));
         $this->assertCount(1, $this->commands('PostToolUse'));
         $this->assertCount(1, $this->commands('Stop'));
+        $this->assertCount(1, $this->commands('PreToolUse'));
         $this->assertStringContainsString('ya presentes', $this->lastOutput);
     }
 
@@ -153,7 +158,7 @@ final class AgentHooksTest extends TestCase
         $result = AgentHooks::installSettings($this->project->path);
 
         $this->assertSame(['PostToolUse'], $result['present']);
-        $this->assertSame(['Stop'], $result['added']);
+        $this->assertSame(['Stop', 'PreToolUse'], $result['added']);
         $this->assertSame(['php artisan larapack:guard'], $this->commands('PostToolUse'));
         $this->assertSame(5, $this->settings()['hooks']['PostToolUse'][0]['hooks'][0]['timeout']);
     }
@@ -171,6 +176,88 @@ final class AgentHooksTest extends TestCase
 
         $this->assertSame(Command::FAILURE, $this->runCommand('larapack:skill', ['--hooks' => true]));
         $this->assertSame('{"hooks": {"PostToolUse": {"no": "es una lista"}}}', file_get_contents($this->settingsFile()));
+    }
+
+    /**
+     * Un `1e999` es JSON válido y json_decode lo lee como INF, que
+     * json_encode no sabe escribir: el `false` acababa en un settings vacío.
+     */
+    public function test_un_settings_que_no_se_puede_reescribir_no_se_vacia(): void
+    {
+        $original = '{"permissions": {"allow": ["Bash(ls)"]}, "limit": 1e999}';
+
+        mkdir(dirname($this->settingsFile()), 0777, true);
+        file_put_contents($this->settingsFile(), $original);
+
+        $this->assertSame(Command::FAILURE, $this->runCommand('larapack:skill', ['--hooks' => true]));
+        $this->assertSame($original, file_get_contents($this->settingsFile()));
+        $this->assertStringContainsString('no se toca', $this->lastOutput);
+    }
+
+    /**
+     * Un repositorio puede traer `.claude/settings.json` como enlace al
+     * settings global de quien lo clona: los hooks acababan en todos sus
+     * proyectos.
+     */
+    public function test_no_escribe_el_settings_a_traves_de_un_enlace_que_sale_del_proyecto(): void
+    {
+        $outside = FakeProject::empty();
+
+        try {
+            $global = $outside->path.'/settings.json';
+            file_put_contents($global, '{"permissions": {}}');
+
+            mkdir(dirname($this->settingsFile()), 0777, true);
+
+            if (! @symlink($global, $this->settingsFile())) {
+                $this->markTestSkipped('No se pueden crear enlaces simbólicos aquí.');
+            }
+
+            $this->assertSame(Command::FAILURE, $this->runCommand('larapack:skill', ['--hooks' => true]));
+            $this->assertSame('{"permissions": {}}', file_get_contents($global));
+            $this->assertStringContainsString('fuera del proyecto', $this->lastOutput);
+        } finally {
+            $outside->cleanup();
+        }
+    }
+
+    public function test_no_escribe_a_traves_de_un_directorio_claude_enlazado_fuera(): void
+    {
+        $outside = FakeProject::empty();
+
+        try {
+            if (! @symlink($outside->path, $this->project->path.'/.claude')) {
+                $this->markTestSkipped('No se pueden crear enlaces simbólicos aquí.');
+            }
+
+            try {
+                $this->runCommand('larapack:skill', ['--hooks' => true, '--no-agents' => true]);
+            } catch (\RuntimeException $e) {
+                $this->assertStringContainsString('fuera del proyecto', $e->getMessage());
+            }
+
+            $this->assertFileDoesNotExist($outside->path.'/settings.json');
+            $this->assertFileDoesNotExist($outside->path.'/skills/larapack/SKILL.md');
+        } finally {
+            @unlink($this->project->path.'/.claude');
+            $outside->cleanup();
+        }
+    }
+
+    /**
+     * Lo habitual —AGENTS.md como enlace a CLAUDE.md, dentro del proyecto—
+     * sigue funcionando.
+     */
+    public function test_un_agents_md_enlazado_dentro_del_proyecto_se_actualiza(): void
+    {
+        file_put_contents($this->project->path.'/CLAUDE.md', "# Reglas\n");
+
+        if (! @symlink($this->project->path.'/CLAUDE.md', $this->agentsFile())) {
+            $this->markTestSkipped('No se pueden crear enlaces simbólicos aquí.');
+        }
+
+        $this->assertSame(Command::SUCCESS, $this->runCommand('larapack:skill'), $this->lastOutput);
+        $this->assertStringContainsString(AgentHooks::BEGIN, (string) file_get_contents($this->project->path.'/CLAUDE.md'));
     }
 
     public function test_crea_agents_md_con_el_bloque_entre_marcadores(): void
@@ -299,6 +386,50 @@ final class AgentHooksTest extends TestCase
 
         $this->assertSame(2, $code, $output);
         $this->assertStringContainsString('controller-shape', $output);
+    }
+
+    /**
+     * El hook de antes de la herramienta corre en cada orden de Bash: la shell
+     * sólo despierta a PHP si la entrada puede ser una aprobación, y entonces
+     * el 2 que la impide llega intacto.
+     */
+    public function test_el_hook_previo_filtra_en_la_shell_y_bloquea_la_aprobacion(): void
+    {
+        if (DIRECTORY_SEPARATOR === '\\' || trim((string) shell_exec('command -v bash 2>/dev/null')) === '') {
+            $this->markTestSkipped('Hace falta bash, que es con lo que Claude Code ejecuta los hooks.');
+        }
+
+        $this->runCommand('larapack:skill', ['--hooks' => true]);
+
+        [$command] = $this->commands('PreToolUse');
+        $bash = fn (string $line): string => (string) json_encode(['hook_event_name' => 'PreToolUse', 'tool_name' => 'Bash', 'tool_input' => ['command' => $line], 'cwd' => $this->project->path]);
+        $write = (string) json_encode(['hook_event_name' => 'PreToolUse', 'tool_name' => 'Write', 'tool_input' => ['file_path' => $this->project->path.'/.larapack/hand-rolled.lock', 'content' => '[]'], 'cwd' => $this->project->path]);
+
+        // Sin vendor/bin/builder no hay a quién preguntar: no falla.
+        $this->assertSame([0, ''], $this->hook($command, $bash('php vendor/bin/builder larapack:hand-rolled approve --all')));
+
+        // Un PHP de mentira que falla siempre: si el filtro de la shell lo
+        // llama sin motivo, se nota.
+        mkdir($this->project->path.'/vendor/bin', 0777, true);
+        file_put_contents($this->project->path.'/vendor/bin/builder', "<?php\nfwrite(STDERR, 'no debía llamarse');\nexit(1);\n");
+
+        $this->assertSame([0, ''], $this->hook($command, $bash('git status && php vendor/bin/builder larapack:verify')));
+
+        copy(dirname(__DIR__, 2).'/builder', $this->project->path.'/vendor/bin/builder');
+        file_put_contents($this->project->path.'/vendor/bin/builder', str_replace(
+            '__DIR__',
+            var_export(dirname(__DIR__, 2), true),
+            (string) file_get_contents($this->project->path.'/vendor/bin/builder')
+        ));
+
+        foreach ([$bash('php vendor/bin/builder larapack:hand-rolled approve --all'), $write] as $payload) {
+            [$code, $output] = $this->hook($command, $payload);
+
+            $this->assertSame(2, $code, $output);
+            $this->assertStringContainsString('Sólo el dueño del proyecto aprueba excepciones', $output);
+        }
+
+        $this->assertSame([0, ''], $this->hook($command, $bash('php vendor/bin/builder larapack:hand-rolled list')));
     }
 
     /**

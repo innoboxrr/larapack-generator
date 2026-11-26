@@ -36,3 +36,26 @@ jobs:
 
             - name: Análisis estático
               run: vendor/bin/phpstan analyse --no-progress --memory-limit=1G
+
+    # El contrato de LaraPack como puerta de la rama. El nombre del job es el
+    # del check que la protección de la rama exige («LaraPack verify»): si
+    # cambia, la protección espera un check que ya no llega y bloquea todo.
+    # --strict cuenta los avisos como fallos: una excepción #[HandRolled] sin
+    # aprobar en .larapack/hand-rolled.lock no entra.
+    verify:
+        name: LaraPack verify
+        runs-on: ubuntu-latest
+
+        steps:
+            - uses: actions/checkout@v5
+
+            - uses: shivammathur/setup-php@v2
+              with:
+                  php-version: '8.4'
+                  coverage: none
+
+            - name: Instalar dependencias
+              run: composer update --prefer-dist --no-interaction --no-progress
+
+            - name: Contrato de LaraPack
+              run: php vendor/bin/builder larapack:verify --strict --format=json

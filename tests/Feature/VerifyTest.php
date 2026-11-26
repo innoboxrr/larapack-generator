@@ -86,6 +86,30 @@ final class VerifyTest extends TestCase
         $this->assertSame('empty-manifest', $report['findings'][0]['check']);
     }
 
+    /**
+     * Un paquete de integración —una pasarela, un PAC— no declara modelos:
+     * sólo tiene sus proveedores. Con `verify --strict` en la CI, avisar de
+     * que «no hay nada registrado» lo dejaría en rojo para siempre.
+     */
+    public function test_un_paquete_sin_modelos_con_sus_proveedores_pasa_con_strict(): void
+    {
+        $this->assertSame(Command::SUCCESS, $this->runCommand('larapack:providers'), $this->lastOutput);
+        $this->assertNotSame([], (new Manifest)->packageFiles());
+
+        [$code, $report] = $this->verify(['--strict' => true]);
+
+        $this->assertSame(Command::SUCCESS, $code, json_encode($report['findings']));
+        $this->assertNotContains('empty-manifest', array_column($report['findings'], 'check'));
+
+        // Lo registrado se sigue comprobando.
+        unlink($this->project->path.'/'.array_key_first((new Manifest)->packageFiles()));
+
+        [$code, $report] = $this->verify();
+
+        $this->assertSame(Command::FAILURE, $code);
+        $this->assertSame(['missing-file'], array_column($report['findings'], 'check'));
+    }
+
     public function test_detecta_un_archivo_generado_que_ha_desaparecido(): void
     {
         $this->runCommand('larapack:full-model', ['name' => 'Product']);

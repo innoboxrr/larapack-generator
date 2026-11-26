@@ -2,6 +2,7 @@
 
 namespace Innoboxrr\LarapackGenerator\Support;
 
+use JsonException;
 use RuntimeException;
 use stdClass;
 
@@ -31,6 +32,12 @@ final class AgentHooks
     private const BLOCK_PATH = '/../../skill/agents-block.md';
 
     /**
+     * La opción de `larapack:guard` que distingue el hook de cada evento: es
+     * como se reconoce uno ya instalado.
+     */
+    private const FLAGS = ['PostToolUse' => null, 'Stop' => '--stop', 'PreToolUse' => '--pre'];
+
+    /**
      * Fusiona los hooks de LaraPack en `.claude/settings.json`.
      *
      * - PostToolUse sobre Write|Edit|MultiEdit: `larapack:guard` revisa el
@@ -38,6 +45,12 @@ final class AgentHooks
      * - Stop: `larapack:guard --stop` corre el Verifier entero y no deja dar la
      *   tarea por terminada con errores. Respeta `stop_hook_active`, así que no
      *   retiene al agente dos veces seguidas por lo mismo.
+     * - PreToolUse sobre Write|Edit|MultiEdit|Bash: `larapack:guard --pre`
+     *   impide que el agente apruebe una excepción #[HandRolled], editando
+     *   `.larapack/hand-rolled.lock` o corriendo `larapack:hand-rolled
+     *   approve`. El PostToolUse también lo bloquea, pero cuando ya está
+     *   escrito; y de una orden de Bash no se entera, porque su matcher no la
+     *   incluye.
      *
      * Un hook ya presente se reconoce por el comando y se deja como está, aunque
      * se haya cambiado a mano: quien lo cambió sabrá por qué.
@@ -67,7 +80,7 @@ final class AgentHooks
                 throw new RuntimeException("{$target}: `hooks.{$event}` no es una lista. Corrígelo a mano; no se toca.");
             }
 
-            if (self::hasGuard($groups, $event === 'Stop')) {
+            if (self::hasGuard($groups, self::FLAGS[$event])) {
                 $present[] = $event;
 
                 continue;
@@ -81,7 +94,16 @@ final class AgentHooks
         // Sin cambios no se reescribe: reformatear el archivo de otro sólo
         // para dejarlo igual es ruido en su diff.
         if ($added !== []) {
-            self::write($target, (string) json_encode($settings, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)."\n");
+            // Con el `false` de json_encode pegado a "\n" el archivo se
+            // quedaba vacío: un `1e999` en el settings (que json_decode lee
+            // como INF) borraba los permisos y los hooks del proyecto.
+            try {
+                $json = json_encode($settings, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+            } catch (JsonException $e) {
+                throw new RuntimeException("{$target}: no se puede volver a escribir sin perder datos ({$e->getMessage()}). Añade los hooks a mano; no se toca.");
+            }
+
+            self::write($root, $target, $json."\n");
         }
 
         return ['target' => $target, 'added' => $added, 'present' => $present];
@@ -127,7 +149,40 @@ final class AgentHooks
                     'statusMessage' => 'LaraPack: verificando el proyecto…',
                 ]],
             ],
+            'PreToolUse' => (object) [
+                'matcher' => 'Write|Edit|MultiEdit|Bash',
+                'hooks' => [(object) [
+                    'type' => 'command',
+                    'command' => self::preCommand($binary),
+                    'timeout' => 30,
+                ]],
+            ],
         ];
+    }
+
+    /**
+     * El hook de antes de la herramienta corre en cada orden de Bash, y
+     * arrancar PHP —en una aplicación, Laravel entero— en cada una se nota.
+     * Por eso la shell filtra primero: sólo llama a PHP si la entrada contiene
+     * `approve`, `revoke` o `hand-rolled` (ésta sin distinguir mayúsculas). Es un
+     * filtro que sólo deja pasar de más: lo que la guardia bloquea siempre
+     * contiene alguna de esas palabras, porque el comando sólo acepta esas
+     * acciones escritas así y el candado se llama así.
+     *
+     * Las busca también en la entrada sin comillas ni barras invertidas
+     * (`bare`): la shell quita las comillas de en medio de una palabra, y
+     * `appr''ove` o `hand"-"rolled` son las mismas palabras. Y deja pasar
+     * siempre una barra invertida seguida de salto de línea (en el JSON,
+     * `\\\n`): la continuación de línea puede partir una palabra por
+     * cualquier sitio, y quitarla aquí con la shell no es fiable.
+     */
+    private static function preCommand(string $binary): string
+    {
+        $filter = <<<'SH'
+        input=$(cat); bare=$(printf '%s' "$input" | tr -d '\\"'"'"); case "$input $bare" in *approve*|*revoke*|*[Hh][Aa][Nn][Dd]-[Rr][Oo][Ll][Ll][Ee][Dd]*|*'\\\'[nr]*)
+        SH;
+
+        return $filter." printf '%s' \"\$input\" | { {$binary} larapack:guard --pre; };; esac";
     }
 
     /**
@@ -145,7 +200,7 @@ final class AgentHooks
         $block = self::BEGIN."\n".self::agentsBlock($skillPath).self::END."\n";
 
         if (! is_file($absolute)) {
-            self::write($absolute, $block);
+            self::write($root, $absolute, $block);
 
             return ['target' => $absolute, 'action' => 'created'];
         }
@@ -158,7 +213,7 @@ final class AgentHooks
 
         if ($begin === false || $end === false) {
             $separator = $current === '' ? '' : (str_ends_with($current, "\n") ? "\n" : "\n\n");
-            self::write($absolute, $current.$separator.$block);
+            self::write($root, $absolute, $current.$separator.$block);
 
             return ['target' => $absolute, 'action' => 'appended'];
         }
@@ -173,7 +228,7 @@ final class AgentHooks
             return ['target' => $absolute, 'action' => 'unchanged'];
         }
 
-        self::write($absolute, $updated);
+        self::write($root, $absolute, $updated);
 
         return ['target' => $absolute, 'action' => 'updated'];
     }
@@ -252,9 +307,12 @@ final class AgentHooks
     }
 
     /**
+     * Si alguno de los grupos ya ejecuta `larapack:guard` con esa opción (o,
+     * con null, sin ninguna de las que distinguen los eventos).
+     *
      * @param  array<int, mixed>  $groups
      */
-    private static function hasGuard(array $groups, bool $stop): bool
+    private static function hasGuard(array $groups, ?string $flag): bool
     {
         foreach ($groups as $group) {
             $handlers = is_object($group) && isset($group->hooks) && is_array($group->hooks) ? $group->hooks : [];
@@ -262,7 +320,13 @@ final class AgentHooks
             foreach ($handlers as $handler) {
                 $command = is_object($handler) && isset($handler->command) && is_string($handler->command) ? $handler->command : '';
 
-                if (str_contains($command, 'larapack:guard') && str_contains($command, '--stop') === $stop) {
+                if (! str_contains($command, 'larapack:guard')) {
+                    continue;
+                }
+
+                $flags = array_filter(self::FLAGS, fn (?string $known): bool => $known !== null && str_contains($command, $known));
+
+                if ($flag === null ? $flags === [] : in_array($flag, $flags, true)) {
                     return true;
                 }
             }
@@ -296,8 +360,10 @@ final class AgentHooks
         return $decoded;
     }
 
-    private static function write(string $file, string $contents): void
+    private static function write(string $root, string $file, string $contents): void
     {
+        self::assertInside($root, $file);
+
         $directory = dirname($file);
 
         if (! is_dir($directory) && ! mkdir($directory, 0777, true) && ! is_dir($directory)) {
@@ -307,5 +373,82 @@ final class AgentHooks
         if (file_put_contents($file, $contents) === false) {
             throw new RuntimeException("No se pudo escribir {$file}.");
         }
+    }
+
+    /**
+     * Que escribir `$file` no acabe fuera del proyecto por un enlace
+     * simbólico.
+     *
+     * Un repositorio puede traer `.claude/settings.json` —o `.claude`, o
+     * `AGENTS.md`— como enlace. Si apuntaba al `~/.claude/settings.json` de
+     * quien lo clona, `larapack:skill --hooks` añadía los hooks a su
+     * configuración global: desde entonces, cada edición en cualquier proyecto
+     * ejecutaba su `artisan` o su `vendor/bin/builder`.
+     *
+     * Se resuelve el camino real del archivo, o del primer antecesor que
+     * existe, y tiene que quedar dentro de la raíz; un enlace roto en el
+     * camino cuenta como fuera. Un enlace que se queda dentro (AGENTS.md →
+     * CLAUDE.md) vale, y una ruta que ya sale del proyecto por escrito
+     * (`--path=../x`) también: eso lo pidió quien ejecuta el comando.
+     */
+    public static function assertInside(string $root, string $file): void
+    {
+        $realRoot = realpath($root);
+
+        if ($realRoot === false) {
+            return;
+        }
+
+        $realRoot = rtrim(str_replace('\\', '/', $realRoot), '/');
+
+        if (! self::within(self::lexical(str_replace('\\', '/', $file)), $realRoot)
+            && ! self::within(self::lexical(str_replace('\\', '/', $file)), rtrim(self::lexical(str_replace('\\', '/', $root)), '/'))) {
+            return;
+        }
+
+        $path = $file;
+
+        while (! file_exists($path)) {
+            if (is_link($path)) {
+                throw new RuntimeException("{$file}: {$path} es un enlace simbólico roto; no se escribe a través de él. Hazlo a mano si es lo que quieres.");
+            }
+
+            $parent = dirname($path);
+
+            if ($parent === $path) {
+                return;
+            }
+
+            $path = $parent;
+        }
+
+        $real = str_replace('\\', '/', (string) realpath($path));
+
+        if (! self::within($real, $realRoot)) {
+            throw new RuntimeException("{$file} lleva fuera del proyecto, a {$real}: no se escribe a través de un enlace simbólico. Hazlo a mano si es lo que quieres.");
+        }
+    }
+
+    private static function within(string $path, string $root): bool
+    {
+        return $path === $root || str_starts_with($path, $root.'/');
+    }
+
+    /**
+     * La ruta con `.` y `..` resueltos sobre el texto, sin mirar el disco.
+     */
+    private static function lexical(string $path): string
+    {
+        $parts = [];
+
+        foreach (explode('/', $path) as $index => $part) {
+            if ($part === '..' && $parts !== [] && end($parts) !== '' && end($parts) !== '..') {
+                array_pop($parts);
+            } elseif ($part !== '.' && ($part !== '' || $index === 0)) {
+                $parts[] = $part;
+            }
+        }
+
+        return implode('/', $parts);
     }
 }

@@ -168,8 +168,8 @@
     "src/Observers/PostObserver.php": "790ee47c1d2b412d23a490b58932a24bd8b23bb4e7806edb3d90edf42a4637ae",
     "src/Policies/CategoryPolicy.php": "4f632f43dd1f57103a0e5c1bd4b9dfb2cfbb2e654d6a50325ffa0e61efad0878",
     "src/Policies/PostPolicy.php": "70a2a899045a738c9182e30751d613201f56ce98724078cf3201c9e27f41f5cf",
-    "tests/Feature/Models/CategoryEndpointsTest.php": "352b2f6d804a1c41976ef21e2925254f5ae9727c6228d895cf10093d1f8e1ac3",
-    "tests/Feature/Models/PostEndpointsTest.php": "1d82fb166db8af3dbd518521fc6900104f6fd50e6b4aa754d89e73d525e1fde6",
+    "tests/Feature/Models/CategoryEndpointsTest.php": "49c4ab5bc80bdd462b8c6c98dcfad1ef1211a5aaeef625b76da1c54c429aee63",
+    "tests/Feature/Models/PostEndpointsTest.php": "b4737ab4c541c1c31961269fbda51e0ab6110d824005b9f75ee9ae5be72d9256",
     "tests/TestCase.php": "6e467aa0e936a3eeb09e3502bdd9b7e48365d999c0987bc5ba872e592f6c72d3",
     "tests/User.php": "d823928f7f62ee09ba8a3868f07923ebfc8bf4afd81f7314acc7a9b74f2298e6"
 }

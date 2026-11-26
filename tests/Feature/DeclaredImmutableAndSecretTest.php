@@ -140,6 +140,14 @@ final class DeclaredImmutableAndSecretTest extends TestCase
         }
 
         $this->assertStringNotContainsString('no_admite_modificaciones', $this->project->read('tests/Feature/Models/PostEndpointsTest.php'));
+
+        // Las pruebas de sesión y de autorización recorren sólo las acciones
+        // que tiene: route() de una que no existe lanzaría.
+        $this->assertStringContainsString("'create' => ['POST', route(", $test);
+
+        foreach (['update', 'delete', 'restore', 'force.delete', 'bulk.update', 'bulk.delete'] as $action) {
+            $this->assertStringNotContainsString("consent.{$action}')", $test);
+        }
     }
 
     // SECRET

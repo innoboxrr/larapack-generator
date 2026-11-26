@@ -1,5 +1,447 @@
 # Changelog
 
+## 9.1.0
+
+Una menor: la CI pasa a ser la barrera de la arquitectura y las excepciones
+`#[HandRolled]` necesitan la aprobación del dueño, los tests generados prueban
+la autorización, y una segunda auditoría de seguridad prueba en masa el escapado
+de los valores del laraimport. Además, documentación para quien mantiene el
+generador. Lo que hay que hacer al actualizar está junto, al final.
+
+### La barrera es la CI, y `#[HandRolled]` exige aprobación
+
+En 9.0 la regla del controlador se cumplía mientras el agente tuviera los hooks
+y la excepción `#[HandRolled]` la decidía quien escribía el atributo. Ninguna de
+las dos cosas puede depender de que alguien se acuerde: ahora la rama protegida
+exige `verify --strict`, y una excepción sólo cuenta si el dueño la aprobó en un
+archivo que pasa por su revisión.
+
+**`.larapack/hand-rolled.lock` y `larapack:hand-rolled`.** El candado es una
+lista JSON de `{target, reason, fingerprint}`, ordenada y estable byte a byte.
+`target` es `Clase` o `Clase::metodo`, con el nombre completo. `fingerprint` es
+la huella del código aprobado —sha256 de sus tokens, sin espacios ni
+comentarios—: de un método, su firma y su cuerpo; de una clase, todos sus
+métodos, su padre y sus traits. Aprobar un nombre sería un cheque en blanco:
+una clase aprobada cubriría cada acción que se le añadiera después. Con la
+huella, añadir una acción, cambiar una sentencia o un parámetro deja la
+excepción sin aprobar, y el diff del candado que la vuelve a aprobar es lo que
+CODEOWNERS pide revisar. Reformatear o comentar no la cambia. Lo que el código
+aprobado llama fuera de la clase (otra clase, el cuerpo de un trait) no entra
+en la huella.
+
+```
+php artisan larapack:hand-rolled list                          # estado de cada excepción
+php artisan larapack:hand-rolled approve --all                 # aprueba las del código
+php artisan larapack:hand-rolled approve TokenController::store
+php artisan larapack:hand-rolled revoke 'App\Http\Controllers\InboundWebhookController'
+```
+
+Basta el final del nombre que lo distinga; si coincide con más de uno, no se
+adivina. Aprobar es correr el comando, revisar el diff del candado y comitearlo;
+`approve` recalcula la huella. `list` marca `code-changed` lo que cambió desde
+que se aprobó. Sin candado y sin excepciones en el código, `approve --all` no
+crea uno vacío: el candado cambia el modo de `verify` (un `#[HandRolled]` nuevo
+pasa de aviso a error), y eso no ocurre de rebote.
+
+| Comprobación | Nivel | Con candado |
+| --- | --- | --- |
+| `hand-rolled` | info | La excepción está aprobada con esa misma razón. `--strict` pasa. |
+| `hand-rolled-unapproved` | error | No está en el candado, **cambió la razón o cambió el código** (la huella no coincide): se aprobó otra cosa. También una entrada sin huella, y un candado ilegible, que deja todo sin aprobar. |
+| `hand-rolled-stale` | aviso | El candado aprueba algo que ya no lleva `#[HandRolled]`. Se retira con `revoke`. |
+
+Sin candado, `hand-rolled` sigue siendo aviso, como en 9.0.
+
+**La guardia no deja que un agente apruebe.** `larapack:guard` bloquea con 2:
+
+- La edición del candado (`Write`, `Edit`, `MultiEdit`), con la ruta
+  normalizada antes de compararla: `//`, `/./`, `x/..`, relativa, con barras de
+  Windows o un punto final.
+- La orden de Bash que corre `larapack:hand-rolled approve` o `revoke`, también
+  por el alias `make:`, por una abreviatura (`larapack:hand`, `l:h`, y con el
+  espacio vacío, `:hand-rolled` o `:h`, que Symfony también acepta), con la
+  palabra partida por comillas (`appr''ove`) o por una continuación de línea
+  (barra invertida y salto), o dentro de `bash -c` y `eval`.
+- La orden de Bash que escribe el candado sin el comando: una redirección (`>`,
+  `>>`), `tee`, `cp`, `mv`, `install`, `ln`, `rsync`, `truncate`, `dd of=`,
+  `sed -i`, `perl -i`, y el código en línea de `php -r`, `python -c`,
+  `node -e`, `ruby -e` o `perl -e` que lo nombre. Leerlo (`cat`, `git diff`) o
+  devolverlo con `git checkout --` no.
+
+La orden se lee como la shell —separadores, comillas, continuaciones y
+heredocs—, sin ejecutarla: un `git commit -m "approve"`, un `grep` o la
+documentación escrita con `cat <<'EOF'` no bloquean; un heredoc que recibe una
+shell (`bash <<EOF`), sí. `larapack:skill --hooks` añade para eso un hook
+**PreToolUse** (`Write|Edit|MultiEdit|Bash`, `larapack:guard --pre`): el
+PostToolUse llega con el archivo ya escrito y su matcher no ve Bash. Como corre
+en cada orden, la shell sólo despierta a PHP si la entrada contiene `approve`,
+`revoke` o `hand-rolled` —también quitando antes comillas y barras invertidas—,
+o una continuación de línea. Se fusiona como los demás y no se duplica. Con los
+hooks de 9.0, que sólo tienen el PostToolUse sobre `Write|Edit|MultiEdit`, la
+guardia ve la edición del candado con esas herramientas —ya hecha: bloquea y
+pide deshacerla—, pero ninguna orden de Bash. No es infranqueable —una
+variable, un glob o un script propio escriben el archivo por otra vía—: la
+barrera es la revisión del dueño en la rama protegida.
+
+**`larapack:ci`** pone `verify --strict` como check de la rama en un proyecto
+que ya existe:
+
+```
+php artisan larapack:ci --dry-run
+php artisan larapack:ci --owner=@organizacion/arquitectura
+```
+
+- Crea `.github/workflows/larapack.yml` con el job **«LaraPack verify»**: Artisan
+  en una aplicación, el builder en un paquete; PHP de `config.platform.php` o la
+  mínima con la que se instala `composer.lock` (school-management pide `^8.3`
+  y su lock exige 8.4); las `ext-*` de `composer.json`; `pull_request` y `push`
+  a la rama por defecto de `origin`. No edita ningún otro workflow, y si el suyo
+  difiere no lo pisa sin `--force`: enseña el diff y sale con 1.
+- Con `--owner` (repetible) fusiona en el CODEOWNERS que GitHub ya lee el
+  candado, el workflow y el propio CODEOWNERS: sin duplicar, sin tocar líneas
+  ajenas, y sin cambiar un patrón que ya tiene otro dueño (lo dice). Sin
+  `--owner` no inventa uno.
+- `--runs-on` (repetible, o una lista JSON: `--runs-on='["self-hosted","linux"]'`)
+  pone el job en los runners del proyecto. Sin él va a `ubuntu-latest`, y si
+  otros workflows corren en otro sitio lo dice con la opción ya escrita: un job
+  que no arranca deja el check exigido sin llegar y nada se fusiona, y en un
+  monorepo donde `verify` tarda minutos, el runner alojado los cobra en cada PR.
+- Si el workflow difiere y no hay `--force`, no escribe nada: tampoco
+  CODEOWNERS, que enseña como «añadiría».
+- Imprime lo que no puede hacer: proteger la rama exigiendo el check y *Require
+  review from Code Owners*, con la orden `gh api --method PUT
+  'repos/{dueño}/{repo}/branches/{rama}/protection'` para que la corra el dueño.
+  Nunca la ejecuta. La rama sale del remoto: si tiene caracteres de shell, la
+  orden lleva `RAMA` y avisa.
+- **La puerta sólo vale si nadie entra por fuera de ella.** La orden pide
+  `enforce_admins=true`: con `false`, quien empuja como administrador se salta
+  el check y la revisión, y GitHub sólo lo anota. Es el caso de un orquestador
+  que sube el SHA ya verificado directo a la rama con la cuenta del dueño: cada
+  push pasaría sin `verify --strict`. El precio es que GitHub no deja aprobar
+  un PR propio, así que los PR del agente tienen que salir de una cuenta que no
+  sea la del único dueño de código (un bot sin administración). Con
+  `--no-enforce-admins` la orden lleva `false`, y la salida avisa.
+
+**Los paquetes nuevos** (`larapack:new`) traen el mismo job «LaraPack verify»
+en su `tests.yml`, y **`larapack:audit`** avisa con `verify-job` si la CI de un
+paquete que usa LaraPack no corre `larapack:verify --strict`. Un paquete en
+`packages/` de un repositorio cuya raíz ya corre `verify --strict` no avisa:
+el `verify` de la raíz recorre `packages/*` con un solo candado.
+
+**`empty-manifest` ya no avisa a un paquete sin modelos que tiene registrados
+sus proveedores** —una pasarela, un PAC: doce de los ochenta y un paquetes de
+school-management—. Lo registrado se sigue comprobando. Con `verify --strict`
+en la CI, ese aviso los habría dejado en rojo para siempre.
+
+### Migrar: school-management
+
+Hoy school-management pide `innoboxrr/larapack-generator` `^8.0` y no tiene
+ningún `#[HandRolled]`. Esto es para **cuando el proyecto ya esté en 9.0** y el
+dueño haya marcado sus excepciones; los nombres de abajo son ejemplos. Una vez,
+**el dueño**:
+
+```
+composer require innoboxrr/larapack-generator:"^9.1" --dev
+php artisan larapack:skill --force --hooks               # añade el hook PreToolUse
+php artisan larapack:hand-rolled list                    # cada excepción, «sin candado»
+php artisan larapack:hand-rolled approve --all           # crea .larapack/hand-rolled.lock con sus huellas
+cat .larapack/hand-rolled.lock                            # revisa objetivos y razones
+php artisan larapack:verify --strict --format=json       # ok: true antes de exigirlo (ver abajo)
+php artisan larapack:ci --owner=@<dueño-o-equipo> --runs-on='["self-hosted","linux","x64","ovh"]'
+git add .larapack/hand-rolled.lock .github .claude/settings.json && git commit
+```
+
+Para retirar una, el nombre completo: hay dos `InboundWebhookController`
+(`App\Http\Controllers\InboundWebhookController` y
+`App\Http\Controllers\Integrations\InboundWebhookController`), y el final del
+nombre sólo vale si no se repite:
+
+```
+php artisan larapack:hand-rolled revoke 'App\Http\Controllers\Integrations\InboundWebhookController'
+```
+
+Después, el workflow corre una vez y el dueño protege `master` con la orden que
+imprime `larapack:ci`. Tres cosas propias de ese proyecto:
+
+- **El push directo a `master` se salta la puerta.** Su contrato de sesión sube
+  el SHA verificado directo a `master` con la cuenta del dueño. Con
+  `enforce_admins=true` ese push deja de entrar; con `false`, entra sin
+  `verify --strict` en cada vez. Para que la puerta valga, el orquestador tiene
+  que pasar por PR, o empujar con una cuenta que no sea de administración y sin
+  permiso para saltarse la protección.
+- **Runners propios.** Su CI corre en `[self-hosted, linux, x64, ovh]` porque
+  se acabaron los minutos alojados, y `verify` tarda minutos en ese monorepo:
+  sin `--runs-on`, el job gastaría minutos de pago en cada PR o no arrancaría.
+- **Un solo candado.** El `verify` de la raíz recorre `packages/*`: el candado
+  de la raíz aprueba también las excepciones de los paquetes, y `audit` no pide
+  un job por paquete. Sólo un paquete que se publique y corra `verify --strict`
+  en su propio repositorio necesita su candado (`--root=packages/<paquete>`).
+
+Si la CI de los paquetes corre `larapack:audit --strict`, el aviso `verify-job`
+la pone en rojo hasta que cada paquete tenga el job: añádelo
+(`larapack:ci --root=packages/<paquete>`) antes de subir a 9.1.
+
+Sus `<Modelo>EndpointsTest` son de antes de 9.1: `verify` avisará con
+`endpoint-tests-outdated` por cada uno (unos 128), y con `--strict` no da
+`ok: true` hasta regenerarlos. Las pruebas nuevas pueden destapar un
+`authorize()` que no pregunta o un listado sin acotar: es lo que buscan. Y antes
+de pasar a `controllers[]` sus controladores escritos a mano que dejan entrar a
+cualquiera con sesión (`DeskLayout`, `Tours`, `Documentation*`), declara en
+ellos `"authorize": "authenticated"`.
+
+### Los tests generados prueban lo que cierra la autorización
+
+Hasta ahora el test de cada modelo abría la autorización con
+`Gate::before(fn () => true)` y probaba sólo el camino feliz: un `authorize()`
+que devolviera `true`, un `IndexRequest` que dejara de forzar `managed` o un
+listado que no pasara por el `ManagedFilter` salían en verde. Ahora cada
+`<Modelo>EndpointsTest` trae, además, tres pruebas que pasan tal como salen y
+no dependen de lo que decida la política del proyecto:
+
+- **`test_<modelo>_cada_accion_requiere_sesion`**: sin sesión, 401 en cada
+  acción declarada. Sustituye a `test_<modelo>_index_requiere_sesion`, que sólo
+  miraba el listado.
+- **`test_<modelo>_cada_accion_pregunta_a_la_politica`**: con sesión y la
+  autorización negando, 403 en cada acción declarada; `policies` y `policy`
+  responden 200 con todo en `false`. Para negar se cambia la puerta por una
+  nueva cuyo único `before()` niega (`Gate::swap(new Gate(..., beforeCallbacks:
+  [fn ($user = null) => false]))`): un `Gate::before(fn () => false)` no
+  bastaría, porque decide el primer `before()` que responde y el `TestCase` (o
+  el `setUp()`) ya abrió la puerta. La política ni se consulta, así que la
+  prueba no cambia cuando se escribe.
+- **`test_<modelo>_index_pasa_por_su_managed_filter`**: el `FilterRegistry` de
+  SearchSurge se envuelve en el test para cambiar el `ManagedFilter` del modelo
+  por uno que primero deja ver todo y después nada. Con `managed=false` en la
+  petición —en la query, como el front, y en el cuerpo—, el registro aparece y
+  luego desaparece: prueba que SearchSurge resuelve el `ManagedFilter` del
+  modelo, que `IndexRequest` fuerza `managed` y que `canView()` se aplica. El
+  test cuenta que se llame al `canView()` sustituto: SearchSurge lo invoca
+  sobre su `managedFilterClass`, el primer filtro crítico, y un segundo filtro
+  derivado de `Managed` ordenado antes lo dejaría sin efecto; así falla
+  diciendo eso y no otra cosa. El estado del sustituto es nuevo en cada
+  ejecución (la clase anónima se declara una vez por proceso). Qué deja ver
+  `canView()` es un hueco y no se prueba; el comentario del test dice dónde
+  hacerlo.
+
+Las acciones salen de `routes.only`/`except` e `immutable`, como el resto del
+test: un modelo de sólo lectura recorre `index` y `show`. Se agrupan en una
+prueba por concepto, no una por acción, para no multiplicar por doce los tests
+de una aplicación con cien modelos.
+
+El test de cada endpoint declarado (`tests/Feature/Endpoints/<Modelo>/`) gana
+**`test_con_sesion_pregunta_a_la_autorizacion`**: con sesión y la autorización
+negando, 403, también en los públicos y en los `controllers[]`. El de un
+registro lo crea y pone su identificador donde lo lee la request, en el cuerpo o
+en la URI. En una aplicación, ese test usa ahora `RefreshDatabase` y su propio
+`signInApplicationUser()`.
+
+**`"authorize": "authenticated"` en un endpoint de `controllers[]`.** Un
+endpoint abierto a cualquiera con sesión, o cuya `authorize()` decide sin Gate
+—deja a `rules()` el 422 y responde 404 por lo ajeno, como el
+`InstalledModulesRequest` de la skill—, fallaría siempre ese 403. Ahora se
+declara: `authorize()` nace en `true` y su test pasa a ser
+**`test_con_sesion_basta_la_sesion`**, que con la autorización negando espera
+cualquier cosa menos 403; el 401 sin sesión se mantiene. No admite `ability` ni
+`public` (`validate` lo rechaza) y en un endpoint de modelo no existe: ahí
+«cualquiera con sesión» es el método de la política devolviendo `true`, y el
+test, que no consulta la política, sigue pasando. Sin declararlo, todo sale
+como antes y el manifiesto no cambia.
+
+Ninguna sale `skipped` ni `incomplete`. Los tests de EndToEnd ejecutan las
+nuevas en un paquete y en una aplicación generados, sin tocarlas, y pasan Pint
+y Larastan. El paquete de prueba cubre ahora, ejecutándolos y no sólo en foto,
+`routes.only` (un modelo de sólo `index`/`show` y otro de
+`index`/`update`/`bulkUpdate`), un endpoint de registro con otro parámetro en la
+URI (`{product_id}/move-to/{slot}`), uno de colección con `delete`, un
+`controllers[]` con parámetro (`import/{batch}`) y uno con `authorize:
+authenticated`.
+
+**En un proyecto existente, `import --force` reescribe el test de cada
+endpoint que nadie editó** (y `.larapack/manifest.json`) y le añade
+`test_con_sesion_pregunta_a_la_autorizacion`. Ese test **falla** en un
+`controllers[]` cuya `authorize()` se rellenó a mano para dejar pasar a
+cualquiera con sesión o decidir sin Gate: es lo que hay que declarar con
+`"authorize": "authenticated"` antes de regenerar. El test de endpoint editado
+se conserva.
+
+`<Modelo>EndpointsTest`, en cambio, se creó una vez y no se regenera nunca: no
+está en el manifiesto, así que no hay hash con el que saber si alguien lo editó
+y reescribirlo podría tirar pruebas escritas a mano. Por eso **`verify` avisa
+con `endpoint-tests-outdated`** por cada uno al que le falte alguna de las tres
+pruebas —la del `ManagedFilter`, sólo si el modelo tiene listado—, con el modelo
+y lo que hay que correr: guardar lo añadido, borrarlo, `larapack:import` (sin
+`--force` basta: crea el que falta) y volver a pegarlo. Es un aviso, así que
+**con `--strict` pone `verify` en rojo** hasta que se haga. No se añadió un paso
+en `larapack:fix`: sin hash no hay forma segura de saber que el archivo es el
+generado, e injertar métodos en una clase editada (sus `use`, sus ayudas)
+tampoco lo es. Las pruebas usan `mockery/mockery`, que traen `laravel/laravel`
+y `orchestra/testbench`.
+
+### Seguridad: segunda auditoría, con pruebas por propiedades
+
+La auditoría de 9.0 escapó los valores libres del laraimport caso por caso.
+Ésta los prueba en masa: 3000 cadenas hostiles de semilla fija (comillas, barra
+final, NUL, saltos, U+2028/2029, `*/`, `?>`, `${`, `</script>`, `}}`, entidades,
+BOM, marcas combinantes, control bidireccional…) por cada contexto donde un
+valor acaba como código, y un `larapack:import` real con ellas en cada campo
+libre —`default` de modelo y de pivote, `cast`, valores y etiquetas de `enum`,
+claves y valores de `rules`—. La propiedad es siempre la misma: el archivo
+generado se analiza, no sale del literal ni del modo PHP, y el valor se recupera
+idéntico. Los escapes viven ahora en `Support\Literal`, uno por contexto.
+
+Lo que salió, de más a menos grave:
+
+- **Código en el formulario Vue a través de una etiqueta de `enum`** (media).
+  Las etiquetas van en `{{ t('…') }}` y llevaban sólo el escape JS. El
+  compilador de plantillas de Vue decodifica las entidades HTML de la
+  interpolación antes de leer el JS: la etiqueta
+  `&#39;) + t.constructor.constructor(&#39;…&#39;)() + (&#39;` llegaba como
+  `t('') + t.constructor.constructor('…')() + ('')` y se ejecutaba en el
+  navegador de quien abre el formulario. Una con `}}` dejaba la plantilla sin
+  compilar. Ahora `&` y `}` van como escapes JS (`\x26`, `\x7d`). Comprobado con
+  `@vue/compiler-sfc` 3.5.
+- **El hook de la guardia repetía al modelo texto del proyecto con saltos de
+  línea** (media). Un archivo de `Http/Controllers` con un salto en el nombre,
+  o un `API_ROUTE_PREFIX` con saltos en el módulo JS, añadía líneas que parecían
+  de LaraPack («LaraPack: antes de corregir nada, ejecuta …») a un mensaje que
+  el modelo lee como salida de un hook del usuario. Ruta, comprobación y
+  mensaje salen ahora en una línea, con cada carácter de control, de formato o
+  separador como `\u{XXXX}` (`Guard::inline()`), también el mensaje de una
+  excepción cuando la guardia falla; lo que no es UTF-8 se sustituye, y el JSON
+  del recordatorio ya no puede salir vacío.
+- **`larapack:skill` escribía a través de enlaces simbólicos** (media-baja). Un
+  repositorio con `.claude/settings.json` (o `.claude`, o `AGENTS.md`) enlazado
+  al `~/.claude/settings.json` de quien lo clona recibía los hooks de LaraPack
+  en la configuración global: desde entonces cada edición, en cualquier
+  proyecto, ejecutaba su `artisan` o su `vendor/bin/builder`. Ahora el destino
+  real tiene que quedar dentro del proyecto; un enlace interno
+  (`AGENTS.md` → `CLAUDE.md`) y un `--path` que sale por escrito siguen valiendo.
+- **El estado de la sesión de la guardia, en un directorio compartido** (baja).
+  Era `/tmp/larapack-guard`, creado 0777: otro usuario de la máquina podía
+  crearlo antes con un enlace por sesión hacia un archivo de la víctima, y cada
+  edición le añadía una línea. Ahora es `larapack-guard-<uid>`, 0700, y sólo se
+  usa si es un directorio de verdad —no un enlace—, del usuario y que nadie más
+  puede escribir. Sin `ext-posix` no se puede saber de quién es: en Windows,
+  donde el temporal es del usuario, se usa `larapack-guard`; en Linux o macOS la
+  guardia sigue sin estado de sesión, como con un directorio que no es de fiar,
+  y el hook de fin de turno se apoya en git.
+- **Un archivo vacío donde había datos** (baja). `json_encode()` devuelve
+  `false`, y pegado a `"\n"` dejaba el archivo vacío: un archivo del proyecto
+  en Latin-1 en el `src` del módulo vaciaba `locales/<idioma>.json` con todas
+  las traducciones escritas a mano, y un `1e999` en `.claude/settings.json` lo
+  vaciaba al añadir los hooks. Ahora la clave que no es UTF-8 se ignora y los
+  dos se escriben con `JSON_THROW_ON_ERROR`.
+- **Un endpoint que tumba la API** (baja). `{course_id}/copy/{course_id}` o un
+  parámetro de más de 32 caracteres pasan el esquema, y el compilador de rutas
+  lanza al compilarlas: un 500 en cada petición con ese verbo que llegue hasta
+  ella —también un 404— y `route:cache` roto. Ahora es un error de validación.
+- **Defaults numéricos en cadena** (baja). `is_numeric()` dejaba sin comillas
+  `"08"` (un octal inválido: la migración no compilaba), `"007"` y `"01"` (los
+  octales 7 y 1), `" 1"` o `"1e3"`. Ahora va sin comillas sólo la cadena con
+  forma de número decimal sin ceros a la izquierda, sin exponente y sin
+  espacios (`-?(0|[1-9][0-9]*)(\.[0-9]+)?`); `"10.00"`, `"0.00"` y `"1.10"`
+  siguen saliendo `->default(10.00)` como en 9.0. Las demás van entre comillas.
+  El pivote usa ahora el mismo literal (`Tool::defaultLiteral()`): antes
+  escribía todo entre comillas, y `true` salía `'1'`, `false` salía `''`
+  —inválido para un `boolean` en MySQL estricto— y `0` salía `'0'`.
+- **Claves de traducción que nadie pide** (baja). `t('Dos\nlíneas')` daba la
+  clave «Dosnlíneas»: ahora se decodifican los escapes de la cadena.
+- **El `value` de una opción con un salto de línea** (baja): el analizador HTML
+  convierte `\r` en `\n`. Los saltos van como entidades numéricas.
+- **`larapack:fix --dry-run` sin memoria** (baja). El diff calculaba una tabla
+  de n·m: dos cambios a 3000 líneas pedían 200 MB. Pasados 4 millones de celdas
+  se parte por anclas, como el diff «patience» de git: las líneas que aparecen
+  una sola vez en cada lado, en su orden común más largo, no cambiaron, y entre
+  dos anclas queda un trozo pequeño. Dos cambios lejanos siguen saliendo en dos
+  trozos y no como el archivo entero quitado y puesto; eso queda sólo para un
+  archivo sin ninguna línea única. Memoria lineal, el mismo diff cada vez, y
+  exacto: una prueba por propiedades lo aplica al original.
+- **Mensajes**: una clave del laraimport que empieza por NUL o un número que
+  JSON lee como INF daban «The data (null) must match the type: object». Se
+  siguen rechazando, ahora diciendo por qué.
+
+Revisado sin cambios: `larapack:fix --path` y `--package` sólo filtran la lista
+de archivos del proyecto (`--path=..` no añade nada); `larapack:guard` resuelve
+`file_path` con `realpath`, ignora una entrada que no es un objeto JSON y sólo
+lee archivos con el tokenizador; los nombres, URIs, middleware y habilidades de
+los endpoints están acotados por el esquema y la interfaz generada no pinta HTML
+(`html: false`); los patrones del esquema terminan con `D` (Opis), así que un
+salto de línea final no pasa; las expresiones regulares de `verify` y `fix` no
+tienen cuantificadores anidados ambiguos, PhpOutline no es recursivo y la búsqueda
+de `handle()` por padres y traits lleva la cuenta de lo visitado.
+
+Queda anotado sin arreglar: un archivo de rutas con miles de closures anidados
+hace que `route-closure` tarde decenas de segundos (cuadrático en la
+profundidad); el hook vence por tiempo y deja pasar. Una clave de `enum`
+`__proto__` no se recupera en el mapa de etiquetas de la tabla.
+
+### Al actualizar
+
+**La barrera de la CI.** Nada rompe a un proyecto en 9.0: sin
+`.larapack/hand-rolled.lock`, `verify` se comporta igual que antes, y el
+workflow y CODEOWNERS sólo se crean si se pide.
+
+Regenerar cambia lo generado sólo donde había valores raros: etiquetas de enum
+con `&` o `}` en el formulario Vue, valores de enum con saltos de línea, y
+defaults en cadena que no son un número decimal normal.
+
+**Los defaults que cambian, y la alteración que escriben.** Cambian sólo los
+`default` de modelo en cadena con ceros a la izquierda (`"01"`, `"007"`), con
+exponente (`"1e3"`) o con espacios (`" 1"`): la 9.0 los escribía sin comillas y
+ahora van entre comillas. `"08"` no compilaba, así que no hay migración de 9.0
+que lo tenga. `MigrationTool::alter()` compara las definiciones como texto: si
+la migración de creación no se editó a mano, el siguiente `larapack:import`
+escribe una `_alter_<tabla>_table` con `->change()` para esas columnas —y es lo
+correcto: `->default(01)` era el entero 1—; si se editó, la conserva y pide
+escribir la alteración. Ojo: `->change()` reescribe la definición entera de la
+columna, así que una longitud o precisión cambiada a mano en otra migración
+(una de invariantes, por ejemplo) se pierde; revisa la alteración antes de
+migrar. En school-management, de 1328 defaults de modelo en sus 82
+`laraimport.json` cambian dos, ambos de `packages/school-payroll`:
+`PayrollFiscalProfile.contract_type` (`01` → `'01'`) y `regime_type`
+(`02` → `'02'`), cuyas columnas lleva a `VARCHAR(2)` la migración
+`2026_10_11_053000_payroll_imss_and_stamping_invariants.php`: la alteración
+generada las devolvería a `VARCHAR(255)`. Los pivotes no tienen alteración: sólo
+cambia la migración de un pivote nuevo (en school-management ningún pivote
+declara `default`).
+
+La guardia guarda su estado en otro directorio:
+el de una sesión abierta antes de actualizar se pierde, y el hook de fin de
+turno sigue con git.
+
+### Para quien mantiene el generador
+
+- **`ARCHITECTURE.md`**: el recorrido completo de `laraimport.json` a la
+  guardia —esquema, valores por omisión, validación semántica, importación,
+  herramientas, plantillas, formateo, manifiesto, `verify`, hooks y `fix`—,
+  cómo se registra un comando, los principios de diseño, el mapa de directorios
+  y qué tocar para cada tipo de cambio (un tipo de columna, una clave, una
+  plantilla, una acción, un check, una opción). Hasta ahora eso sólo se sabía
+  leyendo los docblocks de `src/Support/`, y quien no fuera su autor no tenía
+  por dónde empezar. `Tool::generate` es el camino principal para escribir un
+  archivo, no el único: una tabla dice qué copias van por su cuenta (el
+  andamiaje de `larapack:new`, los tests y `phpunit.xml`, los traits de huecos,
+  las migraciones pivote, `alter` y `drop`) y qué no reciben de `generate()`
+  —bloques, manifiesto, `preserved`, el informe—.
+- **`CONTRIBUTING.md`**: preparar el entorno, la suite, las fotos
+  (`LARAPACK_UPDATE_SNAPSHOTS`), las pruebas de punta a punta
+  (`LARAPACK_SKIP_UI_BUILD`, `LARAPACK_PINT`), Pint y Larastan, la convención
+  de commits, qué cuenta como cambio que rompe y cómo se publica. La cabecera
+  `(sin publicar)` y el «`VERSION` sólo en el commit que publica» son una
+  convención nueva, adoptada en esta versión.
+- **`ArchitectureDocTest`** comprueba que cada enlace relativo, cada ruta del
+  repositorio y cada `Clase::miembro` que citan los dos documentos sigan
+  existiendo. Un mapa que ya no corresponde con el código es peor que no tener
+  mapa, y sin el test envejecería en silencio. Comprueba también cada `#ancla`
+  con el slug de GitHub, que cada test nombrado exista bajo `tests/`, el nombre
+  de un método con sus mayúsculas y que un enlace con una clase apunte a su
+  archivo; lo que va en un bloque de código, también sangrado, no se comprueba.
+- **`release.yml`** sólo publica si `Tests` terminó en verde (o se lanza a
+  mano). Se dispara con `workflow_run` de tipo `completed`, que también llega
+  cuando `Tests` falla, y la puerta sólo podía estar en el workflow reutilizable
+  de `innoboxrr/.github`, que no se ve desde aquí.
+
+No cambia nada de lo que se genera ni de lo que comprueban los comandos.
+
 ## 9.0.0
 
 Los agentes respetaban `return $request->handle();` en los controladores que

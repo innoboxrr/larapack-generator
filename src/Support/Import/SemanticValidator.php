@@ -20,6 +20,12 @@ final class SemanticValidator
     public const WARNING = 'warning';
 
     /**
+     * Symfony\Component\Routing\RouteCompiler::VARIABLE_MAXIMUM_LENGTH: el
+     * paquete no depende de symfony/routing, así que se copia.
+     */
+    private const ROUTE_PARAMETER_MAX_LENGTH = 32;
+
+    /**
      * @param  array<string, mixed>  $document  Ya normalizado con los defaults.
      * @param  array<string, mixed>  $raw  Tal como se escribió. Hace falta para
      *                                     distinguir un valor declarado de uno
@@ -158,6 +164,21 @@ final class SemanticValidator
 
             $parameters = Endpoints::parameters($uri);
 
+            // El compilador de rutas de Symfony, que usa Laravel, lanza una
+            // excepción con un parámetro repetido o de más de 32 caracteres.
+            // No al registrar la ruta sino al compilarla: en la primera
+            // petición con ese verbo que llegue hasta ella —también un 404—, y
+            // en `route:cache`. El esquema no lo ve: la URI es válida.
+            foreach (array_unique(array_diff_assoc($parameters, array_unique($parameters))) as $repeated) {
+                $findings[] = self::error("{$at}/uri", "La URI '{$uri}' repite el parámetro {{$repeated}}: Laravel no puede compilar esa ruta y la petición acaba en un 500.");
+            }
+
+            foreach (array_unique($parameters) as $parameter) {
+                if (strlen($parameter) > self::ROUTE_PARAMETER_MAX_LENGTH) {
+                    $findings[] = self::error("{$at}/uri", "El parámetro {{$parameter}} de '{$uri}' tiene más de ".self::ROUTE_PARAMETER_MAX_LENGTH.' caracteres: Laravel no puede compilar esa ruta y la petición acaba en un 500. Acórtalo.');
+                }
+            }
+
             if ($actions !== null && ($endpoint['target'] ?? 'record') === 'record' && $parameters !== [] && ! in_array($idParameter, $parameters, true)) {
                 $findings[] = self::error("{$at}/uri", "'{$name}' actúa sobre un registro y la request lo lee de {$idParameter}. Si el identificador va en la URI, el parámetro se llama {{$idParameter}}.");
             }
@@ -172,6 +193,18 @@ final class SemanticValidator
 
             if ($actions !== null && $validName) {
                 $findings = [...$findings, ...self::endpointAbility($owner, $endpoint, $at, $actions, $abilities)];
+            }
+
+            // `authorize: authenticated` dice que basta la sesión: un Gate que
+            // no se pregunta, o un público sin sesión, lo contradicen.
+            if (($endpoint['authorize'] ?? null) === 'authenticated') {
+                if (isset($endpoint['ability'])) {
+                    $findings[] = self::error("{$at}/authorize", "'{$name}' declara authorize: authenticated y ability '{$endpoint['ability']}': con authenticated no se pregunta a ningún Gate. Quita una de las dos.");
+                }
+
+                if ($public) {
+                    $findings[] = self::error("{$at}/authorize", "'{$name}' es público y declara authorize: authenticated: un público no exige sesión. Quita una de las dos.");
+                }
             }
         }
 

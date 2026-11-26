@@ -309,16 +309,7 @@ class MigrationTool extends Tool
 
         if (array_key_exists('default', $prop) && $prop['default'] !== null) {
 
-            $default = $prop['default'];
-
-            // Determinar tipo de valor default
-            if (is_bool($default)) {
-                $default = $default ? 'true' : 'false';
-            } elseif (is_numeric($default)) {
-                // se deja tal cual
-            } else {
-                $default = self::phpString((string) $default);
-            }
+            $default = self::defaultLiteral($prop['default']);
 
             $column .= "->default({$default})";
         }

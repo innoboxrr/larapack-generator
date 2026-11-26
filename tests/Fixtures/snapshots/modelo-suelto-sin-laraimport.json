@@ -96,7 +96,7 @@
     "src/Notifications/Product/ExportNotification.php": "c95d9abb40b5f0766e4f30de7c6f9bbd8c5a26b6070485ba1ecea837d9de5741",
     "src/Observers/ProductObserver.php": "02a81e6ca4aaec404d297cac78e4fffc2e6841ff21fe3cc04ad1328e033e4340",
     "src/Policies/ProductPolicy.php": "6bd7321b0c43da19aa5dd62ef529dc6a92f0d5c54e7f735fdd3c11daa9bce550",
-    "tests/Feature/Models/ProductEndpointsTest.php": "5c2cd611a425c84911c46b5d6b31dd99d1f10248caa071933181de37edd7e626",
+    "tests/Feature/Models/ProductEndpointsTest.php": "cf6d52d665040a331ed6cfe5156e88995845829bb13cd9b73214e35bdc8ac55d",
     "tests/TestCase.php": "6e467aa0e936a3eeb09e3502bdd9b7e48365d999c0987bc5ba872e592f6c72d3",
     "tests/User.php": "d823928f7f62ee09ba8a3868f07923ebfc8bf4afd81f7314acc7a9b74f2298e6"
 }

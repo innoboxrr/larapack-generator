@@ -117,6 +117,50 @@ for form in unix windows; do
     echo "ok [$form] controlador con lógica: 2 (bloquea)"
 done
 
+# El hook de antes de la herramienta: filtra en la shell (case, $(cat), una
+# tubería a un grupo { …; }) y sólo entonces llama a PHP. Es la parte con más
+# sintaxis de shell, y la que más fácil se rompe en Git Bash.
+PRE_CMD="$(hook PreToolUse)"
+[ -n "$PRE_CMD" ] || fail "no hay hook PreToolUse de larapack:guard"
+echo "hook previo: $PRE_CMD"
+
+# $1 = forma de la ruta, $2 = la orden de Bash que el agente quiere correr.
+run_pre() {
+    local dir="$P"
+    if [ "$1" = windows ]; then dir="$(winpath "$P")"; fi
+    local payload
+    payload="$(php -r 'echo json_encode(["hook_event_name"=>"PreToolUse","tool_name"=>"Bash","tool_input"=>["command"=>$argv[1]],"cwd"=>$argv[2]]);' "$2" "$dir")"
+    set +e
+    printf '%s' "$payload" | CLAUDE_PROJECT_DIR="$dir" bash -c "$PRE_CMD" 2>"$WORK/stderr"
+    local code=$?
+    set -e
+    return $code
+}
+
+for form in unix windows; do
+    code=0; run_pre "$form" 'php vendor/bin/builder larapack:hand-rolled approve --all' || code=$?
+    [ "$code" = 2 ] || fail "[$form] aprobar una excepción debe salir con 2 y salió con $code: $(cat "$WORK/stderr")"
+    grep -q 'dueño del proyecto' "$WORK/stderr" || fail "[$form] el mensaje no dice quién aprueba: $(cat "$WORK/stderr")"
+    echo "ok [$form] aprobar una excepción: 2 (bloquea)"
+
+    run_pre "$form" 'git status' || fail "[$form] una orden cualquiera no debe bloquear (código $?): $(cat "$WORK/stderr")"
+    echo "ok [$form] orden cualquiera: 0"
+
+    # El filtro de la shell busca también sin comillas ni barras: la shell
+    # quita las de en medio de una palabra, y una continuación de línea la
+    # parte por cualquier sitio. Ninguna de estas formas contiene `approve`
+    # tal cual.
+    for split in "php artisan l:h appr''ove --all" $'php artisan :h appr\\\nove --all'; do
+        code=0; run_pre "$form" "$split" || code=$?
+        [ "$code" = 2 ] || fail "[$form] «$split» debe salir con 2 y salió con $code: $(cat "$WORK/stderr")"
+    done
+    echo "ok [$form] aprobar con la palabra partida: 2 (bloquea)"
+
+    code=0; run_pre "$form" "echo '[]' > .larapack/hand\"-\"rolled.lock" || code=$?
+    [ "$code" = 2 ] || fail "[$form] redirigir al candado debe salir con 2 y salió con $code: $(cat "$WORK/stderr")"
+    echo "ok [$form] redirigir al candado: 2 (bloquea)"
+done
+
 # Sin vendor/bin/builder (antes del composer install) el hook no puede fallar
 # en cada edición: sale limpio.
 rm "$P/vendor/bin/builder"

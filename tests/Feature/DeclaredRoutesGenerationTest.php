@@ -115,10 +115,18 @@ final class DeclaredRoutesGenerationTest extends TestCase
         preg_match_all('/public function (test_\w+)\(\)/', $test, $tests);
 
         $this->assertSame([
-            'test_audit_event_index_requiere_sesion',
+            'test_audit_event_cada_accion_requiere_sesion',
+            'test_audit_event_cada_accion_pregunta_a_la_politica',
             'test_audit_event_index_endpoint',
+            'test_audit_event_index_pasa_por_su_managed_filter',
             'test_audit_event_show_endpoint',
         ], $tests[1]);
+
+        // Las pruebas de sesión y de autorización recorren las acciones
+        // declaradas, y sólo ésas: una ruta que no existe haría fallar route().
+        preg_match_all("/route\\('api\\.acme\\.audit\\.audit_event\\.([a-z.]+)'\\)/", $test, $routes);
+
+        $this->assertSame(['index', 'show'], array_values(array_unique($routes[1])));
     }
 
     public function test_except_quita_solo_lo_que_nombra(): void

@@ -98,6 +98,9 @@ class EndpointTool extends Tool
                 && ! in_array($this->snake_case_model_name.'_id', Endpoints::parameters((string) ($endpoint['uri'] ?? '')), true),
             'endpoint_public' => (bool) ($endpoint['public'] ?? false),
             'endpoint_gate' => ! $model && ($endpoint['ability'] ?? null) !== null,
+            // Basta la sesión: authorize() no pregunta a ningún Gate, y su
+            // test no espera 403 con la autorización negando.
+            'endpoint_authenticated' => ! $model && ($endpoint['authorize'] ?? null) === 'authenticated',
             default => false,
         };
     }
@@ -124,8 +127,8 @@ class EndpointTool extends Tool
             'endpointHttpVerb' => strtoupper($endpoint['method']),
             'endpointUri' => $endpoint['uri'],
             'endpointGuestRouteArgs' => $this->routeArguments(false),
-            'endpointPublicRouteArgs' => $this->routeArguments(true),
-            'endpointPublicPayload' => $this->publicPayload(),
+            'endpointRecordRouteArgs' => $this->routeArguments(true),
+            'endpointRecordPayload' => $this->recordPayload(),
         ];
     }
 
@@ -133,11 +136,13 @@ class EndpointTool extends Tool
      * Los parámetros que la URI exige para que route() pueda construirla.
      *
      * Al invitado le basta cualquier valor: el middleware de sesión lo para
-     * antes de que nadie lo lea. En el público, el identificador del registro
-     * tiene que ser el de uno que exista, o la request respondería 404 antes
-     * de llegar a la política.
+     * antes de que nadie lo lea. Con registro —el público sin sesión y la
+     * prueba con sesión y la autorización negando—, el identificador tiene que
+     * ser el de uno que exista, o la request respondería 404 antes de llegar a
+     * la política. Sólo lo hay si el endpoint actúa sobre un registro: es lo
+     * que crea la prueba.
      */
-    private function routeArguments(bool $public): string
+    private function routeArguments(bool $withRecord): string
     {
         $parameters = Endpoints::parameters($this->endpoint['uri']);
 
@@ -146,9 +151,10 @@ class EndpointTool extends Tool
         }
 
         $id = $this->snake_case_model_name.'_id';
+        $record = $withRecord && $this->holds('endpoint_record');
 
         $pairs = array_map(
-            fn (string $parameter): string => var_export($parameter, true).' => '.($public && $parameter === $id ? "\${$this->camelCaseModelName}->id" : '1'),
+            fn (string $parameter): string => var_export($parameter, true).' => '.($record && $parameter === $id ? "\${$this->camelCaseModelName}->id" : '1'),
             $parameters
         );
 
@@ -158,7 +164,7 @@ class EndpointTool extends Tool
     /**
      * El identificador del registro, si no va ya en la URI.
      */
-    private function publicPayload(): string
+    private function recordPayload(): string
     {
         $id = $this->snake_case_model_name.'_id';
 

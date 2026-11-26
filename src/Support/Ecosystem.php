@@ -178,7 +178,85 @@ final class Ecosystem
             ...$findings,
             ...$this->auditTests($directory, $name),
             ...$this->auditWorkflows($directory, $name, 'composer'),
+            ...$this->auditVerifyJob($directory, $name, array_key_exists('innoboxrr/larapack-generator', $all)),
         ];
+    }
+
+    /**
+     * Un paquete que usa LaraPack y cuya CI no corre `larapack:verify
+     * --strict`: el contrato depende de que alguien se acuerde de correrlo.
+     *
+     * Usa LaraPack si lo pide en composer.json o tiene manifiesto; a uno que
+     * no lo usa no se le exige. Se buscan las líneas de los workflows, sin
+     * comentarios, que llamen a verify con --strict; el nombre del job no se
+     * mira, porque cualquier job que lo corra hace de puerta.
+     *
+     * Un paquete dentro de `packages/` de un repositorio (un monorepo como
+     * school-management) no tiene CI propia que valga: GitHub sólo lee los
+     * workflows de la raíz, y el `verify` de la raíz ya recorre `packages/*`
+     * con un solo candado. Si esa raíz corre verify --strict, no se avisa; si
+     * no, el remedio es el job en la raíz, no un larapack.yml y un candado por
+     * paquete.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function auditVerifyJob(string $directory, string $name, bool $requiresLarapack): array
+    {
+        if (! $requiresLarapack && ! is_file("{$directory}/.larapack/manifest.json")) {
+            return [];
+        }
+
+        if ($this->runsStrictVerify($directory)) {
+            return [];
+        }
+
+        $host = $this->monorepoHost($directory);
+
+        if ($host !== null && $this->runsStrictVerify($host)) {
+            return [];
+        }
+
+        $message = $host === null
+            ? 'Ningún workflow corre `larapack:verify --strict`: el contrato no es una puerta de la rama. `larapack:ci` crea el job «LaraPack verify» (los paquetes nuevos ya lo traen en tests.yml).'
+            : 'Está en packages/ de '.basename($host).', y ningún workflow de esa raíz corre `larapack:verify --strict`: el contrato no es una puerta de la rama. El job va en la raíz (`larapack:ci` allí), cuyo verify recorre también packages/* con un solo candado; no hace falta un larapack.yml ni un candado por paquete.';
+
+        return [$this->finding(self::WARNING, 'verify-job', $name, $message)];
+    }
+
+    /**
+     * Si algún workflow del directorio corre `larapack:verify --strict`.
+     */
+    private function runsStrictVerify(string $directory): bool
+    {
+        $workflows = [
+            ...(glob("{$directory}/.github/workflows/*.yml") ?: []),
+            ...(glob("{$directory}/.github/workflows/*.yaml") ?: []),
+        ];
+
+        foreach ($workflows as $workflow) {
+            foreach (file($workflow, FILE_IGNORE_NEW_LINES) ?: [] as $line) {
+                $code = (string) preg_replace('/(^|\s)#.*$/', '', $line);
+
+                if (str_contains($code, 'larapack:verify') && str_contains($code, '--strict')) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * La raíz del repositorio que lo contiene en `packages/`, o null: el
+     * padre de `packages/` si es la raíz de un repositorio git (tiene `.git`,
+     * directorio o archivo de un worktree).
+     */
+    private function monorepoHost(string $directory): ?string
+    {
+        $parent = dirname($directory);
+        $host = dirname($parent);
+
+        return basename($parent) === 'packages' && $host !== $parent && file_exists("{$host}/.git") ? $host : null;
     }
 
     /**

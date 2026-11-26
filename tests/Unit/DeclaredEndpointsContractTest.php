@@ -217,6 +217,31 @@ final class DeclaredEndpointsContractTest extends TestCase
         $this->assertSame([], $this->messages($errors));
     }
 
+    /**
+     * Las dos URIs pasan el esquema, y Laravel lanza al compilar la ruta: un
+     * 500 en cada petición con ese verbo que llegue hasta ella, y
+     * `route:cache` roto.
+     */
+    public function test_un_parametro_repetido_o_demasiado_largo_no_compila_en_laravel(): void
+    {
+        ['errors' => $errors] = $this->parse([['name' => 'copy', 'method' => 'post', 'uri' => '{course_id}/copy/{course_id}']]);
+
+        $this->assertRejected($errors, '/models/0/endpoints/0/uri', 'repite el parámetro {course_id}');
+
+        ['errors' => $errors] = $this->parse([], [], [['name' => 'Report', 'endpoints' => [
+            ['name' => 'summary', 'method' => 'get', 'uri' => 'reports/{this_parameter_name_is_far_too_long}'],
+        ]]]);
+
+        $this->assertRejected($errors, '/controllers/0/endpoints/0/uri', 'más de 32 caracteres');
+
+        ['errors' => $errors] = $this->parse([], [], [['name' => 'Report', 'endpoints' => [
+            ['name' => 'summary', 'method' => 'get', 'uri' => 'reports/{parameter_name_with_32_character}'],
+        ]]]);
+
+        $this->assertSame(32, strlen('parameter_name_with_32_character'));
+        $this->assertSame([], $this->messages($errors));
+    }
+
     public function test_una_habilidad_crud_que_el_modelo_no_tiene(): void
     {
         ['errors' => $errors] = $this->parse(
@@ -281,6 +306,48 @@ final class DeclaredEndpointsContractTest extends TestCase
         $this->assertRejected($errors, '/controllers/0/name', 'como un modelo');
         $this->assertRejected($errors, '/controllers/1/name', "Declara 'Desk'");
         $this->assertRejected($errors, '/controllers/3/name', 'dos veces');
+    }
+
+    /**
+     * `authorize: authenticated` es la forma declarada de «basta la sesión»:
+     * sólo en un `controllers[]`, sin Gate al que preguntar y con sesión.
+     */
+    public function test_authorize_authenticated_es_de_un_controlador_con_sesion_y_sin_gate(): void
+    {
+        ['document' => $document, 'errors' => $errors] = $this->parse([], controllers: [
+            ['name' => 'Desk', 'endpoints' => [
+                ['name' => 'mine', 'method' => 'get', 'authorize' => 'authenticated'],
+                ['name' => 'overview', 'method' => 'get'],
+            ]],
+        ]);
+
+        $this->assertSame([], $errors);
+        [$mine, $overview] = $document->controllers()[0]['endpoints'];
+        $this->assertSame('authenticated', $mine['authorize']);
+        $this->assertNull($mine['ability']);
+        // Sin declararlo, la clave no aparece: el manifiesto sale como antes.
+        $this->assertArrayNotHasKey('authorize', $overview);
+
+        ['errors' => $errors] = $this->parse([], controllers: [
+            ['name' => 'Desk', 'endpoints' => [
+                ['name' => 'mine', 'method' => 'get', 'authorize' => 'authenticated', 'ability' => 'desk.mine'],
+                ['name' => 'hook', 'method' => 'post', 'authorize' => 'authenticated', 'public' => true, 'middleware' => ['throttle:6,1']],
+            ]],
+        ]);
+
+        $this->assertRejected($errors, '/controllers/0/endpoints/0/authorize', 'no se pregunta a ningún Gate');
+        $this->assertRejected($errors, '/controllers/0/endpoints/1/authorize', 'un público no exige sesión');
+
+        // Otro valor, o en un modelo, que pregunta siempre a su política.
+        ['document' => $document, 'errors' => $errors] = $this->parse([], controllers: [
+            ['name' => 'Desk', 'endpoints' => [['name' => 'mine', 'method' => 'get', 'authorize' => 'anyone']]],
+        ]);
+        $this->assertNull($document);
+        $this->assertContains('/controllers/0/endpoints/0/authorize', array_column($errors, 'path'));
+
+        ['document' => $document, 'errors' => $errors] = $this->parse([['name' => 'publish', 'method' => 'post', 'authorize' => 'authenticated']]);
+        $this->assertNull($document);
+        $this->assertContains('/models/0/endpoints/0', array_column($errors, 'path'));
     }
 
     public function test_un_controlador_sin_endpoints_no_tiene_sentido(): void

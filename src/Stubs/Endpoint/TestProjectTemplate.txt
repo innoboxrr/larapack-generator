@@ -2,8 +2,10 @@
 
 namespace Namespace\Tests\Feature\Endpoints\PascalCaseModelName;
 
-// @larapack:if endpoint_model&endpoint_public&endpoint_record
+use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Gate;
+// @larapack:if endpoint_model&endpoint_record
 use Namespace\Models\PascalCaseModelName;
 // @larapack:endif
 use Namespace\Tests\TestCase;
@@ -16,10 +18,8 @@ use Namespace\Tests\TestCase;
  */
 class EndpointClassNameTest extends TestCase
 {
-// @larapack:if endpoint_model&endpoint_public&endpoint_record
 
     use RefreshDatabase;
-// @larapack:endif
 // @larapack:if !endpoint_public
 
     public function test_requiere_sesion(): void
@@ -44,10 +44,84 @@ class EndpointClassNameTest extends TestCase
         $camelCaseModelName = PascalCaseModelName::factory()->create();
 // @larapack:endif
 
-        $this->json('endpointHttpVerb', route('api.dotNamespacesnake_case_model_name.endpointRouteName'endpointPublicRouteArgs), endpointPublicPayload)
+        $this->json('endpointHttpVerb', route('api.dotNamespacesnake_case_model_name.endpointRouteName'endpointRecordRouteArgs), endpointRecordPayload)
             ->assertForbidden();
 
     }
 // @larapack:endif
+// @larapack:if !endpoint_authenticated
+
+    /**
+     * Con sesión pero con la autorización negando, responde 403: prueba que
+     * authorize() pregunta, y no deja entrar a cualquiera con sesión. Uno que
+     * devolviera true respondería otra cosa.
+     *
+     * Se cambia la puerta por una nueva cuyo único before() niega: gana a
+     * cualquier Gate::before() que haya abierto el TestCase, y la política ni
+     * se consulta, así que esta prueba no cambia cuando escribas quién entra.
+     */
+    public function test_con_sesion_pregunta_a_la_autorizacion(): void
+    {
+
+        $this->signInApplicationUser();
+// @larapack:if endpoint_model&endpoint_record
+
+        $camelCaseModelName = PascalCaseModelName::factory()->create();
+// @larapack:endif
+
+        Gate::swap(new \Illuminate\Auth\Access\Gate(
+            $this->app,
+            fn () => auth()->user(),
+            beforeCallbacks: [fn ($user = null) => false],
+        ));
+
+        $this->json('endpointHttpVerb', route('api.dotNamespacesnake_case_model_name.endpointRouteName'endpointRecordRouteArgs), endpointRecordPayload)
+            ->assertForbidden();
+
+    }
+// @larapack:endif
+// @larapack:if endpoint_authenticated
+
+    /**
+     * Declarado `authorize: authenticated`: basta la sesión. Con la
+     * autorización negando no responde 403, porque authorize() no pregunta a
+     * ningún Gate. Lo que responda después —422, 404, 501 mientras handle()
+     * no esté escrito— es de la request, y se prueba aparte.
+     */
+    public function test_con_sesion_basta_la_sesion(): void
+    {
+
+        $this->signInApplicationUser();
+
+        Gate::swap(new \Illuminate\Auth\Access\Gate(
+            $this->app,
+            fn () => auth()->user(),
+            beforeCallbacks: [fn ($user = null) => false],
+        ));
+
+        $status = $this->json('endpointHttpVerb', route('api.dotNamespacesnake_case_model_name.endpointRouteName'endpointRecordRouteArgs), endpointRecordPayload)->status();
+
+        $this->assertNotSame(403, $status, 'endpointHttpVerb endpointUri responde 403 con la autorizacion negando y declara authorize: authenticated. Si authorize() pregunta a un Gate, declara ability en el laraimport.');
+
+    }
+// @larapack:endif
+
+    /**
+     * Un usuario de la aplicación con sesión en Sanctum, creado con la factory
+     * de su modelo. No se llama signIn() para no chocar con el que tu TestCase
+     * pueda tener.
+     */
+    private function signInApplicationUser(): Authenticatable
+    {
+
+        $model = config('auth.providers.users.model');
+
+        $user = $model::factory()->create();
+
+        $this->actingAs($user, 'sanctum');
+
+        return $user;
+
+    }
 
 }

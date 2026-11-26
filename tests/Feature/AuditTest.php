@@ -436,6 +436,93 @@ final class AuditTest extends TestCase
     }
 
     /**
+     * Un paquete que usa LaraPack y cuya CI no corre `verify --strict`: el
+     * contrato depende de que alguien se acuerde. A uno que no usa LaraPack
+     * no se le pide, y un comentario que lo nombra no cuenta.
+     */
+    public function test_avisa_si_la_ci_no_corre_verify_strict(): void
+    {
+        $composer = [
+            'name' => 'innoboxrr/sin-puerta',
+            'description' => 'x',
+            'license' => 'MIT',
+            'autoload' => ['psr-4' => ['X\\' => 'src/']],
+            'require' => ['php' => '^8.3'],
+            'require-dev' => ['innoboxrr/larapack-generator' => '^9.0'],
+        ];
+        $package = $this->package('sin-puerta', $composer);
+
+        $this->withTests($package);
+        $this->withWorkflows($package, ['tests.yml', 'release.yml']);
+        file_put_contents("{$package}/.github/workflows/tests.yml", "name: Tests\n# run: php vendor/bin/builder larapack:verify --strict\njobs:\n    x:\n        steps:\n            - run: php vendor/bin/builder larapack:verify\n");
+
+        $result = $this->audit($package);
+        $warning = array_values(array_filter($result['findings'], fn (array $f): bool => $f['check'] === 'verify-job'));
+
+        $this->assertCount(1, $warning);
+        $this->assertSame('warning', $warning[0]['level']);
+        $this->assertStringContainsString('larapack:ci', $warning[0]['message']);
+        $this->assertTrue($result['ok'], 'Es un aviso: sin --strict no falla.');
+
+        file_put_contents("{$package}/.github/workflows/larapack.yml", "jobs:\n    verify:\n        steps:\n            - run: php vendor/bin/builder larapack:verify --strict --format=json\n");
+
+        $this->assertNotHasCheck('verify-job', $this->audit($package));
+
+        // Sin LaraPack, nada que exigir.
+        unset($composer['require-dev']);
+        $other = $this->package('sin-larapack', ['name' => 'innoboxrr/sin-larapack'] + $composer);
+        $this->withTests($other);
+        $this->withWorkflows($other, ['tests.yml', 'release.yml']);
+
+        $this->assertNotHasCheck('verify-job', $this->audit($other));
+
+        // Con manifiesto sí, aunque no lo pida en composer.json.
+        mkdir("{$other}/.larapack");
+        file_put_contents("{$other}/.larapack/manifest.json", '{}');
+
+        $this->assertHasCheck('verify-job', $this->audit($other));
+    }
+
+    /**
+     * Un paquete en `packages/` de un monorepo no tiene CI propia que valga:
+     * si la raíz corre verify --strict (que recorre packages/*), no se avisa;
+     * si no, el remedio es el job en la raíz, no uno por paquete.
+     */
+    public function test_verify_job_en_un_monorepo_mira_la_ci_de_la_raiz(): void
+    {
+        $composer = [
+            'name' => 'acme/finanzas',
+            'description' => 'x',
+            'license' => 'MIT',
+            'autoload' => ['psr-4' => ['X\\' => 'src/']],
+            'require' => ['php' => '^8.3'],
+            'require-dev' => ['innoboxrr/larapack-generator' => '^9.0'],
+        ];
+        $app = "{$this->root}/escuela";
+        mkdir("{$app}/.git", 0777, true);
+        mkdir("{$app}/packages", 0777, true);
+        $package = $this->package('escuela/packages/finanzas', $composer);
+        $this->withTests($package);
+
+        $warning = array_values(array_filter($this->audit($package)['findings'], fn (array $f): bool => $f['check'] === 'verify-job'));
+
+        $this->assertCount(1, $warning);
+        $this->assertStringContainsString('Está en packages/ de escuela', $warning[0]['message']);
+        $this->assertStringContainsString('no hace falta un larapack.yml ni un candado por paquete', $warning[0]['message']);
+
+        mkdir("{$app}/.github/workflows", 0777, true);
+        file_put_contents("{$app}/.github/workflows/larapack.yml", "jobs:\n    verify:\n        steps:\n            - run: php artisan larapack:verify --strict --format=json\n");
+
+        $this->assertNotHasCheck('verify-job', $this->audit($package));
+
+        // Fuera de un repositorio git, los workflows de ese directorio no
+        // corren: se sigue avisando.
+        rmdir("{$app}/.git");
+
+        $this->assertHasCheck('verify-job', $this->audit($package));
+    }
+
+    /**
      * @param  array<string, mixed>  $composer
      */
     private function package(string $name, array $composer): string

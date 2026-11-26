@@ -38,7 +38,10 @@ final class DeclaredEndpointsGenerationTest extends TestCase
                 ]],
             ],
             'controllers' => [
-                ['name' => 'Desk', 'endpoints' => [['name' => 'overview', 'method' => 'get']]],
+                ['name' => 'Desk', 'endpoints' => [
+                    ['name' => 'overview', 'method' => 'get'],
+                    ['name' => 'mine', 'method' => 'get', 'uri' => 'mine/{scope}', 'authorize' => 'authenticated'],
+                ]],
                 ['name' => 'Oauth', 'endpoints' => [
                     ['name' => 'token', 'method' => 'post', 'public' => true, 'middleware' => ['throttle:6,1']],
                     ['name' => 'revoke', 'method' => 'post', 'ability' => 'oauth.revoke'],
@@ -153,6 +156,83 @@ final class DeclaredEndpointsGenerationTest extends TestCase
         $certificate = $this->project->read('tests/Feature/Endpoints/Course/CertificateTest.php');
         $this->assertStringContainsString("route('api.acme.school.course.certificate', ['course_id' => \$course->id])", $certificate);
         $this->assertStringContainsString('->assertForbidden()', $certificate);
+    }
+
+    /**
+     * Con sesión y la autorización negando, cada endpoint tiene que responder
+     * 403: es lo que caza un authorize() que devuelve true. El de un registro
+     * lo crea antes, y su identificador va donde lo lee la request —en el
+     * cuerpo o en la URI—, o respondería 404 sin llegar a preguntar.
+     */
+    public function test_cada_endpoint_prueba_que_pregunta_a_la_autorizacion(): void
+    {
+        foreach (['Course/Publish', 'Course/Archive', 'Course/ImportRoster', 'Course/Certificate', 'Desk/Overview', 'Oauth/Token', 'Oauth/Revoke', 'Oauth/Status'] as $name) {
+            $test = $this->project->read("tests/Feature/Endpoints/{$name}Test.php");
+
+            $this->assertStringContainsString('public function test_con_sesion_pregunta_a_la_autorizacion(): void', $test, "{$name}Test no prueba la autorización con sesión.");
+            $this->assertStringContainsString('Gate::swap(', $test, "{$name}Test no cierra la autorización.");
+            $this->assertStringContainsString('$this->signIn();', $test);
+        }
+
+        $publish = $this->project->read('tests/Feature/Endpoints/Course/PublishTest.php');
+        $this->assertStringContainsString('$course = Course::factory()->create();', $publish);
+        $this->assertStringContainsString("route('api.acme.school.course.publish'), ['course_id' => \$course->id])", $publish);
+
+        // En la URI, y en las dos pruebas: la pública sin sesión y la de sesión.
+        $certificate = $this->project->read('tests/Feature/Endpoints/Course/CertificateTest.php');
+        $this->assertSame(2, substr_count($certificate, "route('api.acme.school.course.certificate', ['course_id' => \$course->id]), [])"));
+
+        // Sobre el modelo, no sobre un registro: no hay nada que crear.
+        $this->assertStringNotContainsString('factory()', $this->project->read('tests/Feature/Endpoints/Course/ImportRosterTest.php'));
+        $this->assertStringNotContainsString('factory()', $this->project->read('tests/Feature/Endpoints/Desk/OverviewTest.php'));
+    }
+
+    /**
+     * `authorize: authenticated`: authorize() no pregunta a ningún Gate y su
+     * test no espera 403 con la autorización negando, que sería un falso
+     * positivo obligatorio. Sigue exigiendo sesión.
+     */
+    public function test_un_endpoint_de_cualquiera_con_sesion_no_pregunta_a_ningun_gate(): void
+    {
+        $request = $this->project->read('src/Http/Requests/Desk/MineRequest.php');
+
+        $this->assertMatchesRegularExpression('/public function authorize\(\): bool\s*\{.*return true;\s*\}/s', $request);
+        $this->assertStringNotContainsString('return false;', $request);
+        $this->assertStringNotContainsString('Gate::', $request);
+        $this->assertStringNotContainsString('use Illuminate\Support\Facades\Gate;', $request);
+
+        $test = $this->project->read('tests/Feature/Endpoints/Desk/MineTest.php');
+
+        $this->assertStringContainsString('public function test_requiere_sesion(): void', $test);
+        $this->assertStringContainsString('public function test_con_sesion_basta_la_sesion(): void', $test);
+        $this->assertStringNotContainsString('test_con_sesion_pregunta_a_la_autorizacion', $test);
+        $this->assertStringNotContainsString('assertForbidden', $test);
+        $this->assertStringContainsString("route('api.acme.school.desk.mine', ['scope' => 1]), [])->status();", $test);
+        $this->assertStringContainsString('$this->assertNotSame(403, $status,', $test);
+
+        // Y los demás no cambian.
+        $this->assertStringContainsString('return false;', $this->project->read('src/Http/Requests/Desk/OverviewRequest.php'));
+
+        $manifest = json_decode($this->project->read('.larapack/manifest.json'), true);
+        [$overview, $mine] = $manifest['models']['Desk']['declaration']['endpoints'];
+        $this->assertSame('authenticated', $mine['authorize']);
+        $this->assertArrayNotHasKey('authorize', $overview);
+    }
+
+    /**
+     * El test de un endpoint es un punto de partida: quien lo completa con lo
+     * que hace la operación no lo pierde al regenerar.
+     */
+    public function test_regenerar_no_pisa_un_test_de_endpoint_editado(): void
+    {
+        $test = $this->project->path.'/tests/Feature/Endpoints/Course/PublishTest.php';
+        $edited = str_replace('->assertForbidden();', "->assertForbidden();\n\n        // Lo que hace publish, escrito a mano.", (string) file_get_contents($test));
+        $this->assertNotSame(file_get_contents($test), $edited);
+        file_put_contents($test, $edited);
+
+        $this->import(force: true);
+
+        $this->assertSame($edited, file_get_contents($test));
     }
 
     public function test_un_modelo_sin_endpoints_no_cambia(): void

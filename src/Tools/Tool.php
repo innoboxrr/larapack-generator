@@ -10,6 +10,7 @@ use Illuminate\Support\Str;
 use Innoboxrr\LarapackGenerator\Exceptions\MakerException;
 use Innoboxrr\LarapackGenerator\Support\Declaration;
 use Innoboxrr\LarapackGenerator\Support\Generation;
+use Innoboxrr\LarapackGenerator\Support\Literal;
 use Innoboxrr\LarapackGenerator\Support\Manifest;
 use Innoboxrr\LarapackGenerator\Support\MigrationTimestamp;
 use Innoboxrr\LarapackGenerator\Support\StubBlocks;
@@ -484,13 +485,48 @@ class Tool
      */
     protected static function phpString(string $value): string
     {
-        // Dentro de comilla simple PHP sólo interpreta \' y \\, y una barra al
-        // final se comería la comilla de cierre.
-        $plain = ! str_contains($value, "'")
-            && ! str_contains($value, '\\\\')
-            && ! str_ends_with($value, '\\');
+        return Literal::php($value);
+    }
 
-        return $plain ? "'{$value}'" : var_export($value, true);
+    /**
+     * El `default` de una columna del laraimport como literal PHP, para
+     * `->default(...)`. Lo usan las migraciones de modelo y las de pivote.
+     *
+     * Un booleano sale `true`/`false`; un número, tal cual; una cadena que se
+     * escribe como un número decimal normal —`5`, `-12`, `10.00`, `0.00`—,
+     * sin comillas, como siempre; cualquier otra, entre comillas y escapada.
+     *
+     * La cadena numérica se reconoce por su forma y no con is_numeric(), que
+     * también acepta `08` (un octal inválido en PHP: la migración no
+     * compilaba), `007` o `01` (los octales 7 y 1), ` 1` o `1e3`. Ésas salen
+     * ahora entre comillas.
+     *
+     * Y no se exige que el número «valga lo mismo» leído de vuelta: `10.00`
+     * sale `10.00` y no `'10.00'`, igual que en 9.0. MigrationTool::alter()
+     * compara las definiciones como texto, y cambiar cómo se escribe un
+     * default que no cambió le hacía escribir un `->change()` por nada.
+     */
+    protected static function defaultLiteral(mixed $value): string
+    {
+        if (is_bool($value)) {
+            return $value ? 'true' : 'false';
+        }
+
+        if (is_int($value) || is_float($value) || self::isPlainNumber($value)) {
+            return (string) $value;
+        }
+
+        return self::phpString((string) $value);
+    }
+
+    /**
+     * Una cadena con forma de número decimal sin ceros a la izquierda, sin
+     * exponente y sin espacios: `0`, `-3`, `1.50`. No `08`, `007`, `.5`,
+     * `1e3` ni ` 1`.
+     */
+    protected static function isPlainNumber(mixed $value): bool
+    {
+        return is_string($value) && preg_match('/^-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?\z/', $value) === 1;
     }
 
     // FORMA DECLARADA
