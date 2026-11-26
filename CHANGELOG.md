@@ -1,5 +1,58 @@
 # Changelog
 
+## 9.1.0 (sin publicar)
+
+### Los tests generados prueban lo que cierra la autorización
+
+Hasta ahora el test de cada modelo abría la autorización con
+`Gate::before(fn () => true)` y probaba sólo el camino feliz: un `authorize()`
+que devolviera `true`, un `IndexRequest` que dejara de forzar `managed` o un
+listado que no pasara por el `ManagedFilter` salían en verde. Ahora cada
+`<Modelo>EndpointsTest` trae, además, tres pruebas que pasan tal como salen y
+no dependen de lo que decida la política del proyecto:
+
+- **`test_<modelo>_cada_accion_requiere_sesion`**: sin sesión, 401 en cada
+  acción declarada. Sustituye a `test_<modelo>_index_requiere_sesion`, que sólo
+  miraba el listado.
+- **`test_<modelo>_cada_accion_pregunta_a_la_politica`**: con sesión y la
+  autorización negando, 403 en cada acción declarada; `policies` y `policy`
+  responden 200 con todo en `false`. Para negar se cambia la puerta por una
+  nueva cuyo único `before()` niega (`Gate::swap(new Gate(..., beforeCallbacks:
+  [fn ($user = null) => false]))`): un `Gate::before(fn () => false)` no
+  bastaría, porque decide el primer `before()` que responde y el `TestCase` (o
+  el `setUp()`) ya abrió la puerta. La política ni se consulta, así que la
+  prueba no cambia cuando se escribe.
+- **`test_<modelo>_index_pasa_por_su_managed_filter`**: el `FilterRegistry` de
+  SearchSurge se envuelve en el test para cambiar el `ManagedFilter` del modelo
+  por uno que primero deja ver todo y después nada. Con `managed=false` en la
+  petición, el registro aparece y luego desaparece: prueba que SearchSurge
+  resuelve el `ManagedFilter` del modelo, que `IndexRequest` fuerza `managed` y
+  que `canView()` se aplica. Qué deja ver `canView()` es un hueco y no se
+  prueba; el comentario del test dice dónde hacerlo.
+
+Las acciones salen de `routes.only`/`except` e `immutable`, como el resto del
+test: un modelo de sólo lectura recorre `index` y `show`. Se agrupan en una
+prueba por concepto, no una por acción, para no multiplicar por doce los tests
+de una aplicación con cien modelos.
+
+El test de cada endpoint declarado (`tests/Feature/Endpoints/<Modelo>/`) gana
+**`test_con_sesion_pregunta_a_la_autorizacion`**: con sesión y la autorización
+negando, 403, también en los públicos y en los `controllers[]`. El de un
+registro lo crea y pone su identificador donde lo lee la request, en el cuerpo o
+en la URI. En una aplicación, ese test usa ahora `RefreshDatabase` y su propio
+`signInApplicationUser()`.
+
+Ninguna sale `skipped` ni `incomplete`. Los tests de EndToEnd ejecutan las
+nuevas en un paquete y en una aplicación generados, sin tocarlas, y pasan Pint
+y Larastan.
+
+**En un proyecto existente** no se pisa nada: `<Modelo>EndpointsTest` se crea
+una sola vez y no se regenera nunca, y el test de un endpoint sólo se rehace con
+`--force` si nadie lo editó. Para tener las pruebas nuevas en un modelo que ya
+existía, borra su `EndpointsTest` (guarda antes lo que le añadiste) y vuelve a
+importar. Usan `mockery/mockery`, que traen `laravel/laravel` y
+`orchestra/testbench`.
+
 ## 9.0.0
 
 Los agentes respetaban `return $request->handle();` en los controladores que

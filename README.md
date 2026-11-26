@@ -1070,6 +1070,35 @@ Si una lógica no cabe en ninguno de estos sitios, falta algo en el
 **El modelo es una fachada, no un almacén de lógica.** Un método público en
 `Operations` que orquesta, y el trabajo real en la clase que le corresponda.
 
+### Lo que prueban los tests generados
+
+`<Model>EndpointsTest` abre la autorización (`Gate::before(fn () => true)` en
+su `setUp()` o en el `TestCase` del paquete) para probar que cada acción
+responde. Lo que la cierra se prueba aparte, en tres tests que no dependen de lo
+que decida la política y que no hay que tocar cuando se escribe:
+
+| Test | Qué caza |
+|---|---|
+| `test_<modelo>_cada_accion_requiere_sesion` | Una acción que responde sin sesión: cada una tiene que dar 401. |
+| `test_<modelo>_cada_accion_pregunta_a_la_politica` | Un `authorize()` que no pregunta. Con sesión y la autorización negando, cada acción da 403, y `policies`/`policy` responden todo `false`. |
+| `test_<modelo>_index_pasa_por_su_managed_filter` | Un listado sin acotar: `IndexRequest` que no fuerza `managed`, o un `ManagedFilter` que SearchSurge no encuentra. |
+
+Para negar no basta `Gate::before(fn () => false)`: decide el primer `before()`
+que responde, y ya hay uno que abre. El test cambia la puerta por una nueva
+(`Gate::swap(...)`) cuyo único `before()` niega, así que la política ni se
+consulta. Para el listado envuelve el `FilterRegistry` de SearchSurge y cambia
+el `ManagedFilter` del modelo por uno que primero deja ver todo y después nada;
+la petición manda `managed=false`. Qué deja ver tu `canView()` es un hueco: se
+prueba en un test tuyo, con los usuarios de tu dominio.
+
+Recorren sólo las acciones declaradas (`routes`, `immutable`). Cada endpoint de
+`endpoints` y `controllers` trae lo mismo en su test: 401 sin sesión (o 403 si
+es público, porque nace cerrado) y 403 con sesión y la autorización negando.
+Ningún test generado sale `incomplete`.
+
+`<Model>EndpointsTest` se crea una vez y no se regenera: en un modelo que ya
+existía, bórralo y vuelve a importar para tener estas pruebas.
+
 ### Qué no se toca
 
 - El controlador: delega en las requests y no tiene lógica. Tampoco el que se
