@@ -18,10 +18,10 @@
         "engines": ">=20",
         "ci": "22"
     },
-    "$comment-js": "La cadena de pruebas de los paquetes npm. Sigue en Vite 7 y Vitest 3: Vitest 4 con Vite 8.3 no se instala con npm 10, el de Node 20 y 22 en la CI. El modulo generado ya pide Vite 8, el de Laravel 13, porque no instala Vitest.",
+    "$comment-js": "La cadena de pruebas de los paquetes npm. Vite 8 y Vitest 5: el bloqueo que la tenia en Vite 7 y Vitest 3 (Vitest 4 con Vite 8.3 no se instalaba con npm 10) ya no existe; vite 8.4 + vitest 5.1 + plugin-vue 6 / plugin-react 6 instalan limpio con el npm 10 de Node 22 y la suite corre. Es la misma major de Vite que pide el modulo generado y la de Laravel 13. Vitest 5 ya no corre en Node 20 (pide ^22.12 || ^24 || >=26; Node 20 salio de soporte en abril de 2026): la CI de los paquetes npm debe probar en 22 y 24. Ojo: subir esto hace que `larapack:audit` marque como error a todo paquete npm que siga en vite ^7 o vitest ^3.",
     "js": {
-        "vite": "^7.1.0",
-        "vitest": "^3.0.0",
+        "vite": "^8.0.0",
+        "vitest": "^5.0.0",
         "vue": "^3.5.0",
         "react": "^19.0.0"
     },
