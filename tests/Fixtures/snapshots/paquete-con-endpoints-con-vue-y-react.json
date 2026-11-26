@@ -116,7 +116,7 @@
     "tests/Feature/Endpoints/Course/PurgeTest.php": "3ba86e7d34eb0c86eef471bc7e6d188b2172225959103cc2a118945bd8a69821",
     "tests/Feature/Endpoints/Desk/ImportTest.php": "928f1e714f11c5e4698e71895688fc5219b7ee9af3f2b3f6c1c74a246c70b438",
     "tests/Feature/Endpoints/Desk/OverviewTest.php": "3267a87f23f1397f3ef5484472a53337871e4962d30ecddd195cfebcea5024b0",
-    "tests/Feature/Models/CourseEndpointsTest.php": "7dbc3b04e5a3090f3527afe8aafbc7b49a941d1b150a108bf07436be57ff5b2d",
+    "tests/Feature/Models/CourseEndpointsTest.php": "1f578ba2517b0afa37bbdf87166459bbe2b6539e4b6421d519777836abcbc0a1",
     "tests/TestCase.php": "6e467aa0e936a3eeb09e3502bdd9b7e48365d999c0987bc5ba872e592f6c72d3",
     "tests/User.php": "d823928f7f62ee09ba8a3868f07923ebfc8bf4afd81f7314acc7a9b74f2298e6"
 }

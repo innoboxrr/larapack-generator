@@ -6,15 +6,23 @@ use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Notification;
+// @larapack:if index
+use Innoboxrr\SearchSurge\Search\Support\FilterRegistry;
+use Innoboxrr\SearchSurge\Search\Utils\Managed;
+use Namespace\Models\Filters\PascalCaseModelName\ManagedFilter;
+// @larapack:endif
 use Namespace\Models\PascalCaseModelName;
 use Namespace\Tests\TestCase;
 
 /**
  * Que cada endpoint de PascalCaseModelName responde como dice el contrato.
  *
- * Las rutas se llaman por nombre, igual que el front. La autorizacion no se
- * prueba aqui: setUp() la abre. Cuando escribas PascalCaseModelNamePolicy,
- * pruebala en su propio test.
+ * Las rutas se llaman por nombre, igual que el front. setUp() abre la
+ * autorizacion para probar que cada endpoint responde. Lo que la cierra se
+ * prueba sin depender de lo que decida tu politica: que sin sesion no se
+ * entra, que cada request pregunta a la politica y que el listado pasa por su
+ * ManagedFilter. A quien deja entrar PascalCaseModelNamePolicy, pruebalo en
+ * su propio test.
  */
 class PascalCaseModelNameEndpointsTest extends TestCase
 {
@@ -33,15 +41,149 @@ class PascalCaseModelNameEndpointsTest extends TestCase
 
     }
 
-    // @larapack:if index
-    public function test_snake_case_model_name_index_requiere_sesion(): void
+    // @larapack:if policies|policy|index|show|create|update|delete|restore|forceDelete|export|bulkUpdate|bulkDelete
+    /**
+     * Sin sesion no se entra a ninguna accion: el controlador las pone todas
+     * detras de auth:sanctum, y la que se le escape responde a cualquiera.
+     */
+    public function test_snake_case_model_name_cada_accion_requiere_sesion(): void
     {
 
-        $this->getJson(route('api.dotNamespacesnake_case_model_name.index'))
-            ->assertUnauthorized();
+        foreach ([
+            // @larapack:if policies
+            'policies' => ['GET', route('api.dotNamespacesnake_case_model_name.policies')],
+            // @larapack:endif
+            // @larapack:if policy
+            'policy' => ['GET', route('api.dotNamespacesnake_case_model_name.policy')],
+            // @larapack:endif
+            // @larapack:if index
+            'index' => ['GET', route('api.dotNamespacesnake_case_model_name.index')],
+            // @larapack:endif
+            // @larapack:if show
+            'show' => ['GET', route('api.dotNamespacesnake_case_model_name.show')],
+            // @larapack:endif
+            // @larapack:if create
+            'create' => ['POST', route('api.dotNamespacesnake_case_model_name.create')],
+            // @larapack:endif
+            // @larapack:if update
+            'update' => ['PUT', route('api.dotNamespacesnake_case_model_name.update')],
+            // @larapack:endif
+            // @larapack:if delete
+            'delete' => ['DELETE', route('api.dotNamespacesnake_case_model_name.delete')],
+            // @larapack:endif
+            // @larapack:if restore
+            'restore' => ['POST', route('api.dotNamespacesnake_case_model_name.restore')],
+            // @larapack:endif
+            // @larapack:if forceDelete
+            'forceDelete' => ['DELETE', route('api.dotNamespacesnake_case_model_name.force.delete')],
+            // @larapack:endif
+            // @larapack:if export
+            'export' => ['POST', route('api.dotNamespacesnake_case_model_name.export')],
+            // @larapack:endif
+            // @larapack:if bulkUpdate
+            'bulkUpdate' => ['PUT', route('api.dotNamespacesnake_case_model_name.bulk.update')],
+            // @larapack:endif
+            // @larapack:if bulkDelete
+            'bulkDelete' => ['DELETE', route('api.dotNamespacesnake_case_model_name.bulk.delete')],
+            // @larapack:endif
+        ] as $action => [$method, $uri]) {
+            $status = $this->json($method, $uri)->status();
+
+            $this->assertSame(401, $status, "{$action} responde {$status} sin sesion.");
+        }
 
     }
 
+    /**
+     * Con sesion pero con la autorizacion negando, cada accion responde 403: es
+     * lo que prueba que el authorize() de su request pregunta a la politica. Uno
+     * que devolviera true sin preguntar dejaria entrar a cualquiera con sesion,
+     * y aqui responderia 200.
+     *
+     * No basta Gate::before(fn () => false): setUp() ya abrio la puerta con
+     * Gate::before(fn () => true), y decide el primer before() que responde. Se
+     * cambia la puerta por una nueva cuyo unico before() niega, asi que la
+     * politica ni se consulta: este test no cambia cuando la escribas. A quien
+     * deja entrar PascalCaseModelNamePolicy pruebalo en su propio test.
+     */
+    public function test_snake_case_model_name_cada_accion_pregunta_a_la_politica(): void
+    {
+
+        $this->signInApplicationUser();
+        // @larapack:if show|update|delete|restore|forceDelete
+
+        // Las acciones sobre un registro lo buscan antes de preguntar: sin
+        // uno que exista responderian 404, no 403.
+        $records = PascalCaseModelName::factory()->count(2)->create();
+        $record = ['snake_case_model_name_id' => $records->modelKeys()[0]];
+        $ids = ['ids' => $records->modelKeys()];
+        // @larapack:endif
+
+        Gate::swap(new \Illuminate\Auth\Access\Gate(
+            $this->app,
+            fn () => auth()->user(),
+            beforeCallbacks: [fn ($user = null) => false],
+        ));
+        // @larapack:if policies
+
+        // policies y policy no se cierran: responden que puede el usuario, y
+        // con la autorizacion negando tienen que decir que nada.
+        $this->assertNotContains(
+            true,
+            $this->json('GET', route('api.dotNamespacesnake_case_model_name.policies'))->assertOk()->json(),
+            'policies dice que se puede algo que la autorizacion niega.'
+        );
+        // @larapack:endif
+        // @larapack:if policy
+
+        $this->json('GET', route('api.dotNamespacesnake_case_model_name.policy'), ['policy' => 'create'])
+            ->assertOk()
+            ->assertExactJson(['create' => false]);
+        // @larapack:endif
+        // @larapack:if index|show|create|update|delete|restore|forceDelete|export|bulkUpdate|bulkDelete
+
+        foreach ([
+            // @larapack:if index
+            'index' => ['GET', route('api.dotNamespacesnake_case_model_name.index'), []],
+            // @larapack:endif
+            // @larapack:if show
+            'show' => ['GET', route('api.dotNamespacesnake_case_model_name.show'), $record],
+            // @larapack:endif
+            // @larapack:if create
+            'create' => ['POST', route('api.dotNamespacesnake_case_model_name.create'), []],
+            // @larapack:endif
+            // @larapack:if update
+            'update' => ['PUT', route('api.dotNamespacesnake_case_model_name.update'), $record],
+            // @larapack:endif
+            // @larapack:if delete
+            'delete' => ['DELETE', route('api.dotNamespacesnake_case_model_name.delete'), $record],
+            // @larapack:endif
+            // @larapack:if restore
+            'restore' => ['POST', route('api.dotNamespacesnake_case_model_name.restore'), $record],
+            // @larapack:endif
+            // @larapack:if forceDelete
+            'forceDelete' => ['DELETE', route('api.dotNamespacesnake_case_model_name.force.delete'), $record],
+            // @larapack:endif
+            // @larapack:if export
+            'export' => ['POST', route('api.dotNamespacesnake_case_model_name.export'), []],
+            // @larapack:endif
+            // @larapack:if bulkUpdate
+            'bulkUpdate' => ['PUT', route('api.dotNamespacesnake_case_model_name.bulk.update'), $ids],
+            // @larapack:endif
+            // @larapack:if bulkDelete
+            'bulkDelete' => ['DELETE', route('api.dotNamespacesnake_case_model_name.bulk.delete'), $ids],
+            // @larapack:endif
+        ] as $action => [$method, $uri, $data]) {
+            $status = $this->json($method, $uri, $data)->status();
+
+            $this->assertSame(403, $status, "{$action} responde {$status} con la autorizacion negando: su authorize() no pregunta a la politica.");
+        }
+        // @larapack:endif
+
+    }
+
+    // @larapack:endif
+    // @larapack:if index
     public function test_snake_case_model_name_index_endpoint(): void
     {
 
@@ -52,6 +194,69 @@ class PascalCaseModelNameEndpointsTest extends TestCase
         $this->json('GET', route('api.dotNamespacesnake_case_model_name.index'), ['managed' => true])
             ->assertOk()
             ->assertJsonFragment(['id' => $camelCaseModelName->id]);
+
+    }
+
+    /**
+     * El listado pasa por el ManagedFilter de PascalCaseModelName, y acotado
+     * aunque el cliente pida lo contrario.
+     *
+     * Lo que deja ver canView() es tuyo, y aqui no se prueba: se cambia el
+     * ManagedFilter por uno que primero deja ver todo y despues nada. Que el
+     * listado cambie prueba el camino: SearchSurge encuentra el ManagedFilter
+     * del modelo, IndexRequest fuerza `managed` (el cliente manda false) y
+     * canView() se aplica. Quien ve que fila con tu canView(), pruebalo en un
+     * test aparte, con los usuarios de tu dominio.
+     */
+    public function test_snake_case_model_name_index_pasa_por_su_managed_filter(): void
+    {
+
+        $this->signInApplicationUser();
+
+        $camelCaseModelName = PascalCaseModelName::factory()->create();
+
+        $visibility = new class extends Managed
+        {
+            public static bool $hides = false;
+
+            public static function canView($query, $user, array $args = [])
+            {
+                return static::$hides ? $query->whereRaw('1 = 0') : $query;
+            }
+        };
+
+        // Los filtros los resuelve el FilterRegistry de SearchSurge: se
+        // envuelve el de verdad y solo se cambia el ManagedFilter del modelo.
+        // Con function y no fn: una fn copiaria $found y nunca cambiaria.
+        $registry = $this->app->make(FilterRegistry::class);
+        $found = false;
+
+        $this->mock(FilterRegistry::class)
+            ->shouldReceive('resolve')
+            ->andReturnUsing(function (string $model, array $options = []) use ($registry, $visibility, &$found): array {
+                return array_map(function (string $filter) use ($visibility, &$found): string {
+                    if ($filter !== ManagedFilter::class) {
+                        return $filter;
+                    }
+
+                    $found = true;
+
+                    return $visibility::class;
+                }, $registry->resolve($model, $options));
+            });
+
+        $this->json('GET', route('api.dotNamespacesnake_case_model_name.index'), ['managed' => false])
+            ->assertOk()
+            ->assertJsonFragment(['id' => $camelCaseModelName->id]);
+
+        $this->assertTrue($found, 'SearchSurge no resuelve '.ManagedFilter::class.' para el listado de PascalCaseModelName.');
+
+        $visibility::$hides = true;
+
+        $response = $this->json('GET', route('api.dotNamespacesnake_case_model_name.index'), ['managed' => false])
+            ->assertOk();
+
+        $this->assertSame([], $response->json('data') ?? $response->json(), 'El listado no aplica canView() si el cliente manda managed=false: IndexRequest tiene que forzarlo.');
 
     }
 
