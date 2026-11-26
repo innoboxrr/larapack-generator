@@ -2,8 +2,12 @@
 
 namespace Innoboxrr\LarapackGenerator\Tests\Feature;
 
+use Acme\Vault\Http\Resources\Models\DocumentResource;
+use Acme\Vault\Models\Document;
 use Illuminate\Container\Container;
 use Illuminate\Http\Request;
+use Illuminate\Translation\ArrayLoader;
+use Illuminate\Translation\Translator;
 use Innoboxrr\LarapackGenerator\Tests\Support\FakeProject;
 use Innoboxrr\LarapackGenerator\Tests\TestCase;
 use PhpOffice\PhpSpreadsheet\Cell\Cell;
@@ -103,6 +107,46 @@ final class GeneratedSecurityTest extends TestCase
         $this->assertSame('id', $request->input('orderBy'));
     }
 
+    // RESOURCE: EL CLIENTE NO ELIGE QUÉ ACCESSORS SE EJECUTAN
+
+    public function test_el_resource_ignora_los_appends_que_no_declara(): void
+    {
+        $payload = $this->resourcePayload(
+            'Acme\\Vault\\Http\\Resources\\Models\\DocumentResource',
+            ['appends' => ['internal_url']]
+        );
+
+        $this->assertArrayNotHasKey('internal_url', $payload);
+        $this->assertSame('Informe', $payload['title']);
+    }
+
+    /**
+     * Antes un nombre que no era un accessor llegaba a setAppends() y el
+     * toArray() lanzaba: cualquiera tumbaba el listado con un 500.
+     */
+    public function test_un_append_desconocido_no_rompe_la_respuesta(): void
+    {
+        $payload = $this->resourcePayload(
+            'Acme\\Vault\\Http\\Resources\\Models\\DocumentResource',
+            ['appends' => ['no_existe', ['anidado']]]
+        );
+
+        $this->assertArrayNotHasKey('no_existe', $payload);
+    }
+
+    public function test_el_resource_sirve_los_appends_que_declara(): void
+    {
+        $resource = new class(null) extends DocumentResource
+        {
+            protected array $appendable = ['internal_url'];
+        };
+
+        $payload = $this->resourcePayload($resource::class, ['appends' => ['internal_url', 'otra']]);
+
+        $this->assertSame('https://interno/1', $payload['internal_url']);
+        $this->assertArrayNotHasKey('otra', $payload);
+    }
+
     // AYUDAS
 
     /**
@@ -119,5 +163,33 @@ final class GeneratedSecurityTest extends TestCase
         $method->invoke($request);
 
         return $request;
+    }
+
+    /**
+     * @param  array<string, mixed>  $query
+     * @return array<string, mixed>
+     */
+    private function resourcePayload(string $resourceClass, array $query): array
+    {
+        $container = Container::getInstance();
+
+        if (! $container->bound('translator')) {
+            $container->instance('translator', new Translator(new ArrayLoader, 'en'));
+            $this->boundTranslator = true;
+        }
+
+        $document = new class extends Document
+        {
+            protected $table = 'documents';
+
+            public function getInternalUrlAttribute(): string
+            {
+                return 'https://interno/'.$this->id;
+            }
+        };
+
+        $document->forceFill(['id' => 1, 'title' => 'Informe']);
+
+        return (new $resourceClass($document))->toArray(Request::create('/', 'GET', $query));
     }
 }

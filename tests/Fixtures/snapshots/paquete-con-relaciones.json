@@ -1,5 +1,5 @@
 {
-    ".larapack/manifest.json": "bc4708cbeb441cb569e2b0a88d72924d0f6322eb663eb79b2fad0f8c15b96afa",
+    ".larapack/manifest.json": "51d30abcf7a3a2236972afda3a1a2c6f05028a72837ce06fb06e0876ddc0cf56",
     "composer.json": "dded2aaddb25ff97b89a8b0e047bfd8284706098a414f9124356b235318c7edb",
     "database/factories/CategoryFactory.php": "088a11140f5ec27ef2b0dc5e88074fee459ea0c8f6332d15bb851981cec894fc",
     "database/factories/PostFactory.php": "ee422906bc1937dc2bbfaecf20954553ea5163c79269e2be66ba08cd3178d825",
@@ -138,8 +138,8 @@
     "src/Http/Requests/Post/RestoreRequest.php": "6d234f4db6d4184dc6805d2c6235df6d6bf140c4f74a227b84acc6778839e65c",
     "src/Http/Requests/Post/ShowRequest.php": "3df10118f55626f0ba53cb08cc87799f2acf5ff6dacc39075dc5faa1211e2e2e",
     "src/Http/Requests/Post/UpdateRequest.php": "8c4bdb0dfb84d0bb93f2d5a249b967ee41d541f94a01ccdb993c8974932f9763",
-    "src/Http/Resources/Models/CategoryResource.php": "cd50c667099857204c77f9c8770f57f5192b8dea100d1375d8aa3d007db7e3f3",
-    "src/Http/Resources/Models/PostResource.php": "9f35c25819bfa2f079e407ce8d8a25eddc3c1d7edda6efddfca8065a6c1474db",
+    "src/Http/Resources/Models/CategoryResource.php": "ed5b20ac83c1b0945a03891274b24b220d5b94c327c1f75a036477c7947c4f4d",
+    "src/Http/Resources/Models/PostResource.php": "13059d6dbea698693acc3a8cea5e1e236ddf2965900049f6181ba07aeae959aa",
     "src/Models/Category.php": "ba1469c11294aef8e2de60504c93b2094281f2a32c26ada26c271132a002029d",
     "src/Models/Filters/Category/CreationFilter.php": "953119c1484fbd25d428e44b01478927738ef41288fadbce0a5093ad4442b5f9",
     "src/Models/Filters/Category/EagerLoadingFilter.php": "350ecf7685c9c3753e2537151ad9748038d0b2cf25f7090cfc68facd6f0d8464",

@@ -1,5 +1,5 @@
 {
-    ".larapack/manifest.json": "04b4070130c825e447005e90cfbf1a27927fdc397a258a600a354e88f4d5b337",
+    ".larapack/manifest.json": "a09c54cebc525e3fa4e12b54f21b965f20bc8af30518cc94d2c0896cb06d4168",
     "composer.json": "dded2aaddb25ff97b89a8b0e047bfd8284706098a414f9124356b235318c7edb",
     "database/factories/PostFactory.php": "529d50ee7d10748822c8bc4527847a60ad7640e4e836ecbbd320e65b92f58ac3",
     "database/migrations/TIMESTAMP_create_post_metas_table.php": "4fc21c51de1f59f0bd72b814d69aec13e45cef9ec46b601c5af02947cd6e9a19",
@@ -82,7 +82,7 @@
     "src/Http/Requests/Post/RestoreRequest.php": "6d234f4db6d4184dc6805d2c6235df6d6bf140c4f74a227b84acc6778839e65c",
     "src/Http/Requests/Post/ShowRequest.php": "3df10118f55626f0ba53cb08cc87799f2acf5ff6dacc39075dc5faa1211e2e2e",
     "src/Http/Requests/Post/UpdateRequest.php": "cb02c45fb8622998953df972c0cfbeb2fb3ce865cb8bc8fe1bb547a38573355b",
-    "src/Http/Resources/Models/PostResource.php": "9f35c25819bfa2f079e407ce8d8a25eddc3c1d7edda6efddfca8065a6c1474db",
+    "src/Http/Resources/Models/PostResource.php": "13059d6dbea698693acc3a8cea5e1e236ddf2965900049f6181ba07aeae959aa",
     "src/Models/Filters/Post/CreationFilter.php": "4f7c76bbf7b00371fd463ad49ba2fa511c0b6390c1ced141bfa468ec4465bd43",
     "src/Models/Filters/Post/EagerLoadingFilter.php": "aaa7c200b3b9172fe779ac25d368b73bfd7adb881e18744554ccf94397294fcc",
     "src/Models/Filters/Post/IdFilter.php": "38963adf8045fe503b3d12ff941d3bec438cff420185386fc447914677832bce",
