@@ -193,6 +193,11 @@ class PascalCaseModelNameEndpointsTest extends TestCase
      * del modelo, IndexRequest fuerza `managed` (el cliente manda false) y
      * canView() se aplica. Quien ve que fila con tu canView(), pruebalo en un
      * test aparte, con los usuarios de tu dominio.
+     *
+     * Depende de como SearchSurge elige el filtro de permisos: canView() se
+     * llama sobre `managedFilterClass`, el primer filtro critico del modelo.
+     * Si registras otro derivado de Managed que se ordene antes, el cambio no
+     * surte efecto; por eso se cuenta que el canView() de aqui se llame.
      */
     public function test_snake_case_model_name_index_pasa_por_su_managed_filter(): void
     {
@@ -203,13 +208,21 @@ class PascalCaseModelNameEndpointsTest extends TestCase
 
         $visibility = new class extends Managed
         {
-            public static bool $hides = false;
+            public static \stdClass $state;
 
             public static function canView($query, $user, array $args = [])
             {
-                return static::$hides ? $query->whereRaw('1 = 0') : $query;
+                static::$state->calls++;
+
+                return static::$state->hides ? $query->whereRaw('1 = 0') : $query;
             }
         };
+
+        // PHP declara la clase anonima una vez por proceso y su estado es
+        // estatico: se le da uno nuevo en cada ejecucion, o una repeticion del
+        // test empezaria con el listado ya oculto.
+        $state = (object) ['hides' => false, 'calls' => 0];
+        $visibility::$state = $state;
 
         // Los filtros los resuelve el FilterRegistry de SearchSurge: se
         // envuelve el de verdad y solo se cambia el ManagedFilter del modelo.
@@ -231,15 +244,19 @@ class PascalCaseModelNameEndpointsTest extends TestCase
                 }, $registry->resolve($model, $options));
             });
 
-        $this->json('GET', route('api.dotNamespacesnake_case_model_name.index'), ['managed' => false])
+        // managed=false en la query, como lo manda el front, y en el cuerpo.
+        $index = route('api.dotNamespacesnake_case_model_name.index', ['managed' => 'false']);
+
+        $this->json('GET', $index, ['managed' => false])
             ->assertOk()
             ->assertJsonFragment(['id' => $camelCaseModelName->id]);
 
         $this->assertTrue($found, 'SearchSurge no resuelve '.ManagedFilter::class.' para el listado de PascalCaseModelName.');
+        $this->assertGreaterThan(0, $state->calls, 'SearchSurge resuelve '.ManagedFilter::class.' pero no llama a su canView(): otro filtro derivado de Managed hace de managedFilterClass.');
 
-        $visibility::$hides = true;
+        $state->hides = true;
 
-        $response = $this->json('GET', route('api.dotNamespacesnake_case_model_name.index'), ['managed' => false])
+        $response = $this->json('GET', $index, ['managed' => false])
             ->assertOk();
 
         $this->assertSame([], $response->json('data') ?? $response->json(), 'El listado no aplica canView() si el cliente manda managed=false: IndexRequest tiene que forzarlo.');

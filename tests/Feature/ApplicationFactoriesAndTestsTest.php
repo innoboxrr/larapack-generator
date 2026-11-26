@@ -313,6 +313,13 @@ final class ApplicationFactoriesAndTestsTest extends TestCase
 
         $this->assertStringContainsString("use {$managedFilter};", $test);
         $this->assertStringContainsString("['managed' => false]", $test);
+        // También en la query, que es como lo manda el front.
+        $this->assertMatchesRegularExpression("/route\\('api\\.[a-z_.]*{$snake}\\.index', \\['managed' => 'false'\\]\\)/", $test);
+        // El canView() sustituto se cuenta, y su estado es nuevo en cada
+        // ejecución: una clase anónima se declara una vez por proceso.
+        $this->assertStringContainsString('$visibility::$state = $state;', $test);
+        $this->assertStringContainsString('$this->assertGreaterThan(0, $state->calls,', $test);
+        $this->assertStringNotContainsString('static bool $hides', $test);
         $this->assertStringNotContainsString('markTestIncomplete', $test);
     }
 
