@@ -98,6 +98,9 @@ class EndpointTool extends Tool
                 && ! in_array($this->snake_case_model_name.'_id', Endpoints::parameters((string) ($endpoint['uri'] ?? '')), true),
             'endpoint_public' => (bool) ($endpoint['public'] ?? false),
             'endpoint_gate' => ! $model && ($endpoint['ability'] ?? null) !== null,
+            // Basta la sesión: authorize() no pregunta a ningún Gate, y su
+            // test no espera 403 con la autorización negando.
+            'endpoint_authenticated' => ! $model && ($endpoint['authorize'] ?? null) === 'authenticated',
             default => false,
         };
     }

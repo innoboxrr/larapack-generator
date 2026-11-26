@@ -38,7 +38,10 @@ final class DeclaredEndpointsGenerationTest extends TestCase
                 ]],
             ],
             'controllers' => [
-                ['name' => 'Desk', 'endpoints' => [['name' => 'overview', 'method' => 'get']]],
+                ['name' => 'Desk', 'endpoints' => [
+                    ['name' => 'overview', 'method' => 'get'],
+                    ['name' => 'mine', 'method' => 'get', 'uri' => 'mine/{scope}', 'authorize' => 'authenticated'],
+                ]],
                 ['name' => 'Oauth', 'endpoints' => [
                     ['name' => 'token', 'method' => 'post', 'public' => true, 'middleware' => ['throttle:6,1']],
                     ['name' => 'revoke', 'method' => 'post', 'ability' => 'oauth.revoke'],
@@ -182,6 +185,38 @@ final class DeclaredEndpointsGenerationTest extends TestCase
         // Sobre el modelo, no sobre un registro: no hay nada que crear.
         $this->assertStringNotContainsString('factory()', $this->project->read('tests/Feature/Endpoints/Course/ImportRosterTest.php'));
         $this->assertStringNotContainsString('factory()', $this->project->read('tests/Feature/Endpoints/Desk/OverviewTest.php'));
+    }
+
+    /**
+     * `authorize: authenticated`: authorize() no pregunta a ningún Gate y su
+     * test no espera 403 con la autorización negando, que sería un falso
+     * positivo obligatorio. Sigue exigiendo sesión.
+     */
+    public function test_un_endpoint_de_cualquiera_con_sesion_no_pregunta_a_ningun_gate(): void
+    {
+        $request = $this->project->read('src/Http/Requests/Desk/MineRequest.php');
+
+        $this->assertMatchesRegularExpression('/public function authorize\(\): bool\s*\{.*return true;\s*\}/s', $request);
+        $this->assertStringNotContainsString('return false;', $request);
+        $this->assertStringNotContainsString('Gate::', $request);
+        $this->assertStringNotContainsString('use Illuminate\Support\Facades\Gate;', $request);
+
+        $test = $this->project->read('tests/Feature/Endpoints/Desk/MineTest.php');
+
+        $this->assertStringContainsString('public function test_requiere_sesion(): void', $test);
+        $this->assertStringContainsString('public function test_con_sesion_basta_la_sesion(): void', $test);
+        $this->assertStringNotContainsString('test_con_sesion_pregunta_a_la_autorizacion', $test);
+        $this->assertStringNotContainsString('assertForbidden', $test);
+        $this->assertStringContainsString("route('api.acme.school.desk.mine', ['scope' => 1]), [])->status();", $test);
+        $this->assertStringContainsString('$this->assertNotSame(403, $status,', $test);
+
+        // Y los demás no cambian.
+        $this->assertStringContainsString('return false;', $this->project->read('src/Http/Requests/Desk/OverviewRequest.php'));
+
+        $manifest = json_decode($this->project->read('.larapack/manifest.json'), true);
+        [$overview, $mine] = $manifest['models']['Desk']['declaration']['endpoints'];
+        $this->assertSame('authenticated', $mine['authorize']);
+        $this->assertArrayNotHasKey('authorize', $overview);
     }
 
     /**

@@ -308,6 +308,48 @@ final class DeclaredEndpointsContractTest extends TestCase
         $this->assertRejected($errors, '/controllers/3/name', 'dos veces');
     }
 
+    /**
+     * `authorize: authenticated` es la forma declarada de «basta la sesión»:
+     * sólo en un `controllers[]`, sin Gate al que preguntar y con sesión.
+     */
+    public function test_authorize_authenticated_es_de_un_controlador_con_sesion_y_sin_gate(): void
+    {
+        ['document' => $document, 'errors' => $errors] = $this->parse([], controllers: [
+            ['name' => 'Desk', 'endpoints' => [
+                ['name' => 'mine', 'method' => 'get', 'authorize' => 'authenticated'],
+                ['name' => 'overview', 'method' => 'get'],
+            ]],
+        ]);
+
+        $this->assertSame([], $errors);
+        [$mine, $overview] = $document->controllers()[0]['endpoints'];
+        $this->assertSame('authenticated', $mine['authorize']);
+        $this->assertNull($mine['ability']);
+        // Sin declararlo, la clave no aparece: el manifiesto sale como antes.
+        $this->assertArrayNotHasKey('authorize', $overview);
+
+        ['errors' => $errors] = $this->parse([], controllers: [
+            ['name' => 'Desk', 'endpoints' => [
+                ['name' => 'mine', 'method' => 'get', 'authorize' => 'authenticated', 'ability' => 'desk.mine'],
+                ['name' => 'hook', 'method' => 'post', 'authorize' => 'authenticated', 'public' => true, 'middleware' => ['throttle:6,1']],
+            ]],
+        ]);
+
+        $this->assertRejected($errors, '/controllers/0/endpoints/0/authorize', 'no se pregunta a ningún Gate');
+        $this->assertRejected($errors, '/controllers/0/endpoints/1/authorize', 'un público no exige sesión');
+
+        // Otro valor, o en un modelo, que pregunta siempre a su política.
+        ['document' => $document, 'errors' => $errors] = $this->parse([], controllers: [
+            ['name' => 'Desk', 'endpoints' => [['name' => 'mine', 'method' => 'get', 'authorize' => 'anyone']]],
+        ]);
+        $this->assertNull($document);
+        $this->assertContains('/controllers/0/endpoints/0/authorize', array_column($errors, 'path'));
+
+        ['document' => $document, 'errors' => $errors] = $this->parse([['name' => 'publish', 'method' => 'post', 'authorize' => 'authenticated']]);
+        $this->assertNull($document);
+        $this->assertContains('/models/0/endpoints/0', array_column($errors, 'path'));
+    }
+
     public function test_un_controlador_sin_endpoints_no_tiene_sentido(): void
     {
         ['document' => $document, 'errors' => $errors] = $this->parse([], controllers: [['name' => 'Desk', 'endpoints' => []]]);

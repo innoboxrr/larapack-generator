@@ -394,6 +394,10 @@
                     "pattern": "^[a-z][A-Za-z0-9]*(?:[.:-][A-Za-z0-9]+)*$",
                     "description": "Una habilidad de Gate (Gate::define) que define la aplicación o el paquete: sin modelo no hay política que Laravel resuelva sola. Sin ella, authorize() nace devolviendo false y se rellena a mano."
                 },
+                "authorize": {
+                    "enum": ["authenticated"],
+                    "description": "authenticated: basta la sesión, y authorize() no pregunta a ningún Gate. Nace devolviendo true; lo que quede por decidir —un registro ajeno (404), un dato inválido (422)— lo decide la request. Su test comprueba que con sesión no responde 403 aunque la autorización niegue. No admite ability ni public."
+                },
                 "public": {
                     "type": "boolean",
                     "default": false,
