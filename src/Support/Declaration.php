@@ -79,6 +79,20 @@ final class Declaration
     }
 
     /**
+     * `larapack:full-model` sin laraimport: los endpoints que ya guardaba el
+     * manifiesto, sobre la forma que dieron las opciones del comando.
+     *
+     * @param  array<int, array<string, mixed>>  $endpoints  Tal como los anotó el importador.
+     */
+    public static function withEndpoints(string $model, array $endpoints): void
+    {
+        $declaration = self::of($model);
+        $declaration['endpoints'] = array_values($endpoints);
+
+        self::$models[$model] = $declaration;
+    }
+
+    /**
      * Desde un modelo del laraimport ya normalizado.
      *
      * @param  array<string, mixed>  $model

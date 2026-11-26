@@ -44,7 +44,7 @@ La causa raíz no es el agente: es que **para un endpoint que no es CRUD no hab�
 |---|---|---|---|
 | `name` | camelCase | — | El método del controlador, `<Name>Request`, el nombre de la ruta y la operación `<name>Model` del modelo. |
 | `method` | `get` `post` `put` `patch` `delete` | — | El verbo HTTP. |
-| `uri` | segmentos kebab o `{parametro}` | `name` en kebab (`importRoster` → `import-roster`) | La URI, relativa al prefijo del modelo, como las CRUD. |
+| `uri` | segmentos kebab o `{parametro}` | `name` en kebab (`importRoster` → `import-roster`; una sigla es una palabra: `importCSV` → `import-csv`) | La URI, relativa al prefijo del modelo, como las CRUD. |
 | `target` | `record` `collection` | `record` | `record` actúa sobre un registro: la request lo busca por `<modelo>_id` y la política lo recibe. `collection` actúa sobre el modelo, como `create` o `index`. |
 | `ability` | camelCase | `name` | La habilidad que se pregunta a la política del modelo. |
 | `public` | boolean | `false` | Sin sesión: el controlador quita `auth:sanctum` sólo para este método. La política se sigue preguntando, con `?User`. |
@@ -78,8 +78,8 @@ Todo determinista, a partir de la declaración. Lo que se escribe a mano va **s�
 | Pieza | Qué sale | ¿Hueco? |
 |---|---|---|
 | Controlador del modelo | `public function publish(PublishRequest $request) { return $request->handle(); }` y su `use`. `except:` en `auth:sanctum` si es público. | No. Se regenera con `--force`. |
-| Rutas `routes/api/models/<modelo>.php` | `Route::post('publish', [...])->name('publish')`, detrás de las CRUD, con `->whereNumber('<modelo>_id')` si el identificador va en la URI y `->middleware([...])` si se declaró. Nombre de ruta: `importRoster` → `import.roster`, como `forceDelete` → `force.delete`. | No. |
-| `Http/Requests/<Modelo>/PublishRequest.php` | `authorize()` pregunta a la política (`can('publish', $course)`; `Gate::forUser()` si es público); `rules()` con `<modelo>_id` si es `record` y el identificador no va en la URI, vacío si no; `handle()` busca el registro y delega en `$course->publishModel($this)`. | Sí: `rules()` y lo que necesite `authorize()`/`handle()`. Un archivo editado no se pisa. |
+| Rutas `routes/api/models/<modelo>.php` | `Route::post('publish', [...])->name('publish')`, detrás de las CRUD, con `->whereNumber('<modelo>_id')` si el identificador va en la URI y `->middleware([...])` si se declaró. Nombre de ruta: `importRoster` → `import.roster`, como `forceDelete` → `force.delete`; `importCSV` → `import.csv`. | No. |
+| `Http/Requests/<Modelo>/PublishRequest.php` | `authorize()` pregunta a la política (`can('publish', $course)`; si es público, `Gate::forUser($this->user('sanctum'))`: sin `auth:sanctum` delante, el guard por omisión no ve un token Bearer); `rules()` con `<modelo>_id` si es `record` y el identificador no va en la URI, vacío si no; `handle()` busca el registro y delega en `$course->publishModel($this)`. | Sí: `rules()` y lo que necesite `authorize()`/`handle()`. Un archivo editado no se pisa. |
 | Política del modelo | `public function publish(User $user, Course $course): Response\|bool { return false; }`. `collection` no recibe el modelo; `public` recibe `?User`. Una `ability` CRUD (`update`, `view`, …) no genera método: reutiliza el que hay. | Sí. **Nace denegando.** |
 | Trait `Operations` del modelo | `public function publishModel($request)` que lanza `LogicException` hasta que se escriba. Sólo al crear el trait: un trait existente no se toca (ver `verify`). | Sí. Aquí va la lógica. |
 | `tests/Feature/Endpoints/<Modelo>/PublishTest.php` | Un invitado recibe 401; si es público, la política lo cierra y recibe 403. | Sí. |
@@ -115,7 +115,11 @@ Semántica (errores salvo que se diga):
 - `target: record` con parámetros en la `uri` que no incluyen `{<modelo>_id}`: la request lee el registro de ahí.
 - `ability` CRUD cuya acción el modelo no tiene (`ability: update` con `routes.only: [index]`), o que no casa con el `target` (`update` recibe un registro; `create`, no), o en un endpoint `public` (las habilidades CRUD no admiten invitados).
 - Dos endpoints que comparten una `ability` propia con distinto `target` o distinto `public`: la firma del método de la política sería distinta.
+- Dos `name` que dan la misma ruta (`importCsv` e `importCSV` → `import.csv`). En un disco que no distingue mayúsculas darían además la misma request.
 - `controllers[].name` igual a un modelo (compartirían archivo de rutas y carpeta de requests), repetido, o terminado en `Controller`.
+- `controllers[].name` igual a un modelo **que ya está en el manifiesto**, aunque venga de otro laraimport: escribiría sobre su controlador y sus rutas —con `--force`, sus CRUD desaparecerían— y su anotación diría que no es un modelo. Lo comprueban `validate` e `import` antes de escribir nada. Al revés no: declarar como modelo lo que era un controlador es la forma de convertirlo.
+- Una `uri` que empieza por un parámetro sin restricción (`{slug}`, o cualquiera en un `controllers[]`) y se registra antes que otro endpoint del mismo verbo que casa con ella: esas peticiones llegarían al primero. El `{<modelo>_id}` de un endpoint `record` no cuenta, porque la ruta lo restringe con `whereNumber`.
+- **Aviso:** esa misma `uri` aunque no tape a nadie todavía: taparía al siguiente endpoint del mismo verbo que se declare.
 - **Aviso:** endpoint `public` sin `throttle:` en su `middleware`.
 
 ---
@@ -126,13 +130,21 @@ Semántica (errores salvo que se diga):
 
 | Código | Detecta |
 |---|---|
-| `endpoint-missing` | Un endpoint declarado al que le falta su método del controlador, su ruta, su request, su método de la política o su operación en el trait `Operations`. El mensaje dice cuál y qué escribir o regenerar. |
+| `endpoint-missing` | Un endpoint declarado al que le falta su método del controlador, su ruta, su request, su método de la política o su operación en el trait `Operations`. El mensaje dice cuál y qué escribir o regenerar; si el controlador o las rutas están editados a mano, dice que `--force` los conserva y que regenerar no basta. |
 | `route-not-declared` | (ampliado) Un método público del controlador (un `__invoke`, un constructor que inyecta un servicio), una ruta con nombre, una ruta sin nombre o un `*Request.php` de la carpeta del modelo que no es ni una acción CRUD declarada ni un endpoint declarado. |
-| `controller-logic` | Un método del controlador generado —de un endpoint o de una acción CRUD— cuyo cuerpo no es `return $request->handle();`. Los cuerpos se leen con el tokenizador, no con una expresión regular. |
 
-`controller-logic` es la comprobación que faltaba. Antes de esto, editar el controlador generado sólo daba un `customised` informativo. **Es un cambio de comportamiento:** un proyecto que ya metió lógica en un controlador generado, o le añadió un método, pasa de `verify` en verde a `verify` en rojo. Es lo que se quiere —es exactamente la deriva—, pero conviene publicarlo como tal.
+Los dos entran en `Verifier::CHECKS`, así que `--check endpoint-missing` y `--check route-not-declared` funcionan.
 
-Lo que sigue sin verse es un controlador escrito a mano que **no** está en el manifiesto. Con `controllers[]` ya no hay motivo para escribirlo; detectarlo es otra comprobación (sección 7).
+**Que el controlador haga algo más que `return $request->handle();` no es de este spec.** Lo comprueba `controller-shape` (`ControllerShape`), en todos los controladores del proyecto, generados o no, estén o no en el manifiesto. Una primera versión de este spec añadía `controller-logic` sólo para los generados; con las dos, un controlador generado con lógica daba dos errores por el mismo problema y con reglas distintas (una sólo aceptaba `handle()` y `handle($this)`; la otra, `handle(...)` con cualquier argumento). Se quitó `controller-logic`: un solo dueño, una sola regla.
+
+`route-not-declared` distingue dos orígenes del mismo rastro, porque el manifiesto lo sabe:
+
+- **Escrito a mano.** El archivo no lo escribió el generador, o lo editó alguien después: «Alguien lo escribió a mano: declara el endpoint en el laraimport…».
+- **Declarado antes y retirado del laraimport.** El generador lo escribió y nadie lo ha tocado (o es una request, que se rellena a mano por diseño): «Lo generó LaraPack para un endpoint que ya no está declarado: si lo retiraste del laraimport, regenera con `--force` para quitarlo del controlador y de las rutas, y borra su request y su test». Lo mismo con una acción CRUD que se quita de `routes`.
+
+Culpar de lo segundo a quien no tocó nada sólo enseña a desconfiar de `verify`.
+
+**Es un cambio de comportamiento:** un proyecto que añadió un método o una ruta a un controlador generado pasa de `verify` en verde a `verify` en rojo, y lo mismo con la lógica dentro de uno (por `controller-shape`). Es lo que se quiere —es exactamente la deriva—, y se publica como versión mayor.
 
 ---
 
@@ -144,7 +156,7 @@ Lo que sigue sin verse es un controlador escrito a mano que **no** está en el m
 4. `larapack:import --force` dos veces seguidas no cambia nada; con `PublishRequest` editado, lo conserva.
 5. Un `controllers[]` genera controlador, rutas, requests y tests, sin modelo, política ni migración.
 6. `validate` rechaza: nombre CRUD, nombre reservado, `uri` con `..`, método fuera del enum, `ability` CRUD que el modelo no tiene.
-7. `verify` falla con `endpoint-missing` si se borra la ruta o la operación de un endpoint, con `route-not-declared` si se añade un método al controlador, y con `controller-logic` si se mete lógica en uno.
+7. `verify` falla con `endpoint-missing` si se borra la ruta o la operación de un endpoint, con `route-not-declared` si se añade un método al controlador, y con `controller-shape` —una sola vez— si se mete lógica en uno.
 8. La prueba de punta a punta instala un paquete con endpoints y controladores, pasa sus tests generados, Pint y Larastan.
 
 ---
@@ -155,7 +167,8 @@ Lo que sigue sin verse es un controlador escrito a mano que **no** está en el m
 - **Reglas declaradas** (`rules` dentro del endpoint, como `requests[]` para Create/Update). `rules()` es un hueco.
 - **Eventos** por endpoint (las CRUD disparan `CreateEvent`, …). Se emiten desde la operación si hacen falta.
 - **Respuesta tipada**: `handle()` devuelve lo que devuelva la operación.
-- **Detectar controladores escritos a mano fuera del manifiesto.** Es otra comprobación; ésta hace que ya no haga falta escribirlos.
+- **Detectar controladores escritos a mano fuera del manifiesto.** Lo hace `controller-shape`; este spec hace que ya no haga falta escribirlos.
+- **Retirar un `controllers[]` entero.** Quitarlo del laraimport no borra sus archivos ni su entrada del manifiesto, y `verify` no lo ve: la anotación vieja sigue cuadrando con los archivos. Se borran a mano, y con ellos la entrada de `.larapack/manifest.json`: `larapack:remove-full-model` no la olvida, tampoco la de un modelo.
 
 ---
 
@@ -163,12 +176,13 @@ Lo que sigue sin verse es un controlador escrito a mano que **no** está en el m
 
 - **La clave es `endpoints`**, no `actions` (sección 3.2).
 - **Los endpoints sin modelo van en `controllers[]`** (sección 3.1), y su `ability` es de Gate.
-- **Todo nace cerrado.** La política devuelve `false`; un controlador sin `ability` devuelve `false` en `authorize()`; un endpoint `public` sigue preguntando a la política, ahora con `?User`. El `before()` del administrador no aplica a invitados (Laravel no lo llama si su primer parámetro no admite `null`), así que un endpoint público no queda abierto por accidente.
+- **Todo nace cerrado.** La política devuelve `false`; un controlador sin `ability` devuelve `false` en `authorize()`; un endpoint `public` sigue preguntando a la política, ahora con `?User`. Con un **invitado**, Laravel no llama a `before()` (su primer parámetro no admite `null`), así que `before()` no abre nada a quien no tiene sesión. Con **sesión** sí pasa por `before()`, como en las CRUD: un administrador autenticado entra también en los endpoints públicos, salvo lo que `before()` excluya. Una versión anterior de este spec decía que `?User` impedía que el administrador pasara por `before()`; sólo es así con invitados.
+- **Un endpoint público autoriza con el usuario de `sanctum`.** No pasa por `auth:sanctum`, así que `$this->user()` usaría el guard por omisión (normalmente `web`), que no ve un token Bearer: un cliente con token llegaría a la política como invitado. La request generada pregunta a `$this->user('sanctum')`, que mira la sesión y el token. La prueba de punta a punta lo llama con un token de verdad y sin `actingAs`, que fijaría el guard y escondería justo esto.
 - **La operación se llama `<name>Model`**, como `createModel` y `updateModel`. Con el nombre pelado, un endpoint `refresh`, `touch` o `replicate` habría sobrescrito un método de Eloquent.
 - **El trait `Operations` sólo recibe la operación al crearse.** Es código del proyecto: añadir métodos a uno existente sería escribir en un archivo que no es del generador. Si falta, `verify` lo dice con `endpoint-missing` y el nombre exacto del método.
 - **Tampoco se añade a una política ya editada**, por la misma regla de `--force`. `verify` lo dice igual.
 - **Las rutas de `controllers[]` van en `routes/api/models/`**: es el directorio que el `RouteServiceProvider` ya recorre, así que no hay que regenerar el proveedor de ningún proyecto existente. Por eso un controlador no puede llamarse como un modelo.
 - **El identificador en la URI lo exige la ruta, no `rules()`.** Las reglas validan el cuerpo y la query, no los parámetros de ruta: `'course_id' => 'required'` con `{course_id}/publish` rechazaría todas las peticiones. Se genera `->whereNumber('course_id')` y la request lo lee igual (`$this->course_id` cae en el parámetro de ruta).
 - **El código de los endpoints se inserta después de sustituir los tokens.** Un endpoint `renameModelName` contiene el token `ModelName`; si pasara por `strtr()` saldría roto.
-- **`larapack:full-model` suelto no conoce los endpoints**, igual que no conoce las columnas: regenerar un modelo con él deja el controlador sin los métodos de sus endpoints y `verify` lo marca con `endpoint-missing`. Los endpoints se generan con `larapack:import`.
+- **`larapack:full-model` suelto conserva los endpoints del manifiesto.** No tiene opción para declararlos, y `Manifest::declare` reemplaza la declaración entera: en la primera versión, suelto y con `--force`, anotaba el modelo sin endpoints y regeneraba el controlador y las rutas sin sus métodos, que pasaban a dar 404 sin aviso. Ahora los toma del manifiesto, los genera y los vuelve a anotar, también con `--only`, `--except` o `--immutable`; si una opción quita la acción CRUD por cuya habilidad pregunta un endpoint, falla antes de escribir nada. Sobre un `controllers[]` se niega: le crearía modelo, tabla y política. Declarar o cambiar endpoints sigue siendo cosa de `larapack:import`.
 - **Las piezas de un endpoint no cuentan para `inconsistent-entity`**, como las metas: cada modelo declara los suyos. Un `controllers[]` sólo se compara con otros controladores.

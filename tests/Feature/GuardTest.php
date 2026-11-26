@@ -274,9 +274,14 @@ final class GuardTest extends TestCase
 
         $stop = (string) json_encode(['hook_event_name' => 'Stop', 'stop_hook_active' => false, 'cwd' => $this->file('src')]);
 
+        // Dos problemas distintos, uno por comprobación: una acción que Note
+        // no declara (route-not-declared) y un método que no delega
+        // (controller-shape). El segundo no sale repetido con otro nombre.
         $this->assertSame(GuardCommand::BLOCK, $this->guard($stop, ['--stop' => true]));
-        $this->assertStringContainsString('un error', $this->stderr);
+        $this->assertStringContainsString('2 errores', $this->stderr);
         $this->assertStringContainsString('route-not-declared', $this->stderr);
+        $this->assertStringContainsString('controller-shape', $this->stderr);
+        $this->assertStringNotContainsString('controller-logic', $this->stderr);
         $this->assertStringContainsString('return $request->handle();', $this->stderr);
 
         // El evento lo dice el propio JSON; --stop es para quien no lo mande.

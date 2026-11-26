@@ -2,6 +2,7 @@
 
 namespace Innoboxrr\LarapackGenerator\Tests\Feature;
 
+use Innoboxrr\LarapackGenerator\Support\Manifest;
 use Innoboxrr\LarapackGenerator\Tests\Support\FakeProject;
 use Innoboxrr\LarapackGenerator\Tests\TestCase;
 use Symfony\Component\Console\Command\Command;
@@ -41,6 +42,7 @@ final class DeclaredEndpointsGenerationTest extends TestCase
                 ['name' => 'Oauth', 'endpoints' => [
                     ['name' => 'token', 'method' => 'post', 'public' => true, 'middleware' => ['throttle:6,1']],
                     ['name' => 'revoke', 'method' => 'post', 'ability' => 'oauth.revoke'],
+                    ['name' => 'status', 'method' => 'get', 'ability' => 'oauth.status', 'public' => true, 'middleware' => ['throttle:30,1']],
                 ]],
             ],
         ]));
@@ -113,7 +115,9 @@ final class DeclaredEndpointsGenerationTest extends TestCase
         // El identificador en la URI lo exige la ruta: rules() no ve los
         // parámetros de ruta y lo rechazaría siempre.
         $certificate = $this->project->read('src/Http/Requests/Course/CertificateRequest.php');
-        $this->assertStringContainsString("Gate::forUser(\$this->user())->allows('certificate', \$course)", $certificate);
+        // Público: sin auth:sanctum delante, el guard por omisión no ve un
+        // token Bearer. Se pregunta a sanctum.
+        $this->assertStringContainsString("Gate::forUser(\$this->user('sanctum'))->allows('certificate', \$course)", $certificate);
         $this->assertStringNotContainsString("'course_id' => 'required", $certificate);
     }
 
@@ -175,11 +179,49 @@ final class DeclaredEndpointsGenerationTest extends TestCase
         $revoke = $this->project->read('src/Http/Requests/Oauth/RevokeRequest.php');
         $this->assertStringContainsString("return Gate::forUser(\$this->user())->allows('oauth.revoke');", $revoke);
 
+        $status = $this->project->read('src/Http/Requests/Oauth/StatusRequest.php');
+        $this->assertStringContainsString("return Gate::forUser(\$this->user('sanctum'))->allows('oauth.status');", $status);
+        $this->assertSame(1, substr_count($status, 'return Gate::'));
+
         foreach (['src/Models/Desk.php', 'src/Policies/DeskPolicy.php', 'database/factories/DeskFactory.php', 'src/Http/Resources/Models/DeskResource.php'] as $absent) {
             $this->assertFalse($this->project->has($absent), "{$absent} no debería existir: Desk no es un modelo.");
         }
 
         $this->assertSame([], glob($this->project->path.'/database/migrations/*_desks_table.php'));
+    }
+
+    /**
+     * Otro laraimport del mismo proyecto: el validador sólo ve ese archivo, y
+     * Post viene del primero. Generar Post como controlador escribiría sobre
+     * su controlador y sus rutas, y su anotación diría que no es un modelo.
+     */
+    public function test_un_controlador_no_puede_llamarse_como_un_modelo_ya_generado(): void
+    {
+        $other = $this->project->path.'/otro.json';
+
+        file_put_contents($other, json_encode([
+            'models' => [['name' => 'Tag', 'props' => [['name' => 'title', 'type' => 'string']]]],
+            'controllers' => [
+                ['name' => 'Post', 'endpoints' => [['name' => 'overview', 'method' => 'get']]],
+                // Un controlador que ya era controlador se regenera sin más.
+                ['name' => 'Desk', 'endpoints' => [['name' => 'overview', 'method' => 'get']]],
+            ],
+        ]));
+
+        $routes = $this->project->read('routes/api/models/post.php');
+
+        $this->assertSame(Command::FAILURE, $this->runCommand('larapack:validate', ['jsonPath' => $other, '--format' => 'json']));
+        $this->assertSame(Command::FAILURE, $this->runCommand('larapack:import', ['jsonPath' => $other, '--force' => true, '--format' => 'json']));
+
+        $messages = array_column(json_decode($this->lastOutput, true)['findings'], 'message', 'path');
+
+        $this->assertSame(['/controllers/0/name'], array_keys($messages));
+        $this->assertStringContainsString('ya está generado', $messages['/controllers/0/name']);
+
+        // No se escribió nada: ni el modelo nuevo ni encima de Post.
+        $this->assertFalse($this->project->has('src/Models/Tag.php'));
+        $this->assertSame($routes, $this->project->read('routes/api/models/post.php'));
+        $this->assertFalse((new Manifest($this->project->path))->declarationOf('Post')['controller']);
     }
 
     public function test_el_manifiesto_guarda_los_endpoints_para_verify(): void

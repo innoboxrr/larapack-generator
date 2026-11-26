@@ -48,7 +48,7 @@ final class Verifier
      */
     private const MANIFEST_CHECKS = [
         'empty-manifest', 'missing-file', 'customised', 'inconsistent-entity', 'route-prefix',
-        'route-not-declared', 'immutable-write', 'secret-exposed',
+        'route-not-declared', 'endpoint-missing', 'immutable-write', 'secret-exposed',
     ];
 
     /**
@@ -318,9 +318,14 @@ final class Verifier
     /**
      * Rastros de acciones que el modelo no declara.
      *
-     * Existen porque alguien los escribió a mano: el generador no los produce.
-     * Es la deriva que LaraPack existe para impedir, en el sitio donde hasta
-     * ahora no tenía nada que decir.
+     * Existen porque alguien los escribió a mano —el generador no los produce—
+     * o porque se declararon, se generaron y luego se retiraron del laraimport
+     * sin regenerar. Lo primero es la deriva que LaraPack existe para impedir;
+     * lo segundo, una limpieza pendiente. El mensaje dice cuál de las dos es.
+     *
+     * Que el controlador haga algo más que `return $request->handle();` no se
+     * mira aquí: es de ControllerShape (`controller-shape`), que lo comprueba
+     * en todos los controladores, generados o no, con una sola regla.
      *
      * @param  array<int, string>  $models
      * @return array<int, array<string, mixed>>
@@ -345,7 +350,9 @@ final class Verifier
                     'route-not-declared',
                     $model,
                     $file,
-                    "{$what} {$action}, que {$model} no declara. Alguien lo escribió a mano: declara la acción en el laraimport o retíralo."
+                    $this->generatedBefore($file)
+                        ? "{$what} {$action}, que {$model} ya no declara. Lo generó LaraPack cuando la declaraba: si la retiraste del laraimport, regenera con --force y borra lo que quede; si no, vuelve a declararla."
+                        : "{$what} {$action}, que {$model} no declara. Alguien lo escribió a mano: declara la acción en el laraimport o retíralo."
                 );
             }
 
@@ -353,7 +360,6 @@ final class Verifier
                 ...$findings,
                 ...$this->checkEndpoints($model, $declaration),
                 ...$this->undeclaredEndpoints($model, $declaration),
-                ...$this->controllerLogic($model),
             ];
         }
 
@@ -392,16 +398,22 @@ final class Verifier
         $operations = $app === null ? null : "{$app}/Models/Traits/Operations/{$model}Operations.php";
         $operationsContent = $operations === null ? null : $this->contentsOf($operations);
 
+        // Regenerar con --force no toca lo editado a mano: el generador lo
+        // conserva. Decir "regenera" ahí manda a un comando que no hace nada.
+        $regenerate = fn (?string $file, string $what): string => $file !== null && $this->manifest->wasCustomised($this->manifest->absolute($file))
+            ? "Regenerar no basta: {$what} está editado a mano y --force lo conserva. Lleva lo que tenga de más a la request o a la operación del modelo, bórralo y regenera."
+            : "Regenera con --force: {$what} no se escribe a mano.";
+
         foreach ($declaration['endpoints'] as $endpoint) {
             $name = $endpoint['name'];
             $missing = fn (?string $file, string $message): array => $this->finding(self::ERROR, 'endpoint-missing', $model, $file, "El endpoint {$name} declarado {$message}");
 
             if (! preg_match('/function\s+'.preg_quote($name, '/').'\s*\(/', $controllerContent)) {
-                $findings[] = $missing($controller, 'no tiene método en el controlador. Regenera con --force: el controlador no se escribe a mano.');
+                $findings[] = $missing($controller, 'no tiene método en el controlador. '.$regenerate($controller, 'el controlador'));
             }
 
             if (! str_contains($routesContent, "->name('{$endpoint['route']}')")) {
-                $findings[] = $missing($routes, "no tiene ruta '{$endpoint['route']}'. Regenera con --force.");
+                $findings[] = $missing($routes, "no tiene ruta '{$endpoint['route']}'. ".$regenerate($routes, 'el archivo de rutas'));
             }
 
             if ($app !== null) {
@@ -448,17 +460,24 @@ final class Verifier
     {
         $findings = [];
         $endpoints = $declaration['endpoints'];
-        $hint = 'Alguien lo escribió a mano: declara el endpoint en el laraimport (endpoints, o controllers si no tiene modelo) y regenera.';
+
+        // Lo mismo aparece por dos caminos: alguien lo escribió a mano, o el
+        // endpoint se declaró, se generó y después se quitó del laraimport.
+        // El manifiesto distingue uno del otro, y culpar de lo segundo a
+        // quien no tocó nada sólo enseña a desconfiar de verify.
+        $hint = fn (string $file): string => $this->generatedBefore($file)
+            ? 'Lo generó LaraPack para un endpoint que ya no está declarado: si lo retiraste del laraimport, regenera con --force para quitarlo del controlador y de las rutas, y borra su request y su test; si no, vuelve a declararlo.'
+            : 'Alguien lo escribió a mano: declara el endpoint en el laraimport (endpoints, o controllers si no tiene modelo) y regenera.';
 
         $controller = $this->fileFromStub($model, 'Controller/ControllerTemplate.txt');
 
         if ($controller !== null && ($content = $this->contentsOf($controller)) !== null) {
             $known = [...Actions::ALL, ...array_column($endpoints, 'name'), 'middleware'];
 
-            foreach (array_keys($this->publicMethods($content)) as $method) {
+            foreach ($this->publicMethods($content) as $method) {
                 if (! in_array($method, $known, true)) {
                     $findings[] = $this->finding(self::ERROR, 'route-not-declared', $model, $controller,
-                        "El controlador tiene un método {$method} que no es una acción ni un endpoint declarado. {$hint}");
+                        "El controlador tiene un método {$method} que no es una acción ni un endpoint declarado. ".$hint($controller));
                 }
             }
         }
@@ -472,7 +491,7 @@ final class Verifier
 
             foreach (array_diff($matches[1], $known) as $route) {
                 $findings[] = $this->finding(self::ERROR, 'route-not-declared', $model, $routes,
-                    "Hay una ruta '{$route}' que no es una acción ni un endpoint declarado. {$hint}");
+                    "Hay una ruta '{$route}' que no es una acción ni un endpoint declarado. ".$hint($routes));
             }
 
             // Una ruta sin nombre no la puede llamar el front, y tampoco se ve
@@ -481,7 +500,7 @@ final class Verifier
 
             if ($registered > count($matches[1])) {
                 $findings[] = $this->finding(self::ERROR, 'route-not-declared', $model, $routes,
-                    'Hay rutas sin nombre. Las generadas lo llevan todas; ésa la escribió alguien a mano. '.$hint);
+                    'Hay rutas sin nombre. Las generadas lo llevan todas; ésa la escribió alguien a mano: declara el endpoint en el laraimport (endpoints, o controllers si no tiene modelo) y regenera.');
             }
         }
 
@@ -492,8 +511,10 @@ final class Verifier
 
             foreach (glob($this->manifest->absolute("{$app}/Http/Requests/{$model}").'/*Request.php') ?: [] as $file) {
                 if (! in_array(basename($file, '.php'), $known, true)) {
-                    $findings[] = $this->finding(self::ERROR, 'route-not-declared', $model, "{$app}/Http/Requests/{$model}/".basename($file),
-                        'Existe una request que no es de ninguna acción ni endpoint declarado. '.$hint);
+                    $request = "{$app}/Http/Requests/{$model}/".basename($file);
+
+                    $findings[] = $this->finding(self::ERROR, 'route-not-declared', $model, $request,
+                        'Existe una request que no es de ninguna acción ni endpoint declarado. '.$hint($request));
                 }
             }
         }
@@ -502,141 +523,25 @@ final class Verifier
     }
 
     /**
-     * Un método del controlador generado que hace algo más que llamar a su
-     * request.
-     *
-     * Editar lo generado sólo daba un `customised` informativo; en el
-     * controlador eso no basta. La autorización, la validación y la operación
-     * viven en la request y en el modelo, y un controlador que valida o
-     * consulta es justo lo que el patrón existe para impedir.
-     *
-     * @return array<int, array<string, mixed>>
-     */
-    private function controllerLogic(string $model): array
-    {
-        $controller = $this->fileFromStub($model, 'Controller/ControllerTemplate.txt');
-        $content = $controller === null ? null : $this->contentsOf($controller);
-
-        if ($content === null) {
-            return [];
-        }
-
-        $findings = [];
-
-        foreach ($this->publicMethods($content) as $method => $body) {
-            if ($method === 'middleware') {
-                continue;
-            }
-
-            $normalised = preg_replace('/\s+/', '', $body);
-
-            if (in_array($normalised, ['return$request->handle();', 'return$request->handle($this);'], true)) {
-                continue;
-            }
-
-            $findings[] = $this->finding(self::ERROR, 'controller-logic', $model, $controller,
-                "{$method}() hace algo más que `return \$request->handle();`. La autorización va en authorize(), la validación en rules() y la operación en handle(), que delega en el modelo. Muévelo ahí y regenera el controlador con --force.");
-        }
-
-        return $findings;
-    }
-
-    /**
-     * Los métodos públicos de la clase y su cuerpo, leídos con el tokenizador:
+     * Los métodos públicos de la clase, sin los abstractos, que no tienen
+     * cuerpo. Los lee PhpOutline, el mismo esqueleto que usa ControllerShape:
      * una expresión regular no sabe dónde acaba un método con llaves dentro.
      *
-     * Sólo los del cuerpo de la clase, no los de una clase anónima o un
-     * closure, y sin los abstractos, que no tienen cuerpo.
-     *
-     * @return array<string, string>
+     * @return list<string>
      */
     private function publicMethods(string $php): array
     {
-        $tokens = token_get_all($php);
-        $methods = [];
-        $depth = 0;
-        $count = count($tokens);
+        $names = [];
 
-        for ($i = 0; $i < $count; $i++) {
-            $token = $tokens[$i];
-
-            if ($token === '{' || (is_array($token) && in_array($token[0], [T_CURLY_OPEN, T_DOLLAR_OPEN_CURLY_BRACES], true))) {
-                $depth++;
-
-                continue;
-            }
-
-            if ($token === '}') {
-                $depth--;
-
-                continue;
-            }
-
-            if (! is_array($token) || $token[0] !== T_FUNCTION || $depth !== 1) {
-                continue;
-            }
-
-            $visibility = T_PUBLIC;
-
-            for ($j = $i - 1; $j >= 0 && is_array($tokens[$j]) && in_array($tokens[$j][0], [T_WHITESPACE, T_PUBLIC, T_PROTECTED, T_PRIVATE, T_STATIC, T_FINAL, T_ABSTRACT, T_COMMENT, T_DOC_COMMENT], true); $j--) {
-                if (in_array($tokens[$j][0], [T_PROTECTED, T_PRIVATE], true)) {
-                    $visibility = $tokens[$j][0];
+        foreach (PhpOutline::ofCode($php)->classes() as $class) {
+            foreach ($class['methods'] as $method) {
+                if ($method['visibility'] === 'public' && $method['body'] !== null) {
+                    $names[] = $method['name'];
                 }
             }
-
-            $name = null;
-
-            for ($j = $i + 1; $j < $count; $j++) {
-                if (is_array($tokens[$j]) && $tokens[$j][0] === T_STRING) {
-                    $name = $tokens[$j][1];
-
-                    break;
-                }
-
-                if ($tokens[$j] === '(') {
-                    break;
-                }
-            }
-
-            // El cuerpo empieza en la primera llave tras la firma; un `;` antes
-            // es un método abstracto.
-            for ($j = $i + 1; $j < $count && $tokens[$j] !== '{' && $tokens[$j] !== ';'; $j++);
-
-            if ($name === null || $j >= $count || $tokens[$j] === ';') {
-                continue;
-            }
-
-            $body = '';
-            $level = 0;
-
-            for ($k = $j; $k < $count; $k++) {
-                $piece = $tokens[$k];
-                $text = is_array($piece) ? $piece[1] : $piece;
-
-                if ($piece === '{' || (is_array($piece) && in_array($piece[0], [T_CURLY_OPEN, T_DOLLAR_OPEN_CURLY_BRACES], true))) {
-                    $level++;
-                } elseif ($piece === '}') {
-                    $level--;
-                }
-
-                if ($k > $j && $level > 0) {
-                    $body .= $text;
-                }
-
-                if ($level === 0) {
-                    break;
-                }
-            }
-
-            if ($visibility === T_PUBLIC) {
-                $methods[$name] = $body;
-            }
-
-            // Se sigue después del método: lo de dentro ya está leído.
-            $i = $k;
         }
 
-        return $methods;
+        return array_values(array_unique($names));
     }
 
     /**
@@ -827,6 +732,21 @@ final class Verifier
         }
 
         return $files;
+    }
+
+    /**
+     * El generador lo escribió: está en el manifiesto y, salvo una request,
+     * nadie lo ha tocado desde entonces. Las requests se rellenan a mano por
+     * diseño, así que basta con que el generador las haya creado.
+     */
+    private function generatedBefore(string $relative): bool
+    {
+        if ($this->manifest->stubOf($relative) === null) {
+            return false;
+        }
+
+        return str_contains($relative, '/Http/Requests/')
+            || ! $this->manifest->wasCustomised($this->manifest->absolute($relative));
     }
 
     private function contentsOf(string $relative): ?string

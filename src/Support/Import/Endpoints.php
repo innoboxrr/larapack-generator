@@ -169,8 +169,38 @@ final class Endpoints
         return $matches[1];
     }
 
+    /**
+     * `importRoster` → `import-roster`. Una sigla es una palabra, no una letra
+     * por mayúscula: `importCSV` → `import-csv` y `exportCSVFile` →
+     * `export-csv-file`, no `import-c-s-v`.
+     */
     public static function kebab(string $value): string
     {
-        return mb_strtolower(preg_replace('/(?<!^)[A-Z]/', '-$0', $value));
+        return mb_strtolower((string) preg_replace(['/([a-z0-9])([A-Z])/', '/([A-Z]+)([A-Z][a-z])/'], '$1-$2', $value));
+    }
+
+    /**
+     * La URI como patrón, para saber si una ruta registrada antes se queda
+     * con las peticiones de otra. Un parámetro casa con un segmento, como en
+     * Laravel; el del registro lleva whereNumber() y sólo casa con números.
+     */
+    public static function pattern(string $uri, ?string $numeric = null): string
+    {
+        $regex = '';
+
+        foreach (explode('/', $uri) as $position => $segment) {
+            $slash = $position === 0 ? '' : '/';
+
+            if (preg_match('/^\{([a-z][a-z0-9_]*)(\??)\}$/', $segment, $parameter)) {
+                $value = $parameter[1] === $numeric ? '[0-9]+' : '[^/]+';
+                $regex .= $parameter[2] === '?' ? "(?:{$slash}{$value})?" : $slash.$value;
+
+                continue;
+            }
+
+            $regex .= $slash.preg_quote($segment, '#');
+        }
+
+        return '#^'.$regex.'$#';
     }
 }

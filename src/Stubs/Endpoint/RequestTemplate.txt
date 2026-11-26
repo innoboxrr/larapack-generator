@@ -48,22 +48,32 @@ class EndpointClassNameRequest extends FormRequest
 
 // @larapack:endif
 // @larapack:if endpoint_model&endpoint_record&endpoint_public
-        // Público: puede no haber sesión. La política recibe ?User.
-        return Gate::forUser($this->user())->allows('endpointAbilityName', $camelCaseModelName);
+        // Público: puede no haber sesión, y la política recibe ?User. Aquí no
+        // pasa auth:sanctum, así que el guard por omisión no ve un token
+        // Bearer: se pregunta a sanctum, que mira la sesión y el token.
+        return Gate::forUser($this->user('sanctum'))->allows('endpointAbilityName', $camelCaseModelName);
 // @larapack:endif
 // @larapack:if endpoint_model&endpoint_record&!endpoint_public
         return $this->user()->can('endpointAbilityName', $camelCaseModelName);
 // @larapack:endif
 // @larapack:if endpoint_model&!endpoint_record&endpoint_public
 
-        // Público: puede no haber sesión. La política recibe ?User.
-        return Gate::forUser($this->user())->allows('endpointAbilityName', PascalCaseModelName::class);
+        // Público: puede no haber sesión, y la política recibe ?User. Aquí no
+        // pasa auth:sanctum, así que el guard por omisión no ve un token
+        // Bearer: se pregunta a sanctum, que mira la sesión y el token.
+        return Gate::forUser($this->user('sanctum'))->allows('endpointAbilityName', PascalCaseModelName::class);
 // @larapack:endif
 // @larapack:if endpoint_model&!endpoint_record&!endpoint_public
 
         return $this->user()->can('endpointAbilityName', PascalCaseModelName::class);
 // @larapack:endif
-// @larapack:if endpoint_gate
+// @larapack:if endpoint_gate&endpoint_public
+
+        // Público: puede no haber sesión. Aquí no pasa auth:sanctum, así que
+        // el guard por omisión no ve un token Bearer: se pregunta a sanctum.
+        return Gate::forUser($this->user('sanctum'))->allows('endpointAbilityName');
+// @larapack:endif
+// @larapack:if endpoint_gate&!endpoint_public
 
         return Gate::forUser($this->user())->allows('endpointAbilityName');
 // @larapack:endif
