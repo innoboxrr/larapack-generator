@@ -137,7 +137,7 @@ final class ArchitectureDocTest extends TestCase
     #[DataProvider('documents')]
     public function test_cada_test_que_nombra_existe(string $document): void
     {
-        $tests = $this->testClasses();
+        $tests = $this->knownTests();
         $missing = [];
 
         foreach ($this->codeSpans($document) as $span) {
@@ -300,7 +300,7 @@ final class ArchitectureDocTest extends TestCase
      *
      * @return array<string, string>
      */
-    private function testClasses(): array
+    private function knownTests(): array
     {
         $tests = [];
         $directory = $this->root().'/tests';
