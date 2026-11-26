@@ -199,7 +199,7 @@ final class GeneratedPackageTest extends TestCase
 
     public function test_las_migraciones_crean_las_tablas_declaradas(): void
     {
-        foreach (['products', 'categories', 'audit_entries', 'api_keys'] as $table) {
+        foreach (['products', 'categories', 'audit_entries', 'api_keys', 'ledgers', 'tickets'] as $table) {
             $this->assertTrue(Schema::hasTable($table), "No se creó la tabla {$table}.");
         }
 
@@ -209,7 +209,7 @@ final class GeneratedPackageTest extends TestCase
 
     public function test_cada_factory_crea_una_fila_que_la_base_acepta(): void
     {
-        foreach (['Category', 'Product', 'AuditEntry', 'ApiKey'] as $name) {
+        foreach (['Category', 'Product', 'AuditEntry', 'ApiKey', 'Ledger', 'Ticket'] as $name) {
             $model = $this->model($name)::factory()->create();
 
             $this->assertTrue($model->exists, "La factory de {$name} no creó la fila.");
@@ -499,6 +499,81 @@ final class GeneratedPackageTest extends TestCase
         Gate::define('shop.reports', fn ($user): bool => $user->isAdmin());
 
         $this->getJson(route('api.acme.shop.desk.summary'))->assertStatus(501);
+    }
+
+    /**
+     * Un endpoint de registro con otro parámetro en la URI: la ruta exige el
+     * registro numérico, la política lo recibe y el parámetro llega a la
+     * operación. Uno de colección con `delete` no lleva registro.
+     */
+    public function test_un_endpoint_con_mas_parametros_en_la_uri_llega_a_la_operacion(): void
+    {
+        $product = $this->model('Product')::factory()->create();
+        $moveTo = route($this->prefix('product').'move.to', ['product_id' => $product->id, 'slot' => 'a3']);
+
+        $this->postJson($moveTo)->assertUnauthorized();
+
+        Sanctum::actingAs($this->user());
+        $this->postJson($moveTo)->assertForbidden();
+        $this->deleteJson($this->route('product', 'purge'))->assertForbidden();
+        $this->postJson('/api/acme/shop/product/abc/move-to/a3')->assertNotFound();
+
+        Sanctum::actingAs($this->user(admin: true));
+
+        $this->withoutExceptionHandling();
+        $this->expectException(LogicException::class);
+        $this->expectExceptionMessage('Product::moveToModel() no está implementada.');
+
+        $this->postJson($moveTo);
+    }
+
+    /**
+     * `routes.only`: lo que no se declara no tiene ruta, y lo declarado
+     * funciona igual que en un modelo completo.
+     */
+    public function test_un_modelo_con_rutas_parciales_solo_expone_lo_declarado(): void
+    {
+        foreach (['create', 'update', 'delete', 'restore', 'export', 'bulkDelete'] as $action) {
+            $this->assertFalse(Route::has($this->prefix('ledger').str_replace('bulkDelete', 'bulk.delete', $action)), "Ledger sólo declara index y show, y expone {$action}.");
+        }
+
+        foreach (['create', 'show', 'delete', 'bulkDelete'] as $action) {
+            $this->assertFalse(Route::has($this->prefix('ticket').str_replace('bulkDelete', 'bulk.delete', $action)), "Ticket no declara {$action} y lo expone.");
+        }
+
+        Sanctum::actingAs($this->user(admin: true));
+
+        $ledger = $this->model('Ledger')::factory()->create();
+        $this->getJson($this->route('ledger', 'index'))->assertOk()->assertJsonFragment(['id' => $ledger->id]);
+        $this->getJson($this->route('ledger', 'show', ['ledger_id' => $ledger->id]))->assertOk()->assertJsonPath('id', $ledger->id);
+
+        $tickets = $this->model('Ticket')::factory()->count(2)->create();
+        $this->putJson($this->route('ticket', 'update'), ['ticket_id' => $tickets[0]->id, 'subject' => 'Otro'])
+            ->assertOk()
+            ->assertJsonPath('subject', 'Otro');
+        $this->putJson($this->route('ticket', 'bulk.update'), ['ids' => $tickets->modelKeys(), 'data' => ['subject' => 'Todos']])->assertOk();
+        $this->assertSame(2, $this->model('Ticket')::query()->where('subject', 'Todos')->count());
+    }
+
+    /**
+     * `controllers[]` con un parámetro en la URI, y `authorize: authenticated`:
+     * basta la sesión, no pregunta a ningún Gate y llega a handle().
+     */
+    public function test_un_controlador_con_parametros_y_otro_de_cualquiera_con_sesion(): void
+    {
+        $import = route('api.acme.shop.desk.import', ['batch' => 'b-7']);
+
+        $this->postJson($import)->assertUnauthorized();
+        $this->getJson(route('api.acme.shop.desk.mine'))->assertUnauthorized();
+
+        Sanctum::actingAs($this->user());
+
+        $this->postJson($import)->assertForbidden();
+        $this->getJson(route('api.acme.shop.desk.mine'))->assertStatus(501);
+
+        Gate::define('shop.reports', fn ($user): bool => true);
+
+        $this->postJson($import)->assertStatus(501);
     }
 
     public function test_un_secreto_se_escribe_pero_nunca_sale_por_la_api(): void
