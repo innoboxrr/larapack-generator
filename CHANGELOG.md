@@ -2,6 +2,12 @@
 
 ## 9.1.0 (sin publicar)
 
+Una menor: la CI pasa a ser la barrera de la arquitectura y las excepciones
+`#[HandRolled]` necesitan la aprobación del dueño, los tests generados prueban
+la autorización, y una segunda auditoría de seguridad prueba en masa el escapado
+de los valores del laraimport. Además, documentación para quien mantiene el
+generador. Lo que hay que hacer al actualizar está junto, al final.
+
 ### La barrera es la CI, y `#[HandRolled]` exige aprobación
 
 En 9.0 la regla del controlador se cumplía mientras el agente tuviera los hooks
@@ -9,10 +15,6 @@ y la excepción `#[HandRolled]` la decidía quien escribía el atributo. Ninguna
 las dos cosas puede depender de que alguien se acuerde: ahora la rama protegida
 exige `verify --strict`, y una excepción sólo cuenta si el dueño la aprobó en un
 archivo que pasa por su revisión.
-
-Nada rompe a un proyecto en 9.0: sin `.larapack/hand-rolled.lock`, `verify`
-se comporta igual que antes, y el workflow y CODEOWNERS sólo se crean si se
-pide.
 
 **`.larapack/hand-rolled.lock` y `larapack:hand-rolled`.** El candado es una
 lista JSON de `{target, reason}`, ordenada y estable byte a byte. `target` es
@@ -83,31 +85,6 @@ sus proveedores** —una pasarela, un PAC: doce de los ochenta y un paquetes de
 school-management—. Lo registrado se sigue comprobando. Con `verify --strict`
 en la CI, ese aviso los habría dejado en rojo para siempre.
 
-### Migrar: school-management
-
-school-management llega con dos excepciones que el dueño ya aprobó en 9.0,
-`InboundWebhookController` y `TokenController`. Una vez, **el dueño**:
-
-```
-composer require innoboxrr/larapack-generator:"^9.1" --dev
-php artisan larapack:skill --force --hooks               # añade el hook PreToolUse
-php artisan larapack:hand-rolled list                    # las dos, «sin candado»
-php artisan larapack:hand-rolled approve --all           # crea .larapack/hand-rolled.lock
-cat .larapack/hand-rolled.lock                            # revisa que sean esas dos y esas razones
-php artisan larapack:verify --strict --format=json       # ok: true antes de exigirlo
-php artisan larapack:ci --owner=@<dueño-o-equipo>
-git add .larapack/hand-rolled.lock .github .claude/settings.json && git commit
-```
-
-Después, el workflow corre una vez y el dueño protege `master` con la orden que
-imprime `larapack:ci`. Cada paquete de `packages/` que corre `verify --strict`
-en su propia CI necesita su propio candado (`--root=packages/<paquete>`): el
-candado es de la raíz sobre la que corre `verify`.
-
-Si la CI de los paquetes corre `larapack:audit --strict`, el aviso `verify-job`
-la pone en rojo hasta que cada paquete tenga el job: añádelo
-(`larapack:ci --root=packages/<paquete>`) antes de subir a 9.1.
-
 ### Los tests generados prueban lo que cierra la autorización
 
 Hasta ahora el test de cada modelo abría la autorización con
@@ -151,13 +128,6 @@ en la URI. En una aplicación, ese test usa ahora `RefreshDatabase` y su propio
 Ninguna sale `skipped` ni `incomplete`. Los tests de EndToEnd ejecutan las
 nuevas en un paquete y en una aplicación generados, sin tocarlas, y pasan Pint
 y Larastan.
-
-**En un proyecto existente** no se pisa nada: `<Modelo>EndpointsTest` se crea
-una sola vez y no se regenera nunca, y el test de un endpoint sólo se rehace con
-`--force` si nadie lo editó. Para tener las pruebas nuevas en un modelo que ya
-existía, borra su `EndpointsTest` (guarda antes lo que le añadiste) y vuelve a
-importar. Usan `mockery/mockery`, que traen `laravel/laravel` y
-`orchestra/testbench`.
 
 ### Seguridad: segunda auditoría, con pruebas por propiedades
 
@@ -242,15 +212,7 @@ hace que `route-closure` tarde decenas de segundos (cuadrático en la
 profundidad); el hook vence por tiempo y deja pasar. Una clave de `enum`
 `__proto__` no se recupera en el mapa de etiquetas de la tabla.
 
-### Al actualizar
-
-Regenerar cambia lo generado sólo donde había valores raros: etiquetas de enum
-con `&` o `}` en el formulario Vue, valores de enum con saltos de línea, y
-defaults como `"08"` o `"007"`. La guardia guarda su estado en otro directorio:
-el de una sesión abierta antes de actualizar se pierde, y el hook de fin de
-turno sigue con git.
-
-### Documentación para mantener el generador
+### Para quien mantiene el generador
 
 - **`ARCHITECTURE.md`**: el recorrido completo de `laraimport.json` a la
   guardia —esquema, valores por omisión, validación semántica, importación,
@@ -259,17 +221,75 @@ turno sigue con git.
   y qué tocar para cada tipo de cambio (un tipo de columna, una clave, una
   plantilla, una acción, un check, una opción). Hasta ahora eso sólo se sabía
   leyendo los docblocks de `src/Support/`, y quien no fuera su autor no tenía
-  por dónde empezar.
+  por dónde empezar. `Tool::generate` es el camino principal para escribir un
+  archivo, no el único: una tabla dice qué copias van por su cuenta (el
+  andamiaje de `larapack:new`, los tests y `phpunit.xml`, los traits de huecos,
+  las migraciones pivote, `alter` y `drop`) y qué no reciben de `generate()`
+  —bloques, manifiesto, `preserved`, el informe—.
 - **`CONTRIBUTING.md`**: preparar el entorno, la suite, las fotos
   (`LARAPACK_UPDATE_SNAPSHOTS`), las pruebas de punta a punta
   (`LARAPACK_SKIP_UI_BUILD`, `LARAPACK_PINT`), Pint y Larastan, la convención
-  de commits, qué cuenta como cambio que rompe y cómo se publica.
+  de commits, qué cuenta como cambio que rompe y cómo se publica. La cabecera
+  `(sin publicar)` y el «`VERSION` sólo en el commit que publica» son una
+  convención nueva, adoptada en esta versión.
 - **`ArchitectureDocTest`** comprueba que cada enlace relativo, cada ruta del
   repositorio y cada `Clase::miembro` que citan los dos documentos sigan
   existiendo. Un mapa que ya no corresponde con el código es peor que no tener
-  mapa, y sin el test envejecería en silencio.
+  mapa, y sin el test envejecería en silencio. Comprueba también cada `#ancla`
+  con el slug de GitHub, que cada test nombrado exista bajo `tests/`, el nombre
+  de un método con sus mayúsculas y que un enlace con una clase apunte a su
+  archivo; lo que va en un bloque de código, también sangrado, no se comprueba.
+- **`release.yml`** sólo publica si `Tests` terminó en verde (o se lanza a
+  mano). Se dispara con `workflow_run` de tipo `completed`, que también llega
+  cuando `Tests` falla, y la puerta sólo podía estar en el workflow reutilizable
+  de `innoboxrr/.github`, que no se ve desde aquí.
 
 No cambia nada de lo que se genera ni de lo que comprueban los comandos.
+
+### Al actualizar
+
+**La barrera de la CI.** Nada rompe a un proyecto en 9.0: sin
+`.larapack/hand-rolled.lock`, `verify` se comporta igual que antes, y el
+workflow y CODEOWNERS sólo se crean si se pide.
+
+**Los tests de autorización.** En un proyecto existente no se pisa nada:
+`<Modelo>EndpointsTest` se crea una sola vez y no se regenera nunca, y el test
+de un endpoint sólo se rehace con `--force` si nadie lo editó. Para tener las pruebas nuevas en un modelo que ya
+existía, borra su `EndpointsTest` (guarda antes lo que le añadiste) y vuelve a
+importar. Usan `mockery/mockery`, que traen `laravel/laravel` y
+`orchestra/testbench`.
+
+**El escapado.** Regenerar cambia lo generado por la auditoría sólo donde
+había valores raros: etiquetas de enum con `&` o `}` en el formulario Vue,
+valores de enum con saltos de línea, y defaults como `"08"` o `"007"`.
+
+**El estado de la guardia.** Se guarda en otro directorio: el de una sesión
+abierta antes de actualizar se pierde, y el hook de fin de turno sigue con git.
+
+#### school-management
+
+school-management llega con dos excepciones que el dueño ya aprobó en 9.0,
+`InboundWebhookController` y `TokenController`. Una vez, **el dueño**:
+
+```
+composer require innoboxrr/larapack-generator:"^9.1" --dev
+php artisan larapack:skill --force --hooks               # añade el hook PreToolUse
+php artisan larapack:hand-rolled list                    # las dos, «sin candado»
+php artisan larapack:hand-rolled approve --all           # crea .larapack/hand-rolled.lock
+cat .larapack/hand-rolled.lock                            # revisa que sean esas dos y esas razones
+php artisan larapack:verify --strict --format=json       # ok: true antes de exigirlo
+php artisan larapack:ci --owner=@<dueño-o-equipo>
+git add .larapack/hand-rolled.lock .github .claude/settings.json && git commit
+```
+
+Después, el workflow corre una vez y el dueño protege `master` con la orden que
+imprime `larapack:ci`. Cada paquete de `packages/` que corre `verify --strict`
+en su propia CI necesita su propio candado (`--root=packages/<paquete>`): el
+candado es de la raíz sobre la que corre `verify`.
+
+Si la CI de los paquetes corre `larapack:audit --strict`, el aviso `verify-job`
+la pone en rojo hasta que cada paquete tenga el job: añádelo
+(`larapack:ci --root=packages/<paquete>`) antes de subir a 9.1.
 
 ## 9.0.0
 
