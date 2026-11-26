@@ -96,10 +96,23 @@ class GuardCommand extends Command
         } catch (Throwable $e) {
             // Un fallo de la guardia no debe bloquear al agente: con 1 Claude
             // Code se lo enseña al usuario y sigue.
-            $this->stderr($output)->writeln('larapack:guard falló: '.$e->getMessage(), OutputInterface::OUTPUT_RAW);
+            $this->stderr($output)->writeln(self::failure($e), OutputInterface::OUTPUT_RAW);
 
             return Command::FAILURE;
         }
+    }
+
+    /**
+     * La línea que se enseña cuando la guardia falla. El mensaje de la
+     * excepción puede citar texto del proyecto —una ruta, un valor del
+     * laraimport—, y va a un sitio que el modelo lee: en una sola línea, como
+     * todo lo que la guardia cita del proyecto (Guard::inline()).
+     *
+     * @internal
+     */
+    public static function failure(Throwable $e): string
+    {
+        return 'larapack:guard falló: '.Guard::inline($e->getMessage());
     }
 
     /**

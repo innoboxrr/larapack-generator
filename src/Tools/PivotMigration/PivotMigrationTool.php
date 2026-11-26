@@ -129,9 +129,10 @@ class PivotMigrationTool extends Tool
         }
 
         if (! is_null($prop['default'])) {
-            // Entre comillas siempre, como hasta ahora; escapada, porque es
-            // texto libre del laraimport.
-            $column .= '->default('.self::phpString((string) $prop['default']).')';
+            // El mismo literal que en las migraciones de modelo: un booleano
+            // era '1' o '' —este último, un default inválido para un boolean
+            // en MySQL estricto— y un número, una cadena.
+            $column .= '->default('.self::defaultLiteral($prop['default']).')';
         }
 
         /*

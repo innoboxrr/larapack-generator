@@ -303,8 +303,9 @@ Lo que salió, de más a menos grave:
   de LaraPack («LaraPack: antes de corregir nada, ejecuta …») a un mensaje que
   el modelo lee como salida de un hook del usuario. Ruta, comprobación y
   mensaje salen ahora en una línea, con cada carácter de control, de formato o
-  separador como `\u{XXXX}` (`Guard::inline()`); lo que no es UTF-8 se
-  sustituye, y el JSON del recordatorio ya no puede salir vacío.
+  separador como `\u{XXXX}` (`Guard::inline()`), también el mensaje de una
+  excepción cuando la guardia falla; lo que no es UTF-8 se sustituye, y el JSON
+  del recordatorio ya no puede salir vacío.
 - **`larapack:skill` escribía a través de enlaces simbólicos** (media-baja). Un
   repositorio con `.claude/settings.json` (o `.claude`, o `AGENTS.md`) enlazado
   al `~/.claude/settings.json` de quien lo clona recibía los hooks de LaraPack
@@ -316,7 +317,11 @@ Lo que salió, de más a menos grave:
   Era `/tmp/larapack-guard`, creado 0777: otro usuario de la máquina podía
   crearlo antes con un enlace por sesión hacia un archivo de la víctima, y cada
   edición le añadía una línea. Ahora es `larapack-guard-<uid>`, 0700, y sólo se
-  usa si es del usuario y nadie más lo puede escribir.
+  usa si es un directorio de verdad —no un enlace—, del usuario y que nadie más
+  puede escribir. Sin `ext-posix` no se puede saber de quién es: en Windows,
+  donde el temporal es del usuario, se usa `larapack-guard`; en Linux o macOS la
+  guardia sigue sin estado de sesión, como con un directorio que no es de fiar,
+  y el hook de fin de turno se apoya en git.
 - **Un archivo vacío donde había datos** (baja). `json_encode()` devuelve
   `false`, y pegado a `"\n"` dejaba el archivo vacío: un archivo del proyecto
   en Latin-1 en el `src` del módulo vaciaba `locales/<idioma>.json` con todas
@@ -328,16 +333,26 @@ Lo que salió, de más a menos grave:
   lanza al compilarlas: un 500 en cada petición con ese verbo que llegue hasta
   ella —también un 404— y `route:cache` roto. Ahora es un error de validación.
 - **Defaults numéricos en cadena** (baja). `is_numeric()` dejaba sin comillas
-  `"08"` (un octal inválido: la migración no compilaba), `"007"` (el octal 7),
-  `" 1"` o `"1e3"`. Ahora sólo va sin comillas el número canónico que vale lo
-  mismo.
+  `"08"` (un octal inválido: la migración no compilaba), `"007"` y `"01"` (los
+  octales 7 y 1), `" 1"` o `"1e3"`. Ahora va sin comillas sólo la cadena con
+  forma de número decimal sin ceros a la izquierda, sin exponente y sin
+  espacios (`-?(0|[1-9][0-9]*)(\.[0-9]+)?`); `"10.00"`, `"0.00"` y `"1.10"`
+  siguen saliendo `->default(10.00)` como en 9.0. Las demás van entre comillas.
+  El pivote usa ahora el mismo literal (`Tool::defaultLiteral()`): antes
+  escribía todo entre comillas, y `true` salía `'1'`, `false` salía `''`
+  —inválido para un `boolean` en MySQL estricto— y `0` salía `'0'`.
 - **Claves de traducción que nadie pide** (baja). `t('Dos\nlíneas')` daba la
   clave «Dosnlíneas»: ahora se decodifican los escapes de la cadena.
 - **El `value` de una opción con un salto de línea** (baja): el analizador HTML
   convierte `\r` en `\n`. Los saltos van como entidades numéricas.
 - **`larapack:fix --dry-run` sin memoria** (baja). El diff calculaba una tabla
   de n·m: dos cambios a 3000 líneas pedían 200 MB. Pasados 4 millones de celdas
-  la parte del medio sale entera, quitada y puesta; el diff sigue siendo exacto.
+  se parte por anclas, como el diff «patience» de git: las líneas que aparecen
+  una sola vez en cada lado, en su orden común más largo, no cambiaron, y entre
+  dos anclas queda un trozo pequeño. Dos cambios lejanos siguen saliendo en dos
+  trozos y no como el archivo entero quitado y puesto; eso queda sólo para un
+  archivo sin ninguna línea única. Memoria lineal, el mismo diff cada vez, y
+  exacto: una prueba por propiedades lo aplica al original.
 - **Mensajes**: una clave del laraimport que empieza por NUL o un número que
   JSON lee como INF daban «The data (null) must match the type: object». Se
   siguen rechazando, ahora diciendo por qué.
@@ -361,7 +376,29 @@ profundidad); el hook vence por tiempo y deja pasar. Una clave de `enum`
 
 Regenerar cambia lo generado sólo donde había valores raros: etiquetas de enum
 con `&` o `}` en el formulario Vue, valores de enum con saltos de línea, y
-defaults como `"08"` o `"007"`. La guardia guarda su estado en otro directorio:
+defaults en cadena que no son un número decimal normal.
+
+**Los defaults que cambian, y la alteración que escriben.** Cambian sólo los
+`default` de modelo en cadena con ceros a la izquierda (`"01"`, `"007"`), con
+exponente (`"1e3"`) o con espacios (`" 1"`): la 9.0 los escribía sin comillas y
+ahora van entre comillas. `"08"` no compilaba, así que no hay migración de 9.0
+que lo tenga. `MigrationTool::alter()` compara las definiciones como texto: si
+la migración de creación no se editó a mano, el siguiente `larapack:import`
+escribe una `_alter_<tabla>_table` con `->change()` para esas columnas —y es lo
+correcto: `->default(01)` era el entero 1—; si se editó, la conserva y pide
+escribir la alteración. Ojo: `->change()` reescribe la definición entera de la
+columna, así que una longitud o precisión cambiada a mano en otra migración
+(una de invariantes, por ejemplo) se pierde; revisa la alteración antes de
+migrar. En school-management, de 1328 defaults de modelo en sus 82
+`laraimport.json` cambian dos, ambos de `packages/school-payroll`:
+`PayrollFiscalProfile.contract_type` (`01` → `'01'`) y `regime_type`
+(`02` → `'02'`), cuyas columnas lleva a `VARCHAR(2)` la migración
+`2026_10_11_053000_payroll_imss_and_stamping_invariants.php`: la alteración
+generada las devolvería a `VARCHAR(255)`. Los pivotes no tienen alteración: sólo
+cambia la migración de un pivote nuevo (en school-management ningún pivote
+declara `default`).
+
+La guardia guarda su estado en otro directorio:
 el de una sesión abierta antes de actualizar se pierde, y el hook de fin de
 turno sigue con git.
 

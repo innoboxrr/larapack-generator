@@ -21,6 +21,8 @@ namespace Innoboxrr\LarapackGenerator\Support;
  */
 final class Guard
 {
+    private static ?string $temporaryDirectory = null;
+
     /**
      * Lo que se recuerda cada vez que algo se bloquea. Es la regla entera, en
      * corto: un agente que la tiene delante no necesita releer el skill.
@@ -1016,22 +1018,62 @@ final class Guard
      * con la ruta editada; y lo que él escribiera ahí decidía qué retiene el
      * hook. Ahora es uno por usuario (`larapack-guard-<uid>`), se crea con
      * 0700 y sólo se usa si es un directorio de verdad, del usuario y que
-     * nadie más puede escribir. Si no, la guardia sigue sin él, como sin
-     * `session_id`: el hook de fin de turno todavía tiene git.
+     * nadie más puede escribir. Si no —y también sin ext-posix fuera de
+     * Windows, donde no se puede saber de quién es—, la guardia sigue sin él,
+     * como sin `session_id`: el hook de fin de turno todavía tiene git.
      */
     public static function stateDirectory(): ?string
     {
-        $uid = function_exists('posix_geteuid') ? posix_geteuid() : null;
-        $directory = self::normalise(sys_get_temp_dir()).'/larapack-guard'.($uid === null ? '' : '-'.$uid);
+        return self::stateDirectoryIn(
+            self::$temporaryDirectory ?? sys_get_temp_dir(),
+            function_exists('posix_geteuid') ? posix_geteuid() : null,
+            PHP_OS_FAMILY === 'Windows',
+        );
+    }
 
-        if (! is_dir($directory) && ! @mkdir($directory, 0700, true) && ! is_dir($directory)) {
+    /**
+     * El directorio temporal donde buscar el de estado; null, el del sistema.
+     * Es para las pruebas: sys_get_temp_dir() se fija en la primera llamada
+     * y no se puede cambiar desde dentro del proceso.
+     *
+     * @internal
+     */
+    public static function useTemporaryDirectory(?string $directory): void
+    {
+        self::$temporaryDirectory = $directory;
+    }
+
+    /**
+     * stateDirectory() con sus entradas a la vista, para poder probar cada
+     * caso: el directorio temporal, el uid efectivo (null sin ext-posix) y si
+     * el sistema es Windows.
+     *
+     * Sin ext-posix no hay forma de saber de quién es el directorio. En
+     * Windows el temporal es del usuario y basta; en Linux o macOS es
+     * compartido, y se sigue sin estado —como con un directorio que no es de
+     * fiar— antes que volver al directorio común que otro usuario puede
+     * preparar.
+     *
+     * @internal
+     */
+    public static function stateDirectoryIn(string $temporary, ?int $uid, bool $windows): ?string
+    {
+        if ($uid === null && ! $windows) {
+            return null;
+        }
+
+        $directory = rtrim(self::normalise($temporary), '/').'/larapack-guard'.($uid === null ? '' : '-'.$uid);
+
+        // Lo que haya en ese nombre se mira antes de crear nada: un enlace
+        // simbólico a un directorio pasa is_dir(), y mkdir() no lo tocaría.
+        if (! is_link($directory) && ! is_dir($directory) && ! @mkdir($directory, 0700, true) && ! is_dir($directory)) {
             return null;
         }
 
         if ($uid !== null) {
             clearstatcache(true, $directory);
 
-            if (is_link($directory) || @fileowner($directory) !== $uid || (@fileperms($directory) & 0022) !== 0) {
+            if (is_link($directory) || ! is_dir($directory) || @fileowner($directory) !== $uid || (@fileperms($directory) & 0022) !== 0) {
                 return null;
             }
         }

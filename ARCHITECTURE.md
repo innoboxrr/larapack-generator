@@ -214,7 +214,9 @@ es el único camino por el que se escribe un archivo generado:
 
 Las piezas que comparten más de una herramienta están arriba, no copiadas:
 `Tool::phpString` (todo valor libre del laraimport sale escapado; un `default`
-con comilla ya no rompe una migración), `Tool::referentialActions`,
+con comilla ya no rompe una migración), `Tool::defaultLiteral` (el `default` de
+columna, igual en modelo y pivote; su forma es contrato, porque `alter()` compara
+las definiciones como texto), `Tool::referentialActions`,
 `Tool::migrationFile` (reutiliza la migración de creación que ya exista) y
 `Tool::MODEL_NAME` (el nombre de modelo es un identificador: un `..` borraba
 directorios enteros).

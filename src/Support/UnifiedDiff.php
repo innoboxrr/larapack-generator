@@ -67,8 +67,10 @@ final class UnifiedDiff
      * La tabla ocupa n·m: un archivo con dos cambios a miles de líneas uno
      * del otro —una propiedad al principio de la clase y un bloque al final—
      * pedía cientos de megas, y `larapack:fix --dry-run` moría sin memoria a
-     * mitad de la lista. Pasado MAX_CELLS la parte del medio sale entera,
-     * quitada y puesta: el diff es más largo pero sigue siendo exacto.
+     * mitad de la lista. Pasado MAX_CELLS se parte por anclas (anchored()):
+     * las líneas que aparecen una sola vez en cada lado. Si no hay ninguna, la
+     * parte del medio sale entera, quitada y puesta: el diff es más largo pero
+     * sigue siendo exacto.
      *
      * @param  list<string>  $a
      * @param  list<string>  $b
@@ -80,11 +82,9 @@ final class UnifiedDiff
         $m = count($b);
 
         if ($n * $m > self::MAX_CELLS) {
-            return [
-                ...array_map(fn (string $line, int $i): array => ['-', $line, $i, 0], $a, array_keys($a)),
-                ...array_map(fn (string $line, int $j): array => ['+', $line, $n, $j], $b, array_keys($b)),
-            ];
+            return self::anchored($a, $b);
         }
+
         $lcs = array_fill(0, $n + 1, array_fill(0, $m + 1, 0));
 
         for ($i = $n - 1; $i >= 0; $i--) {
@@ -109,6 +109,121 @@ final class UnifiedDiff
         }
 
         return $lines;
+    }
+
+    /**
+     * La parte que cambia de un archivo grande, partida por anclas, como el
+     * diff «patience» de git: las líneas únicas en los dos lados, en el orden
+     * más largo en que aparecen en ambos, son las que no cambiaron. Entre dos
+     * anclas queda un trozo pequeño, que vuelve a middle(). Memoria lineal y
+     * el mismo resultado cada vez: depende sólo de los dos textos.
+     *
+     * Sin ninguna ancla —un archivo de líneas repetidas— la parte sale entera,
+     * quitada y puesta.
+     *
+     * @param  list<string>  $a
+     * @param  list<string>  $b
+     * @return list<array{0: string, 1: string, 2: int, 3: int}>
+     */
+    private static function anchored(array $a, array $b): array
+    {
+        $anchors = self::anchors($a, $b);
+
+        if ($anchors === []) {
+            $n = count($a);
+
+            return [
+                ...array_map(fn (string $line, int $i): array => ['-', $line, $i, 0], $a, array_keys($a)),
+                ...array_map(fn (string $line, int $j): array => ['+', $line, $n, $j], $b, array_keys($b)),
+            ];
+        }
+
+        $lines = [];
+        $i = 0;
+        $j = 0;
+
+        foreach ([...$anchors, [count($a), count($b)]] as [$ai, $bj]) {
+            $gap = self::middle(array_slice($a, $i, $ai - $i), array_slice($b, $j, $bj - $j));
+
+            foreach ($gap as [$op, $text, $gi, $gj]) {
+                $lines[] = [$op, $text, $i + $gi, $j + $gj];
+            }
+
+            if ($ai < count($a)) {
+                $lines[] = [' ', $a[$ai], $ai, $bj];
+            }
+
+            $i = $ai + 1;
+            $j = $bj + 1;
+        }
+
+        return $lines;
+    }
+
+    /**
+     * Las anclas: pares [línea en a, línea en b] de una línea que aparece una
+     * sola vez en cada lado, y de ellos la secuencia más larga creciente en
+     * los dos (patience sorting, n·log n).
+     *
+     * @param  list<string>  $a
+     * @param  list<string>  $b
+     * @return list<array{0: int, 1: int}>
+     */
+    private static function anchors(array $a, array $b): array
+    {
+        $count = [];
+
+        foreach ($a as $i => $line) {
+            $count[$line] = isset($count[$line]) ? [$count[$line][0] + 1, $i, -1, 0] : [1, $i, -1, 0];
+        }
+
+        foreach ($b as $j => $line) {
+            if (isset($count[$line])) {
+                $count[$line][2] = $j;
+                $count[$line][3]++;
+            }
+        }
+
+        // Los candidatos en el orden de a; se busca la subsecuencia más larga
+        // creciente en b.
+        $pairs = [];
+
+        foreach ($count as [$inA, $i, $j, $inB]) {
+            if ($inA === 1 && $inB === 1) {
+                $pairs[] = [$i, $j];
+            }
+        }
+
+        usort($pairs, fn (array $x, array $y): int => $x[0] <=> $y[0]);
+
+        $tails = [];
+        $previous = [];
+
+        foreach ($pairs as $k => [, $j]) {
+            $low = 0;
+            $high = count($tails);
+
+            while ($low < $high) {
+                $mid = intdiv($low + $high, 2);
+
+                if ($pairs[$tails[$mid]][1] < $j) {
+                    $low = $mid + 1;
+                } else {
+                    $high = $mid;
+                }
+            }
+
+            $previous[$k] = $low > 0 ? $tails[$low - 1] : null;
+            $tails[$low] = $k;
+        }
+
+        $anchors = [];
+
+        for ($k = $tails === [] ? null : $tails[count($tails) - 1]; $k !== null; $k = $previous[$k]) {
+            $anchors[] = $pairs[$k];
+        }
+
+        return array_reverse($anchors);
     }
 
     /**
