@@ -317,7 +317,7 @@ class MigrationTool extends Tool
             } elseif (is_numeric($default)) {
                 // se deja tal cual
             } else {
-                $default = "'{$default}'"; // string u otro tipo
+                $default = self::phpString((string) $default);
             }
 
             $column .= "->default({$default})";
@@ -330,7 +330,7 @@ class MigrationTool extends Tool
             // tabla del anfitrión, la de otro paquete— se deja como está.
             $table = TablePrefix::constraint($prop['constraint']);
 
-            $column .= "->constrained('{$table}')".$this->referentialActions($prop);
+            $column .= '->constrained('.self::phpString($table).')'.$this->referentialActions($prop);
         }
 
         return $column.';';

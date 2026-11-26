@@ -129,7 +129,9 @@ class PivotMigrationTool extends Tool
         }
 
         if (! is_null($prop['default'])) {
-            $column .= "->default('{$prop['default']}')";
+            // Entre comillas siempre, como hasta ahora; escapada, porque es
+            // texto libre del laraimport.
+            $column .= '->default('.self::phpString((string) $prop['default']).')';
         }
 
         /*
@@ -147,7 +149,7 @@ class PivotMigrationTool extends Tool
             // Y en cascada por omision, que aqui SI es lo correcto: una fila
             // pivote no significa nada sin sus dos lados. Es la unica excepcion
             // al `restrict` por omision de los modelos, y la declara el esquema.
-            $column .= "->constrained('{$table}')".$this->referentialActions($prop + [
+            $column .= '->constrained('.self::phpString($table).')'.$this->referentialActions($prop + [
                 'on_update' => 'cascade',
                 'on_delete' => 'cascade',
             ]);

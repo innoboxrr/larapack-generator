@@ -463,6 +463,29 @@ class Tool
         return "->onUpdate('{$onUpdate}')->onDelete('{$onDelete}')";
     }
 
+    /**
+     * Un valor del laraimport como literal PHP de comilla simple.
+     *
+     * Los valores libres del esquema —el `default` de una columna, un `cast`,
+     * la tabla de un `constraint`— se pegaban entre comillas sin escapar. Un
+     * `default` como «it's» dejaba una migración que no compila, y uno como
+     * `x'); exec('...'); //` metía código en un archivo que `migrate` ejecuta.
+     *
+     * Lo que no necesita escape sale exactamente igual que antes —también un
+     * cast con barras, como `App\Casts\Money`—, así que regenerar no cambia
+     * los archivos que ya eran correctos.
+     */
+    protected static function phpString(string $value): string
+    {
+        // Dentro de comilla simple PHP sólo interpreta \' y \\, y una barra al
+        // final se comería la comilla de cierre.
+        $plain = ! str_contains($value, "'")
+            && ! str_contains($value, '\\\\')
+            && ! str_ends_with($value, '\\');
+
+        return $plain ? "'{$value}'" : var_export($value, true);
+    }
+
     // FORMA DECLARADA
 
     /**

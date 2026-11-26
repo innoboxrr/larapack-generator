@@ -239,7 +239,8 @@
                 },
                 "namespace": {
                     "type": "string",
-                    "description": "Sólo si el modelo relacionado vive fuera de este paquete. Por omisión se resuelve contra los modelos de este archivo y, si no está, contra App\\Models."
+                    "pattern": "^$|^\\\\?[A-Za-z_][A-Za-z0-9_]*(\\\\[A-Za-z_][A-Za-z0-9_]*)*\\\\?$",
+                    "description": "Sólo si el modelo relacionado vive fuera de este paquete. Por omisión se resuelve contra los modelos de este archivo y, si no está, contra App\\Models. Tiene que ser un namespace de PHP: va tal cual a un `use` del trait de relaciones."
                 }
             }
         },

@@ -185,7 +185,7 @@ class ReactViewTool extends UiModuleTool
         $options = '';
 
         foreach ($prop['enum'] as $value => $label) {
-            $options .= "{$indent}<option value=\"{$value}\">{t('".$this->escape((string) $label)."')}</option>\n";
+            $options .= "{$indent}<option value=\"".$this->attribute((string) $value)."\">{t('".$this->escape((string) $label)."')}</option>\n";
         }
 
         return $options;

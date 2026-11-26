@@ -131,7 +131,7 @@ class ModelTool extends Tool
 
         foreach ($props as $prop) {
             if (! is_null($prop['cast'])) {
-                $casts[$prop['name']] = "'{$prop['name']}' => '{$prop['cast']}'";
+                $casts[$prop['name']] = "'{$prop['name']}' => ".self::phpString((string) $prop['cast']);
             }
         }
 
