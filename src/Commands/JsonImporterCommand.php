@@ -4,10 +4,17 @@ namespace Innoboxrr\LarapackGenerator\Commands;
 
 use Innoboxrr\LarapackGenerator\Commands\Concerns\ReportsGeneration;
 use Innoboxrr\LarapackGenerator\Support\Declaration;
+use Innoboxrr\LarapackGenerator\Support\Generation;
 use Innoboxrr\LarapackGenerator\Support\Import\ImportDocument;
 use Innoboxrr\LarapackGenerator\Support\Import\SemanticValidator;
+use Innoboxrr\LarapackGenerator\Support\Manifest;
 use Innoboxrr\LarapackGenerator\Support\TablePrefix;
+use Innoboxrr\LarapackGenerator\Tools\Controller\ControllerTool;
+use Innoboxrr\LarapackGenerator\Tools\Endpoint\EndpointTool;
+use Innoboxrr\LarapackGenerator\Tools\ModelView\ModelViewTool;
 use Innoboxrr\LarapackGenerator\Tools\PivotMigration\PivotMigrationTool;
+use Innoboxrr\LarapackGenerator\Tools\ReactView\ReactViewTool;
+use Innoboxrr\LarapackGenerator\Tools\Route\RouteTool;
 use Innoboxrr\LarapackGenerator\Tools\Tool;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\ArrayInput;
@@ -42,6 +49,16 @@ class JsonImporterCommand extends Command
         // daba un mensaje sino un TypeError a mitad de la generación, con
         // parte de los archivos ya escritos.
         ['document' => $document, 'errors' => $findings] = ImportDocument::fromFile($jsonPath);
+
+        // Lo que el laraimport no puede saber solo: qué hay ya generado.
+        if ($document !== null) {
+            $collisions = SemanticValidator::againstManifest($document->toArray(), new Manifest);
+            $findings = [...$findings, ...$collisions];
+
+            if ($collisions !== []) {
+                $document = null;
+            }
+        }
 
         // Los avisos de interfaz sólo tienen sentido si se genera la interfaz.
         if ($document !== null && ($input->getOption('vue') || $input->getOption('react'))) {
@@ -80,6 +97,10 @@ class JsonImporterCommand extends Command
             Declaration::fromModel($model);
         }
 
+        foreach ($document->controllers() as $controller) {
+            Declaration::fromController($controller);
+        }
+
         try {
 
             // Los modelos vienen ordenados por sus dependencias, así que las
@@ -102,6 +123,29 @@ class JsonImporterCommand extends Command
                 $progress->writeln("Processing pivot: {$pivot['name']}");
 
                 (new PivotMigrationTool)->create($pivot['name']);
+            }
+
+            // Lo que no tiene modelo propio: sólo controlador, rutas y, por
+            // endpoint, su request y su test. Nada de tabla ni de política.
+            foreach ($document->controllers() as $controller) {
+                $progress->writeln("Processing controller: {$controller['name']}");
+
+                (new ControllerTool)->create($controller['name']);
+                (new RouteTool)->create($controller['name']);
+                (new EndpointTool)->create($controller['name']);
+
+                // Sin pantalla: sólo el contrato JS, una función por endpoint.
+                if ($input->getOption('vue')) {
+                    (new ModelViewTool)->createController($controller['name']);
+                }
+
+                if ($input->getOption('react')) {
+                    (new ReactViewTool)->createController($controller['name']);
+                }
+
+                if (! Generation::isDryRun()) {
+                    (new Manifest)->declare($controller['name'], Declaration::toManifest($controller['name']));
+                }
             }
 
         } finally {

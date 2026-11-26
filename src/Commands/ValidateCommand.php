@@ -6,6 +6,7 @@ use Innoboxrr\LarapackGenerator\Commands\Concerns\TargetsProject;
 use Innoboxrr\LarapackGenerator\Commands\Concerns\WritesJson;
 use Innoboxrr\LarapackGenerator\Support\Import\ImportDocument;
 use Innoboxrr\LarapackGenerator\Support\Import\SemanticValidator;
+use Innoboxrr\LarapackGenerator\Support\Manifest;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
@@ -44,6 +45,11 @@ class ValidateCommand extends Command
         $path = $input->getArgument('jsonPath') ?? root_path().'/laraimport.json';
 
         ['document' => $document, 'errors' => $findings] = ImportDocument::fromFile($path);
+
+        // Lo mismo que comprobará larapack:import contra lo ya generado.
+        if ($document !== null) {
+            $findings = [...$findings, ...SemanticValidator::againstManifest($document->toArray(), new Manifest)];
+        }
 
         if ($document !== null && ($input->getOption('vue') || $input->getOption('react'))) {
             $findings = [...$findings, ...SemanticValidator::interface($document->toArray())];

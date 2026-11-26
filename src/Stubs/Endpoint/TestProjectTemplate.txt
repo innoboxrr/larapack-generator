@@ -1,0 +1,53 @@
+<?php
+
+namespace Namespace\Tests\Feature\Endpoints\PascalCaseModelName;
+
+// @larapack:if endpoint_model&endpoint_public&endpoint_record
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Namespace\Models\PascalCaseModelName;
+// @larapack:endif
+use Namespace\Tests\TestCase;
+
+/**
+ * endpointHttpVerb endpointUri: el endpoint endpointMethodName de PascalCaseModelName.
+ *
+ * Lo que el contrato promete antes de que escribas nada: quién no entra. Cuando
+ * escribas la autorización y la operación, prueba aquí lo que hace.
+ */
+class EndpointClassNameTest extends TestCase
+{
+// @larapack:if endpoint_model&endpoint_public&endpoint_record
+
+    use RefreshDatabase;
+// @larapack:endif
+// @larapack:if !endpoint_public
+
+    public function test_requiere_sesion(): void
+    {
+
+        $this->json('endpointHttpVerb', route('api.dotNamespacesnake_case_model_name.endpointRouteName'endpointGuestRouteArgs))
+            ->assertUnauthorized();
+
+    }
+// @larapack:endif
+// @larapack:if endpoint_public
+
+    /**
+     * Público no es abierto: sin sesión sigue decidiendo la autorización, y
+     * nace negando. Cuando la abras a invitados, cambia esta prueba por la que
+     * diga a quién.
+     */
+    public function test_es_publico_pero_nace_cerrado(): void
+    {
+// @larapack:if endpoint_model&endpoint_record
+
+        $camelCaseModelName = PascalCaseModelName::factory()->create();
+// @larapack:endif
+
+        $this->json('endpointHttpVerb', route('api.dotNamespacesnake_case_model_name.endpointRouteName'endpointPublicRouteArgs), endpointPublicPayload)
+            ->assertForbidden();
+
+    }
+// @larapack:endif
+
+}

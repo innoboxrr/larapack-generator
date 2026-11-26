@@ -54,6 +54,12 @@ final class GeneratedApplicationTest extends TestCase
                 ['name' => 'price', 'type' => 'decimal'],
                 ['name' => 'active', 'type' => 'boolean'],
             ],
+            // Uno de cada forma, para que el test generado de cada una
+            // corra en una aplicación, que no tiene el TestCase de un paquete.
+            'endpoints' => [
+                ['name' => 'publish', 'method' => 'post'],
+                ['name' => 'preview', 'method' => 'get', 'public' => true, 'middleware' => ['throttle:30,1']],
+            ],
         ],
         [
             'name' => 'OrderLine',
@@ -62,6 +68,8 @@ final class GeneratedApplicationTest extends TestCase
                 ['name' => 'product_id', 'type' => 'foreignId', 'constraint' => 'products'],
             ],
         ],
+    ], 'controllers' => [
+        ['name' => 'Desk', 'endpoints' => [['name' => 'overview', 'method' => 'get']]],
     ]];
 
     private static ?FakeProject $project = null;
@@ -125,7 +133,15 @@ final class GeneratedApplicationTest extends TestCase
 
         $written = 0;
 
-        foreach (glob($root.'/tests/Feature/Models/*EndpointsTest.php') ?: [] as $file) {
+        $files = [
+            ...(glob($root.'/tests/Feature/Models/*EndpointsTest.php') ?: []),
+            // Los de los endpoints declarados, uno por endpoint.
+            ...(glob($root.'/tests/Feature/Endpoints/*/*Test.php') ?: []),
+        ];
+
+        $this->assertNotEmpty(glob($root.'/tests/Feature/Endpoints/Desk/*Test.php'), 'No se generó el test del controlador sin modelo.');
+
+        foreach ($files as $file) {
             $written += preg_match_all('/public function test_\w+\(\)/', (string) file_get_contents($file));
         }
 
@@ -160,6 +176,30 @@ final class GeneratedApplicationTest extends TestCase
 
         $this->assertNotFalse($report, "PHPUnit no dejó el informe:\n".$output);
         $this->assertSame(1, (int) $report->testsuite['tests'], "No se ejecutó el test de la exportación:\n".$output);
+    }
+
+    /**
+     * Un endpoint público no pasa por auth:sanctum, así que el guard por
+     * omisión de la aplicación (web) no ve un token Bearer. La request generada
+     * pregunta a sanctum: un cliente con token llega a la política como quien
+     * es, no como invitado.
+     *
+     * Los tests generados no lo veían: Sanctum::actingAs fija el guard, y los
+     * de un endpoint público sólo prueban al invitado. Éste va sin actingAs,
+     * con un token de verdad (tests/Application/PublicEndpointTest.php).
+     */
+    public function test_un_endpoint_publico_ve_al_usuario_del_token_bearer(): void
+    {
+        $junit = self::$project->path.'/junit-public.xml';
+
+        [$process, $output] = $this->phpunit($junit, self::$project->path.'/tests/Application/PublicEndpointTest.php');
+
+        $this->assertTrue($process->isSuccessful(), "El endpoint público no ve al usuario del token:\n".$output);
+
+        $report = simplexml_load_file($junit);
+
+        $this->assertNotFalse($report, "PHPUnit no dejó el informe:\n".$output);
+        $this->assertSame(1, (int) $report->testsuite['tests'], "No se ejecutó el test del endpoint público:\n".$output);
     }
 
     // AYUDAS
@@ -322,7 +362,66 @@ final class GeneratedApplicationTest extends TestCase
 
             PHP);
 
+        // La tabla de los tokens: la aplicación base instala Sanctum y publica
+        // su migración.
+        copy(
+            dirname(__DIR__, 2).'/vendor/laravel/sanctum/database/migrations/2019_12_14_000001_create_personal_access_tokens_table.php',
+            $root.'/database/migrations/2019_12_14_000001_create_personal_access_tokens_table.php'
+        );
+
         mkdir($root.'/tests/Application', 0777, true);
+
+        file_put_contents($root.'/tests/Application/PublicEndpointTest.php', <<<'PHP'
+            <?php
+
+            namespace Tests\Application;
+
+            use App\Models\Product;
+            use App\Models\User;
+            use Illuminate\Foundation\Testing\RefreshDatabase;
+            use Illuminate\Support\Facades\Gate;
+            use Tests\TestCase;
+
+            /**
+             * Un endpoint público, llamado como lo llama un cliente: con un
+             * token Bearer y sin actingAs, que fijaría el guard.
+             */
+            final class PublicEndpointTest extends TestCase
+            {
+                use RefreshDatabase;
+
+                public function test_la_politica_recibe_al_usuario_del_token(): void
+                {
+                    $user = User::factory()->create();
+                    $token = $user->createToken('cliente')->plainTextToken;
+                    $product = Product::factory()->create();
+
+                    // Quién llega a la autorización de preview. Se niega igual:
+                    // lo que se prueba es a quién se pregunta.
+                    $seen = [];
+
+                    Gate::before(function (?User $who, string $ability) use (&$seen) {
+                        if ($ability !== 'preview') {
+                            return null;
+                        }
+
+                        $seen[] = $who?->getKey();
+
+                        return false;
+                    });
+
+                    $this->json('GET', route('api.app.product.preview'), ['product_id' => $product->id])
+                        ->assertForbidden();
+
+                    $this->withToken($token)
+                        ->json('GET', route('api.app.product.preview'), ['product_id' => $product->id])
+                        ->assertForbidden();
+
+                    $this->assertSame([null, $user->getKey()], $seen, 'Con token Bearer, la política tiene que recibir a su usuario, no a un invitado.');
+                }
+            }
+
+            PHP);
 
         file_put_contents($root.'/tests/Application/ExportTest.php', <<<'PHP'
             <?php

@@ -13,7 +13,25 @@ class IndexRequest extends FormRequest
 
     protected function prepareForValidation(): void
     {
+
+        // La restricción de ManagedFilter::canView() sólo se aplica si llega
+        // `managed`, y llegaba del cliente: quien lo omitía listaba todas las
+        // filas, también las que canView() le oculta. Se fuerza aquí, mande lo
+        // que mande la petición.
         //
+        // `except_view_any` no se fuerza, y el frontend generado no lo manda:
+        // en el listado canView() acota a todos, también al administrador (el
+        // before() de la política no la salta, sólo afecta a can()). Por eso
+        // canView() tiene que cubrir el caso administrador él mismo, p. ej.
+        // devolviendo $query sin tocar si $user->can('viewAny', ...). La
+        // exportación sí fuerza `except_view_any`: si canView() no deja pasar
+        // al administrador, exporta filas que el listado le oculta. Que un
+        // cliente lo mande aquí no amplía nada: sólo salta la restricción a
+        // quien ya tiene viewAny.
+        $this->merge([
+            'managed' => true,
+        ]);
+
     }
 
     public function authorize(): bool

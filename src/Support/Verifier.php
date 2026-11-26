@@ -3,6 +3,7 @@
 namespace Innoboxrr\LarapackGenerator\Support;
 
 use Innoboxrr\LarapackGenerator\Support\Import\Actions;
+use Innoboxrr\LarapackGenerator\Support\Import\Endpoints;
 
 /**
  * Comprueba que lo generado siga en su sitio y que las entidades equivalentes
@@ -13,6 +14,9 @@ use Innoboxrr\LarapackGenerator\Support\Import\Actions;
  * determinista: que los archivos existan, que las entidades comparables
  * tengan los mismos componentes, y que los contratos entre el backend
  * generado y el módulo JS sigan cuadrando.
+ *
+ * La forma de los controladores también es determinista, y no depende del
+ * manifiesto: ControllerShape la comprueba en todos, generados o no.
  */
 final class Verifier
 {
@@ -36,7 +40,29 @@ final class Verifier
      * Las claves que el propio Resource usa en sus acciones por fila. Que
      * aparezcan como cadena no significa que una columna se esté exponiendo.
      */
-    private const RESOURCE_KEYS = ['id', 'name', 'callback', 'icon', 'route', 'policy', 'params', 'to'];
+    private const RESOURCE_KEYS = ['id', 'name', 'callback', 'icon', 'route', 'policy', 'params', 'to', 'success', 'danger'];
+
+    /**
+     * Los contratos JS: el de un modelo y el de un `controllers[]`. Los dos
+     * componen sus URLs con API_ROUTE_PREFIX y los dos llevan una función por
+     * endpoint declarado.
+     */
+    private const CONTRACT_STUBS = ['ModelView/model.js', 'ModelView/controller.js'];
+
+    /**
+     * Las comprobaciones que dependen del manifiesto. Sin modelos registrados
+     * no tienen nada que mirar.
+     */
+    private const MANIFEST_CHECKS = [
+        'empty-manifest', 'missing-file', 'customised', 'inconsistent-entity', 'route-prefix',
+        'route-not-declared', 'endpoint-missing', 'immutable-write', 'secret-exposed',
+    ];
+
+    /**
+     * Todo lo que `verify` sabe comprobar, por el nombre que lleva cada
+     * hallazgo en `check`. Es lo que acepta --check.
+     */
+    public const CHECKS = [...self::MANIFEST_CHECKS, ...ControllerShape::CHECKS, ...LegacySecurity::CHECKS];
 
     public function __construct(private ?Manifest $manifest = null)
     {
@@ -44,9 +70,51 @@ final class Verifier
     }
 
     /**
+     * @param  array<int, string>  $only  sólo estas comprobaciones; vacío, todas
      * @return array<int, array{level: string, check: string, model: string|null, file: string|null, message: string}>
      */
-    public function run(): array
+    public function run(array $only = []): array
+    {
+        $wants = fn (array $checks): bool => $only === [] || array_intersect($only, $checks) !== [];
+
+        $findings = [
+            ...($wants(self::MANIFEST_CHECKS) ? $this->manifestFindings() : []),
+            // La forma de los controladores no depende del manifiesto: la
+            // deriva está justo en los que el generador no escribió, y un
+            // proyecto sin nada generado también tiene controladores.
+            ...($wants(ControllerShape::CHECKS) ? (new ControllerShape($this->manifest->root()))->run() : []),
+            ...($wants(LegacySecurity::CHECKS) ? (new LegacySecurity($this->manifest->root()))->run() : []),
+        ];
+
+        if ($only === []) {
+            return $findings;
+        }
+
+        return array_values(array_filter($findings, fn (array $finding): bool => in_array($finding['check'], $only, true)));
+    }
+
+    /**
+     * @return array<int, array{level: string, check: string, model: string|null, file: string|null, message: string}>
+     */
+    private function manifestFindings(): array
+    {
+        // Se lee el manifiesto una vez para toda la verificación: cada check
+        // lo consulta por modelo y por archivo, y releerlo del disco en cada
+        // consulta hacía que un proyecto grande tardara minutos.
+        $live = $this->manifest;
+        $this->manifest = $live->snapshot();
+
+        try {
+            return $this->checks();
+        } finally {
+            $this->manifest = $live;
+        }
+    }
+
+    /**
+     * @return array<int, array{level: string, check: string, model: string|null, file: string|null, message: string}>
+     */
+    private function checks(): array
     {
         $models = $this->manifest->models();
 
@@ -161,8 +229,9 @@ final class Verifier
         foreach ($models as $model) {
             // Las metas se declaran por modelo: que una tabla las tenga y otra
             // no es una decisión, no deriva. Contarlas avisaba en cada paquete
-            // con un solo modelo con metas.
-            $components[$model] = array_values(array_diff($this->componentsOf($model), ['ModelMetas', 'MigrationMetas']));
+            // con un solo modelo con metas. Con los endpoints pasa lo mismo:
+            // cada modelo declara los suyos, y uno sin ninguno no está roto.
+            $components[$model] = array_values(array_diff($this->componentsOf($model), ['ModelMetas', 'MigrationMetas', 'Endpoint']));
         }
 
         $findings = [];
@@ -211,7 +280,7 @@ final class Verifier
 
         foreach ($models as $model) {
             foreach ($this->manifest->filesFor($model) as $relative => $meta) {
-                if ($meta['stub'] !== 'ModelView/model.js') {
+                if (! in_array($meta['stub'], self::CONTRACT_STUBS, true)) {
                     continue;
                 }
 
@@ -256,9 +325,14 @@ final class Verifier
     /**
      * Rastros de acciones que el modelo no declara.
      *
-     * Existen porque alguien los escribió a mano: el generador no los produce.
-     * Es la deriva que LaraPack existe para impedir, en el sitio donde hasta
-     * ahora no tenía nada que decir.
+     * Existen porque alguien los escribió a mano —el generador no los produce—
+     * o porque se declararon, se generaron y luego se retiraron del laraimport
+     * sin regenerar. Lo primero es la deriva que LaraPack existe para impedir;
+     * lo segundo, una limpieza pendiente. El mensaje dice cuál de las dos es.
+     *
+     * Que el controlador haga algo más que `return $request->handle();` no se
+     * mira aquí: es de ControllerShape (`controller-shape`), que lo comprueba
+     * en todos los controladores, generados o no, con una sola regla.
      *
      * @param  array<int, string>  $models
      * @return array<int, array<string, mixed>>
@@ -283,12 +357,216 @@ final class Verifier
                     'route-not-declared',
                     $model,
                     $file,
-                    "{$what} {$action}, que {$model} no declara. Alguien lo escribió a mano: declara la acción en el laraimport o retíralo."
+                    $this->generatedBefore($file)
+                        ? "{$what} {$action}, que {$model} ya no declara. Lo generó LaraPack cuando la declaraba: si la retiraste del laraimport, regenera con --force y borra lo que quede; si no, vuelve a declararla."
+                        : "{$what} {$action}, que {$model} no declara. Alguien lo escribió a mano: declara la acción en el laraimport o retíralo."
                 );
+            }
+
+            $findings = [
+                ...$findings,
+                ...$this->checkEndpoints($model, $declaration),
+                ...$this->undeclaredEndpoints($model, $declaration),
+            ];
+        }
+
+        return $findings;
+    }
+
+    /**
+     * Que cada endpoint declarado tenga todas sus piezas.
+     *
+     * El controlador y las rutas se regeneran; la política y el trait de
+     * operaciones son del proyecto y el generador no escribe en ellos si ya
+     * existían. Un endpoint añadido después llega sin su habilidad ni su
+     * operación, y aquí se dice cuál falta y cómo se llama.
+     *
+     * @param  array{actions: array<int, string>, immutable: bool, secret: array<int, string>, endpoints: array<int, array<string, mixed>>, controller: bool}  $declaration
+     * @return array<int, array<string, mixed>>
+     */
+    private function checkEndpoints(string $model, array $declaration): array
+    {
+        if ($declaration['endpoints'] === []) {
+            return [];
+        }
+
+        $findings = [];
+
+        $controller = $this->fileFromStub($model, 'Controller/ControllerTemplate.txt');
+        $controllerContent = $controller === null ? '' : (string) $this->contentsOf($controller);
+
+        $routes = $this->fileFromStub($model, 'Route/RouteTemplate.txt');
+        $routesContent = $routes === null ? '' : (string) $this->contentsOf($routes);
+
+        $policy = $this->fileFromStub($model, 'Policy/PolicyTemplate.txt');
+        $policyContent = $policy === null ? null : $this->contentsOf($policy);
+
+        $contracts = [...$this->filesFromStub($model, self::CONTRACT_STUBS[0]), ...$this->filesFromStub($model, self::CONTRACT_STUBS[1])];
+
+        $app = $this->appDirectory($model);
+        $operations = $app === null ? null : "{$app}/Models/Traits/Operations/{$model}Operations.php";
+        $operationsContent = $operations === null ? null : $this->contentsOf($operations);
+
+        // Regenerar con --force no toca lo editado a mano: el generador lo
+        // conserva. Decir "regenera" ahí manda a un comando que no hace nada.
+        $regenerate = fn (?string $file, string $what): string => $file !== null && $this->manifest->wasCustomised($this->manifest->absolute($file))
+            ? "Regenerar no basta: {$what} está editado a mano y --force lo conserva. Lleva lo que tenga de más a la request o a la operación del modelo, bórralo y regenera."
+            : "Regenera con --force: {$what} no se escribe a mano.";
+
+        foreach ($declaration['endpoints'] as $endpoint) {
+            $name = $endpoint['name'];
+            $missing = fn (?string $file, string $message): array => $this->finding(self::ERROR, 'endpoint-missing', $model, $file, "El endpoint {$name} declarado {$message}");
+
+            if (! preg_match('/function\s+'.preg_quote($name, '/').'\s*\(/', $controllerContent)) {
+                $findings[] = $missing($controller, 'no tiene método en el controlador. '.$regenerate($controller, 'el controlador'));
+            }
+
+            if (! str_contains($routesContent, "->name('{$endpoint['route']}')")) {
+                $findings[] = $missing($routes, "no tiene ruta '{$endpoint['route']}'. ".$regenerate($routes, 'el archivo de rutas'));
+            }
+
+            if ($app !== null) {
+                $request = "{$app}/Http/Requests/{$model}/{$endpoint['request']}.php";
+
+                if (! is_file($this->manifest->absolute($request))) {
+                    $findings[] = $missing($request, "no tiene su {$endpoint['request']}. Regenera: se crea sin tocar lo demás.");
+                }
+            }
+
+            // La interfaz llama a cada endpoint por su función del contrato JS.
+            // Un contrato editado a mano no se regenera, así que un endpoint
+            // añadido después llega sin ella y la pantalla no lo ve.
+            $function = Endpoints::jsFunction($endpoint);
+
+            foreach ($contracts as $contract) {
+                $content = $this->contentsOf($contract);
+
+                if ($content !== null && ! preg_match('/export\s+const\s+'.preg_quote($function, '/').'\s*=/', $content)) {
+                    $findings[] = $missing($contract, "no tiene función en el contrato JS: falta `export const {$function}`. "
+                        .($this->manifest->wasCustomised($this->manifest->absolute($contract))
+                            ? 'El contrato está editado a mano y --force lo conserva: escríbela con la forma de las de los demás endpoints, o devuelve el archivo a lo generado y regenera.'
+                            : 'Regenera con --vue o --react y --force: el contrato no se escribe a mano.'));
+                }
+            }
+
+            if ($declaration['controller']) {
+                continue;
+            }
+
+            $ability = (string) $endpoint['ability'];
+
+            if ($policyContent !== null && ! Endpoints::isCrudAbility($ability) && ! preg_match('/function\s+'.preg_quote($ability, '/').'\s*\(/', $policyContent)) {
+                $signature = ($endpoint['public'] ? '?User' : 'User').' $user'.($endpoint['target'] === 'record' ? ", {$model} \$".lcfirst($model) : '');
+
+                $findings[] = $missing($policy, "pregunta a la política por '{$ability}' y la política no lo tiene. Añade `public function {$ability}({$signature}): Response|bool` y decide quién puede; sin él, Laravel lo niega siempre.");
+            }
+
+            if ($operationsContent === null || ! preg_match('/function\s+'.preg_quote((string) $endpoint['operation'], '/').'\s*\(/', $operationsContent)) {
+                $findings[] = $missing($operations, "delega en {$model}::{$endpoint['operation']}(\$request) y el trait de operaciones no lo tiene. Escríbelo ahí: es donde va la lógica del endpoint.");
             }
         }
 
         return $findings;
+    }
+
+    /**
+     * Lo que está en el controlador, en las rutas o en la carpeta de requests
+     * del modelo sin que nadie lo haya declarado.
+     *
+     * Las acciones CRUD no declaradas las cuenta traces(); aquí va todo lo
+     * demás: un método `__invoke`, un constructor que inyecta un servicio, una
+     * ruta añadida a mano. Es la forma exacta que tomó la deriva cuando el
+     * laraimport no sabía declarar un endpoint.
+     *
+     * @param  array{actions: array<int, string>, immutable: bool, secret: array<int, string>, endpoints: array<int, array<string, mixed>>, controller: bool}  $declaration
+     * @return array<int, array<string, mixed>>
+     */
+    private function undeclaredEndpoints(string $model, array $declaration): array
+    {
+        $findings = [];
+        $endpoints = $declaration['endpoints'];
+
+        // Lo mismo aparece por dos caminos: alguien lo escribió a mano, o el
+        // endpoint se declaró, se generó y después se quitó del laraimport.
+        // El manifiesto distingue uno del otro, y culpar de lo segundo a
+        // quien no tocó nada sólo enseña a desconfiar de verify.
+        $hint = fn (string $file): string => $this->generatedBefore($file)
+            ? 'Lo generó LaraPack para un endpoint que ya no está declarado: si lo retiraste del laraimport, regenera con --force para quitarlo del controlador y de las rutas, y borra su request y su test; si no, vuelve a declararlo.'
+            : 'Alguien lo escribió a mano: declara el endpoint en el laraimport (endpoints, o controllers si no tiene modelo) y regenera.';
+
+        $controller = $this->fileFromStub($model, 'Controller/ControllerTemplate.txt');
+
+        if ($controller !== null && ($content = $this->contentsOf($controller)) !== null) {
+            $known = [...Actions::ALL, ...array_column($endpoints, 'name'), 'middleware'];
+
+            foreach ($this->publicMethods($content) as $method) {
+                if (! in_array($method, $known, true)) {
+                    $findings[] = $this->finding(self::ERROR, 'route-not-declared', $model, $controller,
+                        "El controlador tiene un método {$method} que no es una acción ni un endpoint declarado. ".$hint($controller));
+                }
+            }
+        }
+
+        $routes = $this->fileFromStub($model, 'Route/RouteTemplate.txt');
+
+        if ($routes !== null && ($content = $this->contentsOf($routes)) !== null) {
+            $known = [...array_map(fn (string $action): string => Actions::routeName($action), Actions::ALL), ...array_column($endpoints, 'route')];
+
+            preg_match_all("/->name\\(\\s*['\"]([^'\"]+)['\"]\\s*\\)/", $content, $matches);
+
+            foreach (array_diff($matches[1], $known) as $route) {
+                $findings[] = $this->finding(self::ERROR, 'route-not-declared', $model, $routes,
+                    "Hay una ruta '{$route}' que no es una acción ni un endpoint declarado. ".$hint($routes));
+            }
+
+            // Una ruta sin nombre no la puede llamar el front, y tampoco se ve
+            // arriba: se cuentan las que hay contra las que tienen nombre.
+            $registered = preg_match_all('/\bRoute::(?:get|post|put|patch|delete|options|any|match)\s*\(/', $content);
+
+            if ($registered > count($matches[1])) {
+                $findings[] = $this->finding(self::ERROR, 'route-not-declared', $model, $routes,
+                    'Hay rutas sin nombre. Las generadas lo llevan todas; ésa la escribió alguien a mano: declara el endpoint en el laraimport (endpoints, o controllers si no tiene modelo) y regenera.');
+            }
+        }
+
+        $app = $this->appDirectory($model);
+
+        if ($app !== null) {
+            $known = [...array_map(fn (string $action): string => Actions::requestClass($action), Actions::ALL), ...array_column($endpoints, 'request')];
+
+            foreach (glob($this->manifest->absolute("{$app}/Http/Requests/{$model}").'/*Request.php') ?: [] as $file) {
+                if (! in_array(basename($file, '.php'), $known, true)) {
+                    $request = "{$app}/Http/Requests/{$model}/".basename($file);
+
+                    $findings[] = $this->finding(self::ERROR, 'route-not-declared', $model, $request,
+                        'Existe una request que no es de ninguna acción ni endpoint declarado. '.$hint($request));
+                }
+            }
+        }
+
+        return $findings;
+    }
+
+    /**
+     * Los métodos públicos de la clase, sin los abstractos, que no tienen
+     * cuerpo. Los lee PhpOutline, el mismo esqueleto que usa ControllerShape:
+     * una expresión regular no sabe dónde acaba un método con llaves dentro.
+     *
+     * @return list<string>
+     */
+    private function publicMethods(string $php): array
+    {
+        $names = [];
+
+        foreach (PhpOutline::ofCode($php)->classes() as $class) {
+            foreach ($class['methods'] as $method) {
+                if ($method['visibility'] === 'public' && $method['body'] !== null) {
+                    $names[] = $method['name'];
+                }
+            }
+        }
+
+        return array_values(array_unique($names));
     }
 
     /**
@@ -450,13 +728,14 @@ final class Verifier
 
     /**
      * La forma declarada que decide con quién es comparable un modelo. Los
-     * secretos no cuentan: no cambian qué componentes tiene.
+     * secretos no cuentan: no cambian qué componentes tiene. Un `controllers[]`
+     * sólo se compara con otros: no tiene modelo, ni tabla, ni política.
      */
     private function shapeOf(string $model): string
     {
         $declaration = $this->manifest->declarationOf($model);
 
-        return json_encode([$declaration['actions'], $declaration['immutable']]);
+        return json_encode([$declaration['actions'], $declaration['immutable'], $declaration['controller']]);
     }
 
     private function fileFromStub(string $model, string $stub): ?string
@@ -478,6 +757,21 @@ final class Verifier
         }
 
         return $files;
+    }
+
+    /**
+     * El generador lo escribió: está en el manifiesto y, salvo una request,
+     * nadie lo ha tocado desde entonces. Las requests se rellenan a mano por
+     * diseño, así que basta con que el generador las haya creado.
+     */
+    private function generatedBefore(string $relative): bool
+    {
+        if ($this->manifest->stubOf($relative) === null) {
+            return false;
+        }
+
+        return str_contains($relative, '/Http/Requests/')
+            || ! $this->manifest->wasCustomised($this->manifest->absolute($relative));
     }
 
     private function contentsOf(string $relative): ?string

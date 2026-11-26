@@ -111,7 +111,8 @@ un `vendor/autoload.php`: dentro de una aplicación o de un paquete que lo tenga
 instalado eso da la raíz correcta; con el binario sobre un clon del propio
 generador, da el generador. Los generadores aceptan además `--force` y
 `--dry-run`. `--format=json` lo aceptan todos salvo `larapack:schema` (que ya
-emite JSON), `larapack:skill` y `larapack:remove-full-model`.
+emite JSON), `larapack:skill`, `larapack:guard` (que es un hook) y
+`larapack:remove-full-model`.
 
 ---
 
@@ -251,20 +252,56 @@ Las instrucciones para el agente viven en `skill/SKILL.md`, dentro de LaraPack, 
 se instalan en el proyecto:
 
 ```
-php vendor/bin/builder larapack:skill                  # -> .claude/skills/larapack/SKILL.md
-php vendor/bin/builder larapack:skill --path=AGENTS.md # para agentes que leen AGENTS.md
+php vendor/bin/builder larapack:skill                  # skill + bloque en AGENTS.md
+php vendor/bin/builder larapack:skill --hooks          # además, la guardia en .claude/settings.json
+php vendor/bin/builder larapack:skill --no-agents      # sólo la skill
 php vendor/bin/builder larapack:skill --print          # por salida estándar
 ```
 
-- **Claude Code** carga la skill de `.claude/skills/larapack/` sola cuando la
-  tarea toca modelos, endpoints, formularios o vistas.
-- **Codex y otros agentes** leen `AGENTS.md`. Un paquete creado con
-  `larapack:new` ya trae uno que apunta a la skill.
+- **Claude Code** carga la skill de `.claude/skills/larapack/SKILL.md` sola
+  cuando la tarea toca modelos, endpoints, formularios o vistas.
+- **Codex y otros agentes** leen `AGENTS.md`. `larapack:skill` escribe en él un
+  bloque corto con la regla y la ruta de la skill, entre
+  `<!-- LARAPACK:BEGIN -->` y `<!-- LARAPACK:END -->`. Lo crea si no existe, lo
+  añade al final si no tiene marcadores y, si los tiene, sólo reescribe lo de
+  dentro: las reglas propias del proyecto van fuera. No necesita `--force`.
+- **Si el agente sólo lee `AGENTS.md` y quieres ahí la skill entera**,
+  `--path=AGENTS.md` la instala en ese archivo y entonces no añade el bloque, que
+  la repetiría. El archivo pasa a ser del paquete: las reglas del proyecto van
+  en otro.
 - **Tras actualizar LaraPack**, reinstala la skill con `--force`: las
   instrucciones viajan con la versión del generador. Sin `--force` no se pisa un
   destino que se haya ampliado con reglas del proyecto.
 
-Un paquete dentro de `vendor/` no lo lee nadie; de ahí la copia.
+Un paquete creado con `larapack:new` ya trae el bloque y los hooks. Un paquete
+dentro de `vendor/` no lo lee nadie; de ahí la copia.
+
+### La guardia: que el agente no pierda la guía
+
+Una regla escrita se cumple mientras el agente la recuerda, y a mitad de una
+sesión larga deja de recordarla. `larapack:skill --hooks` la convierte en hooks
+de Claude Code, fusionados en `.claude/settings.json` sin duplicar ni tocar los
+demás:
+
+- **Tras cada `Write` o `Edit`** → `larapack:guard`. Si el archivo es un
+  controlador, una request, una ruta, una política, una migración o algo
+  generado que no es un hueco, le pasa las comprobaciones de `larapack:verify`.
+  Si hay **errores en ese archivo** sale con 2, y Claude Code le devuelve al
+  modelo el motivo y la regla con el archivo todavía delante. A un controlador
+  escrito a mano le recuerda el patrón aunque no falle. Los avisos no bloquean.
+- **Al terminar el turno** → `larapack:guard --stop`. Verifica el proyecto y
+  retiene sólo por los errores de lo que tocó la sesión —lo que pasó por la
+  guardia y lo que git ve sin confirmar—; lo demás lo dice sin bloquear, para
+  que una consola no quede retenida por lo que otra dejó a medias.
+
+La guardia nunca se bloquea a sí misma: una entrada vacía o rota, un archivo de
+`vendor/` o fuera de un proyecto salen con 0, y mientras no exista `vendor/` el
+hook no hace nada. El comando usa `$CLAUDE_PROJECT_DIR`, que necesita un shell
+que expanda variables (en Windows, Git Bash).
+
+**Actívala con `verify` limpio.** En un proyecto con errores previos, cada
+edición de esos archivos retendría al agente por algo que no causó. Primero
+`larapack:verify` en verde, después `--hooks`.
 
 ### El ciclo que sigue el agente
 
@@ -317,12 +354,16 @@ En este orden, porque cada paso invalida los siguientes si falla:
    en `Operations` que orquesta, y el trabajo real en la clase que le toque.
 4. **Que `larapack:verify` sólo marque como editados los huecos.** Un
    controlador, un archivo de rutas o un `$fillable` editados son deriva.
-5. **Los tests del comportamiento**, no sólo los generados.
+5. **Cada `#[HandRolled]` nuevo.** Es una excepción al patrón del controlador y
+   sólo la aprueba el dueño del proyecto.
+6. **Los tests del comportamiento**, no sólo los generados.
 
 Señales de que el agente se salió del flujo: editó el controlador o el archivo
-de rutas, cambió `$fillable` o `casts()` a mano, borró acciones en vez de
-declararlas, escribió clases de Tailwind o de UIkit en una vista, hizo que un
-formulario navegue al guardar, o expuso un campo sensible «sólo para depurar».
+de rutas, escribió un controlador a mano para un endpoint que podía declarar,
+añadió `#[HandRolled]` para que `verify` pasara, cambió `$fillable` o `casts()`
+a mano, borró acciones en vez de declararlas, escribió clases de Tailwind o de
+UIkit en una vista, hizo que un formulario navegue al guardar, o expuso un campo
+sensible «sólo para depurar».
 
 ### Lo que no se delega
 
@@ -360,8 +401,9 @@ de claves foráneas (que no tienen orden de migración posible), claves foránea
 sí mismo no anulables, reglas sobre campos que no son columnas, relaciones que no
 resuelven contra ningún modelo, `UpdateRequest` sin la regla del identificador
 del que dependen `authorize()` y `handle()`, `only` junto a `except`, un modelo
-`immutable` que pide una escritura, y un `secret` que pide salir en la tabla o en
-la exportación.
+`immutable` que pide una escritura, un `secret` que pide salir en la tabla o en
+la exportación, y endpoints que chocan con una acción CRUD, entre sí o con un
+modelo.
 
 Los avisos no bloquean. Los errores sí: generar con ellos produce código que no
 arranca. El importador ejecuta esta misma validación antes de escribir nada, así
@@ -826,6 +868,99 @@ alguna de las dos se generan igualmente el contrato y el store, y
 php artisan larapack:full-model AuditEvent --only=policies,index,show --immutable
 ```
 
+### Endpoints que no son CRUD: `endpoints` y `controllers`
+
+Publicar un curso, importar una lista, el escritorio de un módulo, un webhook:
+**lo que no es una de las doce acciones también se declara**. Escribirlo a mano
+es justo donde un controlador empieza a validar, autorizar y consultar.
+
+```json
+{
+    "models": [
+        {
+            "name": "Course",
+            "props": [
+                { "name": "title", "type": "string" }
+            ],
+            "endpoints": [
+                { "name": "publish", "method": "post" },
+                { "name": "archive", "method": "post", "ability": "update" },
+                { "name": "importRoster", "method": "post", "target": "collection" },
+                { "name": "certificate", "method": "get", "uri": "{course_id}/certificate",
+                  "public": true, "middleware": ["throttle:30,1"] }
+            ]
+        }
+    ],
+    "controllers": [
+        { "name": "Desk", "endpoints": [
+            { "name": "overview", "method": "get", "ability": "viewDesk" }
+        ] }
+    ]
+}
+```
+
+| Clave | Por omisión | Qué decide |
+|---|---|---|
+| `name` | — | camelCase. El método del controlador, `<Name>Request`, la ruta (`importRoster` → `import.roster`) y la operación `<name>Model` del modelo. No puede ser una acción CRUD: ésas se declaran con `routes`. |
+| `method` | — | `get`, `post`, `put`, `patch` o `delete`. |
+| `uri` | `name` en kebab | Relativa al prefijo del modelo. `importRoster` → `import-roster`; una sigla es una palabra: `importCSV` → `import-csv`. |
+| `target` | `record` | `record` actúa sobre un registro: la request lo busca por `<modelo>_id`, en el cuerpo o en la `uri`. `collection` actúa sobre el modelo. |
+| `ability` | `name` | La habilidad de la política. Una CRUD (`update`, `view`…) reutiliza su método. |
+| `public` | `false` | Sin sesión: sale de `auth:sanctum` sólo ese método. La política se sigue preguntando, con `?User`. Acompáñalo de un `throttle:`. |
+| `middleware` | `[]` | Middleware de la ruta además del grupo `api`. |
+
+Cada endpoint genera:
+
+- **El método del controlador**, que sólo hace `return $request->handle();`, y su
+  ruta con nombre, detrás de las CRUD.
+- **`Http/Requests/<Modelo>/<Name>Request.php`**: `authorize()` pregunta a la
+  política (un endpoint público, con `$this->user('sanctum')`, que también ve un
+  token Bearer), `rules()` es un hueco y `handle()` delega en
+  `$modelo-><name>Model($this)`.
+- **El método de la política**, que nace en `false`. Con un invitado Laravel no
+  llama a `before()`; con sesión sí, así que un administrador entra como en las
+  CRUD.
+- **`<name>Model($request)` en el trait `Operations`**, que lanza hasta que se
+  escriba. Sólo cuando se crea el trait: uno existente no se toca, y `verify`
+  dice el nombre exacto del método que falta.
+- **`tests/Feature/Endpoints/<Modelo>/<Name>Test.php`.**
+
+**`controllers`** es para lo que no tiene modelo: un escritorio, un asistente,
+el canje de un token. Genera el controlador, sus rutas en
+`routes/api/models/<nombre>.php`, sus requests y sus tests; ni política ni
+operación. Su `ability` es una habilidad de Gate que define la aplicación o el
+paquete; sin ella, `authorize()` nace en `false`. `handle()` nace como
+`abort(501)` y su lógica va en una clase de soporte. No puede llamarse como un
+modelo, ni como uno ya generado por otro laraimport.
+
+**Con `--vue` o `--react`, también su interfaz:**
+
+- **Una función por endpoint en el contrato** (`models/<modelo>/index.js`, el
+  mismo en Vue y en React): `publishModel(data, { confirm })` llama a la ruta
+  por nombre con el verbo declarado. `data.id` es el registro; otro parámetro de
+  la URI sale de `data` por su nombre; lo demás va en el cuerpo, o en la query
+  si es `get`. Si no es `get`, pregunta antes, como borrar; `{ confirm: false }`
+  la llama sin diálogo.
+- **Los que escriben salen como acción**, habilitada por la política: los de
+  `collection`, como botón en la barra de la tabla (`crudActions()`); los de
+  `record`, en el menú de cada fila (el Resource los añade a `actions`) y en el
+  de la ficha (`recordActions()`, que pinta `ModelCard`). `PoliciesRequest`
+  responde por cada endpoint con la habilidad que pregunta (`archive` →
+  `update`).
+- **Un `controllers[]` sólo tiene su contrato**,
+  `src/controllers/<nombre>/index.js` con `<name>Endpoint(data)`: sin modelo ni
+  política no hay pantalla que pintar.
+
+No salen como acción un `get` (devuelve datos que alguien tiene que pintar) ni
+un endpoint con parámetros en la URI además del registro (la pantalla no tiene
+de dónde sacarlos; `import` lo avisa). Ninguno trae formulario: el esquema no
+declara campos de endpoint, así que uno que necesita datos se llama desde una
+pantalla propia con `publishModel({ id, ...datos })`.
+
+Sin las dos claves se genera exactamente lo mismo que antes. Lo que no se genera
+todavía: sus reglas declaradas. El diseño completo está en
+`docs/specs/SPEC-02-acciones-declaradas.md`.
+
 ---
 
 ### El usuario que inicia sesión
@@ -919,14 +1054,14 @@ Si una lógica no cabe en ninguno de estos sitios, falta algo en el
 
 | Hueco | Qué va ahí |
 |---|---|
-| `Traits/Operations/` | La lógica de negocio del modelo. Es el sitio por defecto. Con metas, también la forma de `payload` en `buildPayload()`. |
+| `Traits/Operations/` | La lógica de negocio del modelo. Es el sitio por defecto. Con metas, también la forma de `payload` en `buildPayload()`; con endpoints, su `<name>Model($request)`. |
 | `Traits/Relations/` | Relaciones que el JSON no declara (through, morph, condicionales). |
 | `Traits/Storage/` | Subida y borrado de archivos del modelo. |
 | `Traits/Mutators/` | Accessors y mutators. |
-| `Filters/<Model>/ManagedFilter::canView` | **Quién puede ver qué.** Sin esto el índice lo devuelve todo. |
-| `Policies/<Model>Policy` | Autorización por acción. Nace cerrada: sólo pasa el administrador, y ni él borra para siempre hasta que se saque `forceDelete` de `$exceptAbilities`. |
+| `Filters/<Model>/ManagedFilter::canView` | **Quién puede ver qué.** Sin esto el índice lo devuelve todo. El IndexRequest fuerza `managed`, así que acota a todos, administrador incluido: cubre ese caso aquí. |
+| `Policies/<Model>Policy` | Autorización por acción y por endpoint. Nace cerrada: sólo pasa el administrador, y ni él borra para siempre hasta que se saque `forceDelete` de `$exceptAbilities`. |
 | `Requests/*/rules()` | Reglas que no vengan del JSON. Nada fuera del array. |
-| `Resources/<Model>Resource` | La forma exacta de la respuesta y su array `actions`. |
+| `Resources/<Model>Resource` | La forma exacta de la respuesta y su array `actions`. Los accessors que el cliente puede pedir con `appends[]` se listan en `$appendable`; lo demás se ignora. |
 | `Events/*/Listeners/` | Efectos secundarios: notificaciones, colas, integraciones. |
 | `Observers/` | Ciclo de vida del modelo. |
 | `Factories/` | Datos de prueba realistas. Las generadas ya insertan. |
@@ -937,8 +1072,10 @@ Si una lógica no cabe en ninguno de estos sitios, falta algo en el
 
 ### Qué no se toca
 
-- El controlador: delega en las requests y no tiene lógica.
-- El archivo de rutas: si falta un endpoint, falta en el generador.
+- El controlador: delega en las requests y no tiene lógica. Tampoco el que se
+  escribe a mano: `verify` lo comprueba con `controller-shape`.
+- El archivo de rutas: si falta un endpoint, se declara en `endpoints` o en
+  `controllers`.
 - `$fillable`, `$creatable`, `$updatable`, `$export_cols`, `$loadable_relations`,
   `$loadable_counts`, `$editable_metas`, `$protected_metas` y `casts()`: salen del
   JSON.
@@ -988,17 +1125,124 @@ El manifiesto debe versionarse con el proyecto.
 php artisan larapack:verify
 php artisan larapack:verify --strict          # los avisos cuentan como fallos
 php artisan larapack:verify --format=json
+php artisan larapack:verify --check=controller-shape --check=request-handle   # sólo esas
 ```
+
+Contra el manifiesto:
 
 | Comprobación | Nivel | Qué detecta |
 | --- | --- | --- |
 | `missing-file` | error | Algo que se generó y ya no está. |
 | `customised` | info | Editado a mano; no se podrá regenerar sin perderlo. |
 | `inconsistent-entity` | aviso | Una entidad sin un componente que tienen todas las que declararon su misma forma. |
-| `route-prefix` | error | El `API_ROUTE_PREFIX` del módulo JS dejó de cuadrar con el `->as()` del RouteServiceProvider. |
-| `route-not-declared` | error | Una ruta, un método del controlador, un request o una vista de una acción que el modelo no declara. |
+| `route-prefix` | error | El `API_ROUTE_PREFIX` del módulo JS —el de un modelo o el de un `controllers[]`— dejó de cuadrar con el `->as()` del RouteServiceProvider. |
+| `route-not-declared` | error | Una ruta (con o sin nombre), un método del controlador, un request o una vista de una acción o un endpoint que el modelo no declara. Distingue lo escrito a mano de lo que generó LaraPack para algo que ya no está en el laraimport. |
+| `endpoint-missing` | error | A un endpoint declarado le falta una pieza: su método, su ruta, su request, su habilidad, su operación o, con interfaz, su función en el contrato JS. El mensaje dice qué escribir. |
 | `immutable-write` | error | Un camino de escritura en un modelo `immutable`, o su modelo sin la guarda que rechaza modificaciones. |
 | `secret-exposed` | error | Una columna `secret` fuera de `$hidden`, en la exportación, en el Resource o en la tabla. |
+
+Sobre todo el código, lo haya generado LaraPack o no, en la raíz y en los
+paquetes locales (repositorios `path` y `packages/*`), y aunque no haya
+manifiesto:
+
+| Comprobación | Nivel | Qué detecta |
+| --- | --- | --- |
+| `controller-shape` | error | Una acción de controlador que hace algo más que `return $request->handle();`: recibe `Request` o `FormRequest` base, llama a `validate()`, pasa una expresión a `handle()`. También `__call`, un constructor que hace algo más que asignar lo inyectado y registrar middleware, y un `middleware()` con un closure. |
+| `request-handle` | error | La request de una acción no define `handle()`. Una de `vendor/` sólo se informa. |
+| `controller-concern` | error / aviso | Un trait con lógica en `Http/Controllers`: error si lo usa un controlador, aviso si sólo lo usan requests (va en `Http/Requests/Concerns`). |
+| `hand-rolled` | aviso | Una acción marcada `#[HandRolled('razón')]`. Sin razón, error. |
+| `route-closure` | aviso | Un closure con cuerpo como acción de una ruta. |
+| `index-managed` | aviso | Una request que usa el `Builder` de SearchSurge sin forzar `managed`: el listado se salta `ManagedFilter::canView()`. |
+| `resource-appends` | aviso | Un `setAppends()` que recibe lo que manda el cliente sin una lista blanca. |
+
+Las dos últimas encuentran lo que se generó antes de 9.0 y lo que alguien copie
+de ello; lo que se genera ahora ya sale protegido. Y las dos se arreglan solas:
+
+```
+php artisan larapack:fix index-managed resource-appends --dry-run   # el diff de cada archivo
+php artisan larapack:fix index-managed resource-appends             # escribe
+php artisan larapack:fix index-managed --path=packages/school-library --format=json
+php artisan larapack:fix index-managed resource-appends --package=school-library --dry-run
+php artisan larapack:fix index-managed resource-appends --package=app --format=json
+```
+
+`larapack:fix` hace en cada archivo el mismo cambio, sacado de la plantilla
+actual: en el IndexRequest, `$this->merge(['managed' => true])` al principio de
+`prepareForValidation()` (si no existe lo crea, y si hereda uno del proyecto lo
+llama); en el Resource, el bloque de `$appendable` en lugar del `setAppends()`
+viejo, y la propiedad si falta. Lee tokens, no busca con expresiones regulares,
+y lo que no tiene una forma reconocida no lo toca: lo devuelve como `skipped`
+con la razón, y entonces sale con código distinto de cero. Nada se da por
+arreglado hasta que el resultado parsea y `verify` ya no lo marca, así que
+correrlo dos veces no cambia nada la segunda. Si el proyecto tiene Pint, lo pasa
+por lo que escribió; lo que el manifiesto conocía sin editar se vuelve a anotar.
+Con `--format=json`, un documento con `fixed`, `skipped` y `unchanged` por
+comprobación.
+
+**Sólo toca lo que viene del generador**: reescribe `prepareForValidation()` y
+el bloque `setAppends()` cuando tienen la forma generada; si no, `skipped`. La
+lógica propia que haya alrededor —otros métodos, sentencias propias en
+`prepareForValidation()`, el resto de `toArray()`— no se pierde.
+
+`--path` acota a un subdirectorio de la raíz y `--package` (repetible) a un
+paquete local, por el nombre de su directorio en `packages/` o su nombre de
+Composer, o a `app`: el núcleo, lo que no cuelga de ningún paquete. Las dos se
+combinan, y un paquete que no existe falla con la lista de los que hay.
+
+Además reporta dos cosas **sin arreglarlas**, que no cambian el código de
+salida:
+
+- **`admin_path_missing`** (en `index-managed`): los `ManagedFilter` cuyo
+  `canView()` no tiene camino para el administrador. Con `managed` forzado,
+  `canView()` acota a todos —el `before()` de la política no lo salta— y el
+  administrador vería el listado vacío. Cuenta como camino un `return $query;`
+  en una rama (el cuerpo de la plantilla también: no restringe a nadie) o una
+  llamada reconocible de alcance completo (`unrestricted`, `isUnrestricted`,
+  `viewAny`, `isAdmin`, `can('viewAny', ...)`), también dentro de los soportes
+  del proyecto que `canView()` llama estáticamente. Un ternario
+  `? ... : $query` no cuenta. Los IndexRequest cuyo filtro no se localiza salen
+  en `managed_filter_unresolved`. **Es una heurística de lectura, no una
+  prueba**: el reporte se revisa a mano.
+- **`appendable_proposals`** (en `resource-appends`): por Resource, los
+  accessors que el front pide con `appends` (`appends[]=x`, `appends: [...]`,
+  `params.appends`...) en `resources/` y en el `resources/{react,js,vue}` de
+  cada paquete, con `exists` según el modelo o sus traits declaren el accessor.
+  Lo que no se puede asociar a un Resource sale «sin asociar» con su
+  archivo:línea.
+
+Un `$appendable` vacío deja de añadir lo que pida el cliente. Si la interfaz
+pedía accessors con `appends[]`, decláralos en la lista de cada Resource.
+`appendable_proposals` es el punto de partida, **no la lista**: son propuestas
+sin confirmar, y una lista mal hecha deja de mostrar un dato en pantalla.
+`larapack:fix` nunca las escribe.
+
+**Qué no mira la guardia, a propósito.** Sólo las clases de `Http/Controllers`,
+`Http/Requests` y `Http/Resources`. Un componente de Livewire, un recurso de
+Filament o un controlador fuera de `Http/Controllers` no reciben un FormRequest
+ni delegan en su `handle()`: exigirles esa forma sería un falso positivo en cada
+archivo.
+
+**El controlador sólo hace `return $request->handle();`, también el que se
+escribe a mano.** Un endpoint que no es CRUD se
+[declara](#endpoints-que-no-son-crud-endpoints-y-controllers); si de verdad
+tiene que escribirse a mano, la autorización, la validación y el trabajo van en
+su `FormRequest`. Lo que no puede ser así —un webhook que comprueba la firma
+sobre el cuerpo en bruto, un canje OAuth con sus propios errores— lo marca el
+dueño del proyecto:
+
+```php
+use Innoboxrr\LarapackGenerator\Attributes\HandRolled;
+
+#[HandRolled('La firma se calcula sobre el cuerpo en bruto.')]
+class StripeWebhookController { ... }
+```
+
+`verify` lo lista como aviso en cada ejecución, y con `--strict` falla. No es un
+arreglo que un agente aplique para pasar: es una excepción que aprueba una
+persona, y sigue a la vista.
+
+`--check=<nombre>` se repite para correr varias; un nombre que no existe falla
+en vez de dar un verde falso.
 
 Devuelve un código distinto de cero si hay errores, así que sirve como puerta en
 la CI. La salida en JSON está pensada para que un agente lea qué corregir:
@@ -1022,7 +1266,8 @@ la CI. La salida en JSON está pensada para que un agente lea qué corregir:
 
 No intenta adivinar si una clase «tiene demasiada lógica»: esa clase de
 comprobación produce falsos positivos y acaba desactivándose. Sólo verifica lo
-que es determinista.
+que es determinista: una acción de controlador tiene una forma exacta, y lee los
+archivos sin cargarlos ni ejecutarlos.
 
 ---
 
@@ -1213,15 +1458,16 @@ Si se añade un endpoint, hay que volver a exportar `routes.json`.
 
 El módulo se instala como cualquier paquete npm (publicado, o con
 `"file:vendor/acme/catalogo/resources/vue"` mientras se desarrolla). Necesita
-`vue`, `vue-router` 4 y `pinia` 3 en la aplicación, y el plugin de Vue en Vite:
+`vue`, `vue-router` 4 o 5 y `pinia` 3 o 4 en la aplicación, y el plugin de Vue en
+Vite:
 
 ```
-npm install vue vue-router@4 pinia@3 @vitejs/plugin-vue
+npm install vue vue-router pinia @vitejs/plugin-vue
 ```
 
-`npm install vue-router pinia` sin versión instala hoy vue-router 5 y Pinia 4,
-que el módulo no declara. Instalado desde una carpeta, conviene decirle a Vite
-que use una sola copia de cada uno:
+vue-router 5 instala desde `innoboxrr-vue-datatable` 3.2.0, que es el piso del
+módulo. Instalado desde una carpeta, conviene decirle
+a Vite que use una sola copia de cada uno:
 
 ```js
 // vite.config.js
@@ -1467,8 +1713,10 @@ versión hasta la última.
 | 7.9 | Bajo | El proveedor de eventos se regenera | [7.9 → 7.10](#de-79-a-710) y siguiente |
 | 7.10.0 | Nada en un paquete; bajo en una aplicación | En una aplicación, factories y tests a regenerar | [7.10.0 → 7.10.1](#de-7100-a-7101) y siguiente |
 | 7.10.1 | Nada en un paquete; bajo en una aplicación | En una aplicación, la exportación y su notificación a regenerar | [7.10.1 → 7.10.2](#de-7101-a-7102) y siguiente |
-| 7.10.2 | Bajo | Nada; el contrato del modelo deja de mandar el token CSRF por GET | [7.10.2 → 7.10.3](#de-7102-a-7103) |
-| 7.10.3 | — | Estás al día | — |
+| 7.10.2 | Bajo | Nada; el contrato del modelo deja de mandar el token CSRF por GET | [7.10.2 → 7.10.3](#de-7102-a-7103) y siguientes |
+| 7.10.3 | Bajo | Las tablas nuevas restringen las claves ajenas | [7.10 → 8.0](#de-710-a-80) y siguiente |
+| 8.0 | Medio, según cuántos controladores escribiste a mano | `verify` revisa todos los controladores; el Resource filtra `appends`; nombres de modelo | [8.0 → 9.0](#de-80-a-90) |
+| 9.0 | — | Estás al día | — |
 
 Las notas completas de cada versión están en `CHANGELOG.md`.
 
@@ -1483,7 +1731,7 @@ Las notas completas de cada versión están en `CHANGELOG.md`.
    si lo tenías en `require-dev`):
 
    ```
-   composer require innoboxrr/larapack-generator:"^7.5"
+   composer require innoboxrr/larapack-generator:"^9.0"
    ```
 
 4. **Actualiza las instrucciones del agente**:
@@ -1972,6 +2220,117 @@ No cambia el contrato ni lo que se genera en PHP.
   mandando. Sube también `innoboxrr-vue-datatable` o `innoboxrr-react-datatable`
   a 3.1.1, que hace lo mismo con las peticiones de la tabla.
 
+### De 7.10 a 8.0
+
+Las claves ajenas salen con `restrict` en vez de `cascade` (los pivotes siguen en
+`cascade`), y `table_prefix` es nuevo y opcional. **Las tablas que ya existen no
+se tocan**: el generador reutiliza su migración de creación y, si una clave
+ajena cambió, deja un comentario para escribir la alteración a mano. Si tu
+proyecto dependía de la cascada en tablas nuevas, decláralo con
+`"on_delete": "cascade"`. Ver [Las claves ajenas](#las-claves-ajenas-restrict-por-omisión).
+
+### De 8.0 a 9.0
+
+**Cambia lo que `verify` deja pasar.** Antes sólo miraba el manifiesto; ahora
+revisa todos los controladores del proyecto y de sus paquetes locales, y un
+proyecto que pasaba puede fallar. El contrato no rompe: `endpoints` y
+`controllers` son nuevos y opcionales. En el orden de abajo, en una aplicación
+como school-management:
+
+1. **Actualiza y mira dónde estás, sin la guardia todavía:**
+
+   ```
+   composer require innoboxrr/larapack-generator:"^9.0" --dev
+   php artisan larapack:skill --force
+   php artisan larapack:verify --format=json
+   ```
+
+   En school-management falla con `controller-shape` en cuatro controladores
+   escritos a mano —`InstalledModulesController`, `TokenController` de
+   OneRoster, `RegistrationController` de LTI e `InboundWebhookController`— y
+   avisa con `controller-concern` de los traits de `Http/Controllers/Concerns`
+   (`AuthorizesInScope` en catorce paquetes y otros cinco). Para mirar sólo eso:
+   `--check=controller-shape --check=request-handle --check=controller-concern`.
+
+2. **Cada controlador escrito a mano, a su sitio.** Por orden de preferencia:
+
+   - **Declararlo.** Si actúa sobre un modelo, va en sus `endpoints`; si no, en
+     `controllers[]`. `larapack:import` genera el controlador, la ruta, la
+     request, la habilidad y el test; la lógica pasa a `handle()` o a la
+     operación del modelo, y se borran el controlador y la ruta escritos a mano.
+     La ruta generada vive en `routes/api/models/` con su nombre: actualiza el
+     front que llamaba a la vieja y vuelve a exportar `routes.json`.
+
+     ```json
+     "controllers": [
+         { "name": "Platform", "endpoints": [ { "name": "installedModules", "method": "get" } ] }
+     ]
+     ```
+
+   - **Dejarlo a mano con un `FormRequest`.** El controlador queda en
+     `return $request->handle();`; `authorize()` autoriza, `rules()` valida y
+     `handle()` hace el trabajo o lo delega. Si el protocolo dicta la forma del
+     error —OAuth2 en un canje de tokens, LTI, la firma de un webhook—,
+     sobrescribe `failedValidation()` o `failedAuthorization()` en la request;
+     la firma sobre el cuerpo en bruto se comprueba ahí con `$this->getContent()`.
+     La skill trae el ejemplo de `InstalledModulesController` antes y después.
+   - **`#[HandRolled('razón')]`, sólo si el dueño del proyecto lo aprueba.** No
+     es un arreglo: `verify` lo sigue listando como aviso y con `--strict`
+     falla.
+
+3. **Los traits de `Http/Controllers/Concerns` que sólo usan requests** se
+   mueven a `Http/Requests/Concerns` (cambia su namespace y el `use` de cada
+   request). Uno que use un controlador es error: su lógica va a la request.
+
+4. **Regenera lo que no editaste**, primero en simulación:
+   `larapack:import --dry-run` y `larapack:import --force`. Así recibes el
+   IndexRequest que fuerza `managed`, el Resource con `$appendable` y la
+   exportación que no escribe fórmulas.
+
+5. **Lleva la seguridad a lo editado.** `verify` avisa con `index-managed` y
+   `resource-appends`, y `larapack:fix` lo arregla en todos los archivos a la
+   vez (en school-management, 524 IndexRequests y 691 Resources):
+
+   ```
+   php artisan larapack:fix index-managed resource-appends --dry-run
+   php artisan larapack:fix index-managed resource-appends
+   php artisan larapack:verify --check=index-managed --check=resource-appends
+   ```
+
+   Lo que salte (`skipped`, con su razón) se hace a mano, así:
+
+   ```php
+   // IndexRequest: el listado siempre pasa por ManagedFilter::canView().
+   protected function prepareForValidation(): void
+   {
+       $this->merge(['managed' => true]);
+   }
+   ```
+
+   En el Resource, añade `protected array $appendable = [];` con los accessors
+   que pida la interfaz, y sólo pasa a `setAppends()` la intersección con esa
+   lista, sumada a `getAppends()`. Revisa que cada `canView()` cubra al
+   administrador: al forzar `managed`, también le acota.
+
+6. **Los nombres de modelo** que no sean un identificador
+   (`^[A-Za-z][A-Za-z0-9_]*`) ya no se aceptan en la línea de órdenes. Si un
+   script llamaba a `larapack:model` con guiones o rutas, cámbialo.
+
+7. **Activa la guardia con `verify` limpio:**
+
+   ```
+   php artisan larapack:verify --format=json    # ok: true
+   php artisan larapack:skill --hooks
+   ```
+
+   Antes de eso, cada edición de uno de los archivos con errores retendría al
+   agente por algo que no causó. Versiona `.claude/settings.json` y el bloque
+   de `AGENTS.md` para que lo tengan todas las sesiones.
+
+En el módulo Vue, `pinia` 4 ya vale; `vue-router` sigue en 4. Los pisos de los
+paquetes `innoboxrr-*` suben (`internalNpm` de `ecosystem.json`): alinéalos en
+`resources/<ui>/package.json` si está editado.
+
 ---
 
 ## Referencia de comandos
@@ -1981,9 +2340,11 @@ larapack:new                     Crea un paquete nuevo listo para generar, proba
 larapack:import                  Genera varios modelos desde un laraimport.
 larapack:validate                Valida un laraimport sin generar nada.
 larapack:schema                  Emite el esquema del laraimport.
-larapack:verify                  Busca desviaciones respecto al manifiesto.
+larapack:verify                  Busca desviaciones respecto al manifiesto y en los controladores.
+larapack:fix                     Corrige index-managed y resource-appends en lo generado antes de 9.0.
 larapack:audit                   Comprueba la línea base del ecosistema.
-larapack:skill                   Instala las instrucciones para un agente.
+larapack:skill                   Instala las instrucciones para un agente; con --hooks, la guardia.
+larapack:guard                   Hook para agentes: comprueba el archivo recién editado.
 
 larapack:full-model              Crea un entorno completo de modelo.
 larapack:remove-full-model       Elimina todas las entidades de un modelo.
@@ -2017,7 +2378,7 @@ larapack:test                    Crea una nueva clase de test.
 
 Opciones comunes: `--root=<ruta>` en todos salvo `new`, `schema` y `audit`;
 `--force` y `--dry-run` en los generadores; `--format=json` en todos salvo
-`schema`, `skill` y `remove-full-model`. Con `--format=json` la salida es un
+`schema`, `skill`, `guard` y `remove-full-model`. Con `--format=json` la salida es un
 único documento JSON, también cuando algo falla. La referencia completa de cada
 comando, con sus argumentos y opciones, está en
 <https://innoboxrr.github.io/docs/larapack/comandos>.

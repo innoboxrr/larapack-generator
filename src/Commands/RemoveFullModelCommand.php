@@ -3,6 +3,7 @@
 namespace Innoboxrr\LarapackGenerator\Commands;
 
 use Innoboxrr\LarapackGenerator\Commands\Concerns\TargetsProject;
+use Innoboxrr\LarapackGenerator\Tools\Tool;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
@@ -32,6 +33,8 @@ class RemoveFullModelCommand extends Command
         'Resource',
         'Route',
         'Test',
+        // Los tests de los endpoints; sus requests se van con las demás.
+        'Endpoint',
     ];
 
     protected function configure(): void
@@ -51,7 +54,17 @@ class RemoveFullModelCommand extends Command
     {
         $this->applyRootOption($input);
 
-        $modelName = $input->getArgument('name');
+        $modelName = (string) $input->getArgument('name');
+
+        // Antes que nada: este comando borra directorios enteros a partir del
+        // nombre. Con `..` o con una cadena vacía la carpeta del modelo era la
+        // de todos los modelos, y se borraba recursivamente.
+        if (! Tool::isValidModelName($modelName)) {
+            $output->writeln("<error>«{$modelName}» no es un nombre de modelo válido; no se ha borrado nada.</error>");
+
+            return Command::FAILURE;
+        }
+
         $commands = $this->commands;
 
         if ($input->getOption('vue')) {

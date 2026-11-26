@@ -105,10 +105,38 @@ class Tool
     // INIT
 
     /**
+     * Lo que se acepta como nombre de modelo: un identificador, sin
+     * separadores de ruta ni puntos.
+     *
+     * El nombre acaba en rutas de archivo —`Http/Requests/<Modelo>`,
+     * `Models/Filters/<Modelo>`— y nadie lo comprobaba. `larapack:model
+     * ../../x` escribía fuera del proyecto, y `larapack:remove-full-model ..`
+     * borraba entero el directorio padre de cada carpeta del modelo: todos los
+     * requests, todos los filtros y todos los eventos del paquete. El esquema
+     * ya lo exige en el laraimport; esto lo exige también al comando suelto.
+     *
+     * Termina en `\z` y no en `$`: `$` también casa delante de un salto de
+     * línea final, y «Post\n» pasaba y acababa en nombres de archivo y de clase.
+     */
+    public const MODEL_NAME = '/^[A-Za-z][A-Za-z0-9_]*\z/';
+
+    public static function isValidModelName(string $name): bool
+    {
+        return preg_match(self::MODEL_NAME, $name) === 1;
+    }
+
+    /**
      * @param  string  $ModelName  El nombre del modelo que se está creando, en PascalCase.
+     *                             Vacío sólo en las herramientas del paquete
+     *                             (proveedores, configuración), que no nombran
+     *                             ningún modelo.
      */
     protected function init(string $ModelName)
     {
+        if ($ModelName !== '' && ! self::isValidModelName($ModelName)) {
+            throw MakerException::invalidModelName($ModelName);
+        }
+
         $this->inflector = new Inflector(new NoopWordInflector, new NoopWordInflector);
         $this->namespace = get_namespace();
         $this->dotNamespace = get_dot_namespace();
@@ -349,6 +377,10 @@ class Tool
 
         $this->replaceData($destination);
 
+        // Después de los tokens: lo que se inserta lleva nombres de endpoint,
+        // y uno como `renameModelName` no puede volver a pasar por strtr().
+        $this->applyEndpoints($destination);
+
         if (self::isFromJsonImporter()) {
             $this->processFileWithJson($destination);
         }
@@ -438,6 +470,29 @@ class Tool
         return "->onUpdate('{$onUpdate}')->onDelete('{$onDelete}')";
     }
 
+    /**
+     * Un valor del laraimport como literal PHP de comilla simple.
+     *
+     * Los valores libres del esquema —el `default` de una columna, un `cast`,
+     * la tabla de un `constraint`— se pegaban entre comillas sin escapar. Un
+     * `default` como «it's» dejaba una migración que no compila, y uno como
+     * `x'); exec('...'); //` metía código en un archivo que `migrate` ejecuta.
+     *
+     * Lo que no necesita escape sale exactamente igual que antes —también un
+     * cast con barras, como `App\Casts\Money`—, así que regenerar no cambia
+     * los archivos que ya eran correctos.
+     */
+    protected static function phpString(string $value): string
+    {
+        // Dentro de comilla simple PHP sólo interpreta \' y \\, y una barra al
+        // final se comería la comilla de cierre.
+        $plain = ! str_contains($value, "'")
+            && ! str_contains($value, '\\\\')
+            && ! str_ends_with($value, '\\');
+
+        return $plain ? "'{$value}'" : var_export($value, true);
+    }
+
     // FORMA DECLARADA
 
     /**
@@ -455,7 +510,65 @@ class Tool
      */
     protected function declaresAnyAction(): bool
     {
-        return Declaration::of($this->ModelName)['actions'] !== [];
+        return Declaration::of($this->ModelName)['actions'] !== [] || $this->endpoints() !== [];
+    }
+
+    /**
+     * Los endpoints declarados del modelo o controlador que se está generando,
+     * ya normalizados.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    protected function endpoints(): array
+    {
+        return Declaration::of((string) $this->ModelName)['endpoints'];
+    }
+
+    /**
+     * Sustituye los marcadores `//ENDPOINT_…//` del archivo por el código de
+     * los endpoints declarados, con la sangría del marcador.
+     *
+     * Sin endpoints la línea del marcador desaparece entera, fin de línea
+     * incluido: es lo que garantiza que un laraimport que no los usa genere
+     * byte a byte lo mismo que antes de que existieran.
+     */
+    protected function applyEndpoints(string $file): void
+    {
+        $content = file_get_contents($file);
+
+        if (! str_contains($content, '//ENDPOINT_')) {
+            return;
+        }
+
+        $content = preg_replace_callback(
+            '/^([ \t]*)\/\/(ENDPOINT_[A-Z_]+)\/\/\R/m',
+            function (array $matches): string {
+                $lines = $this->endpointCode($matches[2]);
+
+                if ($lines === []) {
+                    return '';
+                }
+
+                return implode('', array_map(
+                    fn (string $line): string => ($line === '' ? '' : $matches[1].$line)."\n",
+                    $lines
+                ));
+            },
+            $content
+        );
+
+        file_put_contents($file, $content);
+    }
+
+    /**
+     * El código de un marcador de endpoints, línea a línea y sin la sangría
+     * del marcador. Cada herramienta rellena los suyos.
+     *
+     * @return array<int, string>
+     */
+    protected function endpointCode(string $marker): array
+    {
+        return [];
     }
 
     /**
@@ -486,11 +599,43 @@ class Tool
         return unlink($file);
     }
 
+    /**
+     * Borra la carpeta de un modelo, si existe.
+     *
+     * init() deja pasar el nombre vacío porque lo usan las herramientas del
+     * paquete, que no nombran ningún modelo. Al quitar, un nombre vacío
+     * convierte `Http/Requests/<Modelo>` en `Http/Requests/` y se llevaba
+     * todos los requests del paquete: aquí no se admite. Sólo lo frenaba
+     * RemoveFullModelCommand; un remove() llamado desde otro sitio no.
+     */
+    protected function dropModelDir(string $path): bool
+    {
+        $name = (string) $this->ModelName;
+
+        if (! self::isValidModelName($name)) {
+            throw MakerException::invalidModelName($name);
+        }
+
+        return (is_dir($path) || is_link($path)) ? $this->dropDir($path) : false;
+    }
+
     protected function dropDir(string $path)
     {
-        $files = glob($path.'/{,.}[!.,!..]*', GLOB_MARK | GLOB_BRACE);
+        // Si la carpeta misma es un enlace, se quita el enlace: recorrerlo
+        // vaciaba el destino y luego rmdir() fallaba sobre el enlace.
+        if (is_link($path)) {
+            return unlink($path);
+        }
+
+        $files = glob($path.'/{,.}[!.,!..]*', GLOB_MARK | GLOB_BRACE) ?: [];
         foreach ($files as $file) {
-            if (is_dir($file)) {
+            // GLOB_MARK pone `/` a los directorios, también a un enlace que
+            // apunta a uno, y con la barra is_link() sigue el enlace.
+            $file = rtrim($file, '/');
+
+            // Un enlace se quita, no se recorre: recorrerlo borraba el
+            // contenido de su destino, que está fuera del modelo.
+            if (is_dir($file) && ! is_link($file)) {
                 $this->dropDir($file);
             } else {
                 unlink($file);

@@ -21,7 +21,32 @@ final class Manifest
 
     private const RELATIVE_PATH = '.larapack/manifest.json';
 
+    /**
+     * El contenido congelado de una instantánea; null en un manifiesto vivo.
+     *
+     * @var array<string, mixed>|null
+     */
+    private ?array $frozen = null;
+
     public function __construct(private ?string $root = null) {}
+
+    /**
+     * Una copia de sólo lectura que lee el archivo una vez.
+     *
+     * read() vuelve al disco en cada llamada, y es lo correcto mientras se
+     * genera: otra instancia puede haber escrito entre medias. Pero quien sólo
+     * lee —el Verifier, la guardia de los agentes— lo llama miles de veces: en
+     * school-management, con 128 modelos y un manifiesto de 1,5 MB, verificar
+     * pasaba de varios minutos, demasiado para un hook que corre tras cada
+     * edición.
+     */
+    public function snapshot(): self
+    {
+        $snapshot = new self($this->root ?? root_path());
+        $snapshot->frozen = $this->read();
+
+        return $snapshot;
+    }
 
     public function path(): string
     {
@@ -35,10 +60,14 @@ final class Manifest
     ];
 
     /**
-     * @return array{version: int, package: array{namespace: string, files: array<string, array{stub: string, hash: string}>}, models: array<string, array{namespace: string, files: array<string, array{stub: string, hash: string}>, declaration?: array{actions?: array<int, string>, immutable?: bool, secret?: array<int, string>}}>}
+     * @return array{version: int, package: array{namespace: string, files: array<string, array{stub: string, hash: string}>}, models: array<string, array{namespace: string, files: array<string, array{stub: string, hash: string}>, declaration?: array{actions?: array<int, string>, immutable?: bool, secret?: array<int, string>, endpoints?: array<int, array<string, mixed>>, controller?: bool}}>}
      */
     public function read(): array
     {
+        if ($this->frozen !== null) {
+            return $this->frozen;
+        }
+
         if (! is_file($this->path())) {
             return self::EMPTY;
         }
@@ -111,7 +140,10 @@ final class Manifest
     }
 
     /**
-     * @return array{actions: array<int, string>, immutable: bool, secret: array<int, string>}
+     * Un manifiesto anterior a los endpoints no los trae: la ausencia significa
+     * que no hay ninguno, igual que la de `actions` significa todas.
+     *
+     * @return array{actions: array<int, string>, immutable: bool, secret: array<int, string>, endpoints: array<int, array<string, mixed>>, controller: bool}
      */
     public function declarationOf(string $model): array
     {
@@ -121,6 +153,8 @@ final class Manifest
             'actions' => $declared['actions'] ?? Actions::ALL,
             'immutable' => (bool) ($declared['immutable'] ?? false),
             'secret' => $declared['secret'] ?? [],
+            'endpoints' => $declared['endpoints'] ?? [],
+            'controller' => (bool) ($declared['controller'] ?? false),
         ];
     }
 
@@ -175,6 +209,26 @@ final class Manifest
         }
 
         return false;
+    }
+
+    /**
+     * El stub del que salió un archivo, o null si el generador no lo escribió.
+     *
+     * Es lo que distingue un hueco (una Policy, un trait de operaciones) de
+     * lo que se regenera entero (el controlador, las rutas): el nombre del
+     * stub lo pone el propio generador, así que no puede desincronizarse.
+     */
+    public function stubOf(string $file): ?string
+    {
+        $relative = $this->relative($file);
+
+        foreach ($this->buckets() as $bucket) {
+            if (isset($bucket['files'][$relative])) {
+                return $bucket['files'][$relative]['stub'];
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -244,6 +298,15 @@ final class Manifest
         return [$manifest['package'], ...array_values($manifest['models'])];
     }
 
+    /**
+     * La raíz del proyecto al que pertenece este manifiesto. Lo que `verify`
+     * comprueba fuera del manifiesto se busca a partir de ella.
+     */
+    public function root(): string
+    {
+        return $this->root ?? root_path();
+    }
+
     public function absolute(string $relative): string
     {
         return ($this->root ?? root_path()).'/'.$relative;
@@ -297,9 +360,16 @@ final class Manifest
             }
         }
 
+        unset($model);
+
         file_put_contents(
             $this->path(),
             json_encode($manifest, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)."\n"
         );
+
+        // Una instantánea que escribe sigue viendo lo que escribió.
+        if ($this->frozen !== null) {
+            $this->frozen = $manifest;
+        }
     }
 }

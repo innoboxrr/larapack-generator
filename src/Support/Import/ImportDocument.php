@@ -107,6 +107,10 @@ final class ImportDocument
             // de acciones que queda, y esa lista sólo se calcula aquí.
             $document['models'][$index]['actions'] = Actions::resolve($model);
 
+            // Lo mismo con los endpoints: la URI, la ruta, la habilidad y la
+            // operación por omisión se calculan una vez, aquí.
+            $document['models'][$index]['endpoints'] = Endpoints::normaliseAll($model['endpoints'] ?? [], true);
+
             foreach ($model['props'] as $position => $prop) {
                 if (empty($prop['secret'])) {
                     continue;
@@ -135,6 +139,10 @@ final class ImportDocument
             }
 
             $document['models'][$index]['display'] = self::displayOf($document['models'][$index]);
+        }
+
+        foreach ($document['controllers'] ?? [] as $index => $controller) {
+            $document['controllers'][$index]['endpoints'] = Endpoints::normaliseAll($controller['endpoints'], false);
         }
 
         foreach ($document['models'] as $index => $model) {
@@ -350,6 +358,16 @@ final class ImportDocument
     public function pivots(): array
     {
         return $this->data['pivots'];
+    }
+
+    /**
+     * Los endpoints sin modelo propio, con sus endpoints ya normalizados.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function controllers(): array
+    {
+        return $this->data['controllers'] ?? [];
     }
 
     /**

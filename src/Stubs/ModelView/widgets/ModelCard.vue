@@ -23,7 +23,10 @@
 <script setup>
 
     import { computed } from 'vue'
-    // @larapack:if delete
+    // @larapack:if record_actions
+    import { ref, watch } from 'vue'
+    // @larapack:endif
+    // @larapack:if delete|record_actions
     import { useRouter } from 'vue-router'
     import { notifyError, notifySuccess } from 'innoboxrr-form-core'
     // @larapack:endif
@@ -32,8 +35,11 @@
     import { IconComponent } from 'innoboxrr-form-elements'
 
     import ActionMenu from '../../../components/ActionMenu.vue'
-    // @larapack:if delete
+    // @larapack:if delete|record_actions
     import { usePascalCaseModelNameStore } from '../store'
+    // @larapack:endif
+    // @larapack:if record_actions
+    import * as model from '../index'
     // @larapack:endif
 
     const props = defineProps({
@@ -43,11 +49,13 @@
         },
     })
 
-    // @larapack:if delete
+    // @larapack:if delete|record_actions
     const router = useRouter()
 
     const store = usePascalCaseModelNameStore()
 
+    // @larapack:endif
+    // @larapack:if delete
     const remove = async () => {
 
         try {
@@ -66,6 +74,61 @@
         router.push({ name: 'AdminPluralPascalCaseModelName' })
 
     }
+
+    // @larapack:endif
+    // @larapack:if record_actions
+    // Los endpoints declarados sobre el registro (recordActions() del
+    // contrato). Se pregunta a la política por este registro, como hace la
+    // tabla con cada fila: lo que no se puede hacer se ve deshabilitado y dice
+    // por qué.
+    const allowed = ref({})
+
+    watch(() => props.camelCaseModelName.id, async (id) => {
+
+        try {
+            allowed.value = await model.getPolicies(id) ?? {}
+        } catch {
+            allowed.value = {}
+        }
+
+    }, { immediate: true })
+
+    const runEndpoint = async (action) => {
+
+        const id = props.camelCaseModelName.id
+
+        try {
+            // La función del contrato pregunta antes de llamar.
+            await model[action.callback]({ id })
+        } catch (error) {
+            if (error?.name !== 'RequestCancelledError') {
+                notifyError(error?.response?.data?.message ?? t('The action could not be completed.'))
+            }
+
+            return
+        }
+
+        notifySuccess(action.success)
+
+        // El endpoint puede haber cambiado el registro, o haberlo quitado.
+        try {
+            await store.fetchOne(id)
+        } catch {
+            router.push({ name: 'AdminPluralPascalCaseModelName' })
+        }
+
+    }
+
+    const endpointItems = computed(() => model.recordActions().map((action) => ({
+        type: 'event',
+        id: action.id,
+        action: () => runEndpoint(action),
+        label: action.name,
+        icon: action.icon,
+        danger: action.danger === true,
+        disabled: allowed.value[action.id] !== true,
+        disabledReason: t('You are not allowed to do this.'),
+    })))
 
     // @larapack:endif
     const actions = computed(() => [
@@ -97,6 +160,9 @@
             icon: 'delete',
             danger: true,
         },
+        // @larapack:endif
+        // @larapack:if record_actions
+        ...endpointItems.value,
         // @larapack:endif
     ])
 

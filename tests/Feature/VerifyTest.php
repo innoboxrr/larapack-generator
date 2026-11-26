@@ -2,6 +2,8 @@
 
 namespace Innoboxrr\LarapackGenerator\Tests\Feature;
 
+use Innoboxrr\LarapackGenerator\Support\Manifest;
+use Innoboxrr\LarapackGenerator\Support\Verifier;
 use Innoboxrr\LarapackGenerator\Tests\Support\FakeProject;
 use Innoboxrr\LarapackGenerator\Tests\TestCase;
 use Symfony\Component\Console\Command\Command;
@@ -31,6 +33,49 @@ final class VerifyTest extends TestCase
         $this->assertSame(Command::SUCCESS, $code);
         $this->assertTrue($report['ok']);
         $this->assertSame(0, $report['errors']);
+    }
+
+    /**
+     * Lo generado es la forma que controller-shape exige: ni en un paquete ni
+     * en una aplicación puede salir nada, o la comprobación sería ruido.
+     */
+    public function test_los_controladores_generados_tienen_la_forma_que_se_exige(): void
+    {
+        $this->runCommand('larapack:full-model', ['name' => 'Product']);
+        $this->runCommand('larapack:controller', ['name' => 'Category']);
+
+        $this->assertFileExists($this->project->path.'/src/Http/Controllers/ProductController.php');
+
+        $checks = ['controller-shape', 'request-handle', 'controller-concern', 'hand-rolled', 'route-closure'];
+        [$code, $report] = $this->verify(['--check' => $checks]);
+
+        // Category tiene controlador y no requests: delega en clases que,
+        // por PSR-4, deberían estar en el proyecto y no están.
+        $this->assertSame(Command::FAILURE, $code);
+        $this->assertSame(
+            ['src/Http/Controllers/CategoryController.php'],
+            array_values(array_unique(array_column($report['findings'], 'file')))
+        );
+        $this->assertSame(['request-handle'], array_values(array_unique(array_column($report['findings'], 'check'))));
+        $this->assertStringContainsString('no existe', $report['findings'][0]['message']);
+
+        unlink($this->project->path.'/src/Http/Controllers/CategoryController.php');
+
+        [$code, $report] = $this->verify(['--check' => $checks]);
+
+        $this->assertSame(Command::SUCCESS, $code, json_encode($report['findings']));
+        $this->assertSame([], $report['findings']);
+
+        $this->project->cleanup();
+        $this->useProject(FakeProject::application());
+        $this->runCommand('larapack:full-model', ['name' => 'Product']);
+
+        $this->assertFileExists($this->project->path.'/app/Http/Controllers/ProductController.php');
+
+        [$code, $report] = $this->verify(['--check' => $checks]);
+
+        $this->assertSame(Command::SUCCESS, $code);
+        $this->assertSame([], $report['findings']);
     }
 
     public function test_avisa_cuando_no_hay_manifiesto(): void
@@ -197,6 +242,47 @@ final class VerifyTest extends TestCase
         $this->runCommand('larapack:verify');
 
         $this->assertStringContainsString('0 errores', $this->lastOutput);
+    }
+
+    /**
+     * Cada verificación lee el manifiesto una sola vez, por rendimiento. Eso
+     * no puede volverla ciega a lo que cambie entre una y la siguiente: el
+     * hook de los agentes reutiliza el proceso para varias.
+     */
+    public function test_cada_verificacion_lee_el_estado_de_ese_momento(): void
+    {
+        $this->runCommand('larapack:full-model', ['name' => 'Product']);
+
+        $verifier = new Verifier;
+        $checks = fn (): array => array_column($verifier->run(), 'check');
+
+        $this->assertSame([], array_filter($verifier->run(), fn (array $f): bool => $f['level'] === Verifier::ERROR));
+
+        // Lo que cambia es el manifiesto, no el disco: borrar un archivo no
+        // lo probaría, porque missing-file lo ve aunque la instantánea fuera
+        // la de la primera pasada. Con Product olvidado, una instantánea
+        // vieja seguiría echando en falta su política; una nueva sólo ve un
+        // manifiesto vacío.
+        unlink($this->project->path.'/src/Policies/ProductPolicy.php');
+
+        $this->assertContains('missing-file', $checks());
+
+        (new Manifest)->forget('Product');
+
+        $this->assertNotContains('missing-file', $checks());
+        $this->assertContains('empty-manifest', $checks());
+    }
+
+    public function test_una_instantanea_del_manifiesto_no_vuelve_al_disco(): void
+    {
+        $this->runCommand('larapack:full-model', ['name' => 'Product']);
+
+        $snapshot = (new Manifest)->snapshot();
+
+        (new Manifest)->forget('Product');
+
+        $this->assertSame(['Product'], $snapshot->models());
+        $this->assertSame([], (new Manifest)->models());
     }
 
     /**

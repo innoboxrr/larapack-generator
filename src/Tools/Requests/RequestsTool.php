@@ -82,7 +82,37 @@ class RequestsTool extends Tool
 
         $path = $this->requestPath.'/'.$this->PascalCaseModelName;
 
-        return (file_exists($path)) ? $this->dropDir($path) : false;
+        return $this->dropModelDir($path);
+    }
+
+    /**
+     * `policies` responde por cada método del controlador con la habilidad
+     * que le toca, y la interfaz habilita cada acción por esa respuesta. Un
+     * endpoint que pregunta por otra habilidad (`archive` por `update`) se
+     * consultaba por su nombre, que la política no tiene: salía siempre
+     * deshabilitado, o habilitado sólo para quien pasa por before().
+     *
+     * @return array<int, string>
+     */
+    protected function endpointCode(string $marker): array
+    {
+        if ($marker !== 'ENDPOINT_POLICY_MAPPING') {
+            return [];
+        }
+
+        $lines = [];
+
+        foreach ($this->endpoints() as $endpoint) {
+            if ($endpoint['ability'] !== null && $endpoint['ability'] !== $endpoint['name']) {
+                $lines[] = var_export((string) $endpoint['name'], true).' => '.var_export((string) $endpoint['ability'], true).',';
+            }
+        }
+
+        if ($lines !== []) {
+            array_unshift($lines, '// Los endpoints que preguntan por la habilidad de otra acción.');
+        }
+
+        return $lines;
     }
 
     /**

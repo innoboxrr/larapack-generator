@@ -2,6 +2,7 @@
 
 namespace Innoboxrr\LarapackGenerator\Tools\Resource;
 
+use Innoboxrr\LarapackGenerator\Support\Import\Endpoints;
 use Innoboxrr\LarapackGenerator\Support\Translations;
 use Innoboxrr\LarapackGenerator\Tools\Tool;
 
@@ -45,6 +46,52 @@ class ResourceTool extends Tool
 
         return $created;
 
+    }
+
+    /**
+     * Los endpoints que la interfaz ofrece sobre un registro, en el menú de
+     * cada fila de la tabla. La tabla sólo recibe acciones por fila de aquí,
+     * así que aquí van, con la misma forma que `delete`: el `id` es el nombre
+     * del endpoint —la clave con la que responde `policies`— y `callback`, la
+     * función del contrato JS que lo llama y pregunta antes.
+     *
+     * @return array<int, string>
+     */
+    protected function endpointCode(string $marker): array
+    {
+        if ($marker !== 'ENDPOINT_ROW_ACTIONS') {
+            return [];
+        }
+
+        $lines = [];
+
+        foreach ($this->endpoints() as $endpoint) {
+            if ($endpoint['target'] !== 'record' || ! Endpoints::offersInterface($endpoint)) {
+                continue;
+            }
+
+            $danger = $endpoint['method'] === 'delete';
+
+            $lines = [
+                ...$lines,
+                '$actions[] = [',
+                "    'id' => ".self::phpString($endpoint['name']).',',
+                "    'name' => __(".self::phpString(Endpoints::label($endpoint['name'])).'),',
+                "    'success' => __('The action was completed.'),",
+                "    'callback' => ".self::phpString(Endpoints::jsFunction($endpoint)).',',
+                "    'icon' => ".($danger ? "'delete'" : "'play'").',',
+                ...($danger ? ["    'danger' => true,"] : []),
+                "    'route' => false,",
+                "    'policy' => false,",
+                "    'params' => [",
+                "        'id' => \$this->id,",
+                '    ],',
+                '];',
+                '',
+            ];
+        }
+
+        return $lines;
     }
 
     public function remove(string $ModelName)

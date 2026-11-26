@@ -2,6 +2,7 @@
 
 namespace Innoboxrr\LarapackGenerator\Tests\Feature;
 
+use Innoboxrr\LarapackGenerator\Support\AgentHooks;
 use Innoboxrr\LarapackGenerator\Support\Ecosystem;
 use Innoboxrr\LarapackGenerator\Tests\Support\FakeProject;
 use Innoboxrr\LarapackGenerator\Tests\TestCase;
@@ -64,6 +65,26 @@ final class NewPackageCommandTest extends TestCase
 
         $this->assertStringContainsString('composer require acme/shop-catalog', $this->project->read('README.md'));
         $this->assertStringContainsString('Copyright (c) '.date('Y').' Acme', $this->project->read('LICENSE'));
+    }
+
+    /**
+     * La regla llega a cualquier agente desde el primer commit: en AGENTS.md
+     * para el que lo lee, y como hook para Claude Code.
+     */
+    public function test_deja_la_regla_en_agents_md_y_la_guardia_en_los_hooks(): void
+    {
+        $this->create();
+
+        $agents = $this->project->read('AGENTS.md');
+
+        $this->assertStringStartsWith('# Instrucciones para agentes', $agents);
+        $this->assertSame(1, substr_count($agents, AgentHooks::BEGIN));
+        $this->assertStringContainsString('return $request->handle();', $agents);
+
+        $settings = json_decode($this->project->read('.claude/settings.json'), true);
+
+        $this->assertSame('[ ! -f "$CLAUDE_PROJECT_DIR/vendor/bin/builder" ] || php "$CLAUDE_PROJECT_DIR/vendor/bin/builder" larapack:guard', $settings['hooks']['PostToolUse'][0]['hooks'][0]['command']);
+        $this->assertSame('[ ! -f "$CLAUDE_PROJECT_DIR/vendor/bin/builder" ] || php "$CLAUDE_PROJECT_DIR/vendor/bin/builder" larapack:guard --stop', $settings['hooks']['Stop'][0]['hooks'][0]['command']);
     }
 
     /**

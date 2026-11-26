@@ -4,6 +4,7 @@ namespace Innoboxrr\LarapackGenerator\Support;
 
 use Innoboxrr\LarapackGenerator\Exceptions\MakerException;
 use Innoboxrr\LarapackGenerator\Support\Import\Actions;
+use Innoboxrr\LarapackGenerator\Support\Import\Endpoints;
 
 /**
  * Lo que cada modelo declara sobre su propia forma, mientras se genera.
@@ -26,10 +27,10 @@ final class Declaration
      * donde los stubs preguntan, y porque esta lista es la que comprueba que
      * ningún stub use una condición que no existe.
      */
-    public const FLAGS = ['immutable', 'secret', 'metas', 'authenticatable', 'table_prefix'];
+    public const FLAGS = ['immutable', 'secret', 'metas', 'authenticatable', 'table_prefix', 'endpoint_writes', 'record_actions'];
 
     /**
-     * @var array<string, array{actions: array<int, string>, immutable: bool, secret: array<int, string>, metas: bool, display: string, authenticatable: bool}>
+     * @var array<string, array{actions: array<int, string>, immutable: bool, secret: array<int, string>, metas: bool, display: string, authenticatable: bool, endpoints: array<int, array<string, mixed>>, controller: bool}>
      */
     private static array $models = [];
 
@@ -38,8 +39,10 @@ final class Declaration
      * @param  array<int, string>  $secret
      * @param  string  $display  La columna que nombra a un registro en pantalla.
      * @param  bool  $authenticatable  El modelo es un usuario que inicia sesión.
+     * @param  array<int, array<string, mixed>>  $endpoints  Ya normalizados por Endpoints.
+     * @param  bool  $controller  Es un `controllers[]`: endpoints sin modelo.
      */
-    public static function set(string $model, array $actions, bool $immutable = false, array $secret = [], bool $metas = false, string $display = 'name', bool $authenticatable = false): void
+    public static function set(string $model, array $actions, bool $immutable = false, array $secret = [], bool $metas = false, string $display = 'name', bool $authenticatable = false, array $endpoints = [], bool $controller = false): void
     {
         self::$models[$model] = [
             'actions' => array_values(array_intersect(Actions::ALL, $actions)),
@@ -48,7 +51,20 @@ final class Declaration
             'metas' => $metas,
             'display' => $display,
             'authenticatable' => $authenticatable,
+            'endpoints' => array_values($endpoints),
+            'controller' => $controller,
         ];
+    }
+
+    /**
+     * Desde un `controllers[]` ya normalizado: sin acciones CRUD, sin tabla y
+     * sin nada de lo que cuelga de un modelo. Sólo sus endpoints.
+     *
+     * @param  array<string, mixed>  $controller
+     */
+    public static function fromController(array $controller): void
+    {
+        self::set($controller['name'], [], endpoints: $controller['endpoints'], controller: true);
     }
 
     /**
@@ -59,6 +75,20 @@ final class Declaration
     {
         $declaration = self::of($model);
         $declaration['metas'] = true;
+
+        self::$models[$model] = $declaration;
+    }
+
+    /**
+     * `larapack:full-model` sin laraimport: los endpoints que ya guardaba el
+     * manifiesto, sobre la forma que dieron las opciones del comando.
+     *
+     * @param  array<int, array<string, mixed>>  $endpoints  Tal como los anotó el importador.
+     */
+    public static function withEndpoints(string $model, array $endpoints): void
+    {
+        $declaration = self::of($model);
+        $declaration['endpoints'] = array_values($endpoints);
 
         self::$models[$model] = $declaration;
     }
@@ -85,7 +115,8 @@ final class Declaration
             $secret,
             ! empty($model['metas']),
             $model['display'] ?? 'name',
-            ! empty($model['authenticatable'])
+            ! empty($model['authenticatable']),
+            $model['endpoints'] ?? []
         );
     }
 
@@ -93,7 +124,7 @@ final class Declaration
      * Sin laraimport no se conocen las columnas: se nombra por `name`, como
      * siempre.
      *
-     * @return array{actions: array<int, string>, immutable: bool, secret: array<int, string>, metas: bool, display: string, authenticatable: bool}
+     * @return array{actions: array<int, string>, immutable: bool, secret: array<int, string>, metas: bool, display: string, authenticatable: bool, endpoints: array<int, array<string, mixed>>, controller: bool}
      */
     public static function of(string $model): array
     {
@@ -104,6 +135,8 @@ final class Declaration
             'metas' => false,
             'display' => 'name',
             'authenticatable' => false,
+            'endpoints' => [],
+            'controller' => false,
         ];
     }
 
@@ -133,6 +166,15 @@ final class Declaration
             // porque es donde los stubs preguntan. Sin `table_prefix`, el bloque
             // desaparece y el modelo sale byte a byte como salía antes.
             $condition === 'table_prefix' => TablePrefix::get() !== '',
+            // Las del módulo de interfaz. `endpoint_writes`: algún endpoint del
+            // modelo cambia algo, y su función del contrato JS pregunta antes,
+            // como borrar. `record_actions`: alguno sale en el menú de la ficha.
+            $condition === 'endpoint_writes' => ! $declaration['controller']
+                && array_filter($declaration['endpoints'], fn (array $endpoint): bool => $endpoint['method'] !== 'get') !== [],
+            $condition === 'record_actions' => array_filter(
+                $declaration['endpoints'],
+                fn (array $endpoint): bool => ($endpoint['target'] ?? null) === 'record' && Endpoints::offersInterface($endpoint)
+            ) !== [],
             default => throw new MakerException("Condición de stub desconocida: '{$condition}'."),
         };
     }
@@ -148,7 +190,9 @@ final class Declaration
         return Actions::isAll($declaration['actions'])
             && ! $declaration['immutable']
             && $declaration['secret'] === []
-            && ! $declaration['authenticatable'];
+            && ! $declaration['authenticatable']
+            && $declaration['endpoints'] === []
+            && ! $declaration['controller'];
     }
 
     /**
@@ -180,6 +224,16 @@ final class Declaration
 
         if ($declaration['authenticatable']) {
             $entry['authenticatable'] = true;
+        }
+
+        // verify no recibe el laraimport: sin esto no sabría qué endpoints
+        // existen por declaración y cuáles escribió alguien a mano.
+        if ($declaration['endpoints'] !== []) {
+            $entry['endpoints'] = $declaration['endpoints'];
+        }
+
+        if ($declaration['controller']) {
+            $entry['controller'] = true;
         }
 
         return $entry;

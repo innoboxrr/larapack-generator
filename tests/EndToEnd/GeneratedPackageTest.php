@@ -441,6 +441,66 @@ final class GeneratedPackageTest extends TestCase
         $entry->update(['message' => 'cambio']);
     }
 
+    // ENDPOINTS DECLARADOS
+
+    /**
+     * El camino entero de un endpoint que no es CRUD: sesión, política,
+     * request y operación del modelo. La operación nace sin escribir y lo dice:
+     * llegar a su excepción es la prueba de que la request delega en ella.
+     */
+    public function test_un_endpoint_declarado_pasa_por_la_politica_y_llega_a_la_operacion(): void
+    {
+        $product = $this->model('Product')::factory()->create();
+
+        $this->postJson($this->route('product', 'publish'), ['product_id' => $product->id])->assertUnauthorized();
+
+        Sanctum::actingAs($this->user());
+        $this->postJson($this->route('product', 'publish'), ['product_id' => $product->id])->assertForbidden();
+        $this->postJson($this->route('product', 'restock'))->assertForbidden();
+
+        Sanctum::actingAs($this->user(admin: true));
+
+        $this->withoutExceptionHandling();
+        $this->expectException(LogicException::class);
+        $this->expectExceptionMessage('Product::publishModel() no está implementada.');
+
+        $this->postJson($this->route('product', 'publish'), ['product_id' => $product->id]);
+    }
+
+    /**
+     * Público no es abierto. Sin sesión, before() —que pide un User— no
+     * corre, así que ni el atajo del administrador abre lo que es de todos:
+     * decide la política, que nace negando.
+     */
+    public function test_un_endpoint_publico_nace_cerrado_y_su_registro_va_en_la_uri(): void
+    {
+        $product = $this->model('Product')::factory()->create();
+
+        $this->getJson(route($this->prefix('product').'preview', ['product_id' => $product->id]))->assertForbidden();
+        $this->getJson(route($this->prefix('product').'preview', ['product_id' => 999999]))->assertNotFound();
+        $this->getJson('/api/acme/shop/product/abc/preview')->assertNotFound();
+    }
+
+    /**
+     * Un endpoint sin modelo nace cerrado si no declara habilidad, y con ella
+     * pregunta al Gate de la aplicación. Abierto, llega a handle(), que avisa
+     * de que falta escribirlo en lugar de responder 200 sin hacer nada.
+     */
+    public function test_un_controlador_sin_modelo_nace_cerrado_y_se_abre_con_su_gate(): void
+    {
+        $this->getJson(route('api.acme.shop.desk.overview'))->assertUnauthorized();
+        $this->postJson(route('api.acme.shop.desk.webhook'))->assertForbidden();
+
+        Sanctum::actingAs($this->user(admin: true));
+
+        $this->getJson(route('api.acme.shop.desk.overview'))->assertForbidden();
+        $this->getJson(route('api.acme.shop.desk.summary'))->assertForbidden();
+
+        Gate::define('shop.reports', fn ($user): bool => $user->isAdmin());
+
+        $this->getJson(route('api.acme.shop.desk.summary'))->assertStatus(501);
+    }
+
     public function test_un_secreto_se_escribe_pero_nunca_sale_por_la_api(): void
     {
         Sanctum::actingAs($this->user(admin: true));

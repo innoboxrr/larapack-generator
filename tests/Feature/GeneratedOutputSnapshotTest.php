@@ -43,6 +43,14 @@ final class GeneratedOutputSnapshotTest extends TestCase
                 '--vue' => true,
                 '--react' => true,
             ]],
+            // Los endpoints y los controllers[] con su interfaz (SPEC 02): el
+            // contrato, las acciones de la tabla y de la ficha, el Resource y
+            // el mapeo de habilidades de `policies`.
+            'paquete con endpoints con vue y react' => ['library', 'larapack:import', [
+                'jsonPath' => $fixtures.'/laraimport-endpoints.json',
+                '--vue' => true,
+                '--react' => true,
+            ]],
             'aplicacion importada' => ['application', 'larapack:import', [
                 'jsonPath' => $fixtures.'/laraimport.json',
             ]],

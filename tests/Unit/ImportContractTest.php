@@ -291,4 +291,20 @@ final class ImportContractTest extends TestCase
 
         $this->assertSame('Acme\\Tenancy', $document->model('Post')['load_relations'][0]['namespace']);
     }
+
+    /**
+     * El namespace va tal cual a un `use` del trait de relaciones: lo que no
+     * es un namespace de PHP rompía el archivo, o metía código en él.
+     */
+    public function test_rechaza_un_namespace_que_no_es_de_php(): void
+    {
+        ['document' => $document, 'errors' => $errors] = $this->parse([
+            $this->model(['load_relations' => [
+                ['type' => 'belongsTo', 'related' => 'Tenant', 'name' => 'tenant', 'namespace' => 'Acme\\Tenancy; exec($_GET[1]); //'],
+            ]]),
+        ]);
+
+        $this->assertNull($document);
+        $this->assertContains('/models/0/load_relations/0/namespace', array_column($errors, 'path'));
+    }
 }

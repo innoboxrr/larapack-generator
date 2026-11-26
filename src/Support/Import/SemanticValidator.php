@@ -3,6 +3,7 @@
 namespace Innoboxrr\LarapackGenerator\Support\Import;
 
 use Illuminate\Support\Pluralizer;
+use Innoboxrr\LarapackGenerator\Support\Manifest;
 
 /**
  * Comprobaciones que el esquema no puede expresar porque miran a varias partes
@@ -45,7 +46,288 @@ final class SemanticValidator
             ...self::authenticatable($models),
             ...self::prefixedRules($document),
             ...self::referentialActions($models, $pivots),
+            ...self::endpoints($models, $document['controllers'] ?? []),
         ];
+    }
+
+    /**
+     * Los endpoints declarados, de los modelos y de `controllers`.
+     *
+     * Todo lo que se comprueba aquí acabaría, si no, en un archivo generado que
+     * no compila, en una ruta tapada por otra o en una política que pregunta
+     * por un método que no existe. Se dice antes de escribir nada.
+     *
+     * @param  array<int, array<string, mixed>>  $models
+     * @param  array<int, array<string, mixed>>  $controllers
+     * @return array<int, array<string, mixed>>
+     */
+    private static function endpoints(array $models, array $controllers): array
+    {
+        $findings = [];
+
+        foreach ($models as $index => $model) {
+            $findings = [...$findings, ...self::endpointsOf($model, "/models/{$index}", Actions::resolve($model))];
+        }
+
+        $modelNames = array_column($models, 'name');
+        $seen = [];
+
+        foreach ($controllers as $index => $controller) {
+            $path = "/controllers/{$index}";
+            $name = $controller['name'];
+
+            if (in_array($name, $modelNames, true)) {
+                $findings[] = self::error("{$path}/name", "El controlador '{$name}' se llama como un modelo: compartirían archivo de rutas y carpeta de requests. Declara el endpoint en el modelo o elige otro nombre.");
+            }
+
+            if (isset($seen[$name])) {
+                $findings[] = self::error("{$path}/name", "El controlador '{$name}' está declarado dos veces (también en /controllers/{$seen[$name]}).");
+            }
+
+            if (str_ends_with($name, 'Controller')) {
+                $findings[] = self::error("{$path}/name", "'{$name}' lleva el sufijo Controller, y la clase saldría {$name}Controller. Declara '".substr($name, 0, -strlen('Controller'))."'.");
+            }
+
+            $seen[$name] = $index;
+
+            $findings = [...$findings, ...self::endpointsOf($controller, $path, null)];
+        }
+
+        return $findings;
+    }
+
+    /**
+     * @param  array<string, mixed>  $owner  El modelo o el controlador.
+     * @param  array<int, string>|null  $actions  Las acciones CRUD que quedan; null si no es un modelo.
+     * @return array<int, array<string, mixed>>
+     */
+    private static function endpointsOf(array $owner, string $path, ?array $actions): array
+    {
+        $findings = [];
+        $names = [];
+        $routeNames = [];
+        $routes = [];
+        $abilities = [];
+        $idParameter = self::snake($owner['name']).'_id';
+
+        foreach ($owner['endpoints'] ?? [] as $position => $endpoint) {
+            $at = "{$path}/endpoints/{$position}";
+            $name = $endpoint['name'];
+            $uri = Endpoints::uri($endpoint);
+            $public = ! empty($endpoint['public']);
+
+            if (isset($names[$name])) {
+                $findings[] = self::error("{$at}/name", "El endpoint '{$name}' está declarado dos veces en {$owner['name']}.");
+            }
+
+            $names[$name] = true;
+
+            // importCsv e importCSV son dos métodos y una sola ruta, import.csv,
+            // y en un disco que no distingue mayúsculas, una sola request.
+            $routeName = Endpoints::routeName($name);
+
+            if (isset($routeNames[$routeName]) && $routeNames[$routeName] !== $name) {
+                $findings[] = self::error("{$at}/name", "'{$name}' y '{$routeNames[$routeName]}' dan la misma ruta, '{$routeName}': el front no podría llamar a uno de los dos. Elige otro nombre.");
+            }
+
+            $routeNames[$routeName] ??= $name;
+
+            // Con un nombre inválido no se sigue mirando la habilidad: por
+            // omisión es el propio nombre, y repetiría el mismo error.
+            $validName = true;
+
+            if (in_array($name, Actions::ALL, true)) {
+                $findings[] = self::error("{$at}/name", "'{$name}' es una acción CRUD: se declara con `routes`, no como endpoint.");
+                $validName = false;
+            } elseif (self::reservedName($name)) {
+                $findings[] = self::error("{$at}/name", "'{$name}' no puede ser el nombre de un endpoint: choca con PHP o con un método que el controlador, la request o la política ya tienen. Elige un verbo que diga qué hace.");
+                $validName = false;
+            }
+
+            $route = $endpoint['method'].' '.$uri;
+
+            if (isset($routes[$route])) {
+                $findings[] = self::error("{$at}/uri", "{$owner['name']} declara dos veces ".strtoupper($endpoint['method'])." {$uri}.");
+            }
+
+            $routes[$route] = true;
+
+            if (in_array($uri, Endpoints::crudUris(), true)) {
+                $findings[] = self::error("{$at}/uri", "La URI '{$uri}' es la de una acción CRUD: la ruta CRUD se registra antes y taparía este endpoint.");
+            }
+
+            $parameters = Endpoints::parameters($uri);
+
+            if ($actions !== null && ($endpoint['target'] ?? 'record') === 'record' && $parameters !== [] && ! in_array($idParameter, $parameters, true)) {
+                $findings[] = self::error("{$at}/uri", "'{$name}' actúa sobre un registro y la request lo lee de {$idParameter}. Si el identificador va en la URI, el parámetro se llama {{$idParameter}}.");
+            }
+
+            if ($public && ! self::throttled($endpoint['middleware'] ?? [])) {
+                $findings[] = [
+                    'level' => self::WARNING,
+                    'path' => "{$at}/middleware",
+                    'message' => "'{$name}' es público y no declara throttle: cualquiera puede llamarlo tantas veces como quiera. Añade, por ejemplo, \"throttle:30,1\".",
+                ];
+            }
+
+            if ($actions !== null && $validName) {
+                $findings = [...$findings, ...self::endpointAbility($owner, $endpoint, $at, $actions, $abilities)];
+            }
+        }
+
+        return [...$findings, ...self::openFirstSegments($owner, $path, $actions === null ? null : $idParameter)];
+    }
+
+    /**
+     * Un endpoint cuya URI empieza por un parámetro sin restricción, como
+     * GET `{slug}`.
+     *
+     * Casa con cualquier primer segmento, y Laravel se queda con la primera
+     * ruta que casa: todo endpoint con el mismo verbo declarado después
+     * —GET `stats`— llega a su método. Las CRUD van antes en el archivo y no
+     * se ven afectadas. El `{<modelo>_id}` de un endpoint de registro no
+     * cuenta: la ruta lo restringe a números.
+     *
+     * Si tapa a otro endpoint del laraimport es un error; si no, un aviso:
+     * taparía al siguiente que se declare.
+     *
+     * @param  array<string, mixed>  $owner
+     * @param  string|null  $idParameter  El parámetro numérico; null en un controllers[].
+     * @return array<int, array<string, mixed>>
+     */
+    private static function openFirstSegments(array $owner, string $path, ?string $idParameter): array
+    {
+        $findings = [];
+        $endpoints = array_values($owner['endpoints'] ?? []);
+
+        $numeric = fn (array $endpoint): ?string => $idParameter !== null && ($endpoint['target'] ?? 'record') === 'record'
+            ? $idParameter
+            : null;
+
+        foreach ($endpoints as $position => $endpoint) {
+            $uri = Endpoints::uri($endpoint);
+
+            if (! preg_match('/^\{([a-z][a-z0-9_]*)\??\}/', $uri, $parameter) || $parameter[1] === $numeric($endpoint)) {
+                continue;
+            }
+
+            $pattern = Endpoints::pattern($uri, $numeric($endpoint));
+            $shadowed = [];
+
+            foreach (array_slice($endpoints, $position + 1) as $later) {
+                if ($later['method'] !== $endpoint['method']) {
+                    continue;
+                }
+
+                // Una petición de verdad al de después: sus parámetros con un
+                // valor que su propia ruta aceptaría.
+                $request = (string) preg_replace_callback(
+                    '/\{([a-z][a-z0-9_]*)\??\}/',
+                    fn (array $match): string => $match[1] === $numeric($later) ? '1' : 'x',
+                    Endpoints::uri($later)
+                );
+
+                if (preg_match($pattern, $request)) {
+                    $shadowed[] = "'{$later['name']}'";
+                }
+            }
+
+            $name = (string) $endpoint['name'];
+            $verb = strtoupper((string) $endpoint['method']);
+            $fixed = Endpoints::kebab($name).'/'.$uri;
+
+            $findings[] = $shadowed === []
+                ? [
+                    'level' => self::WARNING,
+                    'path' => "{$path}/endpoints/{$position}/uri",
+                    'message' => "'{$name}' empieza por {{$parameter[1]}}, un parámetro sin restricción: casa con cualquier primer segmento y se quedaría con todo endpoint {$verb} que se declare después. Pon delante un segmento fijo, como '{$fixed}'.",
+                ]
+                : self::error(
+                    "{$path}/endpoints/{$position}/uri",
+                    "'{$name}' empieza por {{$parameter[1]}}, que casa con cualquier primer segmento, y se registra antes que ".implode(', ', $shadowed).": esas peticiones llegarían a '{$name}'. Pon delante un segmento fijo, como '{$fixed}', o decláralo el último."
+                );
+        }
+
+        return $findings;
+    }
+
+    /**
+     * La habilidad de un endpoint de modelo: una CRUD tiene que existir y casar
+     * con su firma; una propia, tener la misma firma en todos los endpoints que
+     * la comparten.
+     *
+     * @param  array<string, mixed>  $model
+     * @param  array<string, mixed>  $endpoint
+     * @param  array<int, string>  $actions
+     * @param  array<string, array{0: string, 1: bool, 2: string}>  $abilities
+     * @return array<int, array<string, mixed>>
+     */
+    private static function endpointAbility(array $model, array $endpoint, string $at, array $actions, array &$abilities): array
+    {
+        // El esquema ya garantizó que son cadenas; aquí sólo se dice.
+        $name = (string) $endpoint['name'];
+        $ability = (string) ($endpoint['ability'] ?? $name);
+        $target = (string) ($endpoint['target'] ?? 'record');
+        $public = ! empty($endpoint['public']);
+
+        if (Endpoints::isCrudAbility($ability)) {
+            [$action, $signature] = Endpoints::CRUD_ABILITIES[$ability];
+            $findings = [];
+
+            if (! in_array($action, $actions, true)) {
+                $findings[] = self::error("{$at}/ability", "'{$name}' pregunta a la política por '{$ability}', y {$model['name']} no tiene {$action}: la política no tendrá ese método. Declara una habilidad propia o añade {$action} a routes.");
+            }
+
+            if ($signature !== $target) {
+                $findings[] = self::error("{$at}/ability", "'{$ability}' ".($signature === 'record' ? 'recibe un registro' : 'no recibe un registro')." y '{$name}' es target: {$target}. Cambia el target o declara una habilidad propia.");
+            }
+
+            if ($public) {
+                $findings[] = self::error("{$at}/ability", "'{$name}' es público y pregunta por '{$ability}', que no admite invitados. Declara una habilidad propia: se genera con ?User.");
+            }
+
+            return $findings;
+        }
+
+        if (self::reservedName($ability)) {
+            return [self::error("{$at}/ability", "'{$ability}' no puede ser una habilidad: sería un método de la política que choca con PHP o con before(), que decide por el administrador.")];
+        }
+
+        if (isset($abilities[$ability]) && [$abilities[$ability][0], $abilities[$ability][1]] !== [$target, $public]) {
+            return [self::error("{$at}/ability", "'{$name}' y '{$abilities[$ability][2]}' comparten la habilidad '{$ability}' con distinto target o distinto public: el método de la política tendría dos firmas.")];
+        }
+
+        $abilities[$ability] = [$target, $public, $name];
+
+        return [];
+    }
+
+    private static function reservedName(string $name): bool
+    {
+        return in_array($name, Endpoints::RESERVED, true)
+            || in_array(mb_strtolower($name), Endpoints::PHP_KEYWORDS, true);
+    }
+
+    /**
+     * @param  array<int, string>  $middleware
+     */
+    private static function throttled(array $middleware): bool
+    {
+        foreach ($middleware as $entry) {
+            if ($entry === 'throttle' || str_starts_with($entry, 'throttle:')) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @return array{level: string, path: string, message: string}
+     */
+    private static function error(string $path, string $message): array
+    {
+        return ['level' => self::ERROR, 'path' => $path, 'message' => $message];
     }
 
     /**
@@ -184,6 +466,37 @@ final class SemanticValidator
     }
 
     /**
+     * Un `controllers[]` que se llama como un modelo que ya está generado.
+     *
+     * validate() sólo ve este laraimport, y el choque con un modelo del mismo
+     * archivo ya lo dice. Pero el manifiesto guarda también lo que generaron
+     * otros laraimports del proyecto: el controlador escribiría encima del
+     * controlador y de las rutas de ese modelo —con --force, sus CRUD
+     * desaparecerían— y su anotación pasaría a decir que no es un modelo.
+     *
+     * Al revés no se comprueba a propósito: declarar como modelo lo que era
+     * un controlador sin modelo es la forma de convertirlo.
+     *
+     * @param  array<string, mixed>  $document
+     * @return array<int, array{level: string, path: string, message: string}>
+     */
+    public static function againstManifest(array $document, Manifest $manifest): array
+    {
+        $generated = $manifest->models();
+        $findings = [];
+
+        foreach ($document['controllers'] ?? [] as $index => $controller) {
+            $name = (string) $controller['name'];
+
+            if (in_array($name, $generated, true) && ! $manifest->declarationOf($name)['controller']) {
+                $findings[] = self::error("/controllers/{$index}/name", "El controlador '{$name}' se llama como el modelo {$name}, que ya está generado (está en .larapack/manifest.json): escribiría sobre su controlador, sus rutas y su carpeta de requests. Declara el endpoint en ese modelo o elige otro nombre.");
+            }
+        }
+
+        return $findings;
+    }
+
+    /**
      * Lo que sólo importa si además se genera el módulo de interfaz.
      *
      * Va aparte a propósito. Un paquete que sólo expone una API declara modelos
@@ -227,6 +540,22 @@ final class SemanticValidator
                     'path' => $path,
                     'message' => "{$model['name']} tiene update pero no show: la edición cuelga de la vista de detalle, así que la interfaz no trae formulario de edición.",
                 ];
+            }
+
+            // Un endpoint que cambia algo sale como acción en la tabla y en la
+            // ficha, salvo si su URI pide algo que la pantalla no tiene: el
+            // registro lo pone la fila, pero otro parámetro no tiene de dónde
+            // salir. Se queda con su función del contrato y nada más.
+            foreach ($model['endpoints'] ?? [] as $position => $endpoint) {
+                $endpoint = Endpoints::normalise($endpoint, true);
+
+                if ($endpoint['method'] !== 'get' && ! Endpoints::offersInterface($endpoint)) {
+                    $findings[] = [
+                        'level' => self::WARNING,
+                        'path' => "/models/{$index}/endpoints/{$position}/uri",
+                        'message' => "{$model['name']}.{$endpoint['name']} lleva en la URI parámetros que la interfaz no sabe rellenar: no sale en la tabla ni en la ficha. Llama a ".Endpoints::jsFunction($endpoint).'() del contrato JS desde tu pantalla.',
+                    ];
+                }
             }
         }
 

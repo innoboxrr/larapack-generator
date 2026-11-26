@@ -16,6 +16,11 @@ class MakerException extends Exception
         return new self("No se pudo crear el directorio {$directory}.");
     }
 
+    public static function invalidModelName(string $name): self
+    {
+        return new self("«{$name}» no es un nombre de modelo válido: usa un identificador en PascalCase, como Post o BlogPost.");
+    }
+
     public static function copyFailed(string $stub, string $destination): self
     {
         return new self("No se pudo copiar la plantilla {$stub} a {$destination}.");
