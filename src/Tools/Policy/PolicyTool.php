@@ -46,10 +46,12 @@ class PolicyTool extends Tool
      * Un método por habilidad propia, negando, como los CRUD. Una habilidad
      * CRUD no genera nada: el endpoint pregunta al método que ya hay.
      *
-     * El de un endpoint público recibe `?User`. Laravel sólo llama a un método
-     * de política con un invitado si su firma lo admite, y tampoco llama a
-     * before() —que pide un User—, así que el administrador no abre por
-     * accidente lo que es de todos.
+     * El de un endpoint público recibe `?User`: Laravel sólo llama a un método
+     * de política con un invitado si su firma lo admite. Con un invitado
+     * tampoco llama a before(), que pide un User, así que before() no decide
+     * nada por quien no tiene sesión. Con sesión sí pasa por before(), como
+     * en las CRUD: un administrador autenticado entra también en los
+     * endpoints públicos, salvo lo que before() excluya.
      *
      * @return array<int, string>
      */

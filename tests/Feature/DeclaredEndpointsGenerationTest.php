@@ -41,6 +41,7 @@ final class DeclaredEndpointsGenerationTest extends TestCase
                 ['name' => 'Oauth', 'endpoints' => [
                     ['name' => 'token', 'method' => 'post', 'public' => true, 'middleware' => ['throttle:6,1']],
                     ['name' => 'revoke', 'method' => 'post', 'ability' => 'oauth.revoke'],
+                    ['name' => 'status', 'method' => 'get', 'ability' => 'oauth.status', 'public' => true, 'middleware' => ['throttle:30,1']],
                 ]],
             ],
         ]));
@@ -113,7 +114,9 @@ final class DeclaredEndpointsGenerationTest extends TestCase
         // El identificador en la URI lo exige la ruta: rules() no ve los
         // parámetros de ruta y lo rechazaría siempre.
         $certificate = $this->project->read('src/Http/Requests/Course/CertificateRequest.php');
-        $this->assertStringContainsString("Gate::forUser(\$this->user())->allows('certificate', \$course)", $certificate);
+        // Público: sin auth:sanctum delante, el guard por omisión no ve un
+        // token Bearer. Se pregunta a sanctum.
+        $this->assertStringContainsString("Gate::forUser(\$this->user('sanctum'))->allows('certificate', \$course)", $certificate);
         $this->assertStringNotContainsString("'course_id' => 'required", $certificate);
     }
 
@@ -174,6 +177,10 @@ final class DeclaredEndpointsGenerationTest extends TestCase
 
         $revoke = $this->project->read('src/Http/Requests/Oauth/RevokeRequest.php');
         $this->assertStringContainsString("return Gate::forUser(\$this->user())->allows('oauth.revoke');", $revoke);
+
+        $status = $this->project->read('src/Http/Requests/Oauth/StatusRequest.php');
+        $this->assertStringContainsString("return Gate::forUser(\$this->user('sanctum'))->allows('oauth.status');", $status);
+        $this->assertSame(1, substr_count($status, 'return Gate::'));
 
         foreach (['src/Models/Desk.php', 'src/Policies/DeskPolicy.php', 'database/factories/DeskFactory.php', 'src/Http/Resources/Models/DeskResource.php'] as $absent) {
             $this->assertFalse($this->project->has($absent), "{$absent} no debería existir: Desk no es un modelo.");
