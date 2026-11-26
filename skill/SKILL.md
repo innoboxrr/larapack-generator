@@ -51,7 +51,8 @@ php vendor/bin/builder larapack:<comando>         # también fuera de Laravel
 ```
 
 Casi todos aceptan `--format=json` (parséalo, no raspes el texto; no lo tienen
-`schema`, que ya emite JSON, `skill` ni `remove-full-model`) y `--root=<ruta>`
+`schema`, que ya emite JSON, `skill`, `guard`, que es un hook, ni
+`remove-full-model`) y `--root=<ruta>`
 para decir sobre qué proyecto trabajar (no lo tienen `new`, `schema` ni `audit`,
 que reciben la ruta como argumento). Los generadores aceptan además `--force` y
 `--dry-run`. Con `--format=json` la salida es un único documento,
@@ -340,7 +341,8 @@ la clase que le corresponda.
 ### Qué no tocar
 
 - El `Controller`. Delega en las requests y no tiene lógica. Si necesitas algo
-  distinto, va en la request.
+  distinto, va en la request. Vale también para los que escribes a mano: ver
+  abajo.
 - El archivo de rutas. Sale del generador; si falta un endpoint, se añade al
   generador, no al archivo.
 - `$fillable`, `$creatable`, `$updatable`, `$export_cols`,
@@ -348,6 +350,76 @@ la clase que le corresponda.
   Editarlos a mano los desincroniza del contrato y `larapack:verify` lo dirá.
 - Los archivos con el marcador `//RULES//`, `//IMPORTS//`, `//EDIT//` fuera de
   su marcador.
+
+### Endpoints que LaraPack no genera
+
+Un asistente, un escritorio, una ruta pública, un webhook, un canje de tokens:
+el generador no los escribe, pero **siguen el mismo patrón que los generados**.
+Es justo donde se pierde la guía: el controlador escrito a mano parece el sitio
+natural para todo.
+
+**La regla: el controlador sólo hace `return $request->handle();`.** La
+autorización va en `authorize()`, la validación en `rules()`, y las consultas y
+la respuesta en `handle()`, que delega en la operación del modelo o en una clase
+de soporte. Un caso real que salió mal, recortado:
+
+```php
+// MAL: validación, autorización y consultas en el controlador.
+class InstalledModulesController extends Controller
+{
+    public function __invoke(Request $request, ModuleReach $reach, CurrentSchool $schools): JsonResponse
+    {
+        $data = $request->validate(['scope_id' => ['required', 'integer', 'min:1']]);
+        abort_unless(in_array((int) $data['scope_id'], $schools->enterableScopes($request->user()), true), 404);
+        $modules = Module::query()->whereKey(array_keys($reach->installedVersions((int) $data['scope_id'])))->get();
+        // ... cuarenta líneas más de consultas y de forma de la respuesta
+        return response()->json(['modules' => $modules->pluck('code')]);
+    }
+}
+```
+
+```php
+// BIEN: el controlador delega; la request lo hace todo.
+class InstalledModulesController extends Controller
+{
+    public function __invoke(InstalledModulesRequest $request): JsonResponse
+    {
+        return $request->handle();
+    }
+}
+
+class InstalledModulesRequest extends FormRequest
+{
+    public function authorize(): bool
+    {
+        return in_array((int) $this->scope_id, app(CurrentSchool::class)->enterableScopes($this->user()), true);
+    }
+
+    // Por una escuela ajena, 404 y no 403: que no se sepa cuáles hay.
+    protected function failedAuthorization(): void
+    {
+        abort(404);
+    }
+
+    public function rules(): array
+    {
+        return ['scope_id' => ['required', 'integer', 'min:1']];
+    }
+
+    public function handle(): JsonResponse
+    {
+        return response()->json(Module::installedIn((int) $this->scope_id)); // operación del modelo
+    }
+}
+```
+
+- Si el protocolo dicta la forma del error —OAuth2, la firma de un webhook—,
+  sobrescribe `failedValidation()` o `failedAuthorization()` en la request.
+  Sigue sin ir en el controlador.
+- Un trait compartido de autorización va en `Http/Requests/Concerns/`, nunca en
+  `Http/Controllers/Concerns/`.
+- Si el endpoint es el CRUD de un modelo, no es un endpoint a mano: decláralo en
+  el `laraimport.json`.
 
 ## Paso 7: verificar
 
@@ -375,6 +447,32 @@ generado con su hash. Detecta:
   la exportación o la tabla.
 
 Código distinto de cero = aún no has terminado.
+
+### La guardia automática
+
+Con `larapack:skill --hooks`, Claude Code ejecuta `larapack:guard` después de
+cada `Write` o `Edit`. Si el archivo es un controlador, una request, una ruta,
+una policy, una migración o algo generado que no es un hueco, le pasa las
+comprobaciones de `larapack:verify`; si encuentran errores **en ese archivo**,
+la edición vuelve con el motivo y la regla. A un controlador escrito a mano le
+recuerda el patrón de `handle()`. Al terminar el turno, `larapack:guard --stop`
+verifica el proyecto entero y no te deja darlo por terminado con errores.
+
+Si te bloquea, corrige el archivo o el `laraimport.json`. **No toques el hook
+ni lo rodees.** Sin hooks —Codex y otros agentes leen el bloque de LaraPack en
+`AGENTS.md`—, la comprobación la haces tú con la lista de abajo.
+
+### Antes de terminar una tarea
+
+```
+1. larapack:validate --format=json     # ok: true
+2. larapack:verify --format=json       # ok: true, 0 errores
+3. ningún controlador tuyo hace más que return $request->handle();
+4. vendor/bin/pint --test y vendor/bin/phpstan analyse, si el proyecto los usa
+5. los tests del proyecto
+```
+
+Si algo falla, la tarea no ha terminado.
 
 ## Regenerar
 
@@ -562,6 +660,10 @@ valor)`, que va a `bulk.update` con sólo ese campo.
 
 - **Escribir el modelo a mano "porque es solo uno".** Ese es el primero de los
   treinta.
+- **Meter lógica en un controlador escrito a mano "porque no es generado".**
+  Validar, autorizar o consultar en un asistente, un webhook o una ruta pública
+  es la misma deriva: va en su `FormRequest`, y el controlador hace
+  `return $request->handle();`.
 - **Rellenar todas las claves del JSON.** Declara lo que decides; el resto son
   defaults del esquema.
 - **Generar todas las acciones y borrar las que sobran.** Declara `routes` o

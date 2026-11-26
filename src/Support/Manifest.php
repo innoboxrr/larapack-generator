@@ -21,7 +21,32 @@ final class Manifest
 
     private const RELATIVE_PATH = '.larapack/manifest.json';
 
+    /**
+     * El contenido congelado de una instantánea; null en un manifiesto vivo.
+     *
+     * @var array<string, mixed>|null
+     */
+    private ?array $frozen = null;
+
     public function __construct(private ?string $root = null) {}
+
+    /**
+     * Una copia de sólo lectura que lee el archivo una vez.
+     *
+     * read() vuelve al disco en cada llamada, y es lo correcto mientras se
+     * genera: otra instancia puede haber escrito entre medias. Pero quien sólo
+     * lee —el Verifier, la guardia de los agentes— lo llama miles de veces: en
+     * school-management, con 128 modelos y un manifiesto de 1,5 MB, verificar
+     * pasaba de varios minutos, demasiado para un hook que corre tras cada
+     * edición.
+     */
+    public function snapshot(): self
+    {
+        $snapshot = new self($this->root ?? root_path());
+        $snapshot->frozen = $this->read();
+
+        return $snapshot;
+    }
 
     public function path(): string
     {
@@ -39,6 +64,10 @@ final class Manifest
      */
     public function read(): array
     {
+        if ($this->frozen !== null) {
+            return $this->frozen;
+        }
+
         if (! is_file($this->path())) {
             return self::EMPTY;
         }
@@ -183,6 +212,26 @@ final class Manifest
     }
 
     /**
+     * El stub del que salió un archivo, o null si el generador no lo escribió.
+     *
+     * Es lo que distingue un hueco (una Policy, un trait de operaciones) de
+     * lo que se regenera entero (el controlador, las rutas): el nombre del
+     * stub lo pone el propio generador, así que no puede desincronizarse.
+     */
+    public function stubOf(string $file): ?string
+    {
+        $relative = $this->relative($file);
+
+        foreach ($this->buckets() as $bucket) {
+            if (isset($bucket['files'][$relative])) {
+                return $bucket['files'][$relative]['stub'];
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * Un archivo cuyo hash ya no coincide con el registrado se ha editado a
      * mano. No es un error: es la señal de que regenerarlo destruiría trabajo.
      *
@@ -311,9 +360,16 @@ final class Manifest
             }
         }
 
+        unset($model);
+
         file_put_contents(
             $this->path(),
             json_encode($manifest, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)."\n"
         );
+
+        // Una instantánea que escribe sigue viendo lo que escribió.
+        if ($this->frozen !== null) {
+            $this->frozen = $manifest;
+        }
     }
 }

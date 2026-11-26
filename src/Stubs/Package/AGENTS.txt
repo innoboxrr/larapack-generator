@@ -1,12 +1,5 @@
 # Instrucciones para agentes
 
-La arquitectura de este paquete la genera LaraPack. Antes de crear o cambiar un
-modelo, un endpoint, una request, una política, una migración o una vista, lee
-`.claude/skills/larapack/SKILL.md` y sigue su flujo: se declara en
-`laraimport.json` y se genera, no se escribe a mano.
-
-Si ese archivo falta, o LaraPack se actualizó:
-
-```
-php vendor/bin/builder larapack:skill --force
-```
+Las reglas propias de este paquete van aquí, fuera del bloque de LaraPack: ese
+bloque lo reescribe `php vendor/bin/builder larapack:skill` cada vez que
+LaraPack se actualiza.
