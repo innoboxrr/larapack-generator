@@ -16,6 +16,34 @@ jobs:
             # precisamente para cubrir esa diferencia.
             php-versions: '["8.3", "8.4", "8.5"]'
 
+    # Claude Code ejecuta los hooks con Git Bash en Windows, y CLAUDE_PROJECT_DIR
+    # llega como ruta de Windows. Ninguna prueba de PHPUnit pasa por ahí: este
+    # job instala la guardia con larapack:skill --hooks y lanza el comando real
+    # del hook, con las dos formas de ruta.
+    windows-guard:
+        name: Guardia en Windows (Git Bash)
+        runs-on: windows-latest
+
+        steps:
+            - uses: actions/checkout@v5
+
+            - uses: shivammathur/setup-php@v2
+              with:
+                  php-version: '8.4'
+                  coverage: none
+
+            - name: Instalar dependencias
+              shell: bash
+              run: composer update --prefer-dist --no-interaction --no-progress
+
+            - name: Pruebas de la guardia y de los hooks
+              shell: bash
+              run: vendor/bin/phpunit --no-progress --filter 'GuardTest|AgentHooksTest|SkillTest'
+
+            - name: El hook real, como lo lanza Claude Code
+              shell: bash
+              run: bash .github/scripts/guard-smoke.sh
+
     # El formato y los tipos no dependen de la versión de PHP: basta una vez.
     # Es lo mismo que LaraPack pone en la CI de cada paquete que crea.
     quality:
