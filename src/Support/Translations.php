@@ -134,10 +134,10 @@ final class Translations
             '/\\\\(?:u\{([0-9A-Fa-f]+)\}|u([dD][89abAB][0-9A-Fa-f]{2})\\\\u([dD][c-fC-F][0-9A-Fa-f]{2})|u([0-9A-Fa-f]{4})|x([0-9A-Fa-f]{2})|(\r\n|[\n\r\x{2028}\x{2029}])|(.))/su',
             function (array $match): string {
                 $code = match (true) {
-                    ($match[1] ?? '') !== '' => hexdec($match[1]),
-                    ($match[2] ?? '') !== '' => 0x10000 + ((hexdec($match[2]) - 0xD800) << 10) + (hexdec($match[3]) - 0xDC00),
-                    ($match[4] ?? '') !== '' => hexdec($match[4]),
-                    ($match[5] ?? '') !== '' => hexdec($match[5]),
+                    $match[1] !== null => hexdec($match[1]),
+                    $match[2] !== null => 0x10000 + ((hexdec($match[2]) - 0xD800) << 10) + (hexdec($match[3]) - 0xDC00),
+                    $match[4] !== null => hexdec($match[4]),
+                    $match[5] !== null => hexdec($match[5]),
                     default => null,
                 };
 
@@ -147,7 +147,7 @@ final class Translations
 
                 // Una barra antes de un salto es una continuación de línea:
                 // no aporta nada a la cadena.
-                if (($match[6] ?? '') !== '') {
+                if ($match[6] !== null) {
                     return '';
                 }
 
@@ -159,10 +159,11 @@ final class Translations
                     'f' => "\f",
                     'v' => "\v",
                     '0' => "\0",
-                    default => $match[7],
+                    default => $match[7] ?? '',
                 };
             },
-            $raw
+            $raw,
+            flags: PREG_UNMATCHED_AS_NULL
         );
 
         return is_string($decoded) ? $decoded : null;
@@ -190,12 +191,13 @@ final class Translations
         $decoded = preg_replace_callback(
             '/\\\\(?:([0-7]{1,3})|x([0-9A-Fa-f]{1,2})|u\{([0-9A-Fa-f]+)\}|([nrtvef\\\\$"]))/',
             fn (array $match): string => match (true) {
-                ($match[1] ?? '') !== '' => chr(octdec($match[1]) & 0xFF),
-                ($match[2] ?? '') !== '' => chr((int) hexdec($match[2])),
-                ($match[3] ?? '') !== '' => (string) mb_chr((int) hexdec($match[3]), 'UTF-8'),
-                default => ['n' => "\n", 'r' => "\r", 't' => "\t", 'v' => "\v", 'e' => "\e", 'f' => "\f"][$match[4]] ?? $match[4],
+                $match[1] !== null => chr(octdec($match[1]) & 0xFF),
+                $match[2] !== null => chr((int) hexdec($match[2])),
+                $match[3] !== null => (string) mb_chr((int) hexdec($match[3]), 'UTF-8'),
+                default => ['n' => "\n", 'r' => "\r", 't' => "\t", 'v' => "\v", 'e' => "\e", 'f' => "\f"][$match[4]] ?? $match[4] ?? '',
             },
-            $raw
+            $raw,
+            flags: PREG_UNMATCHED_AS_NULL
         );
 
         return is_string($decoded) && mb_check_encoding($decoded, 'UTF-8') ? $decoded : null;
