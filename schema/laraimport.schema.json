@@ -31,6 +31,12 @@
             "type": "array",
             "default": [],
             "items": { "$ref": "#/$defs/pivot" }
+        },
+        "controllers": {
+            "type": "array",
+            "default": [],
+            "items": { "$ref": "#/$defs/controller" },
+            "description": "Endpoints sin modelo propio: un escritorio, un asistente, el canje de un token, un webhook. Generan controlador, rutas, requests y tests con la misma forma que los de un modelo, sin migración, política ni operación. Es lo que se declara en lugar de escribir un controlador a mano."
         }
     },
     "$defs": {
@@ -125,6 +131,12 @@
                     "type": "boolean",
                     "default": false,
                     "description": "El modelo es un usuario que inicia sesión, típicamente User: extiende Authenticatable, usa Notifiable y los tokens de Sanctum, oculta password y remember_token, cifra la contraseña y responde isAdmin() con los correos de `auth.admins`. Tiene que declarar email y password; la contraseña no sale en la tabla ni en la exportación."
+                },
+                "endpoints": {
+                    "type": "array",
+                    "default": [],
+                    "items": { "$ref": "#/$defs/endpoint" },
+                    "description": "Los endpoints del modelo que no son una de las doce acciones CRUD: publicar, archivar, reenviar, importar. Cada uno genera su método en el controlador (sólo `return $request->handle();`), su ruta, su <Name>Request (authorize() pregunta a la política, rules() y handle() que delega en la operación <name>Model del modelo), su método en la política, que nace denegando, la operación en el trait Operations y un test. Un endpoint que no está aquí no se escribe a mano: se declara."
                 }
             }
         },
@@ -300,6 +312,105 @@
                     }
                 }
             ]
+        },
+        "endpoint": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "method"],
+            "properties": {
+                "name": {
+                    "$ref": "#/$defs/camelCase",
+                    "description": "camelCase. Es el método del controlador, la clase <Name>Request, el nombre de la ruta (importRoster -> import.roster), la habilidad por omisión y la operación <name>Model del modelo. No puede ser una de las doce acciones CRUD: ésas se declaran con routes."
+                },
+                "method": {
+                    "enum": ["get", "post", "put", "patch", "delete"],
+                    "description": "El verbo HTTP de la ruta."
+                },
+                "uri": {
+                    "type": "string",
+                    "pattern": "^(?:[a-z0-9]+(?:-[a-z0-9]+)*|\\{[a-z][a-z0-9_]*\\??\\})(?:/(?:[a-z0-9]+(?:-[a-z0-9]+)*|\\{[a-z][a-z0-9_]*\\??\\}))*$",
+                    "description": "Relativa al prefijo del archivo de rutas, como las CRUD: segmentos en kebab o {parametro}, sin barra inicial ni '..'. Por omisión, el nombre en kebab: importRoster -> import-roster."
+                },
+                "target": {
+                    "enum": ["record", "collection"],
+                    "default": "record",
+                    "description": "record actúa sobre un registro: la request lo busca por <modelo>_id y la política lo recibe. collection actúa sobre el modelo, como create o index."
+                },
+                "ability": {
+                    "$ref": "#/$defs/camelCase",
+                    "description": "La habilidad que se pregunta a la política del modelo. Por omisión, el nombre del endpoint, y se genera su método negando. Una habilidad CRUD (update, view, delete...) reutiliza el método que ya existe."
+                },
+                "public": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Sin sesión: el controlador quita auth:sanctum sólo para este método. La autorización se sigue preguntando, y nace cerrada. Acompáñalo de un throttle en middleware."
+                },
+                "middleware": {
+                    "type": "array",
+                    "default": [],
+                    "uniqueItems": true,
+                    "items": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_.\\-]*(?::[A-Za-z0-9_.,|\\-]+)?$" },
+                    "description": "Middleware de la ruta además del grupo api, por ejemplo throttle:6,1 o signed."
+                }
+            }
+        },
+        "controller": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "endpoints"],
+            "properties": {
+                "name": {
+                    "$ref": "#/$defs/pascalCase",
+                    "description": "PascalCase, sin el sufijo Controller: Desk genera DeskController, Requests/Desk y routes/api/models/desk.php. No puede llamarse como un modelo."
+                },
+                "endpoints": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": { "$ref": "#/$defs/controllerEndpoint" }
+                }
+            }
+        },
+        "controllerEndpoint": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "method"],
+            "properties": {
+                "name": {
+                    "$ref": "#/$defs/camelCase",
+                    "description": "camelCase. Es el método del controlador, la clase <Name>Request y el nombre de la ruta."
+                },
+                "method": {
+                    "enum": ["get", "post", "put", "patch", "delete"],
+                    "description": "El verbo HTTP de la ruta."
+                },
+                "uri": {
+                    "type": "string",
+                    "pattern": "^(?:[a-z0-9]+(?:-[a-z0-9]+)*|\\{[a-z][a-z0-9_]*\\??\\})(?:/(?:[a-z0-9]+(?:-[a-z0-9]+)*|\\{[a-z][a-z0-9_]*\\??\\}))*$",
+                    "description": "Relativa al prefijo del archivo de rutas, como las CRUD: segmentos en kebab o {parametro}, sin barra inicial ni '..'. Por omisión, el nombre en kebab: importRoster -> import-roster."
+                },
+                "ability": {
+                    "type": "string",
+                    "pattern": "^[a-z][A-Za-z0-9]*(?:[.:-][A-Za-z0-9]+)*$",
+                    "description": "Una habilidad de Gate (Gate::define) que define la aplicación o el paquete: sin modelo no hay política que Laravel resuelva sola. Sin ella, authorize() nace devolviendo false y se rellena a mano."
+                },
+                "public": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Sin sesión: el controlador quita auth:sanctum sólo para este método. La autorización se sigue preguntando, y nace cerrada. Acompáñalo de un throttle en middleware."
+                },
+                "middleware": {
+                    "type": "array",
+                    "default": [],
+                    "uniqueItems": true,
+                    "items": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_.\\-]*(?::[A-Za-z0-9_.,|\\-]+)?$" },
+                    "description": "Middleware de la ruta además del grupo api, por ejemplo throttle:6,1 o signed."
+                }
+            }
+        },
+        "camelCase": {
+            "type": "string",
+            "pattern": "^[a-z][A-Za-z0-9]*$",
+            "minLength": 1
         },
         "routeAction": {
             "enum": ["policies", "policy", "index", "show", "create", "update", "delete", "restore", "forceDelete", "export", "bulkUpdate", "bulkDelete"]
