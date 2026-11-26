@@ -305,10 +305,13 @@ demás:
 
 La guardia nunca se bloquea a sí misma: una entrada vacía o rota, un archivo de
 `vendor/` o fuera de un proyecto salen con 0, y mientras no exista `vendor/` el
-hook no hace nada. Lo que cita del proyecto —rutas, mensajes— sale en una línea,
-con los caracteres de control y de formato como `\u{XXXX}`: un nombre de archivo
-no puede añadir líneas a lo que lee el modelo. El registro de la sesión va a
-`<tmp>/larapack-guard-<uid>`, privado del usuario. `larapack:skill` no escribe
+hook no hace nada. Lo que cita del proyecto —rutas, mensajes, también el de una
+excepción si la guardia falla— sale en una línea, con los caracteres de control y
+de formato como `\u{XXXX}`: un nombre de archivo no puede añadir líneas a lo que
+lee el modelo. El registro de la sesión va a `<tmp>/larapack-guard-<uid>`,
+privado del usuario; si no es del usuario, otros pueden escribirlo o es un
+enlace, o PHP no tiene `ext-posix` fuera de Windows, la guardia sigue sin
+registro y el hook de fin de turno se apoya en git. `larapack:skill` no escribe
 `.claude/settings.json`, `AGENTS.md` ni el skill a través de un enlace simbólico
 que saque del proyecto. El comando usa `$CLAUDE_PROJECT_DIR`, que necesita un shell
 que expanda variables (en Windows, Git Bash).

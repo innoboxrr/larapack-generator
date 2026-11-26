@@ -188,8 +188,9 @@ Lo que salió, de más a menos grave:
   de LaraPack («LaraPack: antes de corregir nada, ejecuta …») a un mensaje que
   el modelo lee como salida de un hook del usuario. Ruta, comprobación y
   mensaje salen ahora en una línea, con cada carácter de control, de formato o
-  separador como `\u{XXXX}` (`Guard::inline()`); lo que no es UTF-8 se
-  sustituye, y el JSON del recordatorio ya no puede salir vacío.
+  separador como `\u{XXXX}` (`Guard::inline()`), también el mensaje de una
+  excepción cuando la guardia falla; lo que no es UTF-8 se sustituye, y el JSON
+  del recordatorio ya no puede salir vacío.
 - **`larapack:skill` escribía a través de enlaces simbólicos** (media-baja). Un
   repositorio con `.claude/settings.json` (o `.claude`, o `AGENTS.md`) enlazado
   al `~/.claude/settings.json` de quien lo clona recibía los hooks de LaraPack
@@ -201,7 +202,11 @@ Lo que salió, de más a menos grave:
   Era `/tmp/larapack-guard`, creado 0777: otro usuario de la máquina podía
   crearlo antes con un enlace por sesión hacia un archivo de la víctima, y cada
   edición le añadía una línea. Ahora es `larapack-guard-<uid>`, 0700, y sólo se
-  usa si es del usuario y nadie más lo puede escribir.
+  usa si es un directorio de verdad —no un enlace—, del usuario y que nadie más
+  puede escribir. Sin `ext-posix` no se puede saber de quién es: en Windows,
+  donde el temporal es del usuario, se usa `larapack-guard`; en Linux o macOS la
+  guardia sigue sin estado de sesión, como con un directorio que no es de fiar,
+  y el hook de fin de turno se apoya en git.
 - **Un archivo vacío donde había datos** (baja). `json_encode()` devuelve
   `false`, y pegado a `"\n"` dejaba el archivo vacío: un archivo del proyecto
   en Latin-1 en el `src` del módulo vaciaba `locales/<idioma>.json` con todas
