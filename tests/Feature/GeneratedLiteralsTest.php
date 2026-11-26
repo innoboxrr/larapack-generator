@@ -133,10 +133,10 @@ final class GeneratedLiteralsTest extends TestCase
     {
         $node = trim((string) shell_exec('command -v node 2>/dev/null'));
 
+        // Sin node no se comprueba nada: que conste como omitido y no como
+        // pasado, o el test daría verde según la máquina.
         if ($node === '') {
-            $this->addToAssertionCount(1);
-
-            return;
+            $this->markTestSkipped('node no disponible: no se puede comprobar que el JS generado parsea.');
         }
 
         $file = sys_get_temp_dir().'/larapack-js-'.bin2hex(random_bytes(6)).'.mjs';
