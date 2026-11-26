@@ -46,7 +46,7 @@ final class VerifyTest extends TestCase
 
         $this->assertFileExists($this->project->path.'/src/Http/Controllers/ProductController.php');
 
-        $checks = ['controller-shape', 'request-handle', 'controller-concern', 'hand-rolled'];
+        $checks = ['controller-shape', 'request-handle', 'controller-concern', 'hand-rolled', 'route-closure'];
         [$code, $report] = $this->verify(['--check' => $checks]);
 
         // Category tiene controlador y no requests: delega en clases que,

@@ -6,6 +6,7 @@ use Innoboxrr\LarapackGenerator\Commands\Concerns\TargetsProject;
 use Innoboxrr\LarapackGenerator\Commands\Concerns\WritesJson;
 use Innoboxrr\LarapackGenerator\Support\Verifier;
 use Symfony\Component\Console\Command\Command;
+use Symfony\Component\Console\Formatter\OutputFormatter;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
@@ -71,13 +72,16 @@ class VerifyCommand extends Command
             return $failed ? Command::FAILURE : Command::SUCCESS;
         }
 
+        // El mensaje y la ruta pueden llevar texto del proyecto auditado (la
+        // razón de un #[HandRolled], un nombre de archivo): se escapan para
+        // que una etiqueta de la consola en ellos se lea tal cual.
         foreach ($findings as $finding) {
             $output->writeln(sprintf(
                 '  %s %s%s%s',
                 $this->tag($finding['level']),
-                $finding['model'] ? "[{$finding['model']}] " : '',
-                $finding['file'] ? "{$finding['file']}: " : '',
-                $finding['message']
+                $finding['model'] ? '['.OutputFormatter::escape($finding['model']).'] ' : '',
+                $finding['file'] ? OutputFormatter::escape($finding['file']).': ' : '',
+                OutputFormatter::escape($finding['message'])
             ));
         }
 

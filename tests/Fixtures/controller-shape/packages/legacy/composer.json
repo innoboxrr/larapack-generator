@@ -1,0 +1,8 @@
+{
+    "name": "fixture/legacy",
+    "autoload": {
+        "psr-4": {
+            "": "src/"
+        }
+    }
+}

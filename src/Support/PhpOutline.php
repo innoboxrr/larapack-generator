@@ -19,7 +19,13 @@ namespace Innoboxrr\LarapackGenerator\Support;
  * @phpstan-type AttributeOutline array{name: string, line: int, args: list<Token>|null}
  * @phpstan-type ParameterOutline array{name: string, type: string|null, raw: string}
  * @phpstan-type MethodOutline array{name: string, line: int, visibility: string, static: bool, attributes: list<AttributeOutline>, params: list<ParameterOutline>, body: list<Token>|null}
- * @phpstan-type ClassOutline array{kind: string, name: string, fqcn: string, line: int, extends: string|null, traits: list<string>, attributes: list<AttributeOutline>, methods: list<MethodOutline>}
+ * @phpstan-type ClassOutline array{kind: string, name: string, fqcn: string, line: int, abstract: bool, extends: string|null, traits: list<string>, attributes: list<AttributeOutline>, methods: list<MethodOutline>}
+ * @phpstan-type ClosureOutline array{call: string, line: int, arrow: bool, params: list<Token>, body: list<Token>}
+ *
+ * Tiene que aguantar un archivo a medio escribir —el que un agente está
+ * editando cuando corre `verify`— sin avisos: bajo Artisan un aviso es una
+ * excepción y la verificación entera se cae. Por eso todo acceso a un token
+ * que podría no existir pregunta antes.
  */
 final class PhpOutline
 {
@@ -125,12 +131,12 @@ final class PhpOutline
 
     /**
      * Separa por las comas de primer nivel: las de un array o una llamada
-     * anidada no cuentan.
+     * anidada no cuentan. Con `;`, separa las sentencias de un cuerpo.
      *
      * @param  list<Token>  $tokens
      * @return list<list<Token>>
      */
-    public static function splitTopLevel(array $tokens): array
+    public static function splitTopLevel(array $tokens, string $separator = ','): array
     {
         $parts = [];
         $current = [];
@@ -141,7 +147,7 @@ final class PhpOutline
                 $depth++;
             } elseif (in_array($token[0], [')', ']', '}'], true)) {
                 $depth--;
-            } elseif ($token[0] === ',' && $depth === 0) {
+            } elseif ($token[0] === $separator && $depth === 0) {
                 $parts[] = $current;
                 $current = [];
 
@@ -156,6 +162,132 @@ final class PhpOutline
         }
 
         return $parts;
+    }
+
+    /**
+     * Los closures que se pasan como argumento a una llamada `X::nombre(...)`
+     * o `->nombre(...)`, con `nombre` uno de estos (en minúsculas).
+     *
+     * Se recorre el archivo entero, también dentro de otros closures: un
+     * `Route::get()` dentro de un `group(function () { ... })` cuenta igual.
+     *
+     * @param  list<string>  $names
+     * @return list<ClosureOutline>
+     */
+    public function closuresPassedTo(array $names): array
+    {
+        $closures = [];
+        $count = count($this->tokens);
+
+        for ($index = 1; $index < $count - 1; $index++) {
+            $token = $this->tokens[$index];
+
+            // Por el texto y no por el tipo: tras `::`, `match` llega como
+            // T_MATCH, no como T_STRING.
+            if ($this->tokens[$index + 1][0] !== '('
+                || ! in_array($this->tokens[$index - 1][0], [T_DOUBLE_COLON, T_OBJECT_OPERATOR, T_NULLSAFE_OBJECT_OPERATOR], true)
+                || ! in_array(strtolower($token[1]), $names, true)
+            ) {
+                continue;
+            }
+
+            foreach (self::splitTopLevel(self::enclosed($this->tokens, $index + 1)) as $argument) {
+                // Un argumento con nombre: `action: function () {}`.
+                if (count($argument) > 2 && $argument[0][0] === T_STRING && $argument[1][0] === ':') {
+                    $argument = array_slice($argument, 2);
+                }
+
+                $closure = self::closure($argument);
+
+                if ($closure !== null) {
+                    $closures[] = ['call' => $token[1]] + $closure;
+                }
+            }
+        }
+
+        return $closures;
+    }
+
+    /**
+     * Lo que hay dentro del paréntesis, corchete o llave que abre en $start,
+     * sin los delimitadores. Si el archivo se corta antes del cierre, hasta
+     * el final.
+     *
+     * @param  list<Token>  $tokens
+     * @return list<Token>
+     */
+    private static function enclosed(array $tokens, int $start): array
+    {
+        $inner = [];
+        $depth = 0;
+        $count = count($tokens);
+
+        for ($index = $start; $index < $count; $index++) {
+            $token = $tokens[$index];
+
+            if (self::opens($token)) {
+                if ($depth++ === 0) {
+                    continue;
+                }
+            } elseif (in_array($token[0], [')', ']', '}'], true) && --$depth === 0) {
+                break;
+            }
+
+            $inner[] = $token;
+        }
+
+        return $inner;
+    }
+
+    /**
+     * Si el argumento es un closure: sus parámetros y su cuerpo. El de una
+     * función flecha es la expresión de después de `=>`.
+     *
+     * @param  list<Token>  $argument
+     * @return array{line: int, arrow: bool, params: list<Token>, body: list<Token>}|null
+     */
+    private static function closure(array $argument): ?array
+    {
+        if (($argument[0][0] ?? null) === T_STATIC) {
+            array_shift($argument);
+        }
+
+        $kind = $argument[0][0] ?? null;
+
+        if (! in_array($kind, [T_FUNCTION, T_FN], true)) {
+            return null;
+        }
+
+        $open = 1;
+        $count = count($argument);
+
+        while ($open < $count && $argument[$open][0] !== '(') {
+            $open++;
+        }
+
+        $params = self::enclosed($argument, $open);
+        $depth = 0;
+
+        // Lo que sigue a los parámetros: `use (...)`, el tipo de retorno y,
+        // al final, la llave o la flecha.
+        for ($index = $open; $index < $count; $index++) {
+            $token = $argument[$index];
+
+            if (self::opens($token)) {
+                if ($depth === 0 && $token[0] === '{' && $kind === T_FUNCTION) {
+                    return ['line' => $argument[0][2], 'arrow' => false, 'params' => $params, 'body' => self::enclosed($argument, $index)];
+                }
+
+                $depth++;
+            } elseif (in_array($token[0], [')', ']', '}'], true)) {
+                $depth--;
+            } elseif ($depth === 0 && $token[0] === T_DOUBLE_ARROW && $kind === T_FN) {
+                return ['line' => $argument[0][2], 'arrow' => true, 'params' => $params, 'body' => array_slice($argument, $index + 1)];
+            }
+        }
+
+        // Cortado antes del cuerpo: sigue siendo un closure, sin cuerpo que leer.
+        return ['line' => $argument[0][2], 'arrow' => $kind === T_FN, 'params' => $params, 'body' => []];
     }
 
     /**
@@ -273,6 +405,11 @@ final class PhpOutline
     {
         $this->i++;
 
+        // `function () use ($x)` fuera de una clase: no importa nada.
+        if (($this->tokens[$this->i][0] ?? null) === '(') {
+            return;
+        }
+
         if (in_array($this->tokens[$this->i][0] ?? null, [T_FUNCTION, T_CONST], true)) {
             $this->skipTo(';');
 
@@ -334,7 +471,7 @@ final class PhpOutline
 
         $this->i += 2;
 
-        return $this->tokens[$this->i - 1][1];
+        return $this->tokens[$this->i - 1][1] ?? null;
     }
 
     private function register(string $name, ?string $alias): void
@@ -386,6 +523,14 @@ final class PhpOutline
     {
         $kind = strtolower($this->tokens[$this->i][1]);
         $line = $this->tokens[$this->i][2];
+        $abstract = false;
+
+        // `abstract final readonly class`: los modificadores van delante, en
+        // cualquier orden.
+        for ($before = $this->i - 1; in_array($this->tokens[$before][0] ?? null, [T_ABSTRACT, T_FINAL, T_READONLY], true); $before--) {
+            $abstract = $abstract || $this->tokens[$before][0] === T_ABSTRACT;
+        }
+
         $name = $this->tokens[$this->i + 1][1];
         $extends = null;
         $count = count($this->tokens);
@@ -408,6 +553,7 @@ final class PhpOutline
             'name' => $name,
             'fqcn' => $this->namespace === '' ? $name : $this->namespace.'\\'.$name,
             'line' => $line,
+            'abstract' => $abstract,
             'extends' => $extends,
             'traits' => $traits,
             'attributes' => $attributes,
@@ -448,7 +594,7 @@ final class PhpOutline
 
                     // Las adaptaciones (`{ a insteadof b; }`) no cambian qué
                     // traits se usan.
-                    $this->tokens[$this->i][0] === '{' ? $this->balanced() : $this->i++;
+                    ($this->tokens[$this->i][0] ?? null) === '{' ? $this->balanced() : $this->i++;
                     break;
 
                 case $token[0] === T_ATTRIBUTE:
@@ -471,8 +617,14 @@ final class PhpOutline
                     $modifiers = [];
                     break;
 
+                    // El valor de una constante o una propiedad, o los ganchos de
+                    // una propiedad (PHP 8.4: `public string $x { get => ...; }`,
+                    // que no acaba en `;`). Lo que la precedía no es del método
+                    // que venga después.
                 case self::opens($token):
                     $this->balanced();
+                    $attributes = [];
+                    $modifiers = [];
                     break;
 
                 case $token[0] === ';':
