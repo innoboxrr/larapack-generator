@@ -33,6 +33,49 @@ final class VerifyTest extends TestCase
         $this->assertSame(0, $report['errors']);
     }
 
+    /**
+     * Lo generado es la forma que controller-shape exige: ni en un paquete ni
+     * en una aplicación puede salir nada, o la comprobación sería ruido.
+     */
+    public function test_los_controladores_generados_tienen_la_forma_que_se_exige(): void
+    {
+        $this->runCommand('larapack:full-model', ['name' => 'Product']);
+        $this->runCommand('larapack:controller', ['name' => 'Category']);
+
+        $this->assertFileExists($this->project->path.'/src/Http/Controllers/ProductController.php');
+
+        $checks = ['controller-shape', 'request-handle', 'controller-concern', 'hand-rolled'];
+        [$code, $report] = $this->verify(['--check' => $checks]);
+
+        // Category tiene controlador y no requests: delega en clases que,
+        // por PSR-4, deberían estar en el proyecto y no están.
+        $this->assertSame(Command::FAILURE, $code);
+        $this->assertSame(
+            ['src/Http/Controllers/CategoryController.php'],
+            array_values(array_unique(array_column($report['findings'], 'file')))
+        );
+        $this->assertSame(['request-handle'], array_values(array_unique(array_column($report['findings'], 'check'))));
+        $this->assertStringContainsString('no existe', $report['findings'][0]['message']);
+
+        unlink($this->project->path.'/src/Http/Controllers/CategoryController.php');
+
+        [$code, $report] = $this->verify(['--check' => $checks]);
+
+        $this->assertSame(Command::SUCCESS, $code, json_encode($report['findings']));
+        $this->assertSame([], $report['findings']);
+
+        $this->project->cleanup();
+        $this->useProject(FakeProject::application());
+        $this->runCommand('larapack:full-model', ['name' => 'Product']);
+
+        $this->assertFileExists($this->project->path.'/app/Http/Controllers/ProductController.php');
+
+        [$code, $report] = $this->verify(['--check' => $checks]);
+
+        $this->assertSame(Command::SUCCESS, $code);
+        $this->assertSame([], $report['findings']);
+    }
+
     public function test_avisa_cuando_no_hay_manifiesto(): void
     {
         [$code, $report] = $this->verify();

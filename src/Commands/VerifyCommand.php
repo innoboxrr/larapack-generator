@@ -17,6 +17,10 @@ use Symfony\Component\Console\Output\OutputInterface;
  * comprobación después de implementar: la salida en JSON le dice exactamente
  * qué corregir, y el código de salida distinto de cero le dice que aún no ha
  * terminado.
+ *
+ * --check acota a unas comprobaciones (repetible), para que un agente que
+ * acaba de escribir un controlador pueda preguntar sólo por eso sin esperar
+ * a todo lo demás.
  */
 class VerifyCommand extends Command
 {
@@ -28,16 +32,28 @@ class VerifyCommand extends Command
         $this->addRootOption();
 
         $this->setName('larapack:verify')
-            ->setDescription('Comprueba que lo generado siga coherente con el manifiesto')
+            ->setDescription('Comprueba que lo generado siga coherente con el manifiesto y que todo controlador delegue en su request')
             ->addOption('format', null, InputOption::VALUE_REQUIRED, 'Formato de salida: txt o json', 'txt')
-            ->addOption('strict', null, InputOption::VALUE_NONE, 'Trata los avisos como errores');
+            ->addOption('strict', null, InputOption::VALUE_NONE, 'Trata los avisos como errores')
+            ->addOption('check', null, InputOption::VALUE_REQUIRED | InputOption::VALUE_IS_ARRAY, 'Sólo esta comprobación (repetible): '.implode(', ', Verifier::CHECKS));
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         $this->applyRootOption($input);
 
-        $findings = (new Verifier)->run();
+        // Un nombre mal escrito no puede acabar en "sin desviaciones": filtrar
+        // por algo que no existe no encuentra nada, y eso parecería un verde.
+        $only = array_values(array_unique((array) $input->getOption('check')));
+        $unknown = array_diff($only, Verifier::CHECKS);
+
+        if ($unknown !== []) {
+            return $this->reportFailure($input, $output,
+                'Comprobación desconocida: '.implode(', ', $unknown).'.',
+                'Disponibles: '.implode(', ', Verifier::CHECKS).'.');
+        }
+
+        $findings = (new Verifier)->run($only);
 
         $errors = $this->count($findings, Verifier::ERROR);
         $warnings = $this->count($findings, Verifier::WARNING);
@@ -50,7 +66,7 @@ class VerifyCommand extends Command
                 'errors' => $errors,
                 'warnings' => $warnings,
                 'findings' => $findings,
-            ]);
+            ] + ($only === [] ? [] : ['checks' => $only]));
 
             return $failed ? Command::FAILURE : Command::SUCCESS;
         }

@@ -1,0 +1,8 @@
+{
+    "name": "fixture/billing",
+    "autoload": {
+        "psr-4": {
+            "Acme\\Billing\\": "src/"
+        }
+    }
+}
