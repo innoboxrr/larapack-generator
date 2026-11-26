@@ -19,7 +19,9 @@ use Symfony\Component\Console\Output\OutputInterface;
  * el dueño del proyecto.
  *
  * Aprobar es esto: el dueño corre `approve`, revisa el diff del candado y lo
- * comitea. El comando no pregunta nada ni comprueba quién lo corre —en
+ * comitea. Se aprueba la razón y la huella del código tal como está ahora
+ * (HandRolledLock): si el código cambia, la excepción vuelve a pedir
+ * aprobación, y `approve` de nuevo recalcula la huella. El comando no pregunta nada ni comprueba quién lo corre —en
  * Windows no hay forma fiable de saber si hay una terminal delante, y una
  * pregunta se contesta con una tubería—; lo que lo hace del dueño es que el
  * candado pide su revisión (CODEOWNERS, `larapack:ci --owner`) y que la
@@ -119,10 +121,19 @@ class HandRolledCommand extends Command
 
         foreach ($chosen as $target) {
             if ($action === 'approve') {
-                $next[$target] = $exceptions[$target]['reason'];
+                $next[$target] = ['reason' => $exceptions[$target]['reason'], 'fingerprint' => $exceptions[$target]['fingerprint']];
             } else {
                 unset($next[$target]);
             }
+        }
+
+        // Sin candado y sin nada que aprobar no se crea uno vacío: el candado
+        // cambia el modo de verify —un #[HandRolled] nuevo pasa de aviso a
+        // error—, y eso no puede ocurrir de rebote de un `approve --all` que
+        // no aprobó nada. Sin candado, `verify --strict` ya falla con el
+        // aviso de cualquier excepción nueva.
+        if ($approved === null && $chosen === []) {
+            return $this->nothingToApprove($input, $output);
         }
 
         $changed = $approved === null || HandRolledLock::encode($next) !== HandRolledLock::encode($current);
@@ -152,6 +163,10 @@ class HandRolledCommand extends Command
             $output->writeln('  No hay excepciones #[HandRolled] en el código.');
         }
 
+        if ($changed && $approved === null) {
+            $output->writeln("\n  Se creó ".HandRolledLock::PATH.': desde ahora un #[HandRolled] que no esté en él es error en verify, no aviso.');
+        }
+
         $output->writeln($changed
             ? "\n  Revisa el diff de ".HandRolledLock::PATH.' y comitéalo: la aprobación es ese commit.'
             : "\n  ".HandRolledLock::PATH.' ya estaba así.');
@@ -160,10 +175,30 @@ class HandRolledCommand extends Command
     }
 
     /**
+     * `approve --all` sin candado y sin excepciones en el código: no escribe.
+     */
+    private function nothingToApprove(InputInterface $input, OutputInterface $output): int
+    {
+        if ($this->wantsJson($input)) {
+            $this->writeJson($output, ['ok' => true, 'action' => 'approve', 'lock' => null, 'changed' => false, 'targets' => []]);
+
+            return Command::SUCCESS;
+        }
+
+        $output->writeln([
+            '  No hay excepciones #[HandRolled] en el código: no se creó '.HandRolledLock::PATH.'.',
+            '  Sin candado, verify --strict ya falla con cualquier #[HandRolled] nuevo (es aviso); el candado se',
+            '  crea con la primera aprobación.',
+        ]);
+
+        return Command::SUCCESS;
+    }
+
+    /**
      * Las excepciones del código y las del candado, con su estado.
      *
-     * @param  array<string, array{reason: string, file: string, line: int}>  $exceptions
-     * @param  array<string, string>|null  $approved
+     * @param  array<string, array{reason: string, fingerprint: string, file: string, line: int}>  $exceptions
+     * @param  array<string, array{reason: string, fingerprint: string|null}>|null  $approved
      */
     private function list(InputInterface $input, OutputInterface $output, array $exceptions, ?array $approved): int
     {
@@ -179,15 +214,16 @@ class HandRolledCommand extends Command
                 'line' => $exception['line'],
                 'status' => match (true) {
                     $approved === null => 'no-lock',
-                    $locked === $exception['reason'] => 'approved',
-                    $locked !== null => 'reason-changed',
-                    default => 'unapproved',
+                    $locked === null => 'unapproved',
+                    $locked['reason'] !== $exception['reason'] => 'reason-changed',
+                    $locked['fingerprint'] !== $exception['fingerprint'] => 'code-changed',
+                    default => 'approved',
                 },
             ];
         }
 
-        foreach (array_diff_key($approved ?? [], $exceptions) as $target => $reason) {
-            $rows[] = ['target' => (string) $target, 'reason' => $reason, 'file' => null, 'line' => null, 'status' => 'stale'];
+        foreach (array_diff_key($approved ?? [], $exceptions) as $target => $approval) {
+            $rows[] = ['target' => (string) $target, 'reason' => $approval['reason'], 'file' => null, 'line' => null, 'status' => 'stale'];
         }
 
         if ($this->wantsJson($input)) {
@@ -248,6 +284,7 @@ class HandRolledCommand extends Command
             'approved' => '<info>aprobada  </info>',
             'unapproved' => '<fg=red>pendiente </>',
             'reason-changed' => '<fg=red>cambió    </>',
+            'code-changed' => '<fg=red>código    </>',
             'stale' => '<comment>sobrante  </comment>',
             default => '<comment>sin candado</comment>',
         };

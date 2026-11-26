@@ -55,12 +55,21 @@ final class HandRolledLockTest extends TestCase
             ."use Illuminate\\Http\\Request;\nuse Innoboxrr\\LarapackGenerator\\Attributes\\HandRolled;\n\n{$body}\n");
     }
 
-    private function token(?string $reason): void
+    private function token(?string $reason, string $body = 'return response()->json([]);'): void
     {
         $attribute = $reason === null ? '' : "    #[HandRolled('{$reason}')]\n";
 
         $this->controller('TokenController.php', 'App\Http\Controllers\Auth', "class TokenController\n{\n{$attribute}"
-            ."    public function store(Request \$request)\n    {\n        return response()->json([]);\n    }\n}");
+            ."    public function store(Request \$request)\n    {\n        {$body}\n    }\n}");
+    }
+
+    /**
+     * @param  array<string, mixed>  $report
+     * @return array<string, mixed>
+     */
+    private function unapproved(array $report): array
+    {
+        return array_values(array_filter($report['findings'], fn (array $f): bool => $f['check'] === 'hand-rolled-unapproved'))[0];
     }
 
     /**
@@ -122,21 +131,24 @@ final class HandRolledLockTest extends TestCase
         $this->assertTrue($result['changed']);
         $this->assertSame([self::TOKEN, self::WEBHOOK], array_column($result['targets'], 'target'));
 
-        $expected = <<<'JSON'
-        [
-            {
-                "target": "App\\Http\\Controllers\\Auth\\TokenController::store",
-                "reason": "RFC 6749: los errores del canje son los de OAuth2."
-            },
-            {
-                "target": "App\\Http\\Controllers\\InboundWebhookController",
-                "reason": "La firma se calcula sobre el cuerpo en bruto."
-            }
-        ]
+        $expected = $this->lock();
+        $entries = json_decode($expected, true);
 
-        JSON;
+        $this->assertSame([
+            ['target' => self::TOKEN, 'reason' => 'RFC 6749: los errores del canje son los de OAuth2.'],
+            ['target' => self::WEBHOOK, 'reason' => 'La firma se calcula sobre el cuerpo en bruto.'],
+        ], array_map(fn (array $entry): array => ['target' => $entry['target'], 'reason' => $entry['reason']], $entries));
 
-        $this->assertSame($expected, $this->lock());
+        // Cada aprobación lleva la huella del código que aprueba, y son
+        // distintas: una es de un método y la otra de una clase.
+        foreach ($entries as $entry) {
+            $this->assertSame(['target', 'reason', 'fingerprint'], array_keys($entry));
+            $this->assertMatchesRegularExpression(HandRolledLock::FINGERPRINT, $entry['fingerprint']);
+        }
+
+        $this->assertNotSame($entries[0]['fingerprint'], $entries[1]['fingerprint']);
+        $this->assertStringStartsWith("[\n    {\n        \"target\": \"App\\\\Http\\\\Controllers\\\\Auth\\\\TokenController::store\",\n", $expected);
+        $this->assertStringEndsWith("\"\n    }\n]\n", $expected);
 
         // Aprobado, informa y --strict pasa: la CI puede exigirlo.
         [$code, $report] = $this->verify(['--strict' => true]);
@@ -245,6 +257,158 @@ final class HandRolledLockTest extends TestCase
 
         $this->assertSame(Command::SUCCESS, $code, $this->lastOutput);
         $this->assertStringContainsString('Cualquier otra cosa.', $this->lock());
+    }
+
+    /**
+     * Aprobar una clase entera no es un cheque en blanco: una acción que se
+     * le añade después —aquí, una que borra usuarios— no está aprobada.
+     */
+    public function test_anadir_una_accion_a_una_clase_aprobada_invalida_la_aprobacion(): void
+    {
+        $this->handRolled('approve', ['--all' => true]);
+        $before = $this->lock();
+
+        $this->controller('InboundWebhookController.php', 'App\Http\Controllers', <<<'PHP'
+        #[HandRolled('La firma se calcula sobre el cuerpo en bruto.')]
+        class InboundWebhookController
+        {
+            public function __invoke(Request $request)
+            {
+                return response()->noContent();
+            }
+
+            public function destroy(Request $request)
+            {
+                \Illuminate\Support\Facades\DB::table('users')->delete();
+
+                return response()->noContent();
+            }
+        }
+        PHP);
+
+        [$code, $report] = $this->verify(['--strict' => true]);
+
+        $this->assertSame(Command::FAILURE, $code);
+
+        $error = $this->unapproved($report);
+
+        $this->assertSame('app/Http/Controllers/InboundWebhookController.php', $error['file']);
+        $this->assertStringContainsString('cambió desde que se aprobó: el código aprobado ya no es el mismo', $error['message']);
+        $this->assertStringContainsString('uno nuevo también', $error['message']);
+        $this->assertStringContainsString(self::WEBHOOK, $error['message']);
+        $this->assertStringContainsString('Sólo el dueño del proyecto aprueba excepciones', $error['message']);
+
+        [, $list] = $this->handRolled('list');
+
+        $this->assertSame(['approved', 'code-changed'], array_column($list['exceptions'], 'status'));
+
+        // El dueño revisa y aprueba de nuevo: cambia la huella, y ese cambio
+        // del candado es lo que CODEOWNERS le pide revisar.
+        [$code, $result] = $this->handRolled('approve', ['targets' => ['InboundWebhookController']]);
+
+        $this->assertSame(Command::SUCCESS, $code, $this->lastOutput);
+        $this->assertTrue($result['changed']);
+        $this->assertNotSame($before, $this->lock());
+
+        [$code] = $this->verify(['--strict' => true]);
+
+        $this->assertSame(Command::SUCCESS, $code, $this->lastOutput);
+    }
+
+    /**
+     * La huella es del código, no del texto: un comentario o un cambio de
+     * formato no la mueven; una sentencia más, o un parámetro, sí.
+     */
+    public function test_la_huella_de_un_metodo_sigue_al_codigo_y_no_al_formato(): void
+    {
+        $this->handRolled('approve', ['--all' => true]);
+
+        $this->token('RFC 6749: los errores del canje son los de OAuth2.', "// Responde vacío.\n        return response()\n            ->json( [] ) ;");
+
+        [$code] = $this->verify(['--strict' => true]);
+
+        $this->assertSame(Command::SUCCESS, $code, $this->lastOutput);
+
+        $this->token('RFC 6749: los errores del canje son los de OAuth2.', "\\App\\Models\\User::query()->delete();\n\n        return response()->json([]);");
+
+        [$code, $report] = $this->verify();
+
+        $this->assertSame(Command::FAILURE, $code);
+        $this->assertStringContainsString('cambió desde que se aprobó', $this->unapproved($report)['message']);
+        $this->assertStringContainsString('su firma o su cuerpo', $this->unapproved($report)['message']);
+
+        // La firma también es parte de lo aprobado.
+        $this->token('RFC 6749: los errores del canje son los de OAuth2.');
+        $this->controller('TokenController.php', 'App\Http\Controllers\Auth', "class TokenController\n{\n"
+            ."    #[HandRolled('RFC 6749: los errores del canje son los de OAuth2.')]\n"
+            ."    public function store(Request \$request, bool \$force = true)\n    {\n        return response()->json([]);\n    }\n}");
+
+        [$code] = $this->verify();
+
+        $this->assertSame(Command::FAILURE, $code);
+    }
+
+    /**
+     * Una entrada sin huella no dice qué código se aprobó: no cuenta.
+     */
+    public function test_una_aprobacion_sin_huella_no_aprueba(): void
+    {
+        mkdir($this->project->path.'/.larapack');
+        file_put_contents($this->project->path.'/'.HandRolledLock::PATH, json_encode([
+            ['target' => self::TOKEN, 'reason' => 'RFC 6749: los errores del canje son los de OAuth2.'],
+            ['target' => self::WEBHOOK, 'reason' => 'La firma se calcula sobre el cuerpo en bruto.'],
+        ]));
+
+        [$code, $report] = $this->verify();
+
+        $this->assertSame(Command::FAILURE, $code);
+        $this->assertSame(['error', 'error'], $this->levels($report, 'hand-rolled-unapproved'));
+        $this->assertStringContainsString('sin la huella del código aprobado', $this->unapproved($report)['message']);
+
+        // Aprobar de nuevo la calcula.
+        [$code] = $this->handRolled('approve', ['--all' => true]);
+
+        $this->assertSame(Command::SUCCESS, $code, $this->lastOutput);
+
+        [$code] = $this->verify(['--strict' => true]);
+
+        $this->assertSame(Command::SUCCESS, $code, $this->lastOutput);
+    }
+
+    public function test_una_huella_mal_formada_deja_el_candado_ilegible(): void
+    {
+        mkdir($this->project->path.'/.larapack');
+        file_put_contents($this->project->path.'/'.HandRolledLock::PATH, json_encode([
+            ['target' => self::WEBHOOK, 'reason' => 'La firma se calcula sobre el cuerpo en bruto.', 'fingerprint' => 'md5:abc'],
+        ]));
+
+        [$code, $report] = $this->verify();
+
+        $this->assertSame(Command::FAILURE, $code);
+        $this->assertStringContainsString('sha256:<64 hex>', $this->unapproved($report)['message']);
+    }
+
+    /**
+     * `approve --all` sin nada que aprobar no crea un candado vacío: eso
+     * cambiaría el modo de verify sin que nadie lo decidiera.
+     */
+    public function test_aprobar_todo_sin_excepciones_no_crea_el_candado(): void
+    {
+        $this->controller('InboundWebhookController.php', 'App\Http\Controllers', "class InboundWebhookController\n{\n}");
+        $this->token(null);
+
+        [$code, $result] = $this->handRolled('approve', ['--all' => true]);
+
+        $this->assertSame(Command::SUCCESS, $code, $this->lastOutput);
+        $this->assertFalse($result['changed']);
+        $this->assertNull($result['lock']);
+        $this->assertFileDoesNotExist($this->project->path.'/'.HandRolledLock::PATH);
+
+        $this->runCommand('larapack:hand-rolled', ['action' => 'approve', '--all' => true]);
+
+        $this->assertStringContainsString('no se creó .larapack/hand-rolled.lock', $this->lastOutput);
+        $this->assertStringNotContainsString('comitéalo', $this->lastOutput);
+        $this->assertFileDoesNotExist($this->project->path.'/'.HandRolledLock::PATH);
     }
 
     public function test_lo_aprobado_que_ya_no_esta_en_el_codigo_sobra_y_se_retira(): void
