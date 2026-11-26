@@ -13,15 +13,31 @@ class PascalCaseModelNameResource extends JsonResource
 {
 
     /**
+     * Los accessors que el cliente puede pedir con `appends[]`.
+     *
+     * Antes se añadía cualquiera que llegara: el cliente decidía qué accessor
+     * del modelo se ejecutaba, en cada fila del listado, aunque fuera de uso
+     * interno —una URL firmada, un dato descifrado, una consulta cara—, y un
+     * nombre que no existía tumbaba la respuesta con un 500. Escribe aquí los
+     * que la interfaz necesita; lo que no esté en la lista se ignora.
+     *
+     * @var array<int, string>
+     */
+    protected array $appendable = [];
+
+    /**
      * @return array<string, mixed>
      */
     public function toArray(Request $request): array
     {
 
-        // input() y no get(): Request::get() esta deprecado en Laravel 13 y en
-        // Symfony 7.4, y desaparece en Symfony 8, que Laravel 13 ya admite.
-        if ($request->has('appends') && is_array($request->input('appends'))) {
-            $this->resource->setAppends($request->input('appends'));
+        $appends = $request->input('appends');
+
+        if (is_array($appends) && $this->appendable !== []) {
+            // Se suman a los que el modelo ya declara en $appends: setAppends()
+            // reemplaza, y pedir uno de más no debe quitar los de siempre.
+            $requested = array_intersect($this->appendable, array_filter($appends, 'is_string'));
+            $this->resource->setAppends(array_values(array_unique([...$this->resource->getAppends(), ...$requested])));
         }
 
         return parent::toArray($request) + [

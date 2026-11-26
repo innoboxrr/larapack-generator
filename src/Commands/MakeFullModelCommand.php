@@ -63,9 +63,15 @@ class MakeFullModelCommand extends Command
             $this->applyGenerationOptions($input);
         }
 
-        $modelName = $input->getArgument('name');
+        $modelName = (string) $input->getArgument('name');
         $includeMetas = $input->getOption('metas');
         $commands = $this->commands;
+
+        // Las herramientas lo rechazan igual, pero con una excepción a mitad
+        // de camino; aquí sale como un fallo que --format=json puede leer.
+        if (! Tool::isValidModelName($modelName)) {
+            return $this->reportFailure($input, $output, "«{$modelName}» no es un nombre de modelo válido.", 'Usa un identificador en PascalCase, como Post o BlogPost.');
+        }
 
         $invalid = $this->declareShape($modelName, $input);
 

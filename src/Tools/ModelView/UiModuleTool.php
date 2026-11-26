@@ -541,9 +541,31 @@ abstract class UiModuleTool extends Tool
 
     /**
      * Las etiquetas acaban dentro de cadenas JS con comilla simple.
+     *
+     * Escapar sólo la comilla no bastaba: una etiqueta que acababa en `\`
+     * se comía la comilla de cierre, y una con `\'` dejaba la comilla suelta
+     * y lo que la seguía como código del módulo. strtr() sustituye en una
+     * sola pasada, así que la barra que escapa una comilla no se vuelve a
+     * escapar. Los saltos de línea cortaban la cadena.
      */
     protected function escape(string $value): string
     {
-        return str_replace("'", "\\'", $value);
+        return strtr($value, [
+            '\\' => '\\\\',
+            "'" => "\\'",
+            "\n" => '\\n',
+            "\r" => '\\r',
+            "\u{2028}" => '\\u2028',
+            "\u{2029}" => '\\u2029',
+        ]);
+    }
+
+    /**
+     * Un valor del laraimport dentro de un atributo HTML o JSX entre comillas
+     * dobles: el `value` de una opción. Los dos decodifican las entidades.
+     */
+    protected function attribute(string $value): string
+    {
+        return htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
     }
 }

@@ -105,10 +105,35 @@ class Tool
     // INIT
 
     /**
+     * Lo que se acepta como nombre de modelo: un identificador, sin
+     * separadores de ruta ni puntos.
+     *
+     * El nombre acaba en rutas de archivo —`Http/Requests/<Modelo>`,
+     * `Models/Filters/<Modelo>`— y nadie lo comprobaba. `larapack:model
+     * ../../x` escribía fuera del proyecto, y `larapack:remove-full-model ..`
+     * borraba entero el directorio padre de cada carpeta del modelo: todos los
+     * requests, todos los filtros y todos los eventos del paquete. El esquema
+     * ya lo exige en el laraimport; esto lo exige también al comando suelto.
+     */
+    public const MODEL_NAME = '/^[A-Za-z][A-Za-z0-9_]*$/';
+
+    public static function isValidModelName(string $name): bool
+    {
+        return preg_match(self::MODEL_NAME, $name) === 1;
+    }
+
+    /**
      * @param  string  $ModelName  El nombre del modelo que se está creando, en PascalCase.
+     *                             Vacío sólo en las herramientas del paquete
+     *                             (proveedores, configuración), que no nombran
+     *                             ningún modelo.
      */
     protected function init(string $ModelName)
     {
+        if ($ModelName !== '' && ! self::isValidModelName($ModelName)) {
+            throw MakerException::invalidModelName($ModelName);
+        }
+
         $this->inflector = new Inflector(new NoopWordInflector, new NoopWordInflector);
         $this->namespace = get_namespace();
         $this->dotNamespace = get_dot_namespace();
@@ -438,6 +463,29 @@ class Tool
         return "->onUpdate('{$onUpdate}')->onDelete('{$onDelete}')";
     }
 
+    /**
+     * Un valor del laraimport como literal PHP de comilla simple.
+     *
+     * Los valores libres del esquema —el `default` de una columna, un `cast`,
+     * la tabla de un `constraint`— se pegaban entre comillas sin escapar. Un
+     * `default` como «it's» dejaba una migración que no compila, y uno como
+     * `x'); exec('...'); //` metía código en un archivo que `migrate` ejecuta.
+     *
+     * Lo que no necesita escape sale exactamente igual que antes —también un
+     * cast con barras, como `App\Casts\Money`—, así que regenerar no cambia
+     * los archivos que ya eran correctos.
+     */
+    protected static function phpString(string $value): string
+    {
+        // Dentro de comilla simple PHP sólo interpreta \' y \\, y una barra al
+        // final se comería la comilla de cierre.
+        $plain = ! str_contains($value, "'")
+            && ! str_contains($value, '\\\\')
+            && ! str_ends_with($value, '\\');
+
+        return $plain ? "'{$value}'" : var_export($value, true);
+    }
+
     // FORMA DECLARADA
 
     /**
@@ -488,9 +536,15 @@ class Tool
 
     protected function dropDir(string $path)
     {
-        $files = glob($path.'/{,.}[!.,!..]*', GLOB_MARK | GLOB_BRACE);
+        $files = glob($path.'/{,.}[!.,!..]*', GLOB_MARK | GLOB_BRACE) ?: [];
         foreach ($files as $file) {
-            if (is_dir($file)) {
+            // GLOB_MARK pone `/` a los directorios, también a un enlace que
+            // apunta a uno, y con la barra is_link() sigue el enlace.
+            $file = rtrim($file, '/');
+
+            // Un enlace se quita, no se recorre: recorrerlo borraba el
+            // contenido de su destino, que está fuera del modelo.
+            if (is_dir($file) && ! is_link($file)) {
                 $this->dropDir($file);
             } else {
                 unlink($file);

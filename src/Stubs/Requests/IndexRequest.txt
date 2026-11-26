@@ -13,7 +13,16 @@ class IndexRequest extends FormRequest
 
     protected function prepareForValidation(): void
     {
-        //
+
+        // La restricción de ManagedFilter::canView() sólo se aplica si llega
+        // `managed`, y llegaba del cliente: quien lo omitía listaba todas las
+        // filas, también las que canView() le oculta. Se fuerza aquí, mande lo
+        // que mande la petición. `except_view_any` sigue siendo del cliente:
+        // sólo deja de acotar a quien tiene el permiso viewAny, que ya ve todo.
+        $this->merge([
+            'managed' => true,
+        ]);
+
     }
 
     public function authorize(): bool
