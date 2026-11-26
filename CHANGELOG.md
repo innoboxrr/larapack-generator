@@ -118,6 +118,37 @@ es uno.
   `unchanged` por comprobación y `--path` acota a un subdirectorio. Pasa el Pint
   del proyecto si lo tiene. En una copia de school-management arregló los 524
   IndexRequests y los 691 Resources sin saltarse ninguno.
+- **`larapack:fix --package=<x>`** (repetible) acota a un paquete local por el
+  nombre de su directorio en `packages/` o su nombre de Composer, o a `app`, el
+  núcleo (lo que no cuelga de ningún paquete). Se combina con `--path`; un
+  nombre que no existe falla con la lista de los que hay.
+- **`larapack:fix` sólo toca lo que viene del generador**: reescribe
+  `prepareForValidation()` y el bloque `setAppends()` cuando tienen la forma
+  generada; si no, `skipped`. Una prueba fija que un IndexRequest con lógica
+  propia alrededor no pierde nada.
+- **`index-managed` reporta `admin_path_missing`**, sin arreglar nada: los
+  `ManagedFilter` de los IndexRequest arreglados o ya correctos cuyo
+  `canView()` no tiene camino para el alcance sin restricción. Con `managed`
+  forzado, al administrador le saldría el listado vacío. Cuenta como camino un
+  `return $query;` en cualquier rama (también el cuerpo de la plantilla) o un
+  nombre de `ManagedFilterAudit::UNRESTRICTED_MARKERS` (`unrestricted`,
+  `isUnrestricted`, `viewAny`, `isAdmin`), también en los soportes del proyecto
+  que `canView()` llama estáticamente, hasta tres saltos. El filtro se localiza
+  como SearchSurge: `filtersNamespace` literal de las opciones del Builder,
+  `<espacio del modelo>\Filters\<Modelo>\ManagedFilter` o
+  `App\Models\Filters\...`; lo que no se encuentra sale en
+  `managed_filter_unresolved`. Es una heurística de lectura, no una prueba: se
+  revisa a mano y no cambia el código de salida. En school-management, los 682
+  filtros de sus IndexRequests tienen camino (los 626 que delegan en
+  `AccessScope`/`PolicyScope`, por `$reach->unrestricted` e `isAdmin()`).
+- **`resource-appends` reporta `appendable_proposals`**: por Resource, los
+  accessors que el front pide con `appends` (`appends[]=x`, `appends=x,y`,
+  `appends: [...]`, `params.appends = [...]`, `appends.push(...)`) en
+  `resources/` y en `resources/{react,js,vue}` de cada paquete, asociados por el
+  modelo o la ruta que el archivo menciona cerca, y con `exists` según el
+  modelo y sus traits declaren el accessor. Lo que no se asocia sale «sin
+  asociar» con su archivo:línea. Son propuestas sin confirmar: `$appendable`
+  sigue vacío, porque una lista mal hecha deja de mostrar un dato en pantalla.
 
 ### Endpoints y controladores declarados (SPEC 02)
 

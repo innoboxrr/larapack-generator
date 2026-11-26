@@ -34,15 +34,28 @@ use RuntimeException;
  * Como lo que ya está bien no se marca, correrlo dos veces no cambia nada la
  * segunda.
  *
+ * Sólo toca lo que viene del generador: reescribe prepareForValidation() y
+ * el bloque setAppends() cuando tienen la forma generada; si no, `skipped`.
+ * La lógica propia de alrededor —otros métodos, sentencias propias en
+ * prepareForValidation(), lo que haya en toArray()— queda igual.
+ *
  * Un `$appendable` vacío deja de añadir lo que pida el cliente: es lo
  * conservador, y la interfaz que pedía accessors con `appends[]` tiene que
- * declararlos en la lista. No hay forma de deducirlos del código PHP.
+ * declararlos en la lista. Del PHP no se deducen; AppendableProposals los lee
+ * del front y los PROPONE en el reporte, sin escribirlos nunca.
+ *
+ * Y se reporta, sin arreglar nada, lo que ManagedFilterAudit encuentra: los
+ * ManagedFilter cuyo canView() no tiene camino para el administrador, que con
+ * `managed` forzado le dejarían el listado vacío.
  *
  * @phpstan-import-type Debt from LegacySecurity
+ * @phpstan-import-type AdminPathMissing from ManagedFilterAudit
+ * @phpstan-import-type FilterUnresolved from ManagedFilterAudit
+ * @phpstan-import-type Proposals from AppendableProposals
  *
  * @phpstan-type Fixed array{file: string, diff?: string}
  * @phpstan-type Skipped array{file: string, reason: string}
- * @phpstan-type CheckReport array{fixed: list<Fixed>, skipped: list<Skipped>, unchanged: int}
+ * @phpstan-type CheckReport array{fixed: list<Fixed>, skipped: list<Skipped>, unchanged: int, admin_path_missing?: list<AdminPathMissing>, managed_filter_unresolved?: list<FilterUnresolved>, appendable_proposals?: Proposals}
  */
 final class LegacyFix
 {
@@ -145,8 +158,10 @@ final class LegacyFix
     /**
      * @param  list<string>  $checks
      * @param  string|null  $path  sólo lo que cuelga de este subdirectorio de la raíz
+     * @param  list<string>  $packages  sólo lo de estas raíces (ProjectSources::roots()); la del
+     *                                  proyecto es el núcleo, sin lo que cuelga de un paquete local
      */
-    public function __construct(private string $root, private array $checks, private ?string $path = null)
+    public function __construct(private string $root, private array $checks, private ?string $path = null, private array $packages = [])
     {
         $this->security = new LegacySecurity($root);
         $this->path = $path === null || trim($path, '/\\') === '' ? null : trim(str_replace('\\', '/', $path), '/');
@@ -220,7 +235,43 @@ final class LegacyFix
             $this->report[$check]['fixed'][] = ['file' => $this->security->project()->relative($file)];
         }
 
+        $this->review($inspection['clean']);
+
         return $this->report;
+    }
+
+    /**
+     * Lo que se reporta sin arreglar: los ManagedFilter sin camino para el
+     * administrador, de los IndexRequest arreglados o ya correctos, y la
+     * propuesta de `$appendable` de cada Resource en alcance. Ni una cosa ni
+     * la otra cambia el código de salida: son lecturas heurísticas que revisa
+     * una persona.
+     *
+     * @param  array<string, list<string>>  $clean
+     */
+    private function review(array $clean): void
+    {
+        $project = $this->security->project();
+
+        if (isset($this->report[LegacySecurity::INDEX_MANAGED])) {
+            $requests = array_values(array_unique([
+                ...array_filter($clean[LegacySecurity::INDEX_MANAGED] ?? [], fn (string $file): bool => $this->inScope($file)),
+                ...array_keys(array_filter($this->checkOf, fn (string $check, string $file): bool => $check === LegacySecurity::INDEX_MANAGED && isset($this->fixes[$file]), ARRAY_FILTER_USE_BOTH)),
+            ]));
+            sort($requests);
+            $audit = (new ManagedFilterAudit($project))->audit($requests);
+            $this->report[LegacySecurity::INDEX_MANAGED]['admin_path_missing'] = $audit['missing'];
+            $this->report[LegacySecurity::INDEX_MANAGED]['managed_filter_unresolved'] = $audit['unresolved'];
+        }
+
+        if (isset($this->report[LegacySecurity::RESOURCE_APPENDS])) {
+            $resources = array_values(array_filter($project->files('/Http/Resources/'), fn (string $file): bool => $this->inScope($file)));
+            $frontRoots = $this->packages === []
+                ? $project->roots()
+                : array_values(array_unique([$project->root(), ...$this->packages]));
+
+            $this->report[LegacySecurity::RESOURCE_APPENDS]['appendable_proposals'] = (new AppendableProposals($project))->propose($resources, $frontRoots);
+        }
     }
 
     /**
@@ -943,11 +994,17 @@ final class LegacyFix
 
     private function inScope(string $file): bool
     {
+        $project = $this->security->project();
+
+        if ($this->packages !== [] && ! in_array($project->rootOf($file), $this->packages, true)) {
+            return false;
+        }
+
         if ($this->path === null) {
             return true;
         }
 
-        $relative = $this->security->project()->relative($file);
+        $relative = $project->relative($file);
 
         return $relative === $this->path || str_starts_with($relative, $this->path.'/');
     }

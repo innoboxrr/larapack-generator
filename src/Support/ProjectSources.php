@@ -152,6 +152,23 @@ final class ProjectSources
      */
     public function phpFiles(string $directory): array
     {
+        return $this->filesWithExtensions($directory, ['php']);
+    }
+
+    /**
+     * Los archivos de un directorio con alguna de estas extensiones (en
+     * minúsculas), con las mismas exclusiones que phpFiles(): ruta real =>
+     * ruta tal como se recorrió. Un directorio que no existe no tiene ninguno.
+     *
+     * @param  list<string>  $extensions
+     * @return array<string, string>
+     */
+    public function filesWithExtensions(string $directory, array $extensions): array
+    {
+        if (! is_dir($directory)) {
+            return [];
+        }
+
         $files = [];
         $iterator = new RecursiveIteratorIterator(new RecursiveCallbackFilterIterator(
             new RecursiveDirectoryIterator($directory, FilesystemIterator::SKIP_DOTS),
@@ -161,13 +178,41 @@ final class ProjectSources
 
         foreach ($iterator as $file) {
             /** @var SplFileInfo $file */
-            if ($file->getExtension() === 'php') {
+            if (in_array(strtolower($file->getExtension()), $extensions, true)) {
                 $path = str_replace('\\', '/', $file->getPathname());
                 $files[(string) ($file->getRealPath() ?: $path)] = $path;
             }
         }
 
         return $files;
+    }
+
+    /**
+     * La raíz de un paquete local por el nombre de su directorio
+     * (`school-library`), su ruta relativa (`packages/school-library`) o su
+     * nombre de Composer (`innoboxrr/school-library`); null si no hay ninguno
+     * con ese nombre. La raíz del proyecto no es un paquete.
+     */
+    public function packageRoot(string $name): ?string
+    {
+        $name = strtolower(trim(str_replace('\\', '/', $name), '/'));
+
+        foreach ($this->roots() as $root) {
+            if ($root === $this->root) {
+                continue;
+            }
+
+            $composer = self::composer($root)['name'] ?? null;
+
+            if (strtolower(basename($root)) === $name
+                || strtolower($this->relative($root)) === $name
+                || (is_string($composer) && strtolower($composer) === $name)
+            ) {
+                return $root;
+            }
+        }
+
+        return null;
     }
 
     /**

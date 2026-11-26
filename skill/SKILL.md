@@ -512,8 +512,11 @@ Y en **todos** los controladores, generados o no, con o sin manifiesto:
   forzar `managed`, o un Resource que pasa `appends` del cliente sin
   `$appendable`. Es código de antes de 9.0: no lo copies, y no lo edites
   archivo por archivo: `larapack:fix index-managed resource-appends` lo arregla
-  igual en todos (`--dry-run` enseña el diff). Sólo lo que devuelva como
-  `skipped` se arregla a mano, siguiendo la razón que da.
+  igual en todos (`--dry-run` enseña el diff; `--package=<x>` o `--package=app`
+  acota). Sólo lo que devuelva como `skipped` se arregla a mano, siguiendo la
+  razón que da. Revisa a mano `admin_path_missing` (un `canView()` que deja sin
+  listado al administrador) y `appendable_proposals` (propuestas para
+  `$appendable`, nunca escritas solas).
 
 `--check=<nombre>` (repetible) corre sólo esas. Código distinto de cero = aún no
 has terminado.
