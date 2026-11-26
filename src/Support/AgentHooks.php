@@ -93,13 +93,21 @@ final class AgentHooks
      * El comando pasa por `$CLAUDE_PROJECT_DIR` porque el hook se ejecuta en el
      * directorio en el que esté la sesión, que no tiene por qué ser la raíz.
      *
+     * Antes de llamar a PHP comprueba que haya algo que llamar: en un paquete
+     * recién creado con larapack:new, hasta el `composer install` no existe
+     * vendor/bin/builder, y una aplicación sin vendor/ no arranca Artisan. Sin
+     * esa comprobación cada edición acabaría en un error para el usuario. Se
+     * hace con `[ ! -f … ] || php …` y no con `|| true`, que se tragaría
+     * también el código 2 de la guardia. Es sintaxis POSIX: Claude Code
+     * ejecuta los hooks con bash, también en Windows (Git Bash).
+     *
      * @return array<string, stdClass>
      */
     public static function hooks(string $root): array
     {
         $binary = is_file(rtrim($root, '/').'/artisan')
-            ? 'php "$CLAUDE_PROJECT_DIR/artisan"'
-            : 'php "$CLAUDE_PROJECT_DIR/vendor/bin/builder"';
+            ? '[ ! -f "$CLAUDE_PROJECT_DIR/vendor/autoload.php" ] || php "$CLAUDE_PROJECT_DIR/artisan"'
+            : '[ ! -f "$CLAUDE_PROJECT_DIR/vendor/bin/builder" ] || php "$CLAUDE_PROJECT_DIR/vendor/bin/builder"';
 
         return [
             'PostToolUse' => (object) [
@@ -143,6 +151,8 @@ final class AgentHooks
         }
 
         $current = (string) file_get_contents($absolute);
+        self::assertMarkers($absolute, $current);
+
         $begin = strpos($current, self::BEGIN);
         $end = $begin === false ? false : strpos($current, self::END, $begin);
 
@@ -169,6 +179,27 @@ final class AgentHooks
     }
 
     /**
+     * Si `--path` apunta al mismo `AGENTS.md`: entonces el skill entero ya es
+     * ese archivo, y añadirle el bloque lo duplicaría y le haría decir «lee
+     * `AGENTS.md`» de sí mismo.
+     */
+    public static function isAgentsFile(string $root, string $path, string $target = self::AGENTS): bool
+    {
+        $path = self::resolve($root, $path);
+        $target = self::resolve($root, $target);
+        $realPath = realpath($path);
+        $realTarget = realpath($target);
+
+        if ($realPath !== false && $realTarget !== false) {
+            return $realPath === $realTarget;
+        }
+
+        // Sin los dos en disco no hay realpath que comparar. Sin distinguir
+        // mayúsculas: en Windows y macOS `agents.md` es el mismo archivo.
+        return strcasecmp($path, $target) === 0;
+    }
+
+    /**
      * El texto del bloque, con la ruta en la que se instaló el skill.
      */
     public static function agentsBlock(string $skillPath = Skill::DEFAULT_TARGET): string
@@ -181,6 +212,43 @@ final class AgentHooks
         }
 
         return str_replace('{{skill}}', str_replace('\\', '/', $skillPath), str_replace("\r\n", "\n", $contents));
+    }
+
+    /**
+     * Un marcador suelto —un BEGIN sin su END, editado a mano— no se
+     * arregla adivinando: añadir otro bloque haría que la siguiente
+     * ejecución reemplazara todo lo que hay entre el BEGIN huérfano y el END
+     * nuevo, que es texto del proyecto.
+     */
+    private static function assertMarkers(string $file, string $contents): void
+    {
+        $begins = substr_count($contents, self::BEGIN);
+        $ends = substr_count($contents, self::END);
+        $begin = strpos($contents, self::BEGIN);
+        $end = strpos($contents, self::END);
+
+        if ($begins === 0 && $ends === 0) {
+            return;
+        }
+
+        if ($begins !== 1 || $ends !== 1 || $begin === false || $end === false || $end < $begin) {
+            throw new RuntimeException(sprintf(
+                '%s: los marcadores de LaraPack están descompensados (%d %s, %d %s). Debe haber un único bloque entre %s y %s: corrígelo a mano; no se toca.',
+                $file, $begins, self::BEGIN, $ends, self::END, self::BEGIN, self::END
+            ));
+        }
+    }
+
+    /**
+     * La ruta absoluta y normalizada, sin `./` ni barras repetidas.
+     */
+    private static function resolve(string $root, string $path): string
+    {
+        $path = str_replace('\\', '/', $path);
+        $isAbsolute = str_starts_with($path, '/') || preg_match('/^[A-Za-z]:\//', $path) === 1;
+        $path = $isAbsolute ? $path : rtrim(str_replace('\\', '/', $root), '/').'/'.$path;
+
+        return (string) preg_replace(['#/(\./)+#', '#/{2,}#'], '/', $path);
     }
 
     /**

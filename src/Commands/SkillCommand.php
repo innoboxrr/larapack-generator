@@ -74,7 +74,12 @@ class SkillCommand extends Command
             // El bloque se reescribe siempre, sin --force: lo de fuera de los
             // marcadores es del proyecto y no se toca, y lo de dentro es del
             // paquete y tiene que seguir al paquete.
-            if (! $input->getOption('no-agents')) {
+            if (! $input->getOption('no-agents') && AgentHooks::isAgentsFile(root_path(), $path)) {
+                // Con --path=AGENTS.md el skill entero ya es ese archivo: el
+                // bloque lo duplicaría, y la siguiente ejecución vería que
+                // difiere del paquete para siempre.
+                $output->writeln('  <info>El skill ya está en AGENTS.md:</info> no se añade el bloque de LaraPack.');
+            } elseif (! $input->getOption('no-agents')) {
                 $agents = AgentHooks::installAgentsBlock(root_path(), $path);
 
                 $output->writeln(match ($agents['action']) {
