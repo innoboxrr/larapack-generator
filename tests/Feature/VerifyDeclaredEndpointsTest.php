@@ -2,6 +2,7 @@
 
 namespace Innoboxrr\LarapackGenerator\Tests\Feature;
 
+use Innoboxrr\LarapackGenerator\Support\Verifier;
 use Innoboxrr\LarapackGenerator\Tests\Support\FakeProject;
 use Innoboxrr\LarapackGenerator\Tests\TestCase;
 use Symfony\Component\Console\Command\Command;
@@ -203,10 +204,12 @@ final class VerifyDeclaredEndpointsTest extends TestCase
         $undeclared = $this->findingsOf($report, 'route-not-declared');
         $this->assertCount(1, $undeclared);
         $this->assertStringContainsString('__invoke', $undeclared[0]['message']);
+        $this->assertStringContainsString('a mano', $undeclared[0]['message']);
 
-        $logic = $this->findingsOf($report, 'controller-logic');
-        $this->assertCount(1, $logic);
-        $this->assertStringContainsString('__invoke()', $logic[0]['message']);
+        // Que no delegue lo dice controller-shape, una vez.
+        $shape = $this->findingsOf($report, 'controller-shape');
+        $this->assertCount(1, $shape);
+        $this->assertStringContainsString('__invoke()', $shape[0]['message']);
     }
 
     public function test_una_ruta_escrita_a_mano_falla_tenga_o_no_nombre(): void
@@ -242,9 +245,77 @@ final class VerifyDeclaredEndpointsTest extends TestCase
         $this->assertSame('src/Http/Requests/Course/StatsRequest.php', $findings[0]['file']);
     }
 
-    // CONTROLLER-LOGIC
+    // ENDPOINTS RETIRADOS DEL LARAIMPORT
 
-    public function test_logica_en_un_metodo_generado_falla(): void
+    /**
+     * Quitar un endpoint del laraimport y volver a importar sin --force deja
+     * lo que se generó para él. verify lo encuentra, y no culpa de escribirlo
+     * a mano a quien no tocó nada.
+     */
+    public function test_un_endpoint_retirado_no_se_atribuye_a_mano(): void
+    {
+        $this->write([['name' => 'importRoster', 'method' => 'post', 'target' => 'collection']]);
+        $this->import();
+
+        [$code, $report] = $this->verify();
+
+        $this->assertSame(Command::FAILURE, $code);
+
+        $messages = array_column($this->findingsOf($report, 'route-not-declared'), 'message', 'file');
+
+        $this->assertArrayHasKey('src/Http/Controllers/CourseController.php', $messages);
+        $this->assertArrayHasKey('routes/api/models/course.php', $messages);
+        $this->assertArrayHasKey('src/Http/Requests/Course/PublishRequest.php', $messages);
+
+        foreach ($messages as $file => $message) {
+            $this->assertStringContainsString('ya no está declarado', $message, $file);
+            $this->assertStringNotContainsString('a mano', $message, $file);
+        }
+
+        // Con --force el controlador y las rutas se rehacen sin él; la
+        // request es del proyecto y se queda hasta que alguien la borre.
+        $this->import(force: true);
+
+        [, $report] = $this->verify();
+
+        $findings = $this->findingsOf($report, 'route-not-declared');
+        $this->assertCount(1, $findings);
+        $this->assertSame('src/Http/Requests/Course/PublishRequest.php', $findings[0]['file']);
+        $this->assertStringContainsString('ya no está declarado', $findings[0]['message']);
+    }
+
+    /**
+     * Si el controlador está editado a mano, --force lo conserva: mandar a
+     * regenerar sería mandar a un comando que no hace nada.
+     */
+    public function test_regenerar_no_se_ofrece_sobre_un_controlador_editado(): void
+    {
+        $this->edit('src/Http/Controllers/CourseController.php', fn (string $php): string => preg_replace(
+            '/\n    public function publish\(.*?\n    \}\n/s',
+            "\n",
+            $php
+        ));
+
+        [, $report] = $this->verify();
+
+        $findings = array_values(array_filter(
+            $this->findingsOf($report, 'endpoint-missing'),
+            fn (array $finding): bool => $finding['file'] === 'src/Http/Controllers/CourseController.php'
+        ));
+
+        $this->assertCount(1, $findings);
+        $this->assertStringContainsString('Regenerar no basta', $findings[0]['message']);
+    }
+
+    // LÓGICA EN EL CONTROLADOR: ES DE CONTROLLER-SHAPE
+
+    /**
+     * Un solo dueño para "el controlador hace algo más que
+     * `return $request->handle();`": controller-shape, que mira todos los
+     * controladores. Antes el generado daba además un controller-logic con
+     * otra regla, y el mismo problema salía dos veces.
+     */
+    public function test_logica_en_un_metodo_generado_falla_una_vez(): void
     {
         $this->edit('src/Http/Controllers/CourseController.php', fn (string $php): string => str_replace(
             "public function publish(PublishRequest \$request)\n    {\n        return \$request->handle();",
@@ -255,8 +326,9 @@ final class VerifyDeclaredEndpointsTest extends TestCase
         [$code, $report] = $this->verify();
 
         $this->assertSame(Command::FAILURE, $code);
+        $this->assertSame([], $this->findingsOf($report, 'controller-logic'));
 
-        $findings = $this->findingsOf($report, 'controller-logic');
+        $findings = $this->findingsOf($report, 'controller-shape');
         $this->assertCount(1, $findings);
         $this->assertStringContainsString('publish()', $findings[0]['message']);
         $this->assertSame('src/Http/Controllers/CourseController.php', $findings[0]['file']);
@@ -273,6 +345,27 @@ final class VerifyDeclaredEndpointsTest extends TestCase
         [$code, $report] = $this->verify();
 
         $this->assertSame(Command::FAILURE, $code);
-        $this->assertSame('Post', $this->findingsOf($report, 'controller-logic')[0]['model']);
+        $this->assertSame([], $this->findingsOf($report, 'controller-logic'));
+        $this->assertCount(1, $this->findingsOf($report, 'controller-shape'));
+        $this->assertSame('src/Http/Controllers/PostController.php', $this->findingsOf($report, 'controller-shape')[0]['file']);
+    }
+
+    public function test_check_acepta_endpoint_missing_y_ya_no_controller_logic(): void
+    {
+        $this->assertContains('endpoint-missing', Verifier::CHECKS);
+        $this->assertContains('route-not-declared', Verifier::CHECKS);
+        $this->assertNotContains('controller-logic', Verifier::CHECKS);
+
+        $this->edit('routes/api/models/course.php', fn (string $php): string => preg_replace(
+            "/\nRoute::post\\('publish'.*?;\n/s",
+            "\n",
+            $php
+        ));
+
+        $this->assertSame(Command::FAILURE, $this->runCommand('larapack:verify', ['--format' => 'json', '--check' => ['endpoint-missing']]));
+
+        $report = json_decode($this->lastOutput, true);
+
+        $this->assertSame(['endpoint-missing'], array_values(array_unique(array_column($report['findings'], 'check'))));
     }
 }
