@@ -330,7 +330,7 @@
                 "uri": {
                     "type": "string",
                     "pattern": "^(?:[a-z0-9]+(?:-[a-z0-9]+)*|\\{[a-z][a-z0-9_]*\\??\\})(?:/(?:[a-z0-9]+(?:-[a-z0-9]+)*|\\{[a-z][a-z0-9_]*\\??\\}))*$",
-                    "description": "Relativa al prefijo del archivo de rutas, como las CRUD: segmentos en kebab o {parametro}, sin barra inicial ni '..'. Por omisión, el nombre en kebab: importRoster -> import-roster."
+                    "description": "Relativa al prefijo del archivo de rutas, como las CRUD: segmentos en kebab o {parametro}, sin barra inicial ni '..'. Por omisión, el nombre en kebab: importRoster -> import-roster, importCSV -> import-csv. Si empieza por un parámetro que no es {<modelo>_id} de un endpoint de registro, casa con cualquier segmento y tapa a los endpoints del mismo verbo declarados después."
                 },
                 "target": {
                     "enum": ["record", "collection"],
@@ -387,7 +387,7 @@
                 "uri": {
                     "type": "string",
                     "pattern": "^(?:[a-z0-9]+(?:-[a-z0-9]+)*|\\{[a-z][a-z0-9_]*\\??\\})(?:/(?:[a-z0-9]+(?:-[a-z0-9]+)*|\\{[a-z][a-z0-9_]*\\??\\}))*$",
-                    "description": "Relativa al prefijo del archivo de rutas, como las CRUD: segmentos en kebab o {parametro}, sin barra inicial ni '..'. Por omisión, el nombre en kebab: importRoster -> import-roster."
+                    "description": "Relativa al prefijo del archivo de rutas, como las CRUD: segmentos en kebab o {parametro}, sin barra inicial ni '..'. Por omisión, el nombre en kebab: importRoster -> import-roster, importCSV -> import-csv. Si empieza por un parámetro que no es {<modelo>_id} de un endpoint de registro, casa con cualquier segmento y tapa a los endpoints del mismo verbo declarados después."
                 },
                 "ability": {
                     "type": "string",

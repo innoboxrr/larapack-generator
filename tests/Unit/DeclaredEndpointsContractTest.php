@@ -2,6 +2,7 @@
 
 namespace Innoboxrr\LarapackGenerator\Tests\Unit;
 
+use Innoboxrr\LarapackGenerator\Support\Import\Endpoints;
 use Innoboxrr\LarapackGenerator\Support\Import\ImportDocument;
 use Innoboxrr\LarapackGenerator\Support\Import\SemanticValidator;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -288,5 +289,95 @@ final class DeclaredEndpointsContractTest extends TestCase
 
         $this->assertNull($document);
         $this->assertContains('/controllers/0/endpoints', array_column($errors, 'path'));
+    }
+
+    // SIGLAS Y RUTAS TAPADAS
+
+    /**
+     * Una sigla es una palabra: importCSV no da `import-c-s-v`.
+     *
+     * @return array<string, array{0: string, 1: string, 2: string}>
+     */
+    public static function names(): array
+    {
+        return [
+            'camelCase' => ['importRoster', 'import-roster', 'import.roster'],
+            'sigla al final' => ['importCSV', 'import-csv', 'import.csv'],
+            'sigla en medio' => ['exportCSVFile', 'export-csv-file', 'export.csv.file'],
+            'como forceDelete' => ['forceDelete', 'force-delete', 'force.delete'],
+            'con números' => ['syncV2', 'sync-v2', 'sync.v2'],
+        ];
+    }
+
+    #[DataProvider('names')]
+    public function test_la_uri_y_la_ruta_tratan_las_siglas_como_una_palabra(string $name, string $uri, string $route): void
+    {
+        $this->assertSame($uri, Endpoints::uri(['name' => $name]));
+        $this->assertSame($route, Endpoints::routeName($name));
+    }
+
+    public function test_dos_nombres_que_dan_la_misma_ruta(): void
+    {
+        ['errors' => $errors] = $this->parse([
+            ['name' => 'importCsv', 'method' => 'post', 'target' => 'collection'],
+            ['name' => 'importCSV', 'method' => 'put', 'target' => 'collection'],
+        ]);
+
+        $this->assertRejected($errors, '/models/0/endpoints/1/name', "la misma ruta, 'import.csv'");
+    }
+
+    public function test_un_parametro_sin_restriccion_al_principio_avisa(): void
+    {
+        ['document' => $document, 'errors' => $errors] = $this->parse([
+            ['name' => 'bySlug', 'method' => 'get', 'target' => 'collection', 'uri' => '{slug}'],
+            // Otro verbo: no lo tapa.
+            ['name' => 'importRoster', 'method' => 'post', 'target' => 'collection'],
+        ]);
+
+        $this->assertNotNull($document);
+
+        $warnings = $this->messages($errors, SemanticValidator::WARNING);
+        $this->assertCount(1, $warnings);
+        $this->assertStringStartsWith('/models/0/endpoints/0/uri', $warnings[0]);
+        $this->assertStringContainsString("'by-slug/{slug}'", $warnings[0]);
+    }
+
+    public function test_un_parametro_sin_restriccion_que_tapa_a_otro_endpoint_falla(): void
+    {
+        ['document' => $document, 'errors' => $errors] = $this->parse([
+            ['name' => 'bySlug', 'method' => 'get', 'target' => 'collection', 'uri' => '{slug}'],
+            ['name' => 'stats', 'method' => 'get', 'target' => 'collection'],
+            // El registro se restringe a números, y también lo tapa.
+            ['name' => 'card', 'method' => 'get', 'uri' => '{course_id}'],
+            // Dos segmentos: no casa con uno.
+            ['name' => 'certificate', 'method' => 'get', 'uri' => '{course_id}/certificate'],
+        ]);
+
+        $this->assertNull($document);
+        $this->assertRejected($errors, '/models/0/endpoints/0/uri', "antes que 'stats', 'card'");
+        $this->assertStringNotContainsString("'certificate'", implode("\n", $this->messages($errors)));
+    }
+
+    public function test_el_identificador_del_registro_no_cuenta_como_parametro_abierto(): void
+    {
+        ['errors' => $errors] = $this->parse([
+            ['name' => 'certificate', 'method' => 'get', 'uri' => '{course_id}/certificate'],
+            ['name' => 'stats', 'method' => 'get', 'target' => 'collection'],
+        ]);
+
+        $this->assertSame([], $errors);
+    }
+
+    public function test_tambien_en_un_controlador_sin_modelo(): void
+    {
+        ['errors' => $errors] = $this->parse([], controllers: [
+            ['name' => 'Pages', 'endpoints' => [
+                ['name' => 'page', 'method' => 'get', 'uri' => '{page_id}'],
+                ['name' => 'sitemap', 'method' => 'get'],
+            ]],
+        ]);
+
+        // Sin modelo, la ruta no restringe nada, tampoco un `_id`.
+        $this->assertRejected($errors, '/controllers/0/endpoints/0/uri', "antes que 'sitemap'");
     }
 }

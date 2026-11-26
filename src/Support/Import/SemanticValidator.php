@@ -105,6 +105,7 @@ final class SemanticValidator
     {
         $findings = [];
         $names = [];
+        $routeNames = [];
         $routes = [];
         $abilities = [];
         $idParameter = self::snake($owner['name']).'_id';
@@ -120,6 +121,16 @@ final class SemanticValidator
             }
 
             $names[$name] = true;
+
+            // importCsv e importCSV son dos métodos y una sola ruta, import.csv,
+            // y en un disco que no distingue mayúsculas, una sola request.
+            $routeName = Endpoints::routeName($name);
+
+            if (isset($routeNames[$routeName]) && $routeNames[$routeName] !== $name) {
+                $findings[] = self::error("{$at}/name", "'{$name}' y '{$routeNames[$routeName]}' dan la misma ruta, '{$routeName}': el front no podría llamar a uno de los dos. Elige otro nombre.");
+            }
+
+            $routeNames[$routeName] ??= $name;
 
             // Con un nombre inválido no se sigue mirando la habilidad: por
             // omisión es el propio nombre, y repetiría el mismo error.
@@ -162,6 +173,79 @@ final class SemanticValidator
             if ($actions !== null && $validName) {
                 $findings = [...$findings, ...self::endpointAbility($owner, $endpoint, $at, $actions, $abilities)];
             }
+        }
+
+        return [...$findings, ...self::openFirstSegments($owner, $path, $actions === null ? null : $idParameter)];
+    }
+
+    /**
+     * Un endpoint cuya URI empieza por un parámetro sin restricción, como
+     * GET `{slug}`.
+     *
+     * Casa con cualquier primer segmento, y Laravel se queda con la primera
+     * ruta que casa: todo endpoint con el mismo verbo declarado después
+     * —GET `stats`— llega a su método. Las CRUD van antes en el archivo y no
+     * se ven afectadas. El `{<modelo>_id}` de un endpoint de registro no
+     * cuenta: la ruta lo restringe a números.
+     *
+     * Si tapa a otro endpoint del laraimport es un error; si no, un aviso:
+     * taparía al siguiente que se declare.
+     *
+     * @param  array<string, mixed>  $owner
+     * @param  string|null  $idParameter  El parámetro numérico; null en un controllers[].
+     * @return array<int, array<string, mixed>>
+     */
+    private static function openFirstSegments(array $owner, string $path, ?string $idParameter): array
+    {
+        $findings = [];
+        $endpoints = array_values($owner['endpoints'] ?? []);
+
+        $numeric = fn (array $endpoint): ?string => $idParameter !== null && ($endpoint['target'] ?? 'record') === 'record'
+            ? $idParameter
+            : null;
+
+        foreach ($endpoints as $position => $endpoint) {
+            $uri = Endpoints::uri($endpoint);
+
+            if (! preg_match('/^\{([a-z][a-z0-9_]*)\??\}/', $uri, $parameter) || $parameter[1] === $numeric($endpoint)) {
+                continue;
+            }
+
+            $pattern = Endpoints::pattern($uri, $numeric($endpoint));
+            $shadowed = [];
+
+            foreach (array_slice($endpoints, $position + 1) as $later) {
+                if ($later['method'] !== $endpoint['method']) {
+                    continue;
+                }
+
+                // Una petición de verdad al de después: sus parámetros con un
+                // valor que su propia ruta aceptaría.
+                $request = (string) preg_replace_callback(
+                    '/\{([a-z][a-z0-9_]*)\??\}/',
+                    fn (array $match): string => $match[1] === $numeric($later) ? '1' : 'x',
+                    Endpoints::uri($later)
+                );
+
+                if (preg_match($pattern, $request)) {
+                    $shadowed[] = "'{$later['name']}'";
+                }
+            }
+
+            $name = (string) $endpoint['name'];
+            $verb = strtoupper((string) $endpoint['method']);
+            $fixed = Endpoints::kebab($name).'/'.$uri;
+
+            $findings[] = $shadowed === []
+                ? [
+                    'level' => self::WARNING,
+                    'path' => "{$path}/endpoints/{$position}/uri",
+                    'message' => "'{$name}' empieza por {{$parameter[1]}}, un parámetro sin restricción: casa con cualquier primer segmento y se quedaría con todo endpoint {$verb} que se declare después. Pon delante un segmento fijo, como '{$fixed}'.",
+                ]
+                : self::error(
+                    "{$path}/endpoints/{$position}/uri",
+                    "'{$name}' empieza por {{$parameter[1]}}, que casa con cualquier primer segmento, y se registra antes que ".implode(', ', $shadowed).": esas peticiones llegarían a '{$name}'. Pon delante un segmento fijo, como '{$fixed}', o decláralo el último."
+                );
         }
 
         return $findings;
