@@ -217,6 +217,31 @@ final class DeclaredEndpointsContractTest extends TestCase
         $this->assertSame([], $this->messages($errors));
     }
 
+    /**
+     * Las dos URIs pasan el esquema, y Laravel lanza al compilar la ruta: un
+     * 500 en cada petición con ese verbo que llegue hasta ella, y
+     * `route:cache` roto.
+     */
+    public function test_un_parametro_repetido_o_demasiado_largo_no_compila_en_laravel(): void
+    {
+        ['errors' => $errors] = $this->parse([['name' => 'copy', 'method' => 'post', 'uri' => '{course_id}/copy/{course_id}']]);
+
+        $this->assertRejected($errors, '/models/0/endpoints/0/uri', 'repite el parámetro {course_id}');
+
+        ['errors' => $errors] = $this->parse([], [], [['name' => 'Report', 'endpoints' => [
+            ['name' => 'summary', 'method' => 'get', 'uri' => 'reports/{this_parameter_name_is_far_too_long}'],
+        ]]]);
+
+        $this->assertRejected($errors, '/controllers/0/endpoints/0/uri', 'más de 32 caracteres');
+
+        ['errors' => $errors] = $this->parse([], [], [['name' => 'Report', 'endpoints' => [
+            ['name' => 'summary', 'method' => 'get', 'uri' => 'reports/{parameter_name_with_32_character}'],
+        ]]]);
+
+        $this->assertSame(32, strlen('parameter_name_with_32_character'));
+        $this->assertSame([], $this->messages($errors));
+    }
+
     public function test_una_habilidad_crud_que_el_modelo_no_tiene(): void
     {
         ['errors' => $errors] = $this->parse(
