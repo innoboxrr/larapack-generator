@@ -178,6 +178,88 @@ final class AgentHooksTest extends TestCase
         $this->assertSame('{"hooks": {"PostToolUse": {"no": "es una lista"}}}', file_get_contents($this->settingsFile()));
     }
 
+    /**
+     * Un `1e999` es JSON válido y json_decode lo lee como INF, que
+     * json_encode no sabe escribir: el `false` acababa en un settings vacío.
+     */
+    public function test_un_settings_que_no_se_puede_reescribir_no_se_vacia(): void
+    {
+        $original = '{"permissions": {"allow": ["Bash(ls)"]}, "limit": 1e999}';
+
+        mkdir(dirname($this->settingsFile()), 0777, true);
+        file_put_contents($this->settingsFile(), $original);
+
+        $this->assertSame(Command::FAILURE, $this->runCommand('larapack:skill', ['--hooks' => true]));
+        $this->assertSame($original, file_get_contents($this->settingsFile()));
+        $this->assertStringContainsString('no se toca', $this->lastOutput);
+    }
+
+    /**
+     * Un repositorio puede traer `.claude/settings.json` como enlace al
+     * settings global de quien lo clona: los hooks acababan en todos sus
+     * proyectos.
+     */
+    public function test_no_escribe_el_settings_a_traves_de_un_enlace_que_sale_del_proyecto(): void
+    {
+        $outside = FakeProject::empty();
+
+        try {
+            $global = $outside->path.'/settings.json';
+            file_put_contents($global, '{"permissions": {}}');
+
+            mkdir(dirname($this->settingsFile()), 0777, true);
+
+            if (! @symlink($global, $this->settingsFile())) {
+                $this->markTestSkipped('No se pueden crear enlaces simbólicos aquí.');
+            }
+
+            $this->assertSame(Command::FAILURE, $this->runCommand('larapack:skill', ['--hooks' => true]));
+            $this->assertSame('{"permissions": {}}', file_get_contents($global));
+            $this->assertStringContainsString('fuera del proyecto', $this->lastOutput);
+        } finally {
+            $outside->cleanup();
+        }
+    }
+
+    public function test_no_escribe_a_traves_de_un_directorio_claude_enlazado_fuera(): void
+    {
+        $outside = FakeProject::empty();
+
+        try {
+            if (! @symlink($outside->path, $this->project->path.'/.claude')) {
+                $this->markTestSkipped('No se pueden crear enlaces simbólicos aquí.');
+            }
+
+            try {
+                $this->runCommand('larapack:skill', ['--hooks' => true, '--no-agents' => true]);
+            } catch (\RuntimeException $e) {
+                $this->assertStringContainsString('fuera del proyecto', $e->getMessage());
+            }
+
+            $this->assertFileDoesNotExist($outside->path.'/settings.json');
+            $this->assertFileDoesNotExist($outside->path.'/skills/larapack/SKILL.md');
+        } finally {
+            @unlink($this->project->path.'/.claude');
+            $outside->cleanup();
+        }
+    }
+
+    /**
+     * Lo habitual —AGENTS.md como enlace a CLAUDE.md, dentro del proyecto—
+     * sigue funcionando.
+     */
+    public function test_un_agents_md_enlazado_dentro_del_proyecto_se_actualiza(): void
+    {
+        file_put_contents($this->project->path.'/CLAUDE.md', "# Reglas\n");
+
+        if (! @symlink($this->project->path.'/CLAUDE.md', $this->agentsFile())) {
+            $this->markTestSkipped('No se pueden crear enlaces simbólicos aquí.');
+        }
+
+        $this->assertSame(Command::SUCCESS, $this->runCommand('larapack:skill'), $this->lastOutput);
+        $this->assertStringContainsString(AgentHooks::BEGIN, (string) file_get_contents($this->project->path.'/CLAUDE.md'));
+    }
+
     public function test_crea_agents_md_con_el_bloque_entre_marcadores(): void
     {
         $this->assertSame(Command::SUCCESS, $this->runCommand('larapack:skill'), $this->lastOutput);

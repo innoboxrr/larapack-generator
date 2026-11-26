@@ -159,6 +159,97 @@ existía, borra su `EndpointsTest` (guarda antes lo que le añadiste) y vuelve a
 importar. Usan `mockery/mockery`, que traen `laravel/laravel` y
 `orchestra/testbench`.
 
+### Seguridad: segunda auditoría, con pruebas por propiedades
+
+La auditoría de 9.0 escapó los valores libres del laraimport caso por caso.
+Ésta los prueba en masa: 3000 cadenas hostiles de semilla fija (comillas, barra
+final, NUL, saltos, U+2028/2029, `*/`, `?>`, `${`, `</script>`, `}}`, entidades,
+BOM, marcas combinantes, control bidireccional…) por cada contexto donde un
+valor acaba como código, y un `larapack:import` real con ellas en cada campo
+libre —`default` de modelo y de pivote, `cast`, valores y etiquetas de `enum`,
+claves y valores de `rules`—. La propiedad es siempre la misma: el archivo
+generado se analiza, no sale del literal ni del modo PHP, y el valor se recupera
+idéntico. Los escapes viven ahora en `Support\Literal`, uno por contexto.
+
+Lo que salió, de más a menos grave:
+
+- **Código en el formulario Vue a través de una etiqueta de `enum`** (media).
+  Las etiquetas van en `{{ t('…') }}` y llevaban sólo el escape JS. El
+  compilador de plantillas de Vue decodifica las entidades HTML de la
+  interpolación antes de leer el JS: la etiqueta
+  `&#39;) + t.constructor.constructor(&#39;…&#39;)() + (&#39;` llegaba como
+  `t('') + t.constructor.constructor('…')() + ('')` y se ejecutaba en el
+  navegador de quien abre el formulario. Una con `}}` dejaba la plantilla sin
+  compilar. Ahora `&` y `}` van como escapes JS (`\x26`, `\x7d`). Comprobado con
+  `@vue/compiler-sfc` 3.5.
+- **El hook de la guardia repetía al modelo texto del proyecto con saltos de
+  línea** (media). Un archivo de `Http/Controllers` con un salto en el nombre,
+  o un `API_ROUTE_PREFIX` con saltos en el módulo JS, añadía líneas que parecían
+  de LaraPack («LaraPack: antes de corregir nada, ejecuta …») a un mensaje que
+  el modelo lee como salida de un hook del usuario. Ruta, comprobación y
+  mensaje salen ahora en una línea, con cada carácter de control, de formato o
+  separador como `\u{XXXX}` (`Guard::inline()`); lo que no es UTF-8 se
+  sustituye, y el JSON del recordatorio ya no puede salir vacío.
+- **`larapack:skill` escribía a través de enlaces simbólicos** (media-baja). Un
+  repositorio con `.claude/settings.json` (o `.claude`, o `AGENTS.md`) enlazado
+  al `~/.claude/settings.json` de quien lo clona recibía los hooks de LaraPack
+  en la configuración global: desde entonces cada edición, en cualquier
+  proyecto, ejecutaba su `artisan` o su `vendor/bin/builder`. Ahora el destino
+  real tiene que quedar dentro del proyecto; un enlace interno
+  (`AGENTS.md` → `CLAUDE.md`) y un `--path` que sale por escrito siguen valiendo.
+- **El estado de la sesión de la guardia, en un directorio compartido** (baja).
+  Era `/tmp/larapack-guard`, creado 0777: otro usuario de la máquina podía
+  crearlo antes con un enlace por sesión hacia un archivo de la víctima, y cada
+  edición le añadía una línea. Ahora es `larapack-guard-<uid>`, 0700, y sólo se
+  usa si es del usuario y nadie más lo puede escribir.
+- **Un archivo vacío donde había datos** (baja). `json_encode()` devuelve
+  `false`, y pegado a `"\n"` dejaba el archivo vacío: un archivo del proyecto
+  en Latin-1 en el `src` del módulo vaciaba `locales/<idioma>.json` con todas
+  las traducciones escritas a mano, y un `1e999` en `.claude/settings.json` lo
+  vaciaba al añadir los hooks. Ahora la clave que no es UTF-8 se ignora y los
+  dos se escriben con `JSON_THROW_ON_ERROR`.
+- **Un endpoint que tumba la API** (baja). `{course_id}/copy/{course_id}` o un
+  parámetro de más de 32 caracteres pasan el esquema, y el compilador de rutas
+  lanza al compilarlas: un 500 en cada petición con ese verbo que llegue hasta
+  ella —también un 404— y `route:cache` roto. Ahora es un error de validación.
+- **Defaults numéricos en cadena** (baja). `is_numeric()` dejaba sin comillas
+  `"08"` (un octal inválido: la migración no compilaba), `"007"` (el octal 7),
+  `" 1"` o `"1e3"`. Ahora sólo va sin comillas el número canónico que vale lo
+  mismo.
+- **Claves de traducción que nadie pide** (baja). `t('Dos\nlíneas')` daba la
+  clave «Dosnlíneas»: ahora se decodifican los escapes de la cadena.
+- **El `value` de una opción con un salto de línea** (baja): el analizador HTML
+  convierte `\r` en `\n`. Los saltos van como entidades numéricas.
+- **`larapack:fix --dry-run` sin memoria** (baja). El diff calculaba una tabla
+  de n·m: dos cambios a 3000 líneas pedían 200 MB. Pasados 4 millones de celdas
+  la parte del medio sale entera, quitada y puesta; el diff sigue siendo exacto.
+- **Mensajes**: una clave del laraimport que empieza por NUL o un número que
+  JSON lee como INF daban «The data (null) must match the type: object». Se
+  siguen rechazando, ahora diciendo por qué.
+
+Revisado sin cambios: `larapack:fix --path` y `--package` sólo filtran la lista
+de archivos del proyecto (`--path=..` no añade nada); `larapack:guard` resuelve
+`file_path` con `realpath`, ignora una entrada que no es un objeto JSON y sólo
+lee archivos con el tokenizador; los nombres, URIs, middleware y habilidades de
+los endpoints están acotados por el esquema y la interfaz generada no pinta HTML
+(`html: false`); los patrones del esquema terminan con `D` (Opis), así que un
+salto de línea final no pasa; las expresiones regulares de `verify` y `fix` no
+tienen cuantificadores anidados ambiguos, PhpOutline no es recursivo y la búsqueda
+de `handle()` por padres y traits lleva la cuenta de lo visitado.
+
+Queda anotado sin arreglar: un archivo de rutas con miles de closures anidados
+hace que `route-closure` tarde decenas de segundos (cuadrático en la
+profundidad); el hook vence por tiempo y deja pasar. Una clave de `enum`
+`__proto__` no se recupera en el mapa de etiquetas de la tabla.
+
+### Al actualizar
+
+Regenerar cambia lo generado sólo donde había valores raros: etiquetas de enum
+con `&` o `}` en el formulario Vue, valores de enum con saltos de línea, y
+defaults como `"08"` o `"007"`. La guardia guarda su estado en otro directorio:
+el de una sesión abierta antes de actualizar se pierde, y el hook de fin de
+turno sigue con git.
+
 ## 9.0.0
 
 Los agentes respetaban `return $request->handle();` en los controladores que

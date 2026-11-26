@@ -34,4 +34,30 @@ final class UnifiedDiffTest extends TestCase
         $this->assertStringContainsString("@@ -1,5 +1,5 @@\n 1\n-2\n+dos\n", $diff);
         $this->assertStringContainsString("@@ -16,5 +16,5 @@\n 16\n 17\n 18\n-19\n+diecinueve\n 20\n", $diff);
     }
+
+    /**
+     * Dos cambios a miles de líneas: la tabla de la subsecuencia común pedía
+     * cientos de megas. El diff tiene que seguir siendo exacto —aplicado al
+     * original da el nuevo— y caber en memoria.
+     */
+    public function test_un_archivo_enorme_con_cambios_lejanos_no_agota_la_memoria(): void
+    {
+        $body = array_map(fn (int $i): string => "    // línea {$i}", range(1, 3000));
+        $old = implode("\n", ['<?php', 'primera', ...$body, 'última'])."\n";
+        $new = implode("\n", ['<?php', 'PRIMERA', ...$body, 'ÚLTIMA'])."\n";
+
+        $before = memory_get_usage();
+        memory_reset_peak_usage();
+
+        $diff = UnifiedDiff::of($old, $new, 'x.php');
+
+        $this->assertLessThan(48 * 1024 * 1024, memory_get_peak_usage() - $before);
+
+        // Las líneas de contexto y las «+» son el archivo nuevo; las de
+        // contexto y las «-», el viejo. Con un solo trozo, desde la línea 1.
+        $this->assertSame(1, substr_count($diff, "\n@@ "));
+        $lines = array_slice(explode("\n", rtrim($diff, "\n")), 3);
+        $this->assertSame(explode("\n", $old), array_values(array_map(fn (string $l): string => substr($l, 1), array_filter($lines, fn (string $l): bool => $l[0] !== '+'))));
+        $this->assertSame(explode("\n", $new), array_values(array_map(fn (string $l): string => substr($l, 1), array_filter($lines, fn (string $l): bool => $l[0] !== '-'))));
+    }
 }

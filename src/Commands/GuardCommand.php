@@ -178,7 +178,7 @@ class GuardCommand extends Command
             $errors = Guard::errorsFor(Guard::findings($project, $managed ? [] : ControllerShape::CHECKS), $relative);
 
             if ($errors !== []) {
-                $messages[] = Guard::message("LaraPack: {$relative} se sale del contrato.", $errors, $project);
+                $messages[] = Guard::message('LaraPack: '.Guard::inline($relative).' se sale del contrato.', $errors, $project);
 
                 continue;
             }

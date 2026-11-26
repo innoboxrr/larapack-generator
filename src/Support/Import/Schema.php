@@ -2,6 +2,7 @@
 
 namespace Innoboxrr\LarapackGenerator\Support\Import;
 
+use JsonException;
 use Opis\JsonSchema\Errors\ErrorFormatter;
 use Opis\JsonSchema\Validator;
 use RuntimeException;
@@ -60,10 +61,21 @@ final class Schema
 
         $validator->resolver()->registerRaw(file_get_contents(self::path()), self::id());
 
-        $result = $validator->validate(
-            json_decode(json_encode($document)),
-            self::id()
-        );
+        // Opis valida objetos, y no todo array de PHP se puede volver objeto:
+        // una clave que empieza por NUL no es un nombre de propiedad válido, y
+        // un número fuera de rango (`1e999`) llega como INF, que JSON no
+        // admite. Antes los dos daban `null` y un «The data (null) must match
+        // the type: object» que no decía qué estaba mal.
+        try {
+            $data = json_decode(json_encode($document, JSON_THROW_ON_ERROR), false, 512, JSON_THROW_ON_ERROR);
+        } catch (JsonException $e) {
+            return [[
+                'path' => '/',
+                'message' => 'El documento no se puede validar ('.$e->getMessage().'). Revisa que ninguna clave empiece por el carácter NUL (\\u0000) y que ningún número se salga del rango de un double.',
+            ]];
+        }
+
+        $result = $validator->validate($data, self::id());
 
         if ($result->isValid()) {
             return [];

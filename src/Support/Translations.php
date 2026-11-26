@@ -96,18 +96,111 @@ final class Translations
                 continue;
             }
 
-            preg_match_all($pattern, (string) file_get_contents($file), $matches);
+            preg_match_all($pattern, (string) file_get_contents($file), $matches, PREG_SET_ORDER);
 
-            foreach ($matches[2] as $raw) {
-                $key = (string) preg_replace('/\\\\(.)/s', '$1', $raw);
+            foreach ($matches as $match) {
+                $key = $function === self::FRONTEND
+                    ? self::unescapeJs($match[2])
+                    : self::unescapePhp($match[2], $match[1]);
 
-                if ($key !== '') {
+                if ($key !== null && $key !== '') {
                     $keys[$key] = true;
                 }
             }
         }
 
         return array_map('strval', array_keys($keys));
+    }
+
+    /**
+     * El valor de una cadena JS, como lo verá `t()` al ejecutarse.
+     *
+     * Antes se quitaba la barra a todo escape: la etiqueta «Dos\nlíneas»,
+     * escrita como `t('Dos\nlíneas')`, quedaba en el archivo de idioma como
+     * «Dosnlíneas», una clave que nadie pide, y la traducción no se aplicaba
+     * nunca. Lo mismo con `\u2028` o con los `\x26` de las plantillas Vue
+     * (Literal::vueInterpolation()).
+     *
+     * Null si no es UTF-8 válido: un archivo del proyecto en Latin-1 no es una
+     * clave que se pueda escribir en un JSON.
+     */
+    public static function unescapeJs(string $raw): ?string
+    {
+        if (! mb_check_encoding($raw, 'UTF-8')) {
+            return null;
+        }
+
+        $decoded = preg_replace_callback(
+            '/\\\\(?:u\{([0-9A-Fa-f]+)\}|u([dD][89abAB][0-9A-Fa-f]{2})\\\\u([dD][c-fC-F][0-9A-Fa-f]{2})|u([0-9A-Fa-f]{4})|x([0-9A-Fa-f]{2})|(\r\n|[\n\r\x{2028}\x{2029}])|(.))/su',
+            function (array $match): string {
+                $code = match (true) {
+                    $match[1] !== null => hexdec($match[1]),
+                    $match[2] !== null => 0x10000 + ((hexdec($match[2]) - 0xD800) << 10) + (hexdec($match[3]) - 0xDC00),
+                    $match[4] !== null => hexdec($match[4]),
+                    $match[5] !== null => hexdec($match[5]),
+                    default => null,
+                };
+
+                if ($code !== null) {
+                    return (is_int($code) ? mb_chr($code, 'UTF-8') : false) ?: '';
+                }
+
+                // Una barra antes de un salto es una continuación de línea:
+                // no aporta nada a la cadena.
+                if ($match[6] !== null) {
+                    return '';
+                }
+
+                return match ($match[7]) {
+                    'n' => "\n",
+                    'r' => "\r",
+                    't' => "\t",
+                    'b' => "\x08",
+                    'f' => "\f",
+                    'v' => "\v",
+                    '0' => "\0",
+                    default => $match[7] ?? '',
+                };
+            },
+            $raw,
+            flags: PREG_UNMATCHED_AS_NULL
+        );
+
+        return is_string($decoded) ? $decoded : null;
+    }
+
+    /**
+     * El valor de una cadena PHP, como lo verá `__()`. En comilla simple sólo
+     * `\\` y `\'` son escapes; en comilla doble, una variable la convierte en
+     * algo que no es una clave literal.
+     */
+    public static function unescapePhp(string $raw, string $quote): ?string
+    {
+        if (! mb_check_encoding($raw, 'UTF-8')) {
+            return null;
+        }
+
+        if ($quote === "'") {
+            return (string) preg_replace('/\\\\([\\\\\'])/', '$1', $raw);
+        }
+
+        if (preg_match('/(?<!\\\\)(?:\\\\\\\\)*\$/', $raw) === 1) {
+            return null;
+        }
+
+        $decoded = preg_replace_callback(
+            '/\\\\(?:([0-7]{1,3})|x([0-9A-Fa-f]{1,2})|u\{([0-9A-Fa-f]+)\}|([nrtvef\\\\$"]))/',
+            fn (array $match): string => match (true) {
+                $match[1] !== null => chr(octdec($match[1]) & 0xFF),
+                $match[2] !== null => chr((int) hexdec($match[2])),
+                $match[3] !== null => (string) mb_chr((int) hexdec($match[3]), 'UTF-8'),
+                default => ['n' => "\n", 'r' => "\r", 't' => "\t", 'v' => "\v", 'e' => "\e", 'f' => "\f"][$match[4]] ?? $match[4] ?? '',
+            },
+            $raw,
+            flags: PREG_UNMATCHED_AS_NULL
+        );
+
+        return is_string($decoded) && mb_check_encoding($decoded, 'UTF-8') ? $decoded : null;
     }
 
     /**
@@ -163,9 +256,13 @@ final class Translations
             throw new \RuntimeException("No se pudo crear {$directory}.");
         }
 
+        // Con JSON_THROW_ON_ERROR y no con el `false` de json_encode: pegado a
+        // "\n", ese `false` dejaba el archivo vacío y se llevaba todas las
+        // traducciones escritas a mano. Bastaba un archivo del proyecto en
+        // Latin-1 con un `t('canción')` en el mismo src.
         file_put_contents(
             $path,
-            json_encode((object) $merged, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)."\n"
+            json_encode((object) $merged, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR)."\n"
         );
 
         Generation::record($exists ? 'overwrite' : 'create', $path, $stub);

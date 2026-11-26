@@ -303,7 +303,12 @@ demás:
 
 La guardia nunca se bloquea a sí misma: una entrada vacía o rota, un archivo de
 `vendor/` o fuera de un proyecto salen con 0, y mientras no exista `vendor/` el
-hook no hace nada. El comando usa `$CLAUDE_PROJECT_DIR`, que necesita un shell
+hook no hace nada. Lo que cita del proyecto —rutas, mensajes— sale en una línea,
+con los caracteres de control y de formato como `\u{XXXX}`: un nombre de archivo
+no puede añadir líneas a lo que lee el modelo. El registro de la sesión va a
+`<tmp>/larapack-guard-<uid>`, privado del usuario. `larapack:skill` no escribe
+`.claude/settings.json`, `AGENTS.md` ni el skill a través de un enlace simbólico
+que saque del proyecto. El comando usa `$CLAUDE_PROJECT_DIR`, que necesita un shell
 que expanda variables (en Windows, Git Bash).
 
 **Actívala con `verify` limpio.** En un proyecto con errores previos, cada
@@ -590,7 +595,8 @@ restricción a mano en una alteración.
 | `props[].form` + `form_component` | Pinta un input en `CreateForm` y `EditForm`. `form: true` obliga a declarar el componente. |
 | `props[].form_submit` | El campo viaja en el envío. Un `user_id` con `form: false` y `form_submit: true` se convierte en prop del componente. |
 | `props[].datatable` | Columna de la tabla y candidata al orden por defecto. |
-| `props[].enum` | Opciones de un `SelectInputComponent`. |
+| `props[].enum` | Opciones de un `SelectInputComponent`. Valores y etiquetas son texto libre: se escapan para cada sitio donde acaban (PHP, JS, atributo, plantilla Vue). |
+| `props[].default` | `->default()` de la migración. Un número del JSON va tal cual; una cadena, entre comillas salvo que sea un número canónico (`"5"`, `"-1.5"`): `"08"`, `"007"` o `"1e3"` se quedan como texto. |
 | `props[].secret` | Nunca sale por la API: va a `$hidden`, fuera de la exportación y de la tabla. |
 | `metas` | Campos flexibles en la tabla `<modelo>_metas`, con la relación `metas()`, la copia en `payload` y el guardado al crear y actualizar. Ver [Metas y payload](#metas-y-payload). |
 | `load_relations` | Métodos del trait `Relations` y la lista `$loadable_relations`. |
@@ -910,7 +916,7 @@ es justo donde un controlador empieza a validar, autorizar y consultar.
 |---|---|---|
 | `name` | — | camelCase. El método del controlador, `<Name>Request`, la ruta (`importRoster` → `import.roster`) y la operación `<name>Model` del modelo. No puede ser una acción CRUD: ésas se declaran con `routes`. |
 | `method` | — | `get`, `post`, `put`, `patch` o `delete`. |
-| `uri` | `name` en kebab | Relativa al prefijo del modelo. `importRoster` → `import-roster`; una sigla es una palabra: `importCSV` → `import-csv`. |
+| `uri` | `name` en kebab | Relativa al prefijo del modelo. `importRoster` → `import-roster`; una sigla es una palabra: `importCSV` → `import-csv`. Un parámetro no se repite ni pasa de 32 caracteres: Laravel no compilaría la ruta. |
 | `target` | `record` | `record` actúa sobre un registro: la request lo busca por `<modelo>_id`, en el cuerpo o en la `uri`. `collection` actúa sobre el modelo. |
 | `ability` | `name` | La habilidad de la política. Una CRUD (`update`, `view`…) reutiliza su método. |
 | `public` | `false` | Sin sesión: sale de `auth:sanctum` sólo ese método. La política se sigue preguntando, con `?User`. Acompáñalo de un `throttle:`. |
@@ -1452,6 +1458,9 @@ Así la pantalla habla un solo idioma, el que elige la aplicación.
   `lang/es.json`.
 - `npm run locale` (`innoboxrr-locale-generator`) recoge las claves de lo que
   escribas a mano.
+- La clave es el valor que pide `t()` al ejecutarse, con los escapes de la
+  cadena resueltos (`t('Dos\nlíneas')` es «Dos», salto, «líneas»). Un archivo de
+  `src` que no está en UTF-8 no aporta claves y no estropea el JSON.
 
 ---
 

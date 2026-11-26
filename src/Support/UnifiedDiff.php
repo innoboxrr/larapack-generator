@@ -56,7 +56,19 @@ final class UnifiedDiff
     }
 
     /**
+     * Celdas de la tabla de la subsecuencia común a partir de las cuales no
+     * se calcula: unas 70 MB en PHP.
+     */
+    private const MAX_CELLS = 4_000_000;
+
+    /**
      * La parte que cambia, por subsecuencia común más larga.
+     *
+     * La tabla ocupa n·m: un archivo con dos cambios a miles de líneas uno
+     * del otro —una propiedad al principio de la clase y un bloque al final—
+     * pedía cientos de megas, y `larapack:fix --dry-run` moría sin memoria a
+     * mitad de la lista. Pasado MAX_CELLS la parte del medio sale entera,
+     * quitada y puesta: el diff es más largo pero sigue siendo exacto.
      *
      * @param  list<string>  $a
      * @param  list<string>  $b
@@ -66,6 +78,13 @@ final class UnifiedDiff
     {
         $n = count($a);
         $m = count($b);
+
+        if ($n * $m > self::MAX_CELLS) {
+            return [
+                ...array_map(fn (string $line, int $i): array => ['-', $line, $i, 0], $a, array_keys($a)),
+                ...array_map(fn (string $line, int $j): array => ['+', $line, $n, $j], $b, array_keys($b)),
+            ];
+        }
         $lcs = array_fill(0, $n + 1, array_fill(0, $m + 1, 0));
 
         for ($i = $n - 1; $i >= 0; $i--) {
