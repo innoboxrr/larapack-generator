@@ -231,4 +231,61 @@ final class VerifyDeclaredShapeTest extends TestCase
         $this->assertSame(Command::FAILURE, $code);
         $this->assertCount(1, $this->findingsOf($report, 'route-prefix'));
     }
+
+    // ENDPOINT-TESTS-OUTDATED
+
+    /**
+     * Un `<Modelo>EndpointsTest` de antes de 9.1: se copió una vez y no se
+     * regenera, así que sin este aviso un proyecto que sube de versión nunca
+     * tendría las pruebas que cierran la autorización.
+     */
+    public function test_un_test_de_modelo_sin_las_pruebas_de_autorizacion_avisa(): void
+    {
+        $this->edit('tests/Feature/Models/PostEndpointsTest.php', fn (string $php): string => str_replace(
+            ['test_post_cada_accion_requiere_sesion', 'test_post_index_pasa_por_su_managed_filter'],
+            ['test_post_index_requiere_sesion', 'test_post_otra_cosa'],
+            $php
+        ));
+
+        [$code, $report] = $this->verify();
+        $findings = $this->findingsOf($report, 'endpoint-tests-outdated');
+
+        // Es un aviso: sin --strict, verify pasa.
+        $this->assertSame(Command::SUCCESS, $code);
+        $this->assertCount(1, $findings, json_encode($report['findings'], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+        $this->assertSame('warning', $findings[0]['level']);
+        $this->assertSame('Post', $findings[0]['model']);
+        $this->assertSame('tests/Feature/Models/PostEndpointsTest.php', $findings[0]['file']);
+        $this->assertStringContainsString('test_…_cada_accion_requiere_sesion, test_…_index_pasa_por_su_managed_filter', $findings[0]['message']);
+        $this->assertStringNotContainsString('pregunta_a_la_politica', $findings[0]['message']);
+        $this->assertStringContainsString('larapack:import', $findings[0]['message']);
+
+        [$code] = $this->verify(strict: true);
+        $this->assertSame(Command::FAILURE, $code);
+    }
+
+    /**
+     * Lo que se mira es el nombre del método y lo que el modelo declara: sin
+     * listado no hay prueba del ManagedFilter que echar en falta, y un test
+     * que se borró no se reclama.
+     */
+    public function test_el_aviso_sigue_lo_que_el_modelo_declara(): void
+    {
+        $manifest = $this->project->path.'/.larapack/manifest.json';
+        $data = json_decode((string) file_get_contents($manifest), true);
+        $data['models']['AuditEvent']['declaration']['actions'] = ['policies', 'show'];
+        file_put_contents($manifest, json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+
+        $this->edit('tests/Feature/Models/AuditEventEndpointsTest.php', fn (string $php): string => str_replace(
+            'test_audit_event_index_pasa_por_su_managed_filter',
+            'test_audit_event_otra_cosa',
+            $php
+        ));
+
+        unlink($this->project->path.'/tests/Feature/Models/CategoryEndpointsTest.php');
+
+        $this->verify();
+
+        $this->assertSame([], $this->findingsOf(json_decode($this->lastOutput, true), 'endpoint-tests-outdated'));
+    }
 }

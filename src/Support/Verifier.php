@@ -56,6 +56,19 @@ final class Verifier
     private const MANIFEST_CHECKS = [
         'empty-manifest', 'missing-file', 'customised', 'inconsistent-entity', 'route-prefix',
         'route-not-declared', 'endpoint-missing', 'immutable-write', 'secret-exposed',
+        'endpoint-tests-outdated',
+    ];
+
+    /**
+     * Las pruebas que cada `<Modelo>EndpointsTest` trae desde 9.1, por el final
+     * de su nombre, y la acción que las pide (null: van siempre). Sin sesión
+     * no se entra, cada acción pregunta a la política y el listado pasa por su
+     * ManagedFilter.
+     */
+    private const ENDPOINT_TESTS = [
+        'cada_accion_requiere_sesion' => null,
+        'cada_accion_pregunta_a_la_politica' => null,
+        'index_pasa_por_su_managed_filter' => 'index',
     ];
 
     /**
@@ -153,6 +166,7 @@ final class Verifier
             ...$this->checkDeclaredActions($models),
             ...$this->checkImmutable($models),
             ...$this->checkSecrets($models),
+            ...$this->checkEndpointTests($models),
         ];
     }
 
@@ -620,6 +634,61 @@ final class Verifier
                     $model,
                     $modelFile,
                     'El modelo ya no rechaza modificaciones. Sin la guarda de booted(), cualquier save() o delete() del propio paquete modifica una fila que no debería cambiar.'
+                );
+            }
+        }
+
+        return $findings;
+    }
+
+    /**
+     * Un `<Modelo>EndpointsTest` de antes de 9.1, sin las pruebas que cierran
+     * la autorización.
+     *
+     * Ese test se copia una vez y no se regenera: es del proyecto, y no está
+     * en el manifiesto, así que no hay hash con el que saber si alguien lo
+     * editó. Reescribirlo podría tirar pruebas escritas a mano, y añadirle
+     * métodos a una clase que quizá ya no es la generada tampoco es seguro:
+     * se avisa, con el modelo y lo que hay que correr. Se mira el nombre de
+     * cada método, no su cuerpo: un test editado que los conserva no avisa, y
+     * uno que no existe no se echa en falta.
+     *
+     * @param  array<int, string>  $models
+     * @return array<int, array<string, mixed>>
+     */
+    private function checkEndpointTests(array $models): array
+    {
+        $findings = [];
+
+        foreach ($models as $model) {
+            $declaration = $this->manifest->declarationOf($model);
+            $relative = 'tests/Feature/Models/'.$model.'EndpointsTest.php';
+            $file = $this->manifest->absolute($relative);
+
+            if ($declaration['controller'] || $declaration['actions'] === [] || ! is_file($file)) {
+                continue;
+            }
+
+            $content = (string) file_get_contents($file);
+            $missing = [];
+
+            foreach (self::ENDPOINT_TESTS as $suffix => $action) {
+                if ($action !== null && ! in_array($action, $declaration['actions'], true)) {
+                    continue;
+                }
+
+                if (! preg_match('/function\s+test_\w*'.$suffix.'\s*\(/', $content)) {
+                    $missing[] = 'test_…_'.$suffix;
+                }
+            }
+
+            if ($missing !== []) {
+                $findings[] = $this->finding(
+                    self::WARNING,
+                    'endpoint-tests-outdated',
+                    $model,
+                    $relative,
+                    "{$model}EndpointsTest no tiene ".implode(', ', $missing).': se generó antes de 9.1 y no prueba lo que cierra la autorización. No se regenera solo: guarda lo que le añadiste, bórralo, corre `larapack:import` (sin --force basta: crea el que falta) y vuelve a pegar lo tuyo.'
                 );
             }
         }

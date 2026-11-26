@@ -65,6 +65,20 @@ Para lo que no tiene modelo propio: un escritorio, un asistente, el canje de un 
 
 Las mismas claves que un endpoint de modelo salvo `target` (no hay registro) y con otro significado para `ability`: sin modelo no hay política que Laravel resuelva sola, así que `ability` es **una habilidad de Gate** (`Gate::define`) que define la aplicación o el paquete. Sin `ability`, `authorize()` nace devolviendo `false` y se rellena a mano —es un hueco—.
 
+Y una clave más, sólo de `controllers[]`:
+
+| Clave | Tipo | Por omisión | Qué decide |
+|---|---|---|---|
+| `authorize` | `authenticated` | — | Basta la sesión: `authorize()` nace devolviendo `true` y no pregunta a ningún Gate. Lo que quede por decidir —un registro ajeno (404), un dato inválido (422)— lo decide la request en `rules()` o `handle()`. No admite `ability` (no se preguntaría) ni `public` (no habría sesión). |
+
+```json
+{ "name": "InstalledModules", "endpoints": [
+    { "name": "installed", "method": "get", "authorize": "authenticated" }
+] }
+```
+
+Existe porque el test de cada endpoint (sección 3) exige 403 con sesión y la autorización negando. Un endpoint abierto a cualquiera con sesión, o uno cuya `authorize()` decide sin Gate —el `InstalledModulesRequest` de la skill, que deja a `rules()` el 422 y responde 404 por una escuela ajena—, lo fallaría siempre: un falso positivo obligatorio. Declararlo cambia `authorize()` y su test a la vez. En un endpoint de modelo no hace falta y el esquema lo rechaza: el endpoint pregunta siempre a su política, y «cualquiera con sesión» es su método de la política devolviendo `true`; el test cambia la puerta por una que niega antes de consultarla, así que sigue pasando.
+
 Fragmentos para `laraimport.schema.json`: ver `$defs/endpoint`, `$defs/controller` y `$defs/controllerEndpoint` en el propio esquema.
 
 Ausencia de ambas claves = exactamente lo que se generaba antes. **Las claves son retrocompatibles**, y lo comprueba la foto por hash de `GeneratedOutputSnapshotTest`.
@@ -82,7 +96,7 @@ Todo determinista, a partir de la declaración. Lo que se escribe a mano va **s�
 | `Http/Requests/<Modelo>/PublishRequest.php` | `authorize()` pregunta a la política (`can('publish', $course)`; si es público, `Gate::forUser($this->user('sanctum'))`: sin `auth:sanctum` delante, el guard por omisión no ve un token Bearer); `rules()` con `<modelo>_id` si es `record` y el identificador no va en la URI, vacío si no; `handle()` busca el registro y delega en `$course->publishModel($this)`. | Sí: `rules()` y lo que necesite `authorize()`/`handle()`. Un archivo editado no se pisa. |
 | Política del modelo | `public function publish(User $user, Course $course): Response\|bool { return false; }`. `collection` no recibe el modelo; `public` recibe `?User`. Una `ability` CRUD (`update`, `view`, …) no genera método: reutiliza el que hay. | Sí. **Nace denegando.** |
 | Trait `Operations` del modelo | `public function publishModel($request)` que lanza `LogicException` hasta que se escriba. Sólo al crear el trait: un trait existente no se toca (ver `verify`). | Sí. Aquí va la lógica. |
-| `tests/Feature/Endpoints/<Modelo>/PublishTest.php` | Un invitado recibe 401; si es público, la política lo cierra y recibe 403. | Sí. |
+| `tests/Feature/Endpoints/<Modelo>/PublishTest.php` | Un invitado recibe 401; si es público, la política lo cierra y recibe 403. Con sesión y la autorización negando, 403 (`test_con_sesion_pregunta_a_la_autorizacion`); con `authorize: authenticated`, cualquier cosa menos 403 (`test_con_sesion_basta_la_sesion`). | Sí. |
 
 Un `controllers[]` genera lo mismo salvo política y operación: su controlador, su archivo de rutas en `routes/api/models/<nombre>.php` (el mismo directorio que ya carga el `RouteServiceProvider`), sus requests y sus tests. `handle()` nace como `abort(501)` con el comentario de que la lógica va en una clase de soporte, no en la request ni en el controlador.
 
@@ -146,6 +160,7 @@ Semántica (errores salvo que se diga):
 - Una `uri` que empieza por un parámetro sin restricción (`{slug}`, o cualquiera en un `controllers[]`) y se registra antes que otro endpoint del mismo verbo que casa con ella: esas peticiones llegarían al primero. El `{<modelo>_id}` de un endpoint `record` no cuenta, porque la ruta lo restringe con `whereNumber`.
 - **Aviso:** esa misma `uri` aunque no tape a nadie todavía: taparía al siguiente endpoint del mismo verbo que se declare.
 - **Aviso:** endpoint `public` sin `throttle:` en su `middleware`.
+- `authorize: authenticated` con `ability` o con `public`. En un endpoint de modelo lo rechaza el esquema.
 
 ---
 
@@ -204,7 +219,7 @@ Culpar de lo segundo a quien no tocó nada sólo enseña a desconfiar de `verify
 
 - **La clave es `endpoints`**, no `actions` (sección 3.2).
 - **Los endpoints sin modelo van en `controllers[]`** (sección 3.1), y su `ability` es de Gate.
-- **Todo nace cerrado.** La política devuelve `false`; un controlador sin `ability` devuelve `false` en `authorize()`; un endpoint `public` sigue preguntando a la política, ahora con `?User`. Con un **invitado**, Laravel no llama a `before()` (su primer parámetro no admite `null`), así que `before()` no abre nada a quien no tiene sesión. Con **sesión** sí pasa por `before()`, como en las CRUD: un administrador autenticado entra también en los endpoints públicos, salvo lo que `before()` excluya. Una versión anterior de este spec decía que `?User` impedía que el administrador pasara por `before()`; sólo es así con invitados.
+- **Todo nace cerrado.** La política devuelve `false`; un controlador sin `ability` devuelve `false` en `authorize()`, salvo que declare `authorize: authenticated`, y entonces lo abierto está escrito en el laraimport; un endpoint `public` sigue preguntando a la política, ahora con `?User`. Con un **invitado**, Laravel no llama a `before()` (su primer parámetro no admite `null`), así que `before()` no abre nada a quien no tiene sesión. Con **sesión** sí pasa por `before()`, como en las CRUD: un administrador autenticado entra también en los endpoints públicos, salvo lo que `before()` excluya. Una versión anterior de este spec decía que `?User` impedía que el administrador pasara por `before()`; sólo es así con invitados.
 - **Un endpoint público autoriza con el usuario de `sanctum`.** No pasa por `auth:sanctum`, así que `$this->user()` usaría el guard por omisión (normalmente `web`), que no ve un token Bearer: un cliente con token llegaría a la política como invitado. La request generada pregunta a `$this->user('sanctum')`, que mira la sesión y el token. La prueba de punta a punta lo llama con un token de verdad y sin `actingAs`, que fijaría el guard y escondería justo esto.
 - **La operación se llama `<name>Model`**, como `createModel` y `updateModel`. Con el nombre pelado, un endpoint `refresh`, `touch` o `replicate` habría sobrescrito un método de Eloquent.
 - **El trait `Operations` sólo recibe la operación al crearse.** Es código del proyecto: añadir métodos a uno existente sería escribir en un archivo que no es del generador. Si falta, `verify` lo dice con `endpoint-missing` y el nombre exacto del método.

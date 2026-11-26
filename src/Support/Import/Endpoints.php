@@ -23,7 +23,7 @@ final class Endpoints
      * Las condiciones de los stubs de endpoint. No son del modelo sino del
      * endpoint que se está generando, así que no las resuelve Declaration.
      */
-    public const FLAGS = ['endpoint_record', 'endpoint_id_in_body', 'endpoint_public', 'endpoint_model', 'endpoint_gate'];
+    public const FLAGS = ['endpoint_record', 'endpoint_id_in_body', 'endpoint_public', 'endpoint_model', 'endpoint_gate', 'endpoint_authenticated'];
 
     /**
      * Las habilidades que la política CRUD ya trae, la acción que las genera y
@@ -89,13 +89,13 @@ final class Endpoints
      *
      * @param  array<string, mixed>  $endpoint
      * @param  bool  $model  Si cuelga de un modelo (o de un `controllers[]`).
-     * @return array{name: string, method: string, uri: string, route: string, request: string, target: string|null, ability: string|null, operation: string|null, public: bool, middleware: array<int, string>}
+     * @return array{name: string, method: string, uri: string, route: string, request: string, target: string|null, ability: string|null, operation: string|null, public: bool, middleware: array<int, string>, authorize?: string}
      */
     public static function normalise(array $endpoint, bool $model): array
     {
         $name = (string) $endpoint['name'];
 
-        return [
+        $normalised = [
             'name' => $name,
             'method' => (string) $endpoint['method'],
             'uri' => self::uri($endpoint),
@@ -107,6 +107,15 @@ final class Endpoints
             'public' => (bool) ($endpoint['public'] ?? false),
             'middleware' => array_values($endpoint['middleware'] ?? []),
         ];
+
+        // Sólo un `controllers[]` lo admite (el esquema lo rechaza en un
+        // modelo, que pregunta siempre a su política), y sólo se anota si se
+        // declaró: el manifiesto de un endpoint que no lo usa sale como antes.
+        if (! $model && ($endpoint['authorize'] ?? null) === 'authenticated') {
+            $normalised['authorize'] = 'authenticated';
+        }
+
+        return $normalised;
     }
 
     /**

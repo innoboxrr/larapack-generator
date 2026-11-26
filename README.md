@@ -947,7 +947,9 @@ Cada endpoint genera:
 el canje de un token. Genera el controlador, sus rutas en
 `routes/api/models/<nombre>.php`, sus requests y sus tests; ni política ni
 operación. Su `ability` es una habilidad de Gate que define la aplicación o el
-paquete; sin ella, `authorize()` nace en `false`. `handle()` nace como
+paquete; sin ella, `authorize()` nace en `false`. Si basta la sesión, se
+declara `"authorize": "authenticated"` (sin `ability` ni `public`): `authorize()`
+nace en `true` y lo que quede por decidir va en la request. `handle()` nace como
 `abort(501)` y su lógica va en una clase de soporte. No puede llamarse como un
 modelo, ni como uno ya generado por otro laraimport.
 
@@ -1114,8 +1116,17 @@ Recorren sólo las acciones declaradas (`routes`, `immutable`). Cada endpoint de
 es público, porque nace cerrado) y 403 con sesión y la autorización negando.
 Ningún test generado sale `incomplete`.
 
+Un endpoint de `controllers[]` que deja entrar a cualquiera con sesión —o cuya
+`authorize()` decide sin Gate y deja a `rules()` el 422 y a la request el 404
+de lo ajeno— se declara con `"authorize": "authenticated"`: su `authorize()`
+nace en `true` y su test comprueba que con la autorización negando **no**
+responde 403. Sin declararlo, ese 403 fallaría con razón. En un endpoint de
+modelo no hace falta: «cualquiera con sesión» es su método de la política
+devolviendo `true`, y el test, que no consulta la política, sigue pasando.
+
 `<Model>EndpointsTest` se crea una vez y no se regenera: en un modelo que ya
-existía, bórralo y vuelve a importar para tener estas pruebas.
+existía, `verify` avisa con `endpoint-tests-outdated`. Guarda lo que le
+añadiste, bórralo y vuelve a importar.
 
 ### Qué no se toca
 
@@ -1187,6 +1198,7 @@ Contra el manifiesto:
 | `endpoint-missing` | error | A un endpoint declarado le falta una pieza: su método, su ruta, su request, su habilidad, su operación o, con interfaz, su función en el contrato JS. El mensaje dice qué escribir. |
 | `immutable-write` | error | Un camino de escritura en un modelo `immutable`, o su modelo sin la guarda que rechaza modificaciones. |
 | `secret-exposed` | error | Una columna `secret` fuera de `$hidden`, en la exportación, en el Resource o en la tabla. |
+| `endpoint-tests-outdated` | aviso | Un `<Modelo>EndpointsTest` sin alguna de las pruebas que cierran la autorización (`test_…_cada_accion_requiere_sesion`, `…_cada_accion_pregunta_a_la_politica` y, si hay listado, `…_index_pasa_por_su_managed_filter`): se generó antes de 9.1. Ese test no se regenera ni está en el manifiesto, así que no se reescribe: el mensaje dice cómo traerlas. |
 
 Sobre todo el código, lo haya generado LaraPack o no, en la raíz y en los
 paquetes locales (repositorios `path` y `packages/*`), y aunque no haya

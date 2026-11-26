@@ -51,6 +51,6 @@
     "phpunit.xml": "672e4f061e937abe5637e51734fe9831e04df5c2f1aa6c02c413782a4f61cc60",
     "resources/views/excel/post.blade.php": "70c55a41b3b9abd92814109a64c89944c9b8baeba111a46af598c1986265c32b",
     "routes/api/models/post.php": "393d2f99ebb82882e1f4f783a03c8331c98c29d429a631f0977895bb8547bfc9",
-    "tests/Feature/Models/PostEndpointsTest.php": "a3f44a15972b1a15947f3691dcdf67ea689b93a59f27c86f0c068b0f04b6fa1f",
+    "tests/Feature/Models/PostEndpointsTest.php": "7f3201ec4e44c41f67887d2c8310e4c7cd7b582c078a4734c3938e7ab0044e02",
     "tests/TestCase.php": "c7c209f5579c42647c1f7b2a79ac828e8b54ac62a98442045a6e94fa2c0d0ebc"
 }

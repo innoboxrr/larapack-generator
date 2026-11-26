@@ -194,6 +194,18 @@ final class SemanticValidator
             if ($actions !== null && $validName) {
                 $findings = [...$findings, ...self::endpointAbility($owner, $endpoint, $at, $actions, $abilities)];
             }
+
+            // `authorize: authenticated` dice que basta la sesión: un Gate que
+            // no se pregunta, o un público sin sesión, lo contradicen.
+            if (($endpoint['authorize'] ?? null) === 'authenticated') {
+                if (isset($endpoint['ability'])) {
+                    $findings[] = self::error("{$at}/authorize", "'{$name}' declara authorize: authenticated y ability '{$endpoint['ability']}': con authenticated no se pregunta a ningún Gate. Quita una de las dos.");
+                }
+
+                if ($public) {
+                    $findings[] = self::error("{$at}/authorize", "'{$name}' es público y declara authorize: authenticated: un público no exige sesión. Quita una de las dos.");
+                }
+            }
         }
 
         return [...$findings, ...self::openFirstSegments($owner, $path, $actions === null ? null : $idParameter)];

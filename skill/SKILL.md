@@ -335,7 +335,7 @@ salirse.
 | `Events/*/Listeners/` | Efectos secundarios: notificaciones, colas, integraciones. |
 | `Observers/` | Ciclo de vida del modelo. |
 | `Factories/` | Datos de prueba realistas. Las generadas ya insertan: cada columna tiene un valor que la base acepta y cada `foreignId` hacia un modelo del archivo usa su factory. |
-| `tests/Feature/` | El comportamiento, no la estructura. Los generados pasan recién generados: cada endpoint responde con la autorización abierta, y además 401 sin sesión, 403 con la autorización negando y el listado acotado por su `ManagedFilter`. Si uno falla, lo rompiste tú: no lo ajustes para que pase. Quién entra según tu Policy y qué deja ver tu `canView()`, pruébalo aparte. |
+| `tests/Feature/` | El comportamiento, no la estructura. Los generados pasan recién generados: cada endpoint responde con la autorización abierta, y además 401 sin sesión, 403 con la autorización negando y el listado acotado por su `ManagedFilter`. Si uno falla, lo rompiste tú: no lo ajustes para que pase. Si el 403 de un `controllers[]` falla porque basta la sesión o `authorize()` decide sin Gate, no es un fallo del test: declara `"authorize": "authenticated"` y regenera. Quién entra según tu Policy y qué deja ver tu `canView()`, pruébalo aparte. |
 
 Y una cosa más sobre el modelo: **el modelo es una fachada, no un almacén de
 lógica.** Un método público en `Operations` que orquesta, y el trabajo real en
@@ -378,7 +378,8 @@ Sale el método del controlador (sólo `return $request->handle();`), la ruta,
 código va en `rules()` de la request, en el método de la política y en
 `<name>Model($request)` del trait `Operations`; en un `controllers[]`, en
 `handle()` delegando en una clase de soporte. Un endpoint `public` lleva
-`throttle:`. Lee `endpoints` y `controllers` en `larapack:schema` antes de
+`throttle:`. Un `controllers[]` en el que basta la sesión se declara con
+`"authorize": "authenticated"`, no con un `return true` escrito a mano. Lee `endpoints` y `controllers` en `larapack:schema` antes de
 declararlos.
 
 Con `--vue`/`--react`, la interfaz también sale: no escribas la llamada ni el
@@ -466,6 +467,8 @@ class InstalledModulesRequest extends FormRequest
   `Http/Controllers/Concerns/`.
 - Si el endpoint es el CRUD de un modelo, no es un endpoint a mano: decláralo en
   el `laraimport.json`.
+- Declarado en `controllers[]`, este endpoint lleva `"authorize": "authenticated"`:
+  su `authorize()` no pregunta a ningún Gate, y el test generado no espera 403.
 
 ## Paso 7: verificar
 
@@ -494,6 +497,9 @@ generado con su hash. Detecta:
   escritura, o su modelo perdió la guarda de `booted()`.
 - **`secret-exposed`** (error): una columna `secret` volvió a salir por la API,
   la exportación o la tabla.
+- **`endpoint-tests-outdated`** (aviso): un `<Modelo>EndpointsTest` de antes de
+  9.1, sin las pruebas que cierran la autorización. No se regenera solo:
+  guarda lo que le añadiste, bórralo, `larapack:import` y vuelve a pegarlo.
 
 Y en **todos** los controladores, generados o no, con o sin manifiesto:
 

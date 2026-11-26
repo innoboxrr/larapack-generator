@@ -77,7 +77,16 @@ class EndpointClassNameRequest extends FormRequest
 
         return Gate::forUser($this->user())->allows('endpointAbilityName');
 // @larapack:endif
-// @larapack:if !endpoint_model&!endpoint_gate
+// @larapack:if endpoint_authenticated
+
+        // Declarado `authorize: authenticated`: basta la sesión, que ya exigió
+        // auth:sanctum, y no se pregunta a ningún Gate. Lo que quede por
+        // decidir —un registro ajeno (404), un dato inválido (422)— va en
+        // rules() o en handle(). Si acaba preguntando a un Gate, declara
+        // `ability` en su lugar.
+        return true;
+// @larapack:endif
+// @larapack:if !endpoint_model&!endpoint_gate&!endpoint_authenticated
 
         // Nace cerrado. Sin modelo no hay política que Laravel resuelva sola:
         // decide aquí quién entra —un Gate, un permiso— o declara `ability`

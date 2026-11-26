@@ -45,6 +45,7 @@ class EndpointClassNameTest extends TestCase
 
     }
 // @larapack:endif
+// @larapack:if !endpoint_authenticated
 
     /**
      * Con sesión pero con la autorización negando, responde 403: prueba que
@@ -74,5 +75,31 @@ class EndpointClassNameTest extends TestCase
             ->assertForbidden();
 
     }
+// @larapack:endif
+// @larapack:if endpoint_authenticated
+
+    /**
+     * Declarado `authorize: authenticated`: basta la sesión. Con la
+     * autorización negando no responde 403, porque authorize() no pregunta a
+     * ningún Gate. Lo que responda después —422, 404, 501 mientras handle()
+     * no esté escrito— es de la request, y se prueba aparte.
+     */
+    public function test_con_sesion_basta_la_sesion(): void
+    {
+
+        $this->signIn();
+
+        Gate::swap(new \Illuminate\Auth\Access\Gate(
+            $this->app,
+            fn () => auth()->user(),
+            beforeCallbacks: [fn ($user = null) => false],
+        ));
+
+        $status = $this->json('endpointHttpVerb', route('api.dotNamespacesnake_case_model_name.endpointRouteName'endpointRecordRouteArgs), endpointRecordPayload)->status();
+
+        $this->assertNotSame(403, $status, 'endpointHttpVerb endpointUri responde 403 con la autorizacion negando y declara authorize: authenticated. Si authorize() pregunta a un Gate, declara ability en el laraimport.');
+
+    }
+// @larapack:endif
 
 }
