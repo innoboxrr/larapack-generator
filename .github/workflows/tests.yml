@@ -30,6 +30,10 @@ jobs:
             - uses: shivammathur/setup-php@v2
               with:
                   php-version: '8.4'
+                  # En Windows setup-php no trae fileinfo ni gd/zip activas, y
+                  # phpoffice/phpspreadsheet (via maatwebsite/excel) las exige:
+                  # sin ellas composer no resuelve.
+                  extensions: fileinfo, gd, zip, mbstring, intl
                   coverage: none
 
             - name: Instalar dependencias
