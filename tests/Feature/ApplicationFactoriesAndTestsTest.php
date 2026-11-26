@@ -211,6 +211,31 @@ final class ApplicationFactoriesAndTestsTest extends TestCase
         }
     }
 
+    /**
+     * Lo que cierra la autorización también se prueba, sin depender de lo que
+     * decida la política: sin sesión, 401 en cada acción; con sesión y la
+     * autorización negando, 403 (policies y policy, todo en false); y el
+     * listado, por el ManagedFilter del modelo aunque el cliente mande
+     * managed=false.
+     */
+    public function test_en_una_aplicacion_los_tests_prueban_lo_que_cierra_la_autorizacion(): void
+    {
+        $this->import(FakeProject::application(), ['User', 'Product']);
+
+        foreach (['User' => 'user', 'Product' => 'product'] as $model => $snake) {
+            $this->assertClosingTests($model, $snake, 'App\\Models\\Filters\\'.$model.'\\ManagedFilter', $this->project->read("tests/Feature/Models/{$model}EndpointsTest.php"));
+        }
+    }
+
+    public function test_en_un_paquete_los_tests_prueban_lo_que_cierra_la_autorizacion(): void
+    {
+        $this->import(FakeProject::library('Acme\\Shop\\'), ['Product', 'OrderLine']);
+
+        foreach (['Product' => 'product', 'OrderLine' => 'order_line'] as $model => $snake) {
+            $this->assertClosingTests($model, $snake, 'Acme\\Shop\\Models\\Filters\\'.$model.'\\ManagedFilter', $this->project->read("tests/Feature/Models/{$model}EndpointsTest.php"));
+        }
+    }
+
     // EDICIÓN EN LOTE
 
     /**
@@ -259,7 +284,7 @@ final class ApplicationFactoriesAndTestsTest extends TestCase
                 $guests++;
 
                 $this->assertFalse($signsIn, "{$model}EndpointsTest::{$name} inicia sesión y dice comprobar que sin ella no se entra.");
-                $this->assertStringContainsString('->assertUnauthorized()', $body);
+                $this->assertMatchesRegularExpression('/->assertUnauthorized\(\)|assertSame\(401,/', $body);
 
                 continue;
             }
@@ -268,6 +293,27 @@ final class ApplicationFactoriesAndTestsTest extends TestCase
         }
 
         $this->assertSame(1, $guests, "{$model}EndpointsTest no comprueba que sin sesión no se entra.");
+    }
+
+    private function assertClosingTests(string $model, string $snake, string $managedFilter, string $test): void
+    {
+        foreach (['cada_accion_requiere_sesion', 'cada_accion_pregunta_a_la_politica', 'index_pasa_por_su_managed_filter'] as $name) {
+            $this->assertStringContainsString("public function test_{$snake}_{$name}(): void", $test, "{$model}EndpointsTest no tiene test_{$snake}_{$name}.");
+        }
+
+        // Una puerta nueva, no un before() más: el que abrió la autorización
+        // respondería primero.
+        $this->assertStringContainsString('Gate::swap(new \\Illuminate\\Auth\\Access\\Gate(', $test);
+        $this->assertStringContainsString('beforeCallbacks: [fn ($user = null) => false]', $test);
+        $this->assertStringContainsString("->assertExactJson(['create' => false])", $test);
+
+        // Las doce acciones en las dos pruebas, menos policies y policy en la
+        // de 403, que responden qué se puede en vez de cerrarse.
+        $this->assertSame(12 + 10, preg_match_all("/^\\s+'\\w+' => \\['(GET|POST|PUT|DELETE)', route\\(/m", $test), "{$model}EndpointsTest no recorre todas las acciones.");
+
+        $this->assertStringContainsString("use {$managedFilter};", $test);
+        $this->assertStringContainsString("['managed' => false]", $test);
+        $this->assertStringNotContainsString('markTestIncomplete', $test);
     }
 
     /**

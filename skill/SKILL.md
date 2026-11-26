@@ -335,7 +335,7 @@ salirse.
 | `Events/*/Listeners/` | Efectos secundarios: notificaciones, colas, integraciones. |
 | `Observers/` | Ciclo de vida del modelo. |
 | `Factories/` | Datos de prueba realistas. Las generadas ya insertan: cada columna tiene un valor que la base acepta y cada `foreignId` hacia un modelo del archivo usa su factory. |
-| `tests/Feature/` | El comportamiento, no la estructura. Los generados pasan recién generados y prueban que cada endpoint responde, con la autorización abierta en el `TestCase`. Si uno falla, lo rompiste tú. La autorización pruébala aparte, contra la Policy. |
+| `tests/Feature/` | El comportamiento, no la estructura. Los generados pasan recién generados: cada endpoint responde con la autorización abierta, y además 401 sin sesión, 403 con la autorización negando y el listado acotado por su `ManagedFilter`. Si uno falla, lo rompiste tú: no lo ajustes para que pase. Quién entra según tu Policy y qué deja ver tu `canView()`, pruébalo aparte. |
 
 Y una cosa más sobre el modelo: **el modelo es una fachada, no un almacén de
 lógica.** Un método público en `Operations` que orquesta, y el trabajo real en
