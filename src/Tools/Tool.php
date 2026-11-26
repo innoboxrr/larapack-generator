@@ -374,6 +374,10 @@ class Tool
 
         $this->replaceData($destination);
 
+        // Después de los tokens: lo que se inserta lleva nombres de endpoint,
+        // y uno como `renameModelName` no puede volver a pasar por strtr().
+        $this->applyEndpoints($destination);
+
         if (self::isFromJsonImporter()) {
             $this->processFileWithJson($destination);
         }
@@ -503,7 +507,65 @@ class Tool
      */
     protected function declaresAnyAction(): bool
     {
-        return Declaration::of($this->ModelName)['actions'] !== [];
+        return Declaration::of($this->ModelName)['actions'] !== [] || $this->endpoints() !== [];
+    }
+
+    /**
+     * Los endpoints declarados del modelo o controlador que se está generando,
+     * ya normalizados.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    protected function endpoints(): array
+    {
+        return Declaration::of((string) $this->ModelName)['endpoints'];
+    }
+
+    /**
+     * Sustituye los marcadores `//ENDPOINT_…//` del archivo por el código de
+     * los endpoints declarados, con la sangría del marcador.
+     *
+     * Sin endpoints la línea del marcador desaparece entera, fin de línea
+     * incluido: es lo que garantiza que un laraimport que no los usa genere
+     * byte a byte lo mismo que antes de que existieran.
+     */
+    protected function applyEndpoints(string $file): void
+    {
+        $content = file_get_contents($file);
+
+        if (! str_contains($content, '//ENDPOINT_')) {
+            return;
+        }
+
+        $content = preg_replace_callback(
+            '/^([ \t]*)\/\/(ENDPOINT_[A-Z_]+)\/\/\R/m',
+            function (array $matches): string {
+                $lines = $this->endpointCode($matches[2]);
+
+                if ($lines === []) {
+                    return '';
+                }
+
+                return implode('', array_map(
+                    fn (string $line): string => ($line === '' ? '' : $matches[1].$line)."\n",
+                    $lines
+                ));
+            },
+            $content
+        );
+
+        file_put_contents($file, $content);
+    }
+
+    /**
+     * El código de un marcador de endpoints, línea a línea y sin la sangría
+     * del marcador. Cada herramienta rellena los suyos.
+     *
+     * @return array<int, string>
+     */
+    protected function endpointCode(string $marker): array
+    {
+        return [];
     }
 
     /**

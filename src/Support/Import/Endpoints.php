@@ -1,0 +1,176 @@
+<?php
+
+namespace Innoboxrr\LarapackGenerator\Support\Import;
+
+/**
+ * Los endpoints declarados que no son una de las doce acciones CRUD.
+ *
+ * Es el único sitio que decide cómo se llama cada pieza que sale de uno —el
+ * método del controlador, la request, la ruta, la habilidad, la operación—,
+ * para que el generador y `verify` no puedan discrepar sobre un nombre.
+ *
+ * Existe porque lo que el laraimport no sabía declarar se escribía a mano, y
+ * lo escrito a mano es justo donde se perdía el patrón de que el controlador
+ * sólo llama a `$request->handle()`.
+ */
+final class Endpoints
+{
+    public const METHODS = ['get', 'post', 'put', 'patch', 'delete'];
+
+    public const TARGETS = ['record', 'collection'];
+
+    /**
+     * Las condiciones de los stubs de endpoint. No son del modelo sino del
+     * endpoint que se está generando, así que no las resuelve Declaration.
+     */
+    public const FLAGS = ['endpoint_record', 'endpoint_id_in_body', 'endpoint_public', 'endpoint_model', 'endpoint_gate'];
+
+    /**
+     * Las habilidades que la política CRUD ya trae, la acción que las genera y
+     * si reciben un registro. Un endpoint que reutiliza una no genera método:
+     * pregunta al que hay, así que la acción tiene que existir y el registro
+     * tiene que casar con su firma.
+     */
+    public const CRUD_ABILITIES = [
+        'index' => ['index', 'collection'],
+        'viewAny' => ['index', 'collection'],
+        'view' => ['show', 'record'],
+        'create' => ['create', 'collection'],
+        'update' => ['update', 'record'],
+        'delete' => ['delete', 'record'],
+        'restore' => ['restore', 'record'],
+        'forceDelete' => ['forceDelete', 'record'],
+        'export' => ['export', 'collection'],
+    ];
+
+    /**
+     * Lo que no puede ser el nombre de un endpoint aunque sea camelCase.
+     *
+     * Los métodos que el controlador ya tiene —por HasMiddleware o por los
+     * traits del Controller base— se pisarían en silencio. `form` daría una
+     * clase `FormRequest` que se extiende a sí misma. `before` es el método de
+     * la política que decide por el administrador.
+     */
+    public const RESERVED = [
+        'middleware', 'getMiddleware', 'callAction', 'authorize', 'authorizeForUser',
+        'authorizeResource', 'validate', 'validateWith', 'validateWithBag', 'form',
+        'before', 'handle',
+    ];
+
+    /**
+     * Las palabras reservadas de PHP. Unas no valen como nombre de método,
+     * otras sí; explicar cuáles cuesta más que elegir otro nombre, y un
+     * endpoint `new` o `default` no dice qué hace.
+     */
+    public const PHP_KEYWORDS = [
+        'abstract', 'and', 'array', 'as', 'break', 'callable', 'case', 'catch', 'class', 'clone',
+        'const', 'continue', 'declare', 'default', 'do', 'echo', 'else', 'elseif', 'empty',
+        'enddeclare', 'endfor', 'endforeach', 'endif', 'endswitch', 'endwhile', 'enum', 'eval',
+        'exit', 'extends', 'final', 'finally', 'fn', 'for', 'foreach', 'function', 'global',
+        'goto', 'if', 'implements', 'include', 'instanceof', 'insteadof', 'interface', 'isset',
+        'list', 'match', 'namespace', 'new', 'or', 'parent', 'print', 'private', 'protected',
+        'public', 'readonly', 'require', 'return', 'self', 'static', 'switch', 'throw', 'trait',
+        'try', 'unset', 'use', 'var', 'while', 'xor', 'yield', 'mixed', 'never', 'void', 'null',
+        'true', 'false', 'bool', 'int', 'float', 'string', 'object', 'iterable',
+    ];
+
+    /**
+     * La URI de las acciones CRUD. Un endpoint con la misma URI quedaría
+     * detrás de la CRUD, que se registra antes.
+     */
+    public static function crudUris(): array
+    {
+        return array_map(fn (string $action): string => self::kebab($action), Actions::ALL);
+    }
+
+    /**
+     * Completa lo que el laraimport deja por omisión. Lo que sale de aquí es lo
+     * que leen las herramientas y lo que se guarda en el manifiesto.
+     *
+     * @param  array<string, mixed>  $endpoint
+     * @param  bool  $model  Si cuelga de un modelo (o de un `controllers[]`).
+     * @return array{name: string, method: string, uri: string, route: string, request: string, target: string|null, ability: string|null, operation: string|null, public: bool, middleware: array<int, string>}
+     */
+    public static function normalise(array $endpoint, bool $model): array
+    {
+        $name = (string) $endpoint['name'];
+
+        return [
+            'name' => $name,
+            'method' => (string) $endpoint['method'],
+            'uri' => self::uri($endpoint),
+            'route' => self::routeName($name),
+            'request' => self::requestClass($name),
+            'target' => $model ? (string) ($endpoint['target'] ?? 'record') : null,
+            'ability' => $model ? (string) ($endpoint['ability'] ?? $name) : (isset($endpoint['ability']) ? (string) $endpoint['ability'] : null),
+            'operation' => $model ? self::operation($name) : null,
+            'public' => (bool) ($endpoint['public'] ?? false),
+            'middleware' => array_values($endpoint['middleware'] ?? []),
+        ];
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $endpoints
+     * @return array<int, array<string, mixed>>
+     */
+    public static function normaliseAll(array $endpoints, bool $model): array
+    {
+        return array_map(fn (array $endpoint): array => self::normalise($endpoint, $model), $endpoints);
+    }
+
+    /**
+     * @param  array<string, mixed>  $endpoint
+     */
+    public static function uri(array $endpoint): string
+    {
+        return isset($endpoint['uri']) && $endpoint['uri'] !== ''
+            ? (string) $endpoint['uri']
+            : self::kebab((string) $endpoint['name']);
+    }
+
+    /**
+     * Como `forceDelete` → `force.delete`: el front compone el nombre con
+     * puntos, y así un endpoint se nombra igual que una acción CRUD.
+     */
+    public static function routeName(string $name): string
+    {
+        return str_replace('-', '.', self::kebab($name));
+    }
+
+    public static function requestClass(string $name): string
+    {
+        return ucfirst($name).'Request';
+    }
+
+    /**
+     * La operación del modelo en la que delega la request. Lleva `Model` como
+     * createModel o updateModel: con el nombre pelado, un endpoint `refresh` o
+     * `touch` sobrescribiría un método de Eloquent.
+     */
+    public static function operation(string $name): string
+    {
+        return $name.'Model';
+    }
+
+    public static function isCrudAbility(string $ability): bool
+    {
+        return array_key_exists($ability, self::CRUD_ABILITIES);
+    }
+
+    /**
+     * Los parámetros de una URI, sin llaves ni interrogación.
+     *
+     * @return array<int, string>
+     */
+    public static function parameters(string $uri): array
+    {
+        preg_match_all('/\{([a-z][a-z0-9_]*)\??\}/', $uri, $matches);
+
+        return $matches[1];
+    }
+
+    public static function kebab(string $value): string
+    {
+        return mb_strtolower(preg_replace('/(?<!^)[A-Z]/', '-$0', $value));
+    }
+}

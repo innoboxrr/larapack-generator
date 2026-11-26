@@ -5,6 +5,7 @@ namespace Innoboxrr\LarapackGenerator\Tests\Unit;
 use Innoboxrr\LarapackGenerator\Exceptions\MakerException;
 use Innoboxrr\LarapackGenerator\Support\Declaration;
 use Innoboxrr\LarapackGenerator\Support\Import\Actions;
+use Innoboxrr\LarapackGenerator\Support\Import\Endpoints;
 use Innoboxrr\LarapackGenerator\Support\StubBlocks;
 use PHPUnit\Framework\TestCase;
 
@@ -119,7 +120,11 @@ final class StubBlocksTest extends TestCase
             $content = (string) file_get_contents($file->getPathname());
             $name = str_replace('\\', '/', substr($file->getPathname(), strlen(dirname(__DIR__, 2)) + 1));
 
-            foreach (array_diff(StubBlocks::conditions($content), $known) as $unknown) {
+            // Las condiciones de endpoint sólo las resuelve EndpointTool: en
+            // cualquier otro stub serían una condición desconocida al generar.
+            $allowed = str_starts_with($name, 'src/Stubs/Endpoint/') ? [...$known, ...Endpoints::FLAGS] : $known;
+
+            foreach (array_diff(StubBlocks::conditions($content), $allowed) as $unknown) {
                 $problems[] = "{$name}: condición desconocida '{$unknown}'";
             }
 

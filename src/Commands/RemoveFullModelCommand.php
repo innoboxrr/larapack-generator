@@ -33,6 +33,8 @@ class RemoveFullModelCommand extends Command
         'Resource',
         'Route',
         'Test',
+        // Los tests de los endpoints; sus requests se van con las demás.
+        'Endpoint',
     ];
 
     protected function configure(): void

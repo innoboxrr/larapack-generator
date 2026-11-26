@@ -54,6 +54,12 @@ final class GeneratedApplicationTest extends TestCase
                 ['name' => 'price', 'type' => 'decimal'],
                 ['name' => 'active', 'type' => 'boolean'],
             ],
+            // Uno de cada forma, para que el test generado de cada una
+            // corra en una aplicación, que no tiene el TestCase de un paquete.
+            'endpoints' => [
+                ['name' => 'publish', 'method' => 'post'],
+                ['name' => 'preview', 'method' => 'get', 'public' => true, 'middleware' => ['throttle:30,1']],
+            ],
         ],
         [
             'name' => 'OrderLine',
@@ -62,6 +68,8 @@ final class GeneratedApplicationTest extends TestCase
                 ['name' => 'product_id', 'type' => 'foreignId', 'constraint' => 'products'],
             ],
         ],
+    ], 'controllers' => [
+        ['name' => 'Desk', 'endpoints' => [['name' => 'overview', 'method' => 'get']]],
     ]];
 
     private static ?FakeProject $project = null;
@@ -125,7 +133,15 @@ final class GeneratedApplicationTest extends TestCase
 
         $written = 0;
 
-        foreach (glob($root.'/tests/Feature/Models/*EndpointsTest.php') ?: [] as $file) {
+        $files = [
+            ...(glob($root.'/tests/Feature/Models/*EndpointsTest.php') ?: []),
+            // Los de los endpoints declarados, uno por endpoint.
+            ...(glob($root.'/tests/Feature/Endpoints/*/*Test.php') ?: []),
+        ];
+
+        $this->assertNotEmpty(glob($root.'/tests/Feature/Endpoints/Desk/*Test.php'), 'No se generó el test del controlador sin modelo.');
+
+        foreach ($files as $file) {
             $written += preg_match_all('/public function test_\w+\(\)/', (string) file_get_contents($file));
         }
 

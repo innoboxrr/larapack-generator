@@ -41,6 +41,7 @@ use Namespace\Http\Requests\PascalCaseModelName\{
     // @larapack:if bulkDelete
     BulkDeleteRequest,
     // @larapack:endif
+    //ENDPOINT_REQUESTS//
 };
 
 class PascalCaseModelNameController extends Controller implements HasMiddleware
@@ -140,4 +141,5 @@ class PascalCaseModelNameController extends Controller implements HasMiddleware
         return $request->handle();
     }
     // @larapack:endif
+    //ENDPOINT_ACTIONS//
 }

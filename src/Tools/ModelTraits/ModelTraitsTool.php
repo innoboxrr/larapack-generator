@@ -149,12 +149,59 @@ class ModelTraitsTool extends Tool
             if (copy($templateFile, $operationsTraitFile)) {
                 $this->applyBlocks($operationsTraitFile);
                 $this->replaceData($operationsTraitFile);
+                $this->applyEndpoints($operationsTraitFile);
             } else {
                 throw MakerException::copyFailed($templateFile, $operationsTraitFile);
             }
         }
 
         return $this;
+    }
+
+    /**
+     * La operación de cada endpoint, que es donde va su lógica: la request
+     * autoriza, valida y delega aquí.
+     *
+     * Sólo cuando el trait se crea. Uno que ya existe es código del proyecto y
+     * el generador no escribe en él; si le falta una operación, verify lo dice
+     * con el nombre exacto del método.
+     *
+     * Nace lanzando una excepción y no devolviendo algo vacío: un endpoint que
+     * respondiera 200 sin hacer nada pasaría por implementado.
+     *
+     * @return array<int, string>
+     */
+    protected function endpointCode(string $marker): array
+    {
+        if ($marker !== 'ENDPOINT_OPERATIONS') {
+            return [];
+        }
+
+        $lines = [];
+
+        foreach ($this->endpoints() as $endpoint) {
+            $verb = strtoupper($endpoint['method']);
+            $subject = $endpoint['target'] === 'record'
+                ? ' * La request ya autorizó, validó y buscó el registro: $this es él.'
+                : ' * La request ya autorizó y validó. $this es una instancia vacía, como en createModel().';
+
+            array_push(
+                $lines,
+                '',
+                '/**',
+                " * {$verb} {$endpoint['uri']}: el endpoint {$endpoint['name']} del laraimport.",
+                ' *',
+                $subject,
+                ' * Lo que devuelvas es la respuesta.',
+                ' */',
+                "public function {$endpoint['operation']}(\$request)",
+                '{',
+                "    throw new \\LogicException('{$this->PascalCaseModelName}::{$endpoint['operation']}() no está implementada.');",
+                '}'
+            );
+        }
+
+        return $lines;
     }
 
     private function createRelationsTrait()

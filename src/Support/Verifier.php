@@ -3,6 +3,7 @@
 namespace Innoboxrr\LarapackGenerator\Support;
 
 use Innoboxrr\LarapackGenerator\Support\Import\Actions;
+use Innoboxrr\LarapackGenerator\Support\Import\Endpoints;
 
 /**
  * Comprueba que lo generado siga en su sitio y que las entidades equivalentes
@@ -202,8 +203,9 @@ final class Verifier
         foreach ($models as $model) {
             // Las metas se declaran por modelo: que una tabla las tenga y otra
             // no es una decisión, no deriva. Contarlas avisaba en cada paquete
-            // con un solo modelo con metas.
-            $components[$model] = array_values(array_diff($this->componentsOf($model), ['ModelMetas', 'MigrationMetas']));
+            // con un solo modelo con metas. Con los endpoints pasa lo mismo:
+            // cada modelo declara los suyos, y uno sin ninguno no está roto.
+            $components[$model] = array_values(array_diff($this->componentsOf($model), ['ModelMetas', 'MigrationMetas', 'Endpoint']));
         }
 
         $findings = [];
@@ -327,9 +329,295 @@ final class Verifier
                     "{$what} {$action}, que {$model} no declara. Alguien lo escribió a mano: declara la acción en el laraimport o retíralo."
                 );
             }
+
+            $findings = [
+                ...$findings,
+                ...$this->checkEndpoints($model, $declaration),
+                ...$this->undeclaredEndpoints($model, $declaration),
+                ...$this->controllerLogic($model),
+            ];
         }
 
         return $findings;
+    }
+
+    /**
+     * Que cada endpoint declarado tenga todas sus piezas.
+     *
+     * El controlador y las rutas se regeneran; la política y el trait de
+     * operaciones son del proyecto y el generador no escribe en ellos si ya
+     * existían. Un endpoint añadido después llega sin su habilidad ni su
+     * operación, y aquí se dice cuál falta y cómo se llama.
+     *
+     * @param  array{actions: array<int, string>, immutable: bool, secret: array<int, string>, endpoints: array<int, array<string, mixed>>, controller: bool}  $declaration
+     * @return array<int, array<string, mixed>>
+     */
+    private function checkEndpoints(string $model, array $declaration): array
+    {
+        if ($declaration['endpoints'] === []) {
+            return [];
+        }
+
+        $findings = [];
+
+        $controller = $this->fileFromStub($model, 'Controller/ControllerTemplate.txt');
+        $controllerContent = $controller === null ? '' : (string) $this->contentsOf($controller);
+
+        $routes = $this->fileFromStub($model, 'Route/RouteTemplate.txt');
+        $routesContent = $routes === null ? '' : (string) $this->contentsOf($routes);
+
+        $policy = $this->fileFromStub($model, 'Policy/PolicyTemplate.txt');
+        $policyContent = $policy === null ? null : $this->contentsOf($policy);
+
+        $app = $this->appDirectory($model);
+        $operations = $app === null ? null : "{$app}/Models/Traits/Operations/{$model}Operations.php";
+        $operationsContent = $operations === null ? null : $this->contentsOf($operations);
+
+        foreach ($declaration['endpoints'] as $endpoint) {
+            $name = $endpoint['name'];
+            $missing = fn (?string $file, string $message): array => $this->finding(self::ERROR, 'endpoint-missing', $model, $file, "El endpoint {$name} declarado {$message}");
+
+            if (! preg_match('/function\s+'.preg_quote($name, '/').'\s*\(/', $controllerContent)) {
+                $findings[] = $missing($controller, 'no tiene método en el controlador. Regenera con --force: el controlador no se escribe a mano.');
+            }
+
+            if (! str_contains($routesContent, "->name('{$endpoint['route']}')")) {
+                $findings[] = $missing($routes, "no tiene ruta '{$endpoint['route']}'. Regenera con --force.");
+            }
+
+            if ($app !== null) {
+                $request = "{$app}/Http/Requests/{$model}/{$endpoint['request']}.php";
+
+                if (! is_file($this->manifest->absolute($request))) {
+                    $findings[] = $missing($request, "no tiene su {$endpoint['request']}. Regenera: se crea sin tocar lo demás.");
+                }
+            }
+
+            if ($declaration['controller']) {
+                continue;
+            }
+
+            $ability = (string) $endpoint['ability'];
+
+            if ($policyContent !== null && ! Endpoints::isCrudAbility($ability) && ! preg_match('/function\s+'.preg_quote($ability, '/').'\s*\(/', $policyContent)) {
+                $signature = ($endpoint['public'] ? '?User' : 'User').' $user'.($endpoint['target'] === 'record' ? ", {$model} \$".lcfirst($model) : '');
+
+                $findings[] = $missing($policy, "pregunta a la política por '{$ability}' y la política no lo tiene. Añade `public function {$ability}({$signature}): Response|bool` y decide quién puede; sin él, Laravel lo niega siempre.");
+            }
+
+            if ($operationsContent === null || ! preg_match('/function\s+'.preg_quote((string) $endpoint['operation'], '/').'\s*\(/', $operationsContent)) {
+                $findings[] = $missing($operations, "delega en {$model}::{$endpoint['operation']}(\$request) y el trait de operaciones no lo tiene. Escríbelo ahí: es donde va la lógica del endpoint.");
+            }
+        }
+
+        return $findings;
+    }
+
+    /**
+     * Lo que está en el controlador, en las rutas o en la carpeta de requests
+     * del modelo sin que nadie lo haya declarado.
+     *
+     * Las acciones CRUD no declaradas las cuenta traces(); aquí va todo lo
+     * demás: un método `__invoke`, un constructor que inyecta un servicio, una
+     * ruta añadida a mano. Es la forma exacta que tomó la deriva cuando el
+     * laraimport no sabía declarar un endpoint.
+     *
+     * @param  array{actions: array<int, string>, immutable: bool, secret: array<int, string>, endpoints: array<int, array<string, mixed>>, controller: bool}  $declaration
+     * @return array<int, array<string, mixed>>
+     */
+    private function undeclaredEndpoints(string $model, array $declaration): array
+    {
+        $findings = [];
+        $endpoints = $declaration['endpoints'];
+        $hint = 'Alguien lo escribió a mano: declara el endpoint en el laraimport (endpoints, o controllers si no tiene modelo) y regenera.';
+
+        $controller = $this->fileFromStub($model, 'Controller/ControllerTemplate.txt');
+
+        if ($controller !== null && ($content = $this->contentsOf($controller)) !== null) {
+            $known = [...Actions::ALL, ...array_column($endpoints, 'name'), 'middleware'];
+
+            foreach (array_keys($this->publicMethods($content)) as $method) {
+                if (! in_array($method, $known, true)) {
+                    $findings[] = $this->finding(self::ERROR, 'route-not-declared', $model, $controller,
+                        "El controlador tiene un método {$method} que no es una acción ni un endpoint declarado. {$hint}");
+                }
+            }
+        }
+
+        $routes = $this->fileFromStub($model, 'Route/RouteTemplate.txt');
+
+        if ($routes !== null && ($content = $this->contentsOf($routes)) !== null) {
+            $known = [...array_map(fn (string $action): string => Actions::routeName($action), Actions::ALL), ...array_column($endpoints, 'route')];
+
+            preg_match_all("/->name\\(\\s*['\"]([^'\"]+)['\"]\\s*\\)/", $content, $matches);
+
+            foreach (array_diff($matches[1], $known) as $route) {
+                $findings[] = $this->finding(self::ERROR, 'route-not-declared', $model, $routes,
+                    "Hay una ruta '{$route}' que no es una acción ni un endpoint declarado. {$hint}");
+            }
+
+            // Una ruta sin nombre no la puede llamar el front, y tampoco se ve
+            // arriba: se cuentan las que hay contra las que tienen nombre.
+            $registered = preg_match_all('/\bRoute::(?:get|post|put|patch|delete|options|any|match)\s*\(/', $content);
+
+            if ($registered > count($matches[1])) {
+                $findings[] = $this->finding(self::ERROR, 'route-not-declared', $model, $routes,
+                    'Hay rutas sin nombre. Las generadas lo llevan todas; ésa la escribió alguien a mano. '.$hint);
+            }
+        }
+
+        $app = $this->appDirectory($model);
+
+        if ($app !== null) {
+            $known = [...array_map(fn (string $action): string => Actions::requestClass($action), Actions::ALL), ...array_column($endpoints, 'request')];
+
+            foreach (glob($this->manifest->absolute("{$app}/Http/Requests/{$model}").'/*Request.php') ?: [] as $file) {
+                if (! in_array(basename($file, '.php'), $known, true)) {
+                    $findings[] = $this->finding(self::ERROR, 'route-not-declared', $model, "{$app}/Http/Requests/{$model}/".basename($file),
+                        'Existe una request que no es de ninguna acción ni endpoint declarado. '.$hint);
+                }
+            }
+        }
+
+        return $findings;
+    }
+
+    /**
+     * Un método del controlador generado que hace algo más que llamar a su
+     * request.
+     *
+     * Editar lo generado sólo daba un `customised` informativo; en el
+     * controlador eso no basta. La autorización, la validación y la operación
+     * viven en la request y en el modelo, y un controlador que valida o
+     * consulta es justo lo que el patrón existe para impedir.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function controllerLogic(string $model): array
+    {
+        $controller = $this->fileFromStub($model, 'Controller/ControllerTemplate.txt');
+        $content = $controller === null ? null : $this->contentsOf($controller);
+
+        if ($content === null) {
+            return [];
+        }
+
+        $findings = [];
+
+        foreach ($this->publicMethods($content) as $method => $body) {
+            if ($method === 'middleware') {
+                continue;
+            }
+
+            $normalised = preg_replace('/\s+/', '', $body);
+
+            if (in_array($normalised, ['return$request->handle();', 'return$request->handle($this);'], true)) {
+                continue;
+            }
+
+            $findings[] = $this->finding(self::ERROR, 'controller-logic', $model, $controller,
+                "{$method}() hace algo más que `return \$request->handle();`. La autorización va en authorize(), la validación en rules() y la operación en handle(), que delega en el modelo. Muévelo ahí y regenera el controlador con --force.");
+        }
+
+        return $findings;
+    }
+
+    /**
+     * Los métodos públicos de la clase y su cuerpo, leídos con el tokenizador:
+     * una expresión regular no sabe dónde acaba un método con llaves dentro.
+     *
+     * Sólo los del cuerpo de la clase, no los de una clase anónima o un
+     * closure, y sin los abstractos, que no tienen cuerpo.
+     *
+     * @return array<string, string>
+     */
+    private function publicMethods(string $php): array
+    {
+        $tokens = token_get_all($php);
+        $methods = [];
+        $depth = 0;
+        $count = count($tokens);
+
+        for ($i = 0; $i < $count; $i++) {
+            $token = $tokens[$i];
+
+            if ($token === '{' || (is_array($token) && in_array($token[0], [T_CURLY_OPEN, T_DOLLAR_OPEN_CURLY_BRACES], true))) {
+                $depth++;
+
+                continue;
+            }
+
+            if ($token === '}') {
+                $depth--;
+
+                continue;
+            }
+
+            if (! is_array($token) || $token[0] !== T_FUNCTION || $depth !== 1) {
+                continue;
+            }
+
+            $visibility = T_PUBLIC;
+
+            for ($j = $i - 1; $j >= 0 && is_array($tokens[$j]) && in_array($tokens[$j][0], [T_WHITESPACE, T_PUBLIC, T_PROTECTED, T_PRIVATE, T_STATIC, T_FINAL, T_ABSTRACT, T_COMMENT, T_DOC_COMMENT], true); $j--) {
+                if (in_array($tokens[$j][0], [T_PROTECTED, T_PRIVATE], true)) {
+                    $visibility = $tokens[$j][0];
+                }
+            }
+
+            $name = null;
+
+            for ($j = $i + 1; $j < $count; $j++) {
+                if (is_array($tokens[$j]) && $tokens[$j][0] === T_STRING) {
+                    $name = $tokens[$j][1];
+
+                    break;
+                }
+
+                if ($tokens[$j] === '(') {
+                    break;
+                }
+            }
+
+            // El cuerpo empieza en la primera llave tras la firma; un `;` antes
+            // es un método abstracto.
+            for ($j = $i + 1; $j < $count && $tokens[$j] !== '{' && $tokens[$j] !== ';'; $j++);
+
+            if ($name === null || $j >= $count || $tokens[$j] === ';') {
+                continue;
+            }
+
+            $body = '';
+            $level = 0;
+
+            for ($k = $j; $k < $count; $k++) {
+                $piece = $tokens[$k];
+                $text = is_array($piece) ? $piece[1] : $piece;
+
+                if ($piece === '{' || (is_array($piece) && in_array($piece[0], [T_CURLY_OPEN, T_DOLLAR_OPEN_CURLY_BRACES], true))) {
+                    $level++;
+                } elseif ($piece === '}') {
+                    $level--;
+                }
+
+                if ($k > $j && $level > 0) {
+                    $body .= $text;
+                }
+
+                if ($level === 0) {
+                    break;
+                }
+            }
+
+            if ($visibility === T_PUBLIC) {
+                $methods[$name] = $body;
+            }
+
+            // Se sigue después del método: lo de dentro ya está leído.
+            $i = $k;
+        }
+
+        return $methods;
     }
 
     /**
@@ -491,13 +779,14 @@ final class Verifier
 
     /**
      * La forma declarada que decide con quién es comparable un modelo. Los
-     * secretos no cuentan: no cambian qué componentes tiene.
+     * secretos no cuentan: no cambian qué componentes tiene. Un `controllers[]`
+     * sólo se compara con otros: no tiene modelo, ni tabla, ni política.
      */
     private function shapeOf(string $model): string
     {
         $declaration = $this->manifest->declarationOf($model);
 
-        return json_encode([$declaration['actions'], $declaration['immutable']]);
+        return json_encode([$declaration['actions'], $declaration['immutable'], $declaration['controller']]);
     }
 
     private function fileFromStub(string $model, string $stub): ?string

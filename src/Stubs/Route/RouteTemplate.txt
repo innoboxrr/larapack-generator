@@ -62,3 +62,4 @@ Route::put('bulk-update', [PascalCaseModelNameController::class, 'bulkUpdate'])
 Route::delete('bulk-delete', [PascalCaseModelNameController::class, 'bulkDelete'])
 	->name('bulk.delete');
 // @larapack:endif
+//ENDPOINT_ROUTES//

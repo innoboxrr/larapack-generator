@@ -29,7 +29,7 @@ final class Declaration
     public const FLAGS = ['immutable', 'secret', 'metas', 'authenticatable', 'table_prefix'];
 
     /**
-     * @var array<string, array{actions: array<int, string>, immutable: bool, secret: array<int, string>, metas: bool, display: string, authenticatable: bool}>
+     * @var array<string, array{actions: array<int, string>, immutable: bool, secret: array<int, string>, metas: bool, display: string, authenticatable: bool, endpoints: array<int, array<string, mixed>>, controller: bool}>
      */
     private static array $models = [];
 
@@ -38,8 +38,10 @@ final class Declaration
      * @param  array<int, string>  $secret
      * @param  string  $display  La columna que nombra a un registro en pantalla.
      * @param  bool  $authenticatable  El modelo es un usuario que inicia sesión.
+     * @param  array<int, array<string, mixed>>  $endpoints  Ya normalizados por Endpoints.
+     * @param  bool  $controller  Es un `controllers[]`: endpoints sin modelo.
      */
-    public static function set(string $model, array $actions, bool $immutable = false, array $secret = [], bool $metas = false, string $display = 'name', bool $authenticatable = false): void
+    public static function set(string $model, array $actions, bool $immutable = false, array $secret = [], bool $metas = false, string $display = 'name', bool $authenticatable = false, array $endpoints = [], bool $controller = false): void
     {
         self::$models[$model] = [
             'actions' => array_values(array_intersect(Actions::ALL, $actions)),
@@ -48,7 +50,20 @@ final class Declaration
             'metas' => $metas,
             'display' => $display,
             'authenticatable' => $authenticatable,
+            'endpoints' => array_values($endpoints),
+            'controller' => $controller,
         ];
+    }
+
+    /**
+     * Desde un `controllers[]` ya normalizado: sin acciones CRUD, sin tabla y
+     * sin nada de lo que cuelga de un modelo. Sólo sus endpoints.
+     *
+     * @param  array<string, mixed>  $controller
+     */
+    public static function fromController(array $controller): void
+    {
+        self::set($controller['name'], [], endpoints: $controller['endpoints'], controller: true);
     }
 
     /**
@@ -85,7 +100,8 @@ final class Declaration
             $secret,
             ! empty($model['metas']),
             $model['display'] ?? 'name',
-            ! empty($model['authenticatable'])
+            ! empty($model['authenticatable']),
+            $model['endpoints'] ?? []
         );
     }
 
@@ -93,7 +109,7 @@ final class Declaration
      * Sin laraimport no se conocen las columnas: se nombra por `name`, como
      * siempre.
      *
-     * @return array{actions: array<int, string>, immutable: bool, secret: array<int, string>, metas: bool, display: string, authenticatable: bool}
+     * @return array{actions: array<int, string>, immutable: bool, secret: array<int, string>, metas: bool, display: string, authenticatable: bool, endpoints: array<int, array<string, mixed>>, controller: bool}
      */
     public static function of(string $model): array
     {
@@ -104,6 +120,8 @@ final class Declaration
             'metas' => false,
             'display' => 'name',
             'authenticatable' => false,
+            'endpoints' => [],
+            'controller' => false,
         ];
     }
 
@@ -148,7 +166,9 @@ final class Declaration
         return Actions::isAll($declaration['actions'])
             && ! $declaration['immutable']
             && $declaration['secret'] === []
-            && ! $declaration['authenticatable'];
+            && ! $declaration['authenticatable']
+            && $declaration['endpoints'] === []
+            && ! $declaration['controller'];
     }
 
     /**
@@ -180,6 +200,16 @@ final class Declaration
 
         if ($declaration['authenticatable']) {
             $entry['authenticatable'] = true;
+        }
+
+        // verify no recibe el laraimport: sin esto no sabría qué endpoints
+        // existen por declaración y cuáles escribió alguien a mano.
+        if ($declaration['endpoints'] !== []) {
+            $entry['endpoints'] = $declaration['endpoints'];
+        }
+
+        if ($declaration['controller']) {
+            $entry['controller'] = true;
         }
 
         return $entry;

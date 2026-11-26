@@ -35,7 +35,7 @@ final class Manifest
     ];
 
     /**
-     * @return array{version: int, package: array{namespace: string, files: array<string, array{stub: string, hash: string}>}, models: array<string, array{namespace: string, files: array<string, array{stub: string, hash: string}>, declaration?: array{actions?: array<int, string>, immutable?: bool, secret?: array<int, string>}}>}
+     * @return array{version: int, package: array{namespace: string, files: array<string, array{stub: string, hash: string}>}, models: array<string, array{namespace: string, files: array<string, array{stub: string, hash: string}>, declaration?: array{actions?: array<int, string>, immutable?: bool, secret?: array<int, string>, endpoints?: array<int, array<string, mixed>>, controller?: bool}}>}
      */
     public function read(): array
     {
@@ -111,7 +111,10 @@ final class Manifest
     }
 
     /**
-     * @return array{actions: array<int, string>, immutable: bool, secret: array<int, string>}
+     * Un manifiesto anterior a los endpoints no los trae: la ausencia significa
+     * que no hay ninguno, igual que la de `actions` significa todas.
+     *
+     * @return array{actions: array<int, string>, immutable: bool, secret: array<int, string>, endpoints: array<int, array<string, mixed>>, controller: bool}
      */
     public function declarationOf(string $model): array
     {
@@ -121,6 +124,8 @@ final class Manifest
             'actions' => $declared['actions'] ?? Actions::ALL,
             'immutable' => (bool) ($declared['immutable'] ?? false),
             'secret' => $declared['secret'] ?? [],
+            'endpoints' => $declared['endpoints'] ?? [],
+            'controller' => (bool) ($declared['controller'] ?? false),
         ];
     }
 
