@@ -5,8 +5,9 @@ usa. Cómo se usa está en el [README](README.md); cómo se prepara el entorno, 
 prueba y se publica, en [CONTRIBUTING](CONTRIBUTING.md).
 
 Todo lo que se cita aquí existe: `ArchitectureDocTest` comprueba que cada ruta,
-cada enlace y cada «Clase::miembro» del documento sigan en el código. Si mueves
-algo y el test falla, el documento es lo que hay que arreglar.
+cada enlace (con su ancla), cada test nombrado y cada «Clase::miembro» del
+documento sigan en el código. Si mueves algo y el test falla, el documento es lo
+que hay que arreglar.
 
 ## Índice
 
@@ -191,8 +192,10 @@ prefijo de las vistas de exportación (`Tool::init`).
 
 Una herramienta por pieza, en `src/Tools/<Área>/<Área>Tool.php`, todas sobre
 [`Tool`](src/Tools/Tool.php). Cada una expone `create(string $ModelName)` y
-`remove(string $ModelName)`, decide el destino y llama a `Tool::generate`, que
-es el único camino por el que se escribe un archivo generado:
+`remove(string $ModelName)`, decide el destino y llama a `Tool::generate`. Es
+el camino **principal**, no el único (los demás, en
+[la tabla de abajo](#lo-que-no-pasa-por-toolgenerate)), y es el único que da
+todas las garantías de una vez:
 
 1. Si existe y no hay `--force`: `skipped`.
 2. Si existe y el manifiesto dice que se editó a mano (`Manifest::wasCustomised`):
@@ -211,6 +214,40 @@ es el único camino por el que se escribe un archivo generado:
      sustituye sus marcadores (`//FILLABLE//`, `//EDIT//`, `//RULES//`…) con lo
      que dice el laraimport.
 5. Anota el archivo en el manifiesto (`Manifest::record`) y en `Generation`.
+
+Una herramienta puede especializar un paso sin salirse del camino:
+`EndpointTool::applyBlocks` añade las condiciones de `Endpoints::FLAGS` a las
+del modelo, y `ControllerTool::applyEndpoints` saca de `auth:sanctum` los
+endpoints públicos. Siguen pasando por `generate()`, con todo lo demás.
+
+### Lo que no pasa por `Tool::generate`
+
+Hay archivos que se copian por su cuenta. Algunos a propósito (son de quien
+mantiene el proyecto desde el primer momento), otros por historia. Ninguno se
+sobrescribe nunca, tampoco con `--force`: si el destino existe, no se toca. Pero
+**ninguno recibe gratis lo que hace `generate()`**: una plantilla nueva que
+siga uno de estos caminos no tendrá bloques, manifiesto ni la comprobación de
+`preserved` salvo que la herramienta los llame.
+
+| Camino | Qué escribe | Bloques `@larapack:if` | Manifiesto | En el informe |
+|---|---|---|---|---|
+| `PackageTool::scaffold` | El andamiaje de `larapack:new` (`PackageTool::FILES`, la licencia y `phpunit.xml.dist`). | No. Tokens con `Tool::replaceTokens`, sin `Generation::written`. | No, a propósito: el README o un workflow que cambian no son una desviación. | Sí (`skipped` si existe). |
+| `TestTool::copyOnce` | `TestCase.php`, el `User.php` de un paquete y `phpunit.xml`. | No. | No. | Sí; si existe, ni siquiera `skipped`. |
+| `TestTool::createFeatureTest` | El test de endpoints de cada modelo (`tests/Feature/Models/<Modelo>EndpointsTest.php`). | Sí, llamando a `Tool::applyBlocks`. | No. | Sólo con `--dry-run`; se formatea por `Tool::replaceData`. |
+| `ModelTraitsTool::create` | Los cinco traits de huecos. | Operations, Relations y Storage llaman a `Tool::applyBlocks`; Assignment y Mutators, no. | No: son huecos. | Sólo con `--dry-run`; se formatean por `Tool::replaceData`. |
+| `PivotMigrationTool::create` | La migración de cada pivote. | No, y tampoco `Tool::replaceTokens`: sólo sustituye `migration_name`. | No. | Sí; si existe, ni siquiera `skipped`. |
+| `MigrationTool::alter` | La migración `alter` cuando cambia una tabla que ya existe. | No. | Sí. | Sí. Si la migración de creación está editada, `preserved` y no escribe. |
+| `MigrationTool::remove`, `PivotMigrationTool::remove` | La migración `drop` de `larapack:remove-full-model`. | No. | No. | No. |
+
+Fuera de las herramientas escriben además `Skill::install`, `CiCommand`,
+`AgentHooks` y `Translations`, cada uno con sus reglas; ninguno copia una
+plantilla de `src/Stubs/` con tokens de modelo.
+
+Se formatea lo que el informe anota como creado y lo que pasa por
+`Tool::replaceData`, que anota el archivo con `Generation::written`. Las dos
+copias que no lo llaman (`PackageTool::scaffold` y `PivotMigrationTool::create`)
+pasan por Pint sólo porque se anotan con `Generation::record`: si dejaran de
+hacerlo, quedarían sin formatear.
 
 Las piezas que comparten más de una herramienta están arriba, no copiadas:
 `Tool::phpString` (todo valor libre del laraimport sale escapado; un `default`
@@ -605,7 +642,9 @@ cambia algo que ve quien usa el generador.
 ### Una plantilla
 
 1. El archivo en `src/Stubs/<Área>/` y la llamada a `Tool::generate` en su
-   herramienta (y su `remove()`).
+   herramienta (y su `remove()`). Si por algo no puede pasar por ahí, mira
+   [lo que no pasa por `Tool::generate`](#lo-que-no-pasa-por-toolgenerate): los
+   bloques, el manifiesto y `preserved` los tendrás que pedir tú.
 2. Sólo tokens de `Tool::replacementMap` y condiciones conocidas:
    `StubBlocksTest` recorre todas las plantillas y falla con una condición que
    no existe o un bloque sin cerrar. `StubsAvoidDeprecatedApisTest`, con una API

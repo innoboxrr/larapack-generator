@@ -182,7 +182,11 @@ Un controllers[] no puede llamarse como un modelo ya generado
 - **El cuerpo explica el porqué**, igual que un comentario: qué pasaba, por qué
   importa y qué se decidió. Lo que el diff ya dice no hace falta repetirlo.
 - **`VERSION` sólo se toca en el commit que publica.** Mientras tanto, lo que se
-  acumula va en `CHANGELOG.md` bajo `## <versión> (sin publicar)`.
+  acumula va en `CHANGELOG.md` bajo `## <versión> (sin publicar)`. Es la
+  convención desde la 9.1.0: hasta la 9.0.0, `VERSION` y la entrada del
+  `CHANGELOG.md` llegaban juntas en un mismo commit («Publicar la 7.10.3…»,
+  «9.0.0: CHANGELOG, VERSION…»). Con varias ramas abiertas a la vez, cada una
+  añade a la misma cabecera `(sin publicar)` en su subsección, sin abrir otra.
 - Las ramas se integran con un merge; no se reescribe la historia de `master`.
 
 ## Versionar
@@ -234,8 +238,14 @@ No se publica a mano: no se crean tags ni se sube nada a Packagist.
    ([`.github/workflows/release.yml`](.github/workflows/release.yml)) lee
    `VERSION` y crea ese tag si no existe. Packagist publica al recibir el tag.
 
-Un push con un test roto no publica nada, y un tag que ya existe no se vuelve a
-crear: subir `VERSION` es la única forma de publicar, y la única necesaria.
+`Release` se dispara cuando `Tests` termina, también si falla: la puerta es el
+`if` de su job, que sólo deja pasar un `Tests` en verde o un lanzamiento a mano.
+Está en este repositorio a propósito y no sólo en el workflow reutilizable de
+`innoboxrr/.github` al que llama, que es quien lee `VERSION` y empuja el tag: lo
+que ese reutilizable compruebe no se ve desde aquí y cambia sin pasar por este
+repositorio. Así, un push con un test roto no publica nada, y un tag que ya
+existe no se vuelve a crear: subir `VERSION` es la única forma de publicar, y la
+única necesaria.
 `release.yml` declara `permissions: contents: write` por sí mismo; sin esa
 línea, en un repositorio con permisos de sólo lectura el workflow no arranca y
 no deja log.

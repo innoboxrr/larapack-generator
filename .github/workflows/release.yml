@@ -11,6 +11,12 @@ on:
 
 jobs:
     release:
+        # `types: [completed]` dispara tambien cuando Tests fallo o se cancelo.
+        # La puerta vive aqui y no solo en el reutilizable de innoboxrr/.github:
+        # que un push con un test roto no publique es una garantia de este
+        # repositorio, y tiene que poder leerse en el. A mano siempre se puede.
+        if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+
         # Explicito y no heredado: el reutilizable necesita `contents: write`
         # para empujar el tag, y un repositorio cuyo permiso por defecto sea de
         # solo lectura no puede concederselo. Eso no falla el job: falla el
