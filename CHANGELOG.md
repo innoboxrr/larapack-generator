@@ -195,6 +195,12 @@ error en cada edición, no.
   viable.
 - **La lectura sin cargar aguanta** un archivo a medio escribir —el que un
   agente deja entre dos ediciones— y los ganchos de propiedad de PHP 8.4.
+- **Una sola definición de qué código se recorre.** `controller-shape` y las
+  comprobaciones de seguridad buscaban la raíz, los repositorios `path`,
+  `packages/*` y sus PSR-4 con dos copias del mismo código; ahora las dos usan
+  `ProjectSources`, y un paquete que vea una lo ve la otra. Livewire, Filament
+  y los controladores fuera de `Http/Controllers` siguen fuera a propósito: no
+  reciben un FormRequest ni delegan en su `handle()`.
 
 ### QUÉ HACER AL ACTUALIZAR
 

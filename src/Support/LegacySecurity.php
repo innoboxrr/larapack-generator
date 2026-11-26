@@ -2,12 +2,6 @@
 
 namespace Innoboxrr\LarapackGenerator\Support;
 
-use FilesystemIterator;
-use RecursiveCallbackFilterIterator;
-use RecursiveDirectoryIterator;
-use RecursiveIteratorIterator;
-use SplFileInfo;
-
 /**
  * Los dos agujeros que las plantillas ya cerraron, buscados en el código que
  * se generó antes de que los cerraran.
@@ -27,8 +21,8 @@ use SplFileInfo;
  *    accessor se ejecuta en cada fila, y uno que no existe da un 500.
  *
  * Como ControllerShape, no depende del manifiesto: se recorren las
- * `Http/Requests` y `Http/Resources` del proyecto y de sus paquetes locales,
- * los haya generado LaraPack o no. Es aviso y no error: el código viejo
+ * `Http/Requests` y `Http/Resources` del proyecto y de sus paquetes locales
+ * (ProjectSources), los haya generado LaraPack o no. Es aviso y no error: el código viejo
  * funciona, y arreglarlo es trabajo del proyecto, no algo que `verify` pueda
  * exigir de golpe a quien actualiza.
  *
@@ -52,14 +46,7 @@ final class LegacySecurity
      */
     private const SANITIZERS = ['array_intersect', 'array_intersect_key', 'array_intersect_assoc', 'in_array'];
 
-    private const SKIPPED_DIRECTORIES = ['vendor', 'node_modules'];
-
-    private string $root;
-
-    /**
-     * @var list<string>
-     */
-    private array $sources = [];
+    private ProjectSources $project;
 
     /**
      * Las clases de Http/Requests por nombre completo en minúsculas, para
@@ -71,7 +58,7 @@ final class LegacySecurity
 
     public function __construct(string $root)
     {
-        $this->root = rtrim(str_replace('\\', '/', realpath($root) ?: $root), '/');
+        $this->project = new ProjectSources($root);
     }
 
     /**
@@ -79,12 +66,10 @@ final class LegacySecurity
      */
     public function run(): array
     {
-        $this->discover();
-
         $findings = [];
         $builders = [];
 
-        foreach ($this->files('/Http/Requests/') as $file) {
+        foreach ($this->project->files('/Http/Requests/') as $file) {
             $code = (string) file_get_contents($file);
             $usesSearchSurge = str_contains($code, 'SearchSurge\\Search\\Builder');
 
@@ -109,7 +94,7 @@ final class LegacySecurity
             }
         }
 
-        foreach ($this->files('/Http/Resources/') as $file) {
+        foreach ($this->project->files('/Http/Resources/') as $file) {
             foreach (PhpOutline::ofFile($file)->classes() as $class) {
                 foreach ($class['methods'] as $method) {
                     $line = $this->unfilteredAppends($method);
@@ -430,106 +415,11 @@ final class LegacySecurity
         return $statements;
     }
 
-    // DESCUBRIMIENTO
-
-    /**
-     * La raíz y los paquetes locales, como en ControllerShape: los
-     * repositorios `path` de su composer.json y `packages/*`. De cada uno,
-     * sus directorios PSR-4; sin composer.json, `app` y `src`.
-     */
-    private function discover(): void
-    {
-        $roots = [$this->root];
-        $composer = $this->composer($this->root);
-
-        foreach ((array) ($composer['repositories'] ?? []) as $repository) {
-            if (is_array($repository) && ($repository['type'] ?? null) === 'path' && is_string($repository['url'] ?? null)) {
-                $url = $repository['url'];
-                $pattern = str_starts_with($url, '/') ? $url : $this->root.'/'.$url;
-
-                $roots = [...$roots, ...(glob($pattern, GLOB_ONLYDIR) ?: [])];
-            }
-        }
-
-        $roots = [...$roots, ...(glob($this->root.'/packages/*', GLOB_ONLYDIR) ?: [])];
-        $seen = [];
-
-        foreach ($roots as $root) {
-            $real = realpath($root);
-
-            if ($real === false || isset($seen[$real])) {
-                continue;
-            }
-
-            $seen[$real] = true;
-            $psr4 = (array) ($this->composer($real)['autoload']['psr-4'] ?? []);
-
-            foreach ($psr4 === [] ? [['app', 'src']] : $psr4 as $directories) {
-                foreach ((array) $directories as $directory) {
-                    $absolute = realpath($real.'/'.$directory);
-
-                    if ($absolute !== false && is_dir($absolute)) {
-                        $this->sources[] = str_replace('\\', '/', $absolute);
-                    }
-                }
-            }
-        }
-
-        $this->sources = array_values(array_unique($this->sources));
-    }
-
-    /**
-     * Los PHP de las fuentes que están bajo $segment, sin repetir los que se
-     * alcanzan por dos caminos.
-     *
-     * @return list<string>
-     */
-    private function files(string $segment): array
-    {
-        $files = [];
-
-        foreach ($this->sources as $source) {
-            $iterator = new RecursiveIteratorIterator(new RecursiveCallbackFilterIterator(
-                new RecursiveDirectoryIterator($source, FilesystemIterator::SKIP_DOTS),
-                fn (SplFileInfo $file): bool => ! $file->isDir()
-                    || ! (in_array($file->getFilename(), self::SKIPPED_DIRECTORIES, true) || str_starts_with($file->getFilename(), '.'))
-            ));
-
-            foreach ($iterator as $file) {
-                /** @var SplFileInfo $file */
-                $path = str_replace('\\', '/', $file->getPathname());
-
-                if ($file->getExtension() === 'php' && str_contains(substr($path, strlen($source)), $segment)) {
-                    $files[(string) ($file->getRealPath() ?: $path)] = $path;
-                }
-            }
-        }
-
-        $files = array_values($files);
-        sort($files);
-
-        return $files;
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function composer(string $directory): array
-    {
-        $file = $directory.'/composer.json';
-        $decoded = is_file($file) ? json_decode((string) file_get_contents($file), true) : null;
-
-        return is_array($decoded) ? $decoded : [];
-    }
-
     /**
      * @return array{level: string, check: string, model: string|null, file: string|null, message: string}
      */
     private function finding(string $check, string $file, string $message): array
     {
-        $file = str_replace('\\', '/', $file);
-        $relative = str_starts_with($file, $this->root.'/') ? substr($file, strlen($this->root) + 1) : $file;
-
-        return ['level' => Verifier::WARNING, 'check' => $check, 'model' => null, 'file' => $relative, 'message' => $message];
+        return ['level' => Verifier::WARNING, 'check' => $check, 'model' => null, 'file' => $this->project->relative($file), 'message' => $message];
     }
 }
