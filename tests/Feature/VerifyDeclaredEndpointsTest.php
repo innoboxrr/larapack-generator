@@ -1,0 +1,278 @@
+<?php
+
+namespace Innoboxrr\LarapackGenerator\Tests\Feature;
+
+use Innoboxrr\LarapackGenerator\Tests\Support\FakeProject;
+use Innoboxrr\LarapackGenerator\Tests\TestCase;
+use Symfony\Component\Console\Command\Command;
+
+/**
+ * `larapack:verify` contra los endpoints declarados (SPEC 02).
+ *
+ * Cada test parte de un proyecto recién generado y sin desviaciones, y hace a
+ * mano lo que hicieron los agentes cuando el laraimport no sabía declarar un
+ * endpoint: añadir un método al controlador, meterle lógica, escribir una
+ * ruta. Y lo contrario: declarar un endpoint y dejarlo a medias.
+ */
+final class VerifyDeclaredEndpointsTest extends TestCase
+{
+    private string $laraimport;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->useProject(FakeProject::library('Acme\\School\\'));
+
+        $this->laraimport = $this->project->path.'/laraimport.json';
+
+        $this->write([
+            ['name' => 'publish', 'method' => 'post'],
+            ['name' => 'importRoster', 'method' => 'post', 'target' => 'collection'],
+        ]);
+
+        $this->import();
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $endpoints
+     */
+    private function write(array $endpoints): void
+    {
+        file_put_contents($this->laraimport, json_encode([
+            'models' => [
+                ['name' => 'Post', 'props' => [['name' => 'title', 'type' => 'string']]],
+                ['name' => 'Course', 'props' => [['name' => 'title', 'type' => 'string']], 'endpoints' => $endpoints],
+            ],
+            'controllers' => [
+                ['name' => 'Desk', 'endpoints' => [['name' => 'overview', 'method' => 'get']]],
+            ],
+        ]));
+    }
+
+    private function import(bool $force = false): void
+    {
+        $this->assertSame(
+            Command::SUCCESS,
+            $this->runCommand('larapack:import', ['jsonPath' => $this->laraimport] + ($force ? ['--force' => true] : [])),
+            "larapack:import terminó con error:\n".$this->lastOutput
+        );
+    }
+
+    /**
+     * @return array{0: int, 1: array<string, mixed>}
+     */
+    private function verify(bool $strict = false): array
+    {
+        $code = $this->runCommand('larapack:verify', ['--format' => 'json'] + ($strict ? ['--strict' => true] : []));
+
+        return [$code, json_decode($this->lastOutput, true)];
+    }
+
+    /**
+     * @param  array<string, mixed>  $report
+     * @return array<int, array<string, mixed>>
+     */
+    private function findingsOf(array $report, string $check): array
+    {
+        return array_values(array_filter($report['findings'], fn (array $f): bool => $f['check'] === $check));
+    }
+
+    private function edit(string $relative, callable $change): void
+    {
+        $file = $this->project->path.'/'.$relative;
+
+        $changed = $change((string) file_get_contents($file));
+
+        $this->assertNotSame(file_get_contents($file), $changed, "La edición de {$relative} no cambió nada: el test no probaría lo que dice.");
+
+        file_put_contents($file, $changed);
+    }
+
+    public function test_un_proyecto_recien_generado_con_endpoints_no_tiene_desviaciones(): void
+    {
+        [$code, $report] = $this->verify(strict: true);
+
+        $this->assertSame(Command::SUCCESS, $code, json_encode($report['findings'], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+        $this->assertSame([], $this->findingsOf($report, 'inconsistent-entity'));
+    }
+
+    // ENDPOINT-MISSING
+
+    public function test_un_endpoint_sin_su_ruta_falla(): void
+    {
+        $this->edit('routes/api/models/course.php', fn (string $php): string => preg_replace(
+            "/\nRoute::post\\('publish'.*?;\n/s",
+            "\n",
+            $php
+        ));
+
+        [$code, $report] = $this->verify();
+
+        $this->assertSame(Command::FAILURE, $code);
+
+        $findings = $this->findingsOf($report, 'endpoint-missing');
+        $this->assertCount(1, $findings);
+        $this->assertSame('Course', $findings[0]['model']);
+        $this->assertStringContainsString("ruta 'publish'", $findings[0]['message']);
+    }
+
+    public function test_un_endpoint_sin_su_operacion_dice_que_metodo_escribir(): void
+    {
+        $this->edit('src/Models/Traits/Operations/CourseOperations.php', fn (string $php): string => str_replace('function publishModel(', 'function renamedModel(', $php));
+
+        [$code, $report] = $this->verify();
+
+        $this->assertSame(Command::FAILURE, $code);
+
+        $findings = $this->findingsOf($report, 'endpoint-missing');
+        $this->assertCount(1, $findings);
+        $this->assertSame('src/Models/Traits/Operations/CourseOperations.php', $findings[0]['file']);
+        $this->assertStringContainsString('Course::publishModel($request)', $findings[0]['message']);
+    }
+
+    /**
+     * El caso de verdad: el trait y la política ya existían, son código del
+     * proyecto y el generador no escribe en ellos. Un endpoint declarado
+     * después llega sin su habilidad ni su operación, y verify lo dice.
+     */
+    public function test_un_endpoint_declarado_despues_avisa_de_lo_que_el_proyecto_tiene_que_escribir(): void
+    {
+        $this->edit('src/Policies/CoursePolicy.php', fn (string $php): string => str_replace(
+            'public function index(User $user): Response|bool',
+            "// Escrita por el proyecto.\n    public function index(User \$user): Response|bool",
+            $php
+        ));
+
+        $this->write([
+            ['name' => 'publish', 'method' => 'post'],
+            ['name' => 'importRoster', 'method' => 'post', 'target' => 'collection'],
+            ['name' => 'archive', 'method' => 'post'],
+        ]);
+
+        $this->import(force: true);
+
+        $this->assertStringContainsString('function archive(ArchiveRequest', $this->project->read('src/Http/Controllers/CourseController.php'));
+        $this->assertTrue($this->project->has('src/Http/Requests/Course/ArchiveRequest.php'));
+
+        [$code, $report] = $this->verify();
+
+        $this->assertSame(Command::FAILURE, $code);
+
+        $messages = array_column($this->findingsOf($report, 'endpoint-missing'), 'message', 'file');
+
+        $this->assertStringContainsString('public function archive(User $user, Course $course): Response|bool', $messages['src/Policies/CoursePolicy.php']);
+        $this->assertStringContainsString('Course::archiveModel($request)', $messages['src/Models/Traits/Operations/CourseOperations.php']);
+    }
+
+    public function test_un_endpoint_sin_su_metodo_en_el_controlador_falla(): void
+    {
+        $this->edit('src/Http/Controllers/DeskController.php', fn (string $php): string => preg_replace(
+            '/\n    public function overview\(.*?\n    \}\n/s',
+            "\n",
+            $php
+        ));
+
+        [$code, $report] = $this->verify();
+
+        $this->assertSame(Command::FAILURE, $code);
+
+        $findings = $this->findingsOf($report, 'endpoint-missing');
+        $this->assertCount(1, $findings);
+        $this->assertSame('Desk', $findings[0]['model']);
+    }
+
+    // ROUTE-NOT-DECLARED
+
+    /**
+     * Lo que pasó en el sistema real: un constructor que inyecta un servicio y
+     * un __invoke con la lógica dentro.
+     */
+    public function test_un_metodo_escrito_a_mano_en_el_controlador_falla(): void
+    {
+        $this->edit('src/Http/Controllers/DeskController.php', fn (string $php): string => preg_replace(
+            '/\n}\s*$/',
+            "\n    public function __invoke(\\Illuminate\\Http\\Request \$request)\n    {\n        \$data = \$request->validate(['scope_id' => 'required']);\n\n        return response()->json(\$data);\n    }\n}\n",
+            $php
+        ));
+
+        [$code, $report] = $this->verify();
+
+        $this->assertSame(Command::FAILURE, $code);
+
+        $undeclared = $this->findingsOf($report, 'route-not-declared');
+        $this->assertCount(1, $undeclared);
+        $this->assertStringContainsString('__invoke', $undeclared[0]['message']);
+
+        $logic = $this->findingsOf($report, 'controller-logic');
+        $this->assertCount(1, $logic);
+        $this->assertStringContainsString('__invoke()', $logic[0]['message']);
+    }
+
+    public function test_una_ruta_escrita_a_mano_falla_tenga_o_no_nombre(): void
+    {
+        $this->edit('routes/api/models/desk.php', fn (string $php): string => $php
+            ."\nRoute::get('stats', [DeskController::class, 'overview'])\n\t->name('stats');\n"
+            ."\nRoute::get('raw', [DeskController::class, 'overview']);\n");
+
+        [$code, $report] = $this->verify();
+
+        $this->assertSame(Command::FAILURE, $code);
+
+        $messages = array_column($this->findingsOf($report, 'route-not-declared'), 'message');
+
+        $this->assertCount(2, $messages);
+        $this->assertStringContainsString("'stats'", $messages[0]);
+        $this->assertStringContainsString('sin nombre', $messages[1]);
+    }
+
+    public function test_una_request_que_nadie_declaro_falla(): void
+    {
+        file_put_contents(
+            $this->project->path.'/src/Http/Requests/Course/StatsRequest.php',
+            "<?php\n\nnamespace Acme\\School\\Http\\Requests\\Course;\n\nclass StatsRequest {}\n"
+        );
+
+        [$code, $report] = $this->verify();
+
+        $this->assertSame(Command::FAILURE, $code);
+
+        $findings = $this->findingsOf($report, 'route-not-declared');
+        $this->assertCount(1, $findings);
+        $this->assertSame('src/Http/Requests/Course/StatsRequest.php', $findings[0]['file']);
+    }
+
+    // CONTROLLER-LOGIC
+
+    public function test_logica_en_un_metodo_generado_falla(): void
+    {
+        $this->edit('src/Http/Controllers/CourseController.php', fn (string $php): string => str_replace(
+            "public function publish(PublishRequest \$request)\n    {\n        return \$request->handle();",
+            "public function publish(PublishRequest \$request)\n    {\n        abort_unless(\$request->user()->isAdmin(), 403);\n\n        return \$request->handle();",
+            $php
+        ));
+
+        [$code, $report] = $this->verify();
+
+        $this->assertSame(Command::FAILURE, $code);
+
+        $findings = $this->findingsOf($report, 'controller-logic');
+        $this->assertCount(1, $findings);
+        $this->assertStringContainsString('publish()', $findings[0]['message']);
+        $this->assertSame('src/Http/Controllers/CourseController.php', $findings[0]['file']);
+    }
+
+    public function test_tambien_en_una_accion_crud(): void
+    {
+        $this->edit('src/Http/Controllers/PostController.php', fn (string $php): string => str_replace(
+            "public function index(IndexRequest \$request)\n    {\n        return \$request->handle();",
+            "public function index(IndexRequest \$request)\n    {\n        return \\Acme\\School\\Models\\Post::query()->where('title', \$request->input('q'))->get();",
+            $php
+        ));
+
+        [$code, $report] = $this->verify();
+
+        $this->assertSame(Command::FAILURE, $code);
+        $this->assertSame('Post', $this->findingsOf($report, 'controller-logic')[0]['model']);
+    }
+}
