@@ -68,6 +68,7 @@ class PascalCaseModelNameResource extends JsonResource
         $actions[] = $this->delete();
 
         // @larapack:endif
+        //ENDPOINT_ROW_ACTIONS//
         return $actions;
 
     }

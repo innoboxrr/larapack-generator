@@ -541,6 +541,22 @@ final class SemanticValidator
                     'message' => "{$model['name']} tiene update pero no show: la edición cuelga de la vista de detalle, así que la interfaz no trae formulario de edición.",
                 ];
             }
+
+            // Un endpoint que cambia algo sale como acción en la tabla y en la
+            // ficha, salvo si su URI pide algo que la pantalla no tiene: el
+            // registro lo pone la fila, pero otro parámetro no tiene de dónde
+            // salir. Se queda con su función del contrato y nada más.
+            foreach ($model['endpoints'] ?? [] as $position => $endpoint) {
+                $endpoint = Endpoints::normalise($endpoint, true);
+
+                if ($endpoint['method'] !== 'get' && ! Endpoints::offersInterface($endpoint)) {
+                    $findings[] = [
+                        'level' => self::WARNING,
+                        'path' => "/models/{$index}/endpoints/{$position}/uri",
+                        'message' => "{$model['name']}.{$endpoint['name']} lleva en la URI parámetros que la interfaz no sabe rellenar: no sale en la tabla ni en la ficha. Llama a ".Endpoints::jsFunction($endpoint).'() del contrato JS desde tu pantalla.',
+                    ];
+                }
+            }
         }
 
         return $findings;

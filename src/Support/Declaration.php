@@ -4,6 +4,7 @@ namespace Innoboxrr\LarapackGenerator\Support;
 
 use Innoboxrr\LarapackGenerator\Exceptions\MakerException;
 use Innoboxrr\LarapackGenerator\Support\Import\Actions;
+use Innoboxrr\LarapackGenerator\Support\Import\Endpoints;
 
 /**
  * Lo que cada modelo declara sobre su propia forma, mientras se genera.
@@ -26,7 +27,7 @@ final class Declaration
      * donde los stubs preguntan, y porque esta lista es la que comprueba que
      * ningún stub use una condición que no existe.
      */
-    public const FLAGS = ['immutable', 'secret', 'metas', 'authenticatable', 'table_prefix'];
+    public const FLAGS = ['immutable', 'secret', 'metas', 'authenticatable', 'table_prefix', 'endpoint_writes', 'record_actions'];
 
     /**
      * @var array<string, array{actions: array<int, string>, immutable: bool, secret: array<int, string>, metas: bool, display: string, authenticatable: bool, endpoints: array<int, array<string, mixed>>, controller: bool}>
@@ -165,6 +166,15 @@ final class Declaration
             // porque es donde los stubs preguntan. Sin `table_prefix`, el bloque
             // desaparece y el modelo sale byte a byte como salía antes.
             $condition === 'table_prefix' => TablePrefix::get() !== '',
+            // Las del módulo de interfaz. `endpoint_writes`: algún endpoint del
+            // modelo cambia algo, y su función del contrato JS pregunta antes,
+            // como borrar. `record_actions`: alguno sale en el menú de la ficha.
+            $condition === 'endpoint_writes' => ! $declaration['controller']
+                && array_filter($declaration['endpoints'], fn (array $endpoint): bool => $endpoint['method'] !== 'get') !== [],
+            $condition === 'record_actions' => array_filter(
+                $declaration['endpoints'],
+                fn (array $endpoint): bool => ($endpoint['target'] ?? null) === 'record' && Endpoints::offersInterface($endpoint)
+            ) !== [],
             default => throw new MakerException("Condición de stub desconocida: '{$condition}'."),
         };
     }

@@ -933,10 +933,33 @@ paquete; sin ella, `authorize()` nace en `false`. `handle()` nace como
 `abort(501)` y su lógica va en una clase de soporte. No puede llamarse como un
 modelo, ni como uno ya generado por otro laraimport.
 
+**Con `--vue` o `--react`, también su interfaz:**
+
+- **Una función por endpoint en el contrato** (`models/<modelo>/index.js`, el
+  mismo en Vue y en React): `publishModel(data, { confirm })` llama a la ruta
+  por nombre con el verbo declarado. `data.id` es el registro; otro parámetro de
+  la URI sale de `data` por su nombre; lo demás va en el cuerpo, o en la query
+  si es `get`. Si no es `get`, pregunta antes, como borrar; `{ confirm: false }`
+  la llama sin diálogo.
+- **Los que escriben salen como acción**, habilitada por la política: los de
+  `collection`, como botón en la barra de la tabla (`crudActions()`); los de
+  `record`, en el menú de cada fila (el Resource los añade a `actions`) y en el
+  de la ficha (`recordActions()`, que pinta `ModelCard`). `PoliciesRequest`
+  responde por cada endpoint con la habilidad que pregunta (`archive` →
+  `update`).
+- **Un `controllers[]` sólo tiene su contrato**,
+  `src/controllers/<nombre>/index.js` con `<name>Endpoint(data)`: sin modelo ni
+  política no hay pantalla que pintar.
+
+No salen como acción un `get` (devuelve datos que alguien tiene que pintar) ni
+un endpoint con parámetros en la URI además del registro (la pantalla no tiene
+de dónde sacarlos; `import` lo avisa). Ninguno trae formulario: el esquema no
+declara campos de endpoint, así que uno que necesita datos se llama desde una
+pantalla propia con `publishModel({ id, ...datos })`.
+
 Sin las dos claves se genera exactamente lo mismo que antes. Lo que no se genera
-todavía: la interfaz de los endpoints (se llaman con
-`API_ROUTE_PREFIX + '<ruta>'`) y sus reglas declaradas. El diseño completo está
-en `docs/specs/SPEC-02-acciones-declaradas.md`.
+todavía: sus reglas declaradas. El diseño completo está en
+`docs/specs/SPEC-02-acciones-declaradas.md`.
 
 ---
 
@@ -1112,9 +1135,9 @@ Contra el manifiesto:
 | `missing-file` | error | Algo que se generó y ya no está. |
 | `customised` | info | Editado a mano; no se podrá regenerar sin perderlo. |
 | `inconsistent-entity` | aviso | Una entidad sin un componente que tienen todas las que declararon su misma forma. |
-| `route-prefix` | error | El `API_ROUTE_PREFIX` del módulo JS dejó de cuadrar con el `->as()` del RouteServiceProvider. |
+| `route-prefix` | error | El `API_ROUTE_PREFIX` del módulo JS —el de un modelo o el de un `controllers[]`— dejó de cuadrar con el `->as()` del RouteServiceProvider. |
 | `route-not-declared` | error | Una ruta (con o sin nombre), un método del controlador, un request o una vista de una acción o un endpoint que el modelo no declara. Distingue lo escrito a mano de lo que generó LaraPack para algo que ya no está en el laraimport. |
-| `endpoint-missing` | error | A un endpoint declarado le falta una pieza: su método, su ruta, su request, su habilidad o su operación. El mensaje dice qué escribir. |
+| `endpoint-missing` | error | A un endpoint declarado le falta una pieza: su método, su ruta, su request, su habilidad, su operación o, con interfaz, su función en el contrato JS. El mensaje dice qué escribir. |
 | `immutable-write` | error | Un camino de escritura en un modelo `immutable`, o su modelo sin la guarda que rechaza modificaciones. |
 | `secret-exposed` | error | Una columna `secret` fuera de `$hidden`, en la exportación, en el Resource o en la tabla. |
 

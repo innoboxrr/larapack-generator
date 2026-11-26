@@ -3,6 +3,7 @@
 namespace Innoboxrr\LarapackGenerator\Tools\ModelView;
 
 use Innoboxrr\LarapackGenerator\Support\Declaration;
+use Innoboxrr\LarapackGenerator\Support\Import\Endpoints;
 use Innoboxrr\LarapackGenerator\Support\Translations;
 use Innoboxrr\LarapackGenerator\Tools\Tool;
 
@@ -146,6 +147,26 @@ abstract class UiModuleTool extends Tool
         $this->syncTranslations();
 
         return $created;
+    }
+
+    /**
+     * El contrato JS de un `controllers[]`: una función por endpoint, sin
+     * pantalla. No hay modelo, ni tabla, ni política que pregunte la interfaz,
+     * así que no hay nada que pintar; quien tenga la pantalla la llama.
+     *
+     * Va en `src/controllers/<nombre>/index.js` y no en `src/models/`: no es
+     * un modelo, y el directorio es lo primero que lee quien busca uno.
+     */
+    public function createController(string $name): bool
+    {
+        $this->init($name);
+
+        $this->scaffoldModule();
+
+        return $this->generate(
+            stubs_path('ModelView/controller.js'),
+            get_path('resources/'.$this->framework().'/src/controllers/'.$this->kebabcasemodelname).'/index.js'
+        );
     }
 
     /**
@@ -348,6 +369,233 @@ abstract class UiModuleTool extends Tool
         );
 
         file_put_contents($file, $content);
+    }
+
+    // ENDPOINTS DECLARADOS
+
+    /**
+     * Lo que el contrato JS lleva de los endpoints declarados (SPEC 02): una
+     * función por endpoint, los de colección en la barra de la tabla y los de
+     * registro en `recordActions()`, que lee la ficha. La tabla recibe los de
+     * registro del Resource, en `actions` de cada fila.
+     *
+     * Todo lo que viene del laraimport pasa por escape(), aunque la validación
+     * ya lo limite a camelCase y segmentos kebab: el escape no puede depender
+     * de que otra pieza haya hecho su trabajo.
+     *
+     * @return array<int, string>
+     */
+    protected function endpointCode(string $marker): array
+    {
+        $endpoints = $this->endpoints();
+
+        return match ($marker) {
+            'ENDPOINT_COLLECTION_ACTIONS' => $this->collectionActions($endpoints),
+            'ENDPOINT_RECORD_ACTIONS' => $this->recordActions($endpoints),
+            'ENDPOINT_SERVICES' => array_merge([], ...array_map(
+                fn (array $endpoint): array => $this->endpointService($endpoint),
+                $endpoints
+            )),
+            default => [],
+        };
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $endpoints
+     * @return array<int, string>
+     */
+    private function collectionActions(array $endpoints): array
+    {
+        $lines = [];
+
+        foreach ($endpoints as $endpoint) {
+            if ($endpoint['target'] !== 'collection' || ! Endpoints::offersInterface($endpoint)) {
+                continue;
+            }
+
+            $lines = [
+                ...$lines,
+                '{',
+                ...$this->actionFields($endpoint),
+                '    route: false,',
+                '    policy: false,',
+                '    params: {},',
+                '},',
+            ];
+        }
+
+        return $lines;
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $endpoints
+     * @return array<int, string>
+     */
+    private function recordActions(array $endpoints): array
+    {
+        $entries = [];
+
+        foreach ($endpoints as $endpoint) {
+            if ($endpoint['target'] !== 'record' || ! Endpoints::offersInterface($endpoint)) {
+                continue;
+            }
+
+            $entries = [
+                ...$entries,
+                '    {',
+                ...array_map(fn (string $line): string => '    '.$line, $this->actionFields($endpoint)),
+                '    },',
+            ];
+        }
+
+        if ($entries === []) {
+            return [];
+        }
+
+        return [
+            '',
+            '/**',
+            ' * Los endpoints declarados que se lanzan sobre un registro, para el menú',
+            ' * de la ficha. La tabla recibe los mismos del Resource, en `actions` de',
+            ' * cada fila. El `id` es el nombre del endpoint: es la clave con la que',
+            ' * responde `policies`, y la acción se ofrece si la política lo permite.',
+            ' */',
+            'export const recordActions = () => [',
+            ...$entries,
+            ']',
+        ];
+    }
+
+    /**
+     * Lo que comparten la acción de la barra y la de la ficha.
+     *
+     * @param  array<string, mixed>  $endpoint
+     * @return array<int, string>
+     */
+    private function actionFields(array $endpoint): array
+    {
+        $danger = $endpoint['method'] === 'delete';
+
+        return [
+            "    id: '".$this->escape((string) $endpoint['name'])."',",
+            "    name: t('".$this->escape(Endpoints::label((string) $endpoint['name']))."'),",
+            "    success: t('The action was completed.'),",
+            "    callback: '".$this->escape(Endpoints::jsFunction($endpoint))."',",
+            '    icon: '.($danger ? "'delete'" : "'play'").',',
+            ...($danger ? ['    danger: true,'] : []),
+        ];
+    }
+
+    /**
+     * La función del contrato que llama a un endpoint por su nombre de ruta,
+     * como las CRUD: el verbo declarado, el token CSRF sólo en lo que escribe
+     * y los reintentos sólo en lo que lee.
+     *
+     * Recibe un solo objeto, como `deleteModel(data)`, porque es lo que le
+     * pasa la tabla: `data.id` es el registro, los parámetros de la URI se
+     * sacan de `data` por su nombre y lo demás viaja en el cuerpo (o en la
+     * query, si es `get`). La de un modelo que escribe pregunta antes, como
+     * borrar; `{ confirm: false }` la llama sin diálogo.
+     *
+     * @param  array<string, mixed>  $endpoint
+     * @return array<int, string>
+     */
+    private function endpointService(array $endpoint): array
+    {
+        $verb = (string) $endpoint['method'];
+        $read = $verb === 'get';
+        $record = $endpoint['target'] === 'record';
+        $confirm = $endpoint['target'] !== null && ! $read;
+        $id = $this->snake_case_model_name.'_id';
+        $parameters = Endpoints::parameters((string) $endpoint['uri']);
+
+        $doc = [
+            '',
+            '/**',
+            ' * `'.$this->escape((string) $endpoint['name']).'`: '.strtoupper($verb).' '.$this->escape((string) $endpoint['uri']).', declarado en el laraimport.',
+        ];
+
+        if ($record) {
+            array_push($doc, ' *', ' * `data.id` es el registro; lo demás viaja '.($read ? 'en la query.' : 'en el cuerpo.'));
+        }
+
+        if ($confirm) {
+            array_push($doc, ' *', ' * Pregunta antes, como borrar: `{ confirm: false }` la llama sin diálogo.');
+        }
+
+        $doc[] = ' */';
+
+        $body = [];
+        $source = 'data';
+
+        if ($record) {
+            $body[] = '    const { id, ...payload } = data';
+            $source = 'payload';
+        } elseif ($parameters !== []) {
+            $body[] = '    const payload = { ...data }';
+            $source = 'payload';
+        }
+
+        $routeArguments = '';
+
+        if ($parameters !== []) {
+            $pairs = [];
+            $removed = [];
+
+            foreach ($parameters as $parameter) {
+                if ($record && $parameter === $id) {
+                    $pairs[] = "{$parameter}: id";
+
+                    continue;
+                }
+
+                // El parámetro va en la URI y no también en el cuerpo.
+                $pairs[] = "{$parameter}: payload.{$parameter}";
+                $removed[] = "    delete payload.{$parameter}";
+            }
+
+            $body[] = '    const parameters = { '.implode(', ', $pairs).' }';
+            array_push($body, ...$removed);
+            $routeArguments = ', parameters';
+        }
+
+        if ($body !== []) {
+            $body[] = '';
+        }
+
+        if ($confirm) {
+            $body = [
+                ...$body,
+                '    if (confirm) {',
+                '        await confirmOrCancel({',
+                "            title: t('".$this->escape(Endpoints::label((string) $endpoint['name']))."'),",
+                "            message: t('Are you sure you want to continue?'),",
+                "            confirmLabel: t('Yes, continue'),",
+                "            cancelLabel: t('Cancel'),",
+                ...($verb === 'delete' ? ["            variant: 'danger',"] : []),
+                '        })',
+                '    }',
+                '',
+            ];
+        }
+
+        $payload = $read ? [] : ['        _token: csrfToken(),'];
+        $payload[] = "        ...{$source},";
+
+        if ($record && ! in_array($id, $parameters, true)) {
+            $payload[] = "        {$id}: id,";
+        }
+
+        return [
+            ...$doc,
+            'export const '.$this->escape(Endpoints::jsFunction($endpoint)).' = '
+                .($confirm ? 'async (data = {}, { confirm = true } = {}) => {' : '(data = {}) => {'),
+            ...$body,
+            "    return makeHttpRequest('{$verb}', route(API_ROUTE_PREFIX + '".$this->escape((string) $endpoint['route'])."'{$routeArguments}), {",
+            ...$payload,
+            '    }, {}, '.($read ? '3' : '0').', 1500)',
+            '}',
+        ];
     }
 
     // FORMULARIOS

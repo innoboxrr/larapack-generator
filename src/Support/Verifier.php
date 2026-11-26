@@ -40,7 +40,14 @@ final class Verifier
      * Las claves que el propio Resource usa en sus acciones por fila. Que
      * aparezcan como cadena no significa que una columna se esté exponiendo.
      */
-    private const RESOURCE_KEYS = ['id', 'name', 'callback', 'icon', 'route', 'policy', 'params', 'to'];
+    private const RESOURCE_KEYS = ['id', 'name', 'callback', 'icon', 'route', 'policy', 'params', 'to', 'success', 'danger'];
+
+    /**
+     * Los contratos JS: el de un modelo y el de un `controllers[]`. Los dos
+     * componen sus URLs con API_ROUTE_PREFIX y los dos llevan una función por
+     * endpoint declarado.
+     */
+    private const CONTRACT_STUBS = ['ModelView/model.js', 'ModelView/controller.js'];
 
     /**
      * Las comprobaciones que dependen del manifiesto. Sin modelos registrados
@@ -273,7 +280,7 @@ final class Verifier
 
         foreach ($models as $model) {
             foreach ($this->manifest->filesFor($model) as $relative => $meta) {
-                if ($meta['stub'] !== 'ModelView/model.js') {
+                if (! in_array($meta['stub'], self::CONTRACT_STUBS, true)) {
                     continue;
                 }
 
@@ -394,6 +401,8 @@ final class Verifier
         $policy = $this->fileFromStub($model, 'Policy/PolicyTemplate.txt');
         $policyContent = $policy === null ? null : $this->contentsOf($policy);
 
+        $contracts = [...$this->filesFromStub($model, self::CONTRACT_STUBS[0]), ...$this->filesFromStub($model, self::CONTRACT_STUBS[1])];
+
         $app = $this->appDirectory($model);
         $operations = $app === null ? null : "{$app}/Models/Traits/Operations/{$model}Operations.php";
         $operationsContent = $operations === null ? null : $this->contentsOf($operations);
@@ -421,6 +430,22 @@ final class Verifier
 
                 if (! is_file($this->manifest->absolute($request))) {
                     $findings[] = $missing($request, "no tiene su {$endpoint['request']}. Regenera: se crea sin tocar lo demás.");
+                }
+            }
+
+            // La interfaz llama a cada endpoint por su función del contrato JS.
+            // Un contrato editado a mano no se regenera, así que un endpoint
+            // añadido después llega sin ella y la pantalla no lo ve.
+            $function = Endpoints::jsFunction($endpoint);
+
+            foreach ($contracts as $contract) {
+                $content = $this->contentsOf($contract);
+
+                if ($content !== null && ! preg_match('/export\s+const\s+'.preg_quote($function, '/').'\s*=/', $content)) {
+                    $findings[] = $missing($contract, "no tiene función en el contrato JS: falta `export const {$function}`. "
+                        .($this->manifest->wasCustomised($this->manifest->absolute($contract))
+                            ? 'El contrato está editado a mano y --force lo conserva: escríbela con la forma de las de los demás endpoints, o devuelve el archivo a lo generado y regenera.'
+                            : 'Regenera con --vue o --react y --force: el contrato no se escribe a mano.'));
                 }
             }
 

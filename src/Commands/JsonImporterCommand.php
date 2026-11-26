@@ -11,7 +11,9 @@ use Innoboxrr\LarapackGenerator\Support\Manifest;
 use Innoboxrr\LarapackGenerator\Support\TablePrefix;
 use Innoboxrr\LarapackGenerator\Tools\Controller\ControllerTool;
 use Innoboxrr\LarapackGenerator\Tools\Endpoint\EndpointTool;
+use Innoboxrr\LarapackGenerator\Tools\ModelView\ModelViewTool;
 use Innoboxrr\LarapackGenerator\Tools\PivotMigration\PivotMigrationTool;
+use Innoboxrr\LarapackGenerator\Tools\ReactView\ReactViewTool;
 use Innoboxrr\LarapackGenerator\Tools\Route\RouteTool;
 use Innoboxrr\LarapackGenerator\Tools\Tool;
 use Symfony\Component\Console\Command\Command;
@@ -131,6 +133,15 @@ class JsonImporterCommand extends Command
                 (new ControllerTool)->create($controller['name']);
                 (new RouteTool)->create($controller['name']);
                 (new EndpointTool)->create($controller['name']);
+
+                // Sin pantalla: sólo el contrato JS, una función por endpoint.
+                if ($input->getOption('vue')) {
+                    (new ModelViewTool)->createController($controller['name']);
+                }
+
+                if ($input->getOption('react')) {
+                    (new ReactViewTool)->createController($controller['name']);
+                }
 
                 if (! Generation::isDryRun()) {
                     (new Manifest)->declare($controller['name'], Declaration::toManifest($controller['name']));

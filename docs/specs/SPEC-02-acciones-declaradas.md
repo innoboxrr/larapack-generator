@@ -86,6 +86,31 @@ Todo determinista, a partir de la declaración. Lo que se escribe a mano va **s�
 
 Un `controllers[]` genera lo mismo salvo política y operación: su controlador, su archivo de rutas en `routes/api/models/<nombre>.php` (el mismo directorio que ya carga el `RouteServiceProvider`), sus requests y sus tests. `handle()` nace como `abort(501)` con el comentario de que la lógica va en una clase de soporte, no en la request ni en el controlador.
 
+### 3.0 La interfaz (con `--vue` o `--react`)
+
+Lo que sale en el módulo de interfaz del modelo. El contrato (`models/<modelo>/index.js`) es el mismo archivo en Vue y en React, así que casi todo vale para los dos.
+
+| Pieza | Qué sale | Cuándo |
+|---|---|---|
+| Función del contrato | `export const publishModel = async (data = {}, { confirm = true } = {})`. Llama a `route(API_ROUTE_PREFIX + 'publish')` con el verbo declarado. `data.id` es el registro: va a `{<modelo>_id}` si la URI lo lleva y al cuerpo si no. Otro parámetro de la URI sale de `data` por su nombre y no viaja también en el cuerpo. El token CSRF sólo en lo que escribe y los reintentos sólo en lo que lee, como en las CRUD. | Siempre, uno por endpoint. |
+| Confirmación | La función pregunta antes con el diálogo del tema (`confirmOrCancel`), como `deleteModel`; `variant: 'danger'` si el verbo es `delete`. `{ confirm: false }` la llama sin diálogo. | Si no es `get`. |
+| Botón en la barra de la tabla | Una entrada en `crudActions()` con `callback: '<name>Model'`. La tabla la habilita con la respuesta de `policies` sin `id`. | `collection`, no `get`, sin parámetros en la URI. |
+| Acción en cada fila | Una entrada en `actions` del Resource (`id` = nombre del endpoint, `callback` = la función). La tabla la habilita con `policies` por fila. | `record`, no `get`, sin más parámetro en la URI que el registro. |
+| Acción en la ficha | `recordActions()` en el contrato; `ModelCard` las añade a su menú, pregunta a `policies` por el registro, deshabilita lo que la política niega y, al terminar, recarga el registro (o vuelve al índice si ya no existe). | Las mismas que en la fila. |
+| `PoliciesRequest` | Mapea el endpoint a la habilidad que pregunta (`'archive' => 'update'`). Sin eso, `policies` respondía por `archive`, que la política no tiene, y la acción salía siempre deshabilitada. | Si `ability` no es el nombre. |
+| Contrato de un `controllers[]` | `src/controllers/<nombre>/index.js`, con `API_ROUTE_PREFIX` y `<name>Endpoint(data)` por endpoint. Sin pantalla ni confirmación: no hay modelo, ni tabla, ni política que pregunte la interfaz. | Siempre. |
+
+El Resource y `PoliciesRequest` son del backend: sus dos piezas salen aunque no se pida interfaz, igual que las acciones `view`, `edit` y `delete` que el Resource ya llevaba.
+
+Lo que **no** sale, a propósito:
+
+- **Un `get` no es una acción.** Devuelve datos que alguien tiene que pintar; lanzarlo desde un menú para tirar la respuesta no sirve de nada. Tiene su función y nada más.
+- **Un parámetro de la URI que no es el registro** no tiene de dónde salir en una fila ni en la ficha. El endpoint se queda con su función, y `import --vue`/`--react` lo avisa.
+- **Formularios.** El esquema no declara campos de endpoint (`rules()` es un hueco, sección 7), así que no hay de dónde sacarlos. Un endpoint que necesita datos se llama desde una pantalla propia con `publishModel({ id, ...datos })`.
+- **Una entrada en la paleta de comandos** del índice: la barra de la tabla ya es el botón, y está protegida por la política; la paleta no lo está.
+
+Sin endpoints, todo esto desaparece y la interfaz sale byte a byte como antes (`GeneratedOutputSnapshotTest`).
+
 ### 3.1 Por qué `controllers` y no «un modelo sin tabla»
 
 Se consideró declarar el escritorio como un modelo con `"table": false`. Se descartó:
@@ -133,6 +158,8 @@ Semántica (errores salvo que se diga):
 | `endpoint-missing` | Un endpoint declarado al que le falta su método del controlador, su ruta, su request, su método de la política o su operación en el trait `Operations`. El mensaje dice cuál y qué escribir o regenerar; si el controlador o las rutas están editados a mano, dice que `--force` los conserva y que regenerar no basta. |
 | `route-not-declared` | (ampliado) Un método público del controlador (un `__invoke`, un constructor que inyecta un servicio), una ruta con nombre, una ruta sin nombre o un `*Request.php` de la carpeta del modelo que no es ni una acción CRUD declarada ni un endpoint declarado. |
 
+Con interfaz, `endpoint-missing` mira además que cada contrato JS del modelo o del controlador (Vue y React) exporte la función del endpoint: un contrato editado a mano no se regenera, y un endpoint añadido después llegaría sin ella. `route-prefix` comprueba también el `API_ROUTE_PREFIX` del contrato de un `controllers[]`. Lo que queda de un endpoint retirado (su función, su acción en el Resource) no tiene comprobación propia: lo señala `route-not-declared` en el controlador y las rutas, y regenerar con `--force` lo quita de todo lo que no esté editado a mano.
+
 Los dos entran en `Verifier::CHECKS`, así que `--check endpoint-missing` y `--check route-not-declared` funcionan.
 
 **Que el controlador haga algo más que `return $request->handle();` no es de este spec.** Lo comprueba `controller-shape` (`ControllerShape`), en todos los controladores del proyecto, generados o no, estén o no en el manifiesto. Una primera versión de este spec añadía `controller-logic` sólo para los generados; con las dos, un controlador generado con lógica daba dos errores por el mismo problema y con reglas distintas (una sólo aceptaba `handle()` y `handle($this)`; la otra, `handle(...)` con cualquier argumento). Se quitó `controller-logic`: un solo dueño, una sola regla.
@@ -158,12 +185,13 @@ Culpar de lo segundo a quien no tocó nada sólo enseña a desconfiar de `verify
 6. `validate` rechaza: nombre CRUD, nombre reservado, `uri` con `..`, método fuera del enum, `ability` CRUD que el modelo no tiene.
 7. `verify` falla con `endpoint-missing` si se borra la ruta o la operación de un endpoint, con `route-not-declared` si se añade un método al controlador, y con `controller-shape` —una sola vez— si se mete lógica en uno.
 8. La prueba de punta a punta instala un paquete con endpoints y controladores, pasa sus tests generados, Pint y Larastan.
+9. Con `--vue` y `--react`, cada endpoint tiene su función en el contrato, los que escriben salen como acción protegida por la política, el JS generado se analiza con `node --check` y compila con Vite, y regenerar dos veces no cambia nada (`DeclaredEndpointsInterfaceTest`, `GeneratedUiBuildsTest`).
 
 ---
 
 ## 7. Lo que este spec NO pide
 
-- **Interfaz Vue/React** para los endpoints: ni botón, ni acción por fila del datatable, ni llamada en el `store`. Queda pendiente; el contrato del módulo JS (`API_ROUTE_PREFIX + '<ruta>'`) ya permite llamarlos a mano con el nombre de ruta.
+- **Formularios para los endpoints**, ni acciones en el `store`. La interfaz está en la sección 3.0; lo que no sale de ella también.
 - **Reglas declaradas** (`rules` dentro del endpoint, como `requests[]` para Create/Update). `rules()` es un hueco.
 - **Eventos** por endpoint (las CRUD disparan `CreateEvent`, …). Se emiten desde la operación si hacen falta.
 - **Respuesta tipada**: `handle()` devuelve lo que devuelva la operación.

@@ -137,9 +137,23 @@ dice qué pieza le falta a un endpoint declarado y qué escribir, y
 y distingue lo escrito a mano de lo que se retiró del laraimport.
 `larapack:full-model` suelto conserva los endpoints que guarda el manifiesto.
 
-La interfaz Vue/React de los endpoints y sus reglas declaradas quedan
-pendientes: `rules()` es un hueco. El detalle está en
-`docs/specs/SPEC-02-acciones-declaradas.md`.
+**Con `--vue` o `--react`, también su interfaz.** Cada endpoint tiene su función
+en el contrato JS del modelo (`publishModel(data, { confirm })`, que llama a la
+ruta por nombre con el verbo declarado; `data.id` es el registro). Los que no son
+`get` salen como acción y preguntan antes, como borrar: los de `collection` en la
+barra de la tabla (`crudActions()`), los de `record` en el menú de cada fila (el
+Resource los añade a `actions`) y en el de la ficha (`recordActions()`, que lee
+`ModelCard`). Las habilita la política por `policies`, que ahora responde con la
+habilidad que pregunta cada endpoint (`archive` → `update`). Un `controllers[]`
+sólo recibe su contrato, `src/controllers/<nombre>/index.js` con
+`<name>Endpoint()`, sin pantalla. Un endpoint con parámetros en la URI además del
+registro no sale en la interfaz —`import` lo avisa—, y ninguno trae formulario:
+el esquema no declara campos de endpoint. `verify` añade a `endpoint-missing` la
+función que falta en un contrato y a `route-prefix` el prefijo del contrato de
+un controlador. Sin endpoints, la interfaz sale igual que antes.
+
+Las reglas declaradas quedan pendientes: `rules()` es un hueco. El detalle está
+en `docs/specs/SPEC-02-acciones-declaradas.md`.
 
 ### La guía como hook: `larapack:guard`
 
