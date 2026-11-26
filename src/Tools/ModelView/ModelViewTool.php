@@ -182,7 +182,9 @@ class ModelViewTool extends UiModuleTool
         $options = '';
 
         foreach ($prop['enum'] as $value => $label) {
-            $options .= "{$indent}<option value=\"".$this->attribute((string) $value)."\">{{ t('".$this->escape((string) $label)."') }}</option>\n";
+            // En una interpolación de Vue, no el escape JS a secas: el
+            // compilador decodifica entidades y corta en el primer `}}`.
+            $options .= "{$indent}<option value=\"".$this->attribute((string) $value)."\">{{ t('".$this->interpolation((string) $label)."') }}</option>\n";
         }
 
         return $options;

@@ -10,6 +10,7 @@ use Illuminate\Support\Str;
 use Innoboxrr\LarapackGenerator\Exceptions\MakerException;
 use Innoboxrr\LarapackGenerator\Support\Declaration;
 use Innoboxrr\LarapackGenerator\Support\Generation;
+use Innoboxrr\LarapackGenerator\Support\Literal;
 use Innoboxrr\LarapackGenerator\Support\Manifest;
 use Innoboxrr\LarapackGenerator\Support\MigrationTimestamp;
 use Innoboxrr\LarapackGenerator\Support\StubBlocks;
@@ -484,13 +485,7 @@ class Tool
      */
     protected static function phpString(string $value): string
     {
-        // Dentro de comilla simple PHP sólo interpreta \' y \\, y una barra al
-        // final se comería la comilla de cierre.
-        $plain = ! str_contains($value, "'")
-            && ! str_contains($value, '\\\\')
-            && ! str_ends_with($value, '\\');
-
-        return $plain ? "'{$value}'" : var_export($value, true);
+        return Literal::php($value);
     }
 
     // FORMA DECLARADA
