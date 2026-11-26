@@ -7,6 +7,8 @@ lee `{{skill}}` y sigue su flujo.
 - **La arquitectura se declara, no se escribe.** Lo que falta se declara en
   `laraimport.json`, se valida con `larapack:validate` y se genera con
   `larapack:import`. Tu código va sólo en los huecos que deja el generador.
+- **Un endpoint que no es CRUD también se declara**: en `endpoints` del modelo,
+  o en `controllers` si no tiene modelo. Antes de escribir un controlador.
 - **El controlador sólo hace `return $request->handle();`**, también el que se
   escribe a mano: un asistente, un escritorio, una ruta pública, un webhook, un
   canje de tokens. La autorización, la validación, las consultas y la respuesta

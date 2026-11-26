@@ -19,7 +19,7 @@
         "engines": ">=20",
         "ci": "22"
     },
-    "$comment-js": "La cadena de pruebas de los paquetes npm. Sigue en Vite 7 y Vitest 3: Vitest 4 con Vite 8.3 no se instala con npm 10, el de Node 20 y 22 en la CI. El modulo generado ya pide Vite 8, el de Laravel 13, porque no instala Vitest.",
+    "$comment-js": "La cadena de pruebas de los paquetes npm. Sigue en Vite 7 y Vitest 3. Vitest 5 con Vite 8 ya se instala con npm 10, pero los paquetes publicados declaran vitest ^3 (y cuatro, vite ^7.1): subirla aqui haria que larapack:audit los rechazara a todos. Queda como plan, con la migracion de esos paquetes y Node >=22.12, que pide Vitest 5. El modulo generado ya pide Vite 8, el de Laravel 13, porque no instala Vitest.",
     "js": {
         "vite": "^7.1.0",
         "vitest": "^3.0.0",
@@ -27,7 +27,7 @@
         "react": "^19.0.0"
     },
     "internal": {
-        "innoboxrr/larapack-generator": "^8.0",
+        "innoboxrr/larapack-generator": "^9.0",
         "innoboxrr/traits": "^2.1",
         "innoboxrr/support": "^2.1",
         "innoboxrr/search-surge": "^3.0"
