@@ -31,6 +31,12 @@ final class AgentHooks
     private const BLOCK_PATH = '/../../skill/agents-block.md';
 
     /**
+     * La opción de `larapack:guard` que distingue el hook de cada evento: es
+     * como se reconoce uno ya instalado.
+     */
+    private const FLAGS = ['PostToolUse' => null, 'Stop' => '--stop', 'PreToolUse' => '--pre'];
+
+    /**
      * Fusiona los hooks de LaraPack en `.claude/settings.json`.
      *
      * - PostToolUse sobre Write|Edit|MultiEdit: `larapack:guard` revisa el
@@ -38,6 +44,12 @@ final class AgentHooks
      * - Stop: `larapack:guard --stop` corre el Verifier entero y no deja dar la
      *   tarea por terminada con errores. Respeta `stop_hook_active`, así que no
      *   retiene al agente dos veces seguidas por lo mismo.
+     * - PreToolUse sobre Write|Edit|MultiEdit|Bash: `larapack:guard --pre`
+     *   impide que el agente apruebe una excepción #[HandRolled], editando
+     *   `.larapack/hand-rolled.lock` o corriendo `larapack:hand-rolled
+     *   approve`. El PostToolUse también lo bloquea, pero cuando ya está
+     *   escrito; y de una orden de Bash no se entera, porque su matcher no la
+     *   incluye.
      *
      * Un hook ya presente se reconoce por el comando y se deja como está, aunque
      * se haya cambiado a mano: quien lo cambió sabrá por qué.
@@ -67,7 +79,7 @@ final class AgentHooks
                 throw new RuntimeException("{$target}: `hooks.{$event}` no es una lista. Corrígelo a mano; no se toca.");
             }
 
-            if (self::hasGuard($groups, $event === 'Stop')) {
+            if (self::hasGuard($groups, self::FLAGS[$event])) {
                 $present[] = $event;
 
                 continue;
@@ -127,7 +139,30 @@ final class AgentHooks
                     'statusMessage' => 'LaraPack: verificando el proyecto…',
                 ]],
             ],
+            'PreToolUse' => (object) [
+                'matcher' => 'Write|Edit|MultiEdit|Bash',
+                'hooks' => [(object) [
+                    'type' => 'command',
+                    'command' => self::preCommand($binary),
+                    'timeout' => 30,
+                ]],
+            ],
         ];
+    }
+
+    /**
+     * El hook de antes de la herramienta corre en cada orden de Bash, y
+     * arrancar PHP —en una aplicación, Laravel entero— en cada una se nota.
+     * Por eso la shell filtra primero: sólo llama a PHP si la entrada contiene
+     * `approve`, `revoke` o `hand-rolled` (ésta sin distinguir mayúsculas). Es un
+     * filtro que sólo deja pasar de más: lo que la guardia bloquea siempre
+     * contiene alguna de esas palabras, porque el comando sólo acepta esas
+     * acciones escritas así y el candado se llama así.
+     */
+    private static function preCommand(string $binary): string
+    {
+        return 'input=$(cat); case "$input" in *approve*|*revoke*|*[Hh][Aa][Nn][Dd]-[Rr][Oo][Ll][Ll][Ee][Dd]*) '
+            ."printf '%s' \"\$input\" | { {$binary} larapack:guard --pre; };; esac";
     }
 
     /**
@@ -252,9 +287,12 @@ final class AgentHooks
     }
 
     /**
+     * Si alguno de los grupos ya ejecuta `larapack:guard` con esa opción (o,
+     * con null, sin ninguna de las que distinguen los eventos).
+     *
      * @param  array<int, mixed>  $groups
      */
-    private static function hasGuard(array $groups, bool $stop): bool
+    private static function hasGuard(array $groups, ?string $flag): bool
     {
         foreach ($groups as $group) {
             $handlers = is_object($group) && isset($group->hooks) && is_array($group->hooks) ? $group->hooks : [];
@@ -262,7 +300,13 @@ final class AgentHooks
             foreach ($handlers as $handler) {
                 $command = is_object($handler) && isset($handler->command) && is_string($handler->command) ? $handler->command : '';
 
-                if (str_contains($command, 'larapack:guard') && str_contains($command, '--stop') === $stop) {
+                if (! str_contains($command, 'larapack:guard')) {
+                    continue;
+                }
+
+                $flags = array_filter(self::FLAGS, fn (?string $known): bool => $known !== null && str_contains($command, $known));
+
+                if ($flag === null ? $flags === [] : in_array($flag, $flags, true)) {
                     return true;
                 }
             }

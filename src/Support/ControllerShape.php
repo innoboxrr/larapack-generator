@@ -3,6 +3,7 @@
 namespace Innoboxrr\LarapackGenerator\Support;
 
 use Innoboxrr\LarapackGenerator\Attributes\HandRolled;
+use RuntimeException;
 
 /**
  * La forma de todos los controladores del proyecto, también los que el
@@ -31,9 +32,11 @@ use Innoboxrr\LarapackGenerator\Attributes\HandRolled;
  * comprueba aquí.
  *
  * Lo que de verdad no puede seguir la forma se declara con
- * #[HandRolled('razón')] y se lista como aviso en cada ejecución: con
- * --strict falla. Es una excepción que aprueba el dueño del proyecto, y por
- * eso ningún mensaje la ofrece como arreglo.
+ * #[HandRolled('razón')]. Es una excepción que aprueba el dueño del proyecto,
+ * y por eso ningún mensaje la ofrece como arreglo. Sin candado
+ * (.larapack/hand-rolled.lock) se lista como aviso en cada ejecución, y con
+ * --strict falla, como en 9.0. Con candado, la que el dueño aprobó con esa
+ * misma razón se informa y la que no, es error (HandRolledLock).
  *
  * @phpstan-import-type ClassOutline from PhpOutline
  * @phpstan-import-type MethodOutline from PhpOutline
@@ -52,7 +55,14 @@ final class ControllerShape
 
     public const ROUTE_CLOSURE = 'route-closure';
 
-    public const CHECKS = [self::SHAPE, self::REQUEST_HANDLE, self::CONCERN, self::HAND_ROLLED, self::ROUTE_CLOSURE];
+    public const HAND_ROLLED_UNAPPROVED = 'hand-rolled-unapproved';
+
+    public const HAND_ROLLED_STALE = 'hand-rolled-stale';
+
+    public const CHECKS = [
+        self::SHAPE, self::REQUEST_HANDLE, self::CONCERN, self::HAND_ROLLED, self::ROUTE_CLOSURE,
+        self::HAND_ROLLED_UNAPPROVED, self::HAND_ROLLED_STALE,
+    ];
 
     /**
      * Tipar la acción con estas clases es lo que deja la validación y la
@@ -83,6 +93,22 @@ final class ControllerShape
     private ProjectSources $project;
 
     /**
+     * Lo aprobado en el candado, objetivo => razón; null sin candado, que es
+     * el comportamiento de 9.0.
+     *
+     * @var array<string, string>|null
+     */
+    private ?array $approved = null;
+
+    /**
+     * Cada #[HandRolled] que se evaluó, por objetivo, con su razón saneada
+     * (vacía si no tiene).
+     *
+     * @var array<string, array{reason: string, file: string, line: int}>
+     */
+    private array $declared = [];
+
+    /**
      * @var array<string, list<ClassOutline>>
      */
     private array $outlines = [];
@@ -92,9 +118,24 @@ final class ControllerShape
      */
     private array $handles = [];
 
-    public function __construct(string $root)
+    public function __construct(private string $root)
     {
         $this->project = new ProjectSources($root);
+    }
+
+    /**
+     * Las excepciones #[HandRolled] con razón que evaluó la última ejecución
+     * de run(), por objetivo: `Clase` o `Clase::metodo`, con el nombre
+     * completo de la clase. Es lo que `larapack:hand-rolled` aprueba.
+     *
+     * @return array<string, array{reason: string, file: string, line: int}>
+     */
+    public function exceptions(): array
+    {
+        $exceptions = array_filter($this->declared, fn (array $declared): bool => $declared['reason'] !== '');
+        ksort($exceptions, SORT_STRING);
+
+        return $exceptions;
     }
 
     /**
@@ -104,6 +145,8 @@ final class ControllerShape
     {
         $findings = [];
         $requests = [];
+        $this->declared = [];
+        $lockReadable = $this->loadLock($findings);
         $files = $this->project->files('/Http/Controllers/');
 
         // Qué controladores usa cada trait: decide si un trait de
@@ -127,7 +170,7 @@ final class ControllerShape
                     continue;
                 }
 
-                $excused = $this->handRolled($class['attributes'], $class['name'], $relative, $findings);
+                $excused = $this->handRolled($class['attributes'], $class['name'], $class['fqcn'], $relative, $findings);
 
                 if ($class['kind'] === 'trait') {
                     $this->checkConcern($class, $users[strtolower($class['fqcn'])] ?? [], $excused, $relative, $findings);
@@ -141,7 +184,7 @@ final class ControllerShape
                     if ($side !== null) {
                         $where = "{$class['name']}::{$method['name']}()";
 
-                        if (! $this->handRolled($method['attributes'], $where, $relative, $findings) && ! $excused) {
+                        if (! $this->handRolled($method['attributes'], $where, "{$class['fqcn']}::{$method['name']}", $relative, $findings) && ! $excused) {
                             $findings[] = $this->finding(Verifier::ERROR, self::SHAPE, $relative, "{$where} (línea {$method['line']}) {$side}");
                         }
 
@@ -158,7 +201,7 @@ final class ControllerShape
 
                     $where = "{$class['name']}::{$method['name']}()";
 
-                    if ($this->handRolled($method['attributes'], $where, $relative, $findings) || $excused) {
+                    if ($this->handRolled($method['attributes'], $where, "{$class['fqcn']}::{$method['name']}", $relative, $findings) || $excused) {
                         continue;
                     }
 
@@ -177,7 +220,52 @@ final class ControllerShape
 
         $this->checkRouteClosures($findings);
 
+        if ($lockReadable) {
+            $this->checkStale($findings);
+        }
+
         return $findings;
+    }
+
+    /**
+     * Lee el candado. Uno ilegible es error y deja todo sin aprobar: volver
+     * al comportamiento sin candado sería aprobar por un archivo roto.
+     *
+     * @param  list<array<string, mixed>>  $findings
+     * @return bool si se pudo leer (o no existe)
+     */
+    private function loadLock(array &$findings): bool
+    {
+        try {
+            $this->approved = HandRolledLock::read($this->root);
+
+            return true;
+        } catch (RuntimeException $e) {
+            $this->approved = [];
+            $findings[] = $this->finding(Verifier::ERROR, self::HAND_ROLLED_UNAPPROVED, HandRolledLock::PATH,
+                self::sanitise($e->getMessage()).' Mientras no se corrija, ninguna excepción #[HandRolled] cuenta como aprobada. Lo mantiene el dueño del proyecto con larapack:hand-rolled.');
+
+            return false;
+        }
+    }
+
+    /**
+     * Lo aprobado que ya no está en el código: se quitó el atributo, o la
+     * clase cambió de nombre. Es aviso y no error —no deja pasar nada—, pero
+     * con --strict falla: un candado que aprueba lo que no existe ya no dice
+     * qué se aprobó.
+     *
+     * @param  list<array<string, mixed>>  $findings
+     */
+    private function checkStale(array &$findings): void
+    {
+        $stale = array_diff_key($this->approved ?? [], $this->declared);
+        ksort($stale, SORT_STRING);
+
+        foreach (array_keys($stale) as $target) {
+            $findings[] = $this->finding(Verifier::WARNING, self::HAND_ROLLED_STALE, HandRolledLock::PATH,
+                'Aprueba '.self::sanitise((string) $target).', que ya no lleva #[HandRolled] en ningún controlador. El dueño del proyecto la retira con larapack:hand-rolled revoke.');
+        }
     }
 
     /**
@@ -549,7 +637,7 @@ final class ControllerShape
     private function remedy(): string
     {
         return 'La acción es `return $request->handle();` con un FormRequest propio: authorize() autoriza, rules() valida y handle() hace el trabajo (o lo delega en la operación del modelo o en un soporte). '
-            .'Marcarla como escrita a mano (#[HandRolled]) no es un arreglo: es una excepción que sólo aprueba el dueño del proyecto, y verify la sigue listando como aviso.';
+            .'Marcarla como escrita a mano (#[HandRolled]) no es un arreglo: es una excepción que sólo aprueba el dueño del proyecto, y verify la sigue señalando.';
     }
 
     /**
@@ -583,7 +671,7 @@ final class ControllerShape
                 continue;
             }
 
-            if (! $this->handRolled($method['attributes'], "{$trait['name']}::{$method['name']}()", $file, $findings)) {
+            if (! $this->handRolled($method['attributes'], "{$trait['name']}::{$method['name']}()", "{$trait['fqcn']}::{$method['name']}", $file, $findings)) {
                 $logic[] = $method['name'].'()';
             }
         }
@@ -697,17 +785,19 @@ final class ControllerShape
 
     /**
      * Si la clase o el método llevan #[HandRolled]: true si excusa (tiene
-     * razón, y se lista como aviso), false si no lo lleva o no tiene razón (y
-     * entonces es error).
+     * razón), false si no lo lleva o no tiene razón (y entonces es error).
      *
-     * Con razón es aviso y no información: así --strict falla mientras la
-     * excepción exista, y quien la añade no puede dejar el proyecto en verde
-     * con una línea sin que nadie lo apruebe.
+     * Excusar la forma no es aprobar. Sin candado, se lista como aviso: así
+     * --strict falla mientras la excepción exista, y quien la añade no puede
+     * dejar el proyecto en verde con una línea. Con candado, se informa si el
+     * dueño la aprobó con esta misma razón, y si no, es error: la forma no se
+     * cuenta dos veces, pero verify falla igual.
      *
      * @param  list<AttributeOutline>  $attributes
+     * @param  string  $target  `Clase` o `Clase::metodo`, con el nombre completo
      * @param  list<array<string, mixed>>  $findings
      */
-    private function handRolled(array $attributes, string $what, string $file, array &$findings): bool
+    private function handRolled(array $attributes, string $what, string $target, string $file, array &$findings): bool
     {
         foreach ($attributes as $attribute) {
             if (strcasecmp($attribute['name'], HandRolled::class) !== 0) {
@@ -715,6 +805,7 @@ final class ControllerShape
             }
 
             $reason = self::sanitise((string) PhpOutline::stringArgument($attribute['args'], 0, 'reason'));
+            $this->declared[$target] = ['reason' => $reason, 'file' => $file, 'line' => $attribute['line']];
 
             if ($reason === '') {
                 $findings[] = $this->finding(Verifier::ERROR, self::HAND_ROLLED, $file,
@@ -723,13 +814,48 @@ final class ControllerShape
                 return false;
             }
 
-            $findings[] = $this->finding(Verifier::WARNING, self::HAND_ROLLED, $file,
-                "{$what} (línea {$attribute['line']}) escrito a mano a propósito: «{$reason}». Es una excepción al patrón que aprueba el dueño del proyecto; si no la aprobó, devuelve la acción a `return \$request->handle();`.");
+            $findings[] = $this->approval($what, $target, $reason, $attribute['line'], $file);
 
             return true;
         }
 
         return false;
+    }
+
+    /**
+     * El hallazgo de una excepción con razón, según el candado.
+     *
+     * El mensaje de la que no está aprobada nombra el objetivo —es lo que el
+     * dueño aprueba— pero no se la ofrece al agente como arreglo: le dice que
+     * no es suya.
+     *
+     * @return array{level: string, check: string, model: string|null, file: string|null, message: string}
+     */
+    private function approval(string $what, string $target, string $reason, int $line, string $file): array
+    {
+        $where = "{$what} (línea {$line})";
+
+        if ($this->approved === null) {
+            return $this->finding(Verifier::WARNING, self::HAND_ROLLED, $file,
+                "{$where} escrito a mano a propósito: «{$reason}». Es una excepción al patrón que aprueba el dueño del proyecto; si no la aprobó, devuelve la acción a `return \$request->handle();`.");
+        }
+
+        $approved = $this->approved[$target] ?? null;
+
+        if ($approved === $reason) {
+            return $this->finding(Verifier::INFO, self::HAND_ROLLED, $file,
+                "{$where} escrito a mano a propósito: «{$reason}». Aprobada por el dueño del proyecto en ".HandRolledLock::PATH.'.');
+        }
+
+        $notYours = 'Sólo el dueño del proyecto aprueba excepciones: devuelve la acción a `return $request->handle();` o pídele que la revise. No edites '.HandRolledLock::PATH.' ni corras la aprobación.';
+
+        if ($approved !== null) {
+            return $this->finding(Verifier::ERROR, self::HAND_ROLLED_UNAPPROVED, $file,
+                "{$where} cambió la razón de su #[HandRolled]: se aprobó «".self::sanitise($approved)."» y ahora dice «{$reason}». La aprobación era de la otra razón ({$target}). {$notYours}");
+        }
+
+        return $this->finding(Verifier::ERROR, self::HAND_ROLLED_UNAPPROVED, $file,
+            "{$where} lleva #[HandRolled] («{$reason}») y no está aprobada en ".HandRolledLock::PATH." ({$target}). {$notYours}");
     }
 
     /**

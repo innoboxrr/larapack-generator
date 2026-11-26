@@ -31,6 +31,25 @@ final class Guard
         .'operación del modelo.';
 
     /**
+     * Lo que se dice cuando un agente toca la aprobación de una excepción.
+     */
+    public const LOCK_RULE = 'Sólo el dueño del proyecto aprueba excepciones #[HandRolled]: él corre '
+        .'`larapack:hand-rolled approve`, revisa '.HandRolledLock::PATH.' y lo comitea. Tú no editas ese '
+        .'archivo ni corres `approve` o `revoke`. Si una acción de verdad no puede ser '
+        .'`return $request->handle();`, dilo en tu respuesta y deja que el dueño decida.';
+
+    /**
+     * Los separadores de órdenes de la shell, y los de redirección: lo que
+     * los sigue ya no son argumentos de la orden anterior.
+     */
+    private const SHELL_SEPARATORS = [';', '&', '|', "\n", '(', ')', '`', '<', '>'];
+
+    /**
+     * Las órdenes que ejecutan como órdenes lo que reciben por la entrada.
+     */
+    private const SHELLS = ['bash', 'sh', 'zsh', 'dash', 'ksh'];
+
+    /**
      * Las partes de un proyecto Laravel que son arquitectura, aunque el
      * archivo lo haya escrito alguien a mano: es justo ahí donde se pierde la
      * guía, porque el generador no tuvo nada que ver.
@@ -101,6 +120,292 @@ final class Guard
         }
 
         return array_values(array_unique($files));
+    }
+
+    /**
+     * Los archivos tocados que son el candado de las excepciones, de
+     * cualquier proyecto. Sin distinguir mayúsculas: en Windows y macOS
+     * `Hand-Rolled.lock` es el mismo archivo.
+     *
+     * @param  array<string, mixed>  $payload
+     * @return array<int, string>
+     */
+    public static function touchedLocks(array $payload): array
+    {
+        return array_values(array_filter(
+            self::touchedFiles($payload),
+            fn (string $file): bool => preg_match('#(^|/)\.larapack/hand-rolled\.lock$#i', $file) === 1
+        ));
+    }
+
+    /**
+     * Si la orden de Bash ejecuta `larapack:hand-rolled approve` o `revoke`.
+     *
+     * Se lee como la lee la shell, sin ejecutar nada: se parte en órdenes por
+     * sus separadores, respetando las comillas, y en cada una se busca el
+     * comando —también por el alias `make:` del binario y por las abreviaturas
+     * que Symfony admite, como `larapack:hand`— seguido de `approve` o
+     * `revoke` como palabra entera. Lo que la shell va a ejecutar como orden
+     * —el argumento de `-c` en `bash -c "…"`, lo que sigue a `eval`— se lee
+     * también como orden; un texto entre comillas cualquiera (`grep "…"`), no.
+     *
+     * No busca el subcomando en una posición concreta: una opción con su
+     * valor delante (`--root packages/x`) lo movería. Cualquier `approve` o
+     * `revoke` detrás del comando cuenta; las únicas órdenes que eso bloquea
+     * de más —`list approve`— fallan igual al ejecutarse.
+     *
+     * @param  array<string, mixed>  $payload
+     */
+    public static function approvesHandRolled(array $payload): bool
+    {
+        $input = is_array($payload['tool_input'] ?? null) ? $payload['tool_input'] : [];
+        $command = $input['command'] ?? null;
+
+        return is_string($command) && self::shellApproves($command, 0);
+    }
+
+    private static function shellApproves(string $command, int $depth): bool
+    {
+        $scripts = [];
+        $commands = self::shellCommands($command, $scripts);
+
+        // Un heredoc que se le pasa a una shell (`bash <<EOF`) sí son órdenes.
+        foreach ($depth < 3 ? $scripts : [] as $script) {
+            if (self::shellApproves($script, $depth + 1)) {
+                return true;
+            }
+        }
+
+        foreach ($commands as $words) {
+            $invoked = false;
+            $eval = ($words[0] ?? null) === 'eval';
+
+            foreach ($words as $index => $word) {
+                if ($invoked && in_array($word, ['approve', 'revoke'], true)) {
+                    return true;
+                }
+
+                $invoked = $invoked || self::namesHandRolled($word);
+                $nested = $eval || preg_match('/^-[a-z]*c$/i', $words[$index - 1] ?? '') === 1;
+
+                if ($nested && $depth < 3 && self::shellApproves($word, $depth + 1)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Si la palabra es un nombre con el que Symfony encontraría
+     * `larapack:hand-rolled`: el espacio, prefijo de `larapack` o del alias
+     * `make`; el nombre, prefijo de `hand-rolled`.
+     */
+    private static function namesHandRolled(string $word): bool
+    {
+        if (preg_match('/^([a-z]+):([a-z-]+)$/i', $word, $parts) !== 1) {
+            return false;
+        }
+
+        $namespace = strtolower($parts[1]);
+        $name = strtolower($parts[2]);
+
+        return (str_starts_with('larapack', $namespace) || str_starts_with('make', $namespace))
+            && str_starts_with('hand-rolled', $name);
+    }
+
+    /**
+     * Las órdenes de una línea de shell, cada una como sus palabras ya sin
+     * comillas.
+     *
+     * El cuerpo de un heredoc no son órdenes: es el texto que recibe la
+     * anterior, y un agente que escribe documentación con `cat <<'EOF'` puede
+     * nombrar `larapack:hand-rolled approve` sin correrlo. Se salta hasta su
+     * delimitador, salvo que lo reciba una shell (`bash <<EOF`): entonces se
+     * devuelve en `$scripts` para leerlo como órdenes.
+     *
+     * @param  list<string>  $scripts
+     * @return list<list<string>>
+     */
+    private static function shellCommands(string $line, array &$scripts = []): array
+    {
+        $commands = [];
+        $words = [];
+        $word = null;
+        $quote = null;
+        $heredocs = [];
+        // La primera palabra de la orden en curso: las redirecciones no la
+        // terminan, así que en `bash > log <<EOF` sigue siendo `bash`.
+        $head = null;
+        $length = strlen($line);
+
+        for ($i = 0; $i < $length; $i++) {
+            $char = $line[$i];
+
+            if ($quote === "'") {
+                $quote = $char === "'" ? null : $quote;
+                $word .= $char === "'" ? '' : $char;
+
+                continue;
+            }
+
+            if ($char === '\\' && $i + 1 < $length && ($quote === null || in_array($line[$i + 1], ['"', '\\', '$', '`'], true))) {
+                $word .= $line[++$i];
+
+                continue;
+            }
+
+            if ($quote === '"') {
+                $quote = $char === '"' ? null : $quote;
+                $word .= $char === '"' ? '' : $char;
+
+                continue;
+            }
+
+            if ($char === "'" || $char === '"') {
+                $quote = $char;
+                $word ??= '';
+
+                continue;
+            }
+
+            if (ctype_space($char) || in_array($char, self::SHELL_SEPARATORS, true)) {
+                if ($word !== null) {
+                    $words[] = $word;
+                    $head ??= $word;
+                    $word = null;
+                }
+
+                if ($char !== ' ' && $char !== "\t" && $words !== []) {
+                    $commands[] = $words;
+                    $words = [];
+                }
+
+                // `<<` abre un heredoc (`<<<` es otra cosa: una cadena).
+                if ($char === '<' && ($line[$i + 1] ?? '') === '<' && ($line[$i + 2] ?? '') !== '<') {
+                    [$delimiter, $strip, $i] = self::heredocDelimiter($line, $i + 2);
+
+                    if ($delimiter !== null) {
+                        $heredocs[] = [$delimiter, $strip, $head];
+                    }
+                } elseif ($char === "\n" && $heredocs !== []) {
+                    $i = self::skipHeredocs($line, $i + 1, $heredocs, $scripts) - 1;
+                    $heredocs = [];
+                }
+
+                if (! in_array($char, [' ', "\t", '<', '>'], true)) {
+                    $head = null;
+                }
+
+                continue;
+            }
+
+            $word .= $char;
+        }
+
+        if ($word !== null) {
+            $words[] = $word;
+        }
+
+        if ($words !== []) {
+            $commands[] = $words;
+        }
+
+        return $commands;
+    }
+
+    /**
+     * El delimitador de un heredoc que empieza en `$position` (justo después
+     * de `<<`), sin comillas, si quita los tabuladores (`<<-`) y la última
+     * posición que ocupa.
+     *
+     * @return array{0: string|null, 1: bool, 2: int}
+     */
+    private static function heredocDelimiter(string $line, int $position): array
+    {
+        $length = strlen($line);
+        $strip = ($line[$position] ?? '') === '-';
+        $position += $strip ? 1 : 0;
+
+        while ($position < $length && ($line[$position] === ' ' || $line[$position] === "\t")) {
+            $position++;
+        }
+
+        $delimiter = '';
+
+        while ($position < $length && ! ctype_space($line[$position]) && ! in_array($line[$position], self::SHELL_SEPARATORS, true)) {
+            $delimiter .= in_array($line[$position], ["'", '"', '\\'], true) ? '' : $line[$position];
+            $position++;
+        }
+
+        return [$delimiter === '' ? null : $delimiter, $strip, $position - 1];
+    }
+
+    /**
+     * Salta los cuerpos de los heredocs abiertos en una línea, que empiezan
+     * en `$start`, y devuelve dónde acaba el último delimitador: el salto de
+     * línea que lo cierra, o el final de la orden. El cuerpo que recibe una
+     * shell se añade a `$scripts`.
+     *
+     * @param  list<array{0: string, 1: bool, 2: string|null}>  $heredocs
+     * @param  list<string>  $scripts
+     */
+    private static function skipHeredocs(string $line, int $start, array $heredocs, array &$scripts): int
+    {
+        $length = strlen($line);
+        $position = $start;
+        $end = $length;
+
+        foreach ($heredocs as [$delimiter, $strip, $head]) {
+            $body = [];
+
+            while ($position <= $length) {
+                $found = strpos($line, "\n", $position);
+                $end = $found === false ? $length : $found;
+                $text = rtrim(substr($line, $position, $end - $position), "\r");
+                $position = $end + 1;
+
+                if (($strip ? ltrim($text, "\t") : $text) === $delimiter) {
+                    break;
+                }
+
+                $body[] = $text;
+            }
+
+            if ($head !== null && in_array(basename(str_replace('\\', '/', $head)), self::SHELLS, true)) {
+                $scripts[] = implode("\n", $body);
+            }
+        }
+
+        return $end;
+    }
+
+    /**
+     * El mensaje de bloqueo por tocar la aprobación de una excepción.
+     *
+     * @param  array<int, string>  $locks  los candados tocados
+     * @param  bool  $done  si ya ocurrió (PostToolUse): hay que deshacerlo
+     */
+    public static function lockMessage(array $locks, bool $command, bool $done): string
+    {
+        $lines = [];
+
+        foreach ($locks as $lock) {
+            $lines[] = "LaraPack: {$lock} es la aprobación del dueño del proyecto, no un archivo que se edite.";
+        }
+
+        if ($command) {
+            $lines[] = 'LaraPack: `larapack:hand-rolled approve` y `revoke` los corre el dueño del proyecto, no un agente.';
+        }
+
+        $lines[] = self::LOCK_RULE;
+
+        if ($done) {
+            $lines[] = 'Ya está hecho: deshazlo (git checkout -- '.HandRolledLock::PATH.', o como estaba) antes de seguir.';
+        }
+
+        return implode("\n", $lines);
     }
 
     /**

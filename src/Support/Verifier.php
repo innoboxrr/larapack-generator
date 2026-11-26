@@ -118,6 +118,18 @@ final class Verifier
     {
         $models = $this->manifest->models();
 
+        // Un paquete que sólo integra —una pasarela, un PAC— nace con
+        // larapack:new y nunca declara un modelo: tiene registrados sus
+        // proveedores y su config, y eso se sigue comprobando. Avisar de que
+        // «no hay nada registrado» sería falso, y con --strict, que es como
+        // corre `verify` en la CI, lo dejaría en rojo para siempre.
+        if ($models === [] && $this->manifest->packageFiles() !== []) {
+            return [
+                ...$this->checkFilesExist(['']),
+                ...$this->checkCustomisations(['']),
+            ];
+        }
+
         if ($models === []) {
             return [[
                 'level' => self::WARNING,

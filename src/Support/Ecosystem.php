@@ -178,7 +178,44 @@ final class Ecosystem
             ...$findings,
             ...$this->auditTests($directory, $name),
             ...$this->auditWorkflows($directory, $name, 'composer'),
+            ...$this->auditVerifyJob($directory, $name, array_key_exists('innoboxrr/larapack-generator', $all)),
         ];
+    }
+
+    /**
+     * Un paquete que usa LaraPack y cuya CI no corre `larapack:verify
+     * --strict`: el contrato depende de que alguien se acuerde de correrlo.
+     *
+     * Usa LaraPack si lo pide en composer.json o tiene manifiesto; a uno que
+     * no lo usa no se le exige. Se buscan las líneas de los workflows, sin
+     * comentarios, que llamen a verify con --strict; el nombre del job no se
+     * mira, porque cualquier job que lo corra hace de puerta.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function auditVerifyJob(string $directory, string $name, bool $requiresLarapack): array
+    {
+        if (! $requiresLarapack && ! is_file("{$directory}/.larapack/manifest.json")) {
+            return [];
+        }
+
+        $workflows = [
+            ...(glob("{$directory}/.github/workflows/*.yml") ?: []),
+            ...(glob("{$directory}/.github/workflows/*.yaml") ?: []),
+        ];
+
+        foreach ($workflows as $workflow) {
+            foreach (file($workflow, FILE_IGNORE_NEW_LINES) ?: [] as $line) {
+                $code = (string) preg_replace('/(^|\s)#.*$/', '', $line);
+
+                if (str_contains($code, 'larapack:verify') && str_contains($code, '--strict')) {
+                    return [];
+                }
+            }
+        }
+
+        return [$this->finding(self::WARNING, 'verify-job', $name,
+            'Ningún workflow corre `larapack:verify --strict`: el contrato no es una puerta de la rama. `larapack:ci` crea el job «LaraPack verify» (los paquetes nuevos ya lo traen en tests.yml).')];
     }
 
     /**
