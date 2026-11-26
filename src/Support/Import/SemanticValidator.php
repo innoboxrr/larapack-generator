@@ -179,9 +179,10 @@ final class SemanticValidator
      */
     private static function endpointAbility(array $model, array $endpoint, string $at, array $actions, array &$abilities): array
     {
-        $name = $endpoint['name'];
-        $ability = $endpoint['ability'] ?? $name;
-        $target = $endpoint['target'] ?? 'record';
+        // El esquema ya garantizó que son cadenas; aquí sólo se dice.
+        $name = (string) $endpoint['name'];
+        $ability = (string) ($endpoint['ability'] ?? $name);
+        $target = (string) ($endpoint['target'] ?? 'record');
         $public = ! empty($endpoint['public']);
 
         if (Endpoints::isCrudAbility($ability)) {
