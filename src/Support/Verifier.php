@@ -48,6 +48,24 @@ final class Verifier
      */
     public function run(): array
     {
+        // Se lee el manifiesto una vez para toda la verificación: cada check
+        // lo consulta por modelo y por archivo, y releerlo del disco en cada
+        // consulta hacía que un proyecto grande tardara minutos.
+        $live = $this->manifest;
+        $this->manifest = $live->snapshot();
+
+        try {
+            return $this->checks();
+        } finally {
+            $this->manifest = $live;
+        }
+    }
+
+    /**
+     * @return array<int, array{level: string, check: string, model: string|null, file: string|null, message: string}>
+     */
+    private function checks(): array
+    {
         $models = $this->manifest->models();
 
         if ($models === []) {

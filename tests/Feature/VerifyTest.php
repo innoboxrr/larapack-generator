@@ -2,6 +2,8 @@
 
 namespace Innoboxrr\LarapackGenerator\Tests\Feature;
 
+use Innoboxrr\LarapackGenerator\Support\Manifest;
+use Innoboxrr\LarapackGenerator\Support\Verifier;
 use Innoboxrr\LarapackGenerator\Tests\Support\FakeProject;
 use Innoboxrr\LarapackGenerator\Tests\TestCase;
 use Symfony\Component\Console\Command\Command;
@@ -197,6 +199,38 @@ final class VerifyTest extends TestCase
         $this->runCommand('larapack:verify');
 
         $this->assertStringContainsString('0 errores', $this->lastOutput);
+    }
+
+    /**
+     * Cada verificación lee el manifiesto una sola vez, por rendimiento. Eso
+     * no puede volverla ciega a lo que cambie entre una y la siguiente: el
+     * hook de los agentes reutiliza el proceso para varias.
+     */
+    public function test_cada_verificacion_lee_el_estado_de_ese_momento(): void
+    {
+        $this->runCommand('larapack:full-model', ['name' => 'Product']);
+
+        $verifier = new Verifier;
+
+        $this->assertSame([], array_filter($verifier->run(), fn (array $f): bool => $f['level'] === Verifier::ERROR));
+
+        unlink($this->project->path.'/src/Policies/ProductPolicy.php');
+
+        $missing = array_values(array_filter($verifier->run(), fn (array $f): bool => $f['check'] === 'missing-file'));
+
+        $this->assertSame('src/Policies/ProductPolicy.php', $missing[0]['file'] ?? null);
+    }
+
+    public function test_una_instantanea_del_manifiesto_no_vuelve_al_disco(): void
+    {
+        $this->runCommand('larapack:full-model', ['name' => 'Product']);
+
+        $snapshot = (new Manifest)->snapshot();
+
+        (new Manifest)->forget('Product');
+
+        $this->assertSame(['Product'], $snapshot->models());
+        $this->assertSame([], (new Manifest)->models());
     }
 
     /**
