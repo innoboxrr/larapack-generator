@@ -76,7 +76,7 @@ class ExportNotificationTool extends Tool
 
         $path = $this->exportNotificationPath.'/'.$this->PascalCaseModelName;
 
-        return (file_exists($path)) ? $this->dropDir($path) : false;
+        return $this->dropModelDir($path);
 
     }
 }

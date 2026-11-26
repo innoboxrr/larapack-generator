@@ -10,6 +10,7 @@ use Illuminate\Translation\ArrayLoader;
 use Illuminate\Translation\Translator;
 use Innoboxrr\LarapackGenerator\Tests\Support\FakeProject;
 use Innoboxrr\LarapackGenerator\Tests\TestCase;
+use Maatwebsite\Excel\DefaultValueBinder as ExcelValueBinder;
 use PhpOffice\PhpSpreadsheet\Cell\Cell;
 use PhpOffice\PhpSpreadsheet\Cell\DataType;
 use PhpOffice\PhpSpreadsheet\Cell\DefaultValueBinder;
@@ -154,6 +155,10 @@ final class GeneratedSecurityTest extends TestCase
     public function test_la_exportacion_guarda_como_texto_lo_que_empieza_por_igual(): void
     {
         $class = 'Acme\\Vault\\Exports\\DocumentsExports';
+
+        // El de Laravel Excel, que es el que usa por omisión: no el de
+        // PhpSpreadsheet, que no pasa los arrays a JSON.
+        $this->assertTrue(is_subclass_of($class, ExcelValueBinder::class));
 
         Cell::setValueBinder(new $class([]));
 

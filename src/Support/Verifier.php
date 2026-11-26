@@ -55,7 +55,7 @@ final class Verifier
      * Todo lo que `verify` sabe comprobar, por el nombre que lleva cada
      * hallazgo en `check`. Es lo que acepta --check.
      */
-    public const CHECKS = [...self::MANIFEST_CHECKS, ...ControllerShape::CHECKS];
+    public const CHECKS = [...self::MANIFEST_CHECKS, ...ControllerShape::CHECKS, ...LegacySecurity::CHECKS];
 
     public function __construct(private ?Manifest $manifest = null)
     {
@@ -76,6 +76,7 @@ final class Verifier
             // deriva está justo en los que el generador no escribió, y un
             // proyecto sin nada generado también tiene controladores.
             ...($wants(ControllerShape::CHECKS) ? (new ControllerShape($this->manifest->root()))->run() : []),
+            ...($wants(LegacySecurity::CHECKS) ? (new LegacySecurity($this->manifest->root()))->run() : []),
         ];
 
         if ($only === []) {
