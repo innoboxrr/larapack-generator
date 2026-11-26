@@ -10,7 +10,7 @@
  */
 
 import makeHttpRequest from 'innoboxrr-http-request'
-// @larapack:if delete|forceDelete|export
+// @larapack:if delete|forceDelete|export|endpoint_writes
 import { RequestCancelledError } from 'innoboxrr-http-request'
 import { confirmAction } from 'innoboxrr-form-core'
 // @larapack:endif
@@ -93,6 +93,7 @@ export const crudActions = () => [
         params: {},
     },
     // @larapack:endif
+    //ENDPOINT_COLLECTION_ACTIONS//
 ]
 
 /**
@@ -117,6 +118,7 @@ export const bulkActions = () => [
     },
     // @larapack:endif
 ]
+//ENDPOINT_RECORD_ACTIONS//
 
 export const dataTableHead = () => [
     {
@@ -161,7 +163,7 @@ export const getPolicy = (policy, modelId = null) => {
 }
 // @larapack:endif
 
-// @larapack:if delete|forceDelete|export
+// @larapack:if delete|forceDelete|export|endpoint_writes
 /**
  * Pregunta antes de lo que no se deshace, con el diálogo del tema
  * (ConfirmHostComponent). Antes lo hacía un SweetAlert con sus propios colores
@@ -326,3 +328,4 @@ export const bulkDeleteModels = async (ids) => {
     }, {}, 0, 1500)
 }
 // @larapack:endif
+//ENDPOINT_SERVICES//

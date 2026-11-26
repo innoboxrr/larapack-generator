@@ -59,6 +59,7 @@ class PoliciesRequest extends FormRequest
             // a registro.
             'bulkUpdate' => 'update',
             'bulkDelete' => 'delete',
+            //ENDPOINT_POLICY_MAPPING//
             // Agrega aquí más mapeos si es necesario
         ];
 

@@ -1,0 +1,37 @@
+{
+    "models": [
+        {
+            "name": "Course",
+            "props": [
+                {
+                    "name": "title",
+                    "type": "string",
+                    "fillable": true,
+                    "creatable": true,
+                    "updatable": true,
+                    "datatable": true,
+                    "form": true,
+                    "form_component": "TextInputComponent",
+                    "form_submit": true
+                }
+            ],
+            "endpoints": [
+                { "name": "publish", "method": "post" },
+                { "name": "archive", "method": "post", "ability": "update" },
+                { "name": "importRoster", "method": "post", "target": "collection" },
+                { "name": "certificate", "method": "get", "uri": "{course_id}/certificate", "public": true, "middleware": ["throttle:30,1"] },
+                { "name": "purge", "method": "delete", "uri": "{course_id}/purge" },
+                { "name": "moveTo", "method": "patch", "uri": "{course_id}/move-to/{slot}" }
+            ]
+        }
+    ],
+    "controllers": [
+        {
+            "name": "Desk",
+            "endpoints": [
+                { "name": "overview", "method": "get" },
+                { "name": "import", "method": "post", "uri": "import/{batch}", "ability": "desk.import" }
+            ]
+        }
+    ]
+}

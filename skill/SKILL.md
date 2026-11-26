@@ -381,6 +381,15 @@ código va en `rules()` de la request, en el método de la política y en
 `throttle:`. Lee `endpoints` y `controllers` en `larapack:schema` antes de
 declararlos.
 
+Con `--vue`/`--react`, la interfaz también sale: no escribas la llamada ni el
+botón. El contrato trae `<name>Model(data, { confirm })` (`data.id` es el
+registro) y los endpoints que no son `get` salen como acción con confirmación y
+política: `collection` en la barra de la tabla, `record` en el menú de la fila
+(desde el Resource) y de la ficha (`recordActions()`). Un `controllers[]` sólo
+trae `src/controllers/<nombre>/index.js` con `<name>Endpoint(data)`. No hay
+formulario de endpoint: si necesita datos, llámalo desde tu pantalla con
+`<name>Model({ id, ...datos })`.
+
 Escribe un controlador a mano sólo si no cabe en la declaración, y entonces
 con el patrón de la sección siguiente.
 

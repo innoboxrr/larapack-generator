@@ -152,6 +152,56 @@ final class Endpoints
         return $name.'Model';
     }
 
+    /**
+     * La función del contrato JS que llama al endpoint. La de un modelo se
+     * llama como su operación (`publishModel`), igual que `createModel` o
+     * `deleteModel`; la de un `controllers[]`, `<name>Endpoint`. Con el nombre
+     * pelado, un endpoint `import` o `typeof` sería una palabra reservada de
+     * JavaScript, que la validación no rechaza porque en PHP no lo es.
+     *
+     * @param  array<string, mixed>  $endpoint  Normalizado.
+     */
+    public static function jsFunction(array $endpoint): string
+    {
+        return isset($endpoint['operation'])
+            ? (string) $endpoint['operation']
+            : $endpoint['name'].'Endpoint';
+    }
+
+    /**
+     * Si la interfaz lo ofrece como acción: un botón en la barra de la tabla
+     * (`collection`) o una entrada en el menú de la fila y de la ficha
+     * (`record`).
+     *
+     * Sólo lo que cambia algo y de un modelo: un `get` devuelve datos que
+     * alguien tiene que pintar, y lanzarlo desde un menú para tirar la
+     * respuesta no sirve de nada. Y sólo si la interfaz sabe rellenar la URI:
+     * el registro lo pone la fila, pero cualquier otro parámetro no tiene de
+     * dónde salir. La validación ya exige que un `record` con parámetros lleve
+     * `{<modelo>_id}`, así que basta contarlos.
+     *
+     * @param  array<string, mixed>  $endpoint  Normalizado.
+     */
+    public static function offersInterface(array $endpoint): bool
+    {
+        $target = $endpoint['target'] ?? null;
+
+        if ($target === null || $endpoint['method'] === 'get') {
+            return false;
+        }
+
+        return count(self::parameters((string) $endpoint['uri'])) <= ($target === 'record' ? 1 : 0);
+    }
+
+    /**
+     * El texto del botón, como clave de traducción: `importRoster` →
+     * `Import roster`. Es la misma forma que las etiquetas de los campos.
+     */
+    public static function label(string $name): string
+    {
+        return ucfirst(str_replace('-', ' ', self::kebab($name)));
+    }
+
     public static function isCrudAbility(string $ability): bool
     {
         return array_key_exists($ability, self::CRUD_ABILITIES);
