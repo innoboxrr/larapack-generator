@@ -6,6 +6,7 @@ use Innoboxrr\LarapackGenerator\Commands\Concerns\ReportsGeneration;
 use Innoboxrr\LarapackGenerator\Support\Declaration;
 use Innoboxrr\LarapackGenerator\Support\Generation;
 use Innoboxrr\LarapackGenerator\Support\Import\Actions;
+use Innoboxrr\LarapackGenerator\Support\Import\Endpoints;
 use Innoboxrr\LarapackGenerator\Support\Manifest;
 use Innoboxrr\LarapackGenerator\Tools\Tool;
 use Symfony\Component\Console\Command\Command;
@@ -82,6 +83,14 @@ class MakeFullModelCommand extends Command
             return $this->reportFailure($input, $output, $invalid);
         }
 
+        if (! $nested) {
+            $invalid = $this->keepDeclaredEndpoints($modelName);
+
+            if ($invalid !== null) {
+                return $this->reportFailure($input, $output, ...$invalid);
+            }
+        }
+
         // La UI es opcional y no excluyente: el mismo laraimport puede generar
         // los dos modulos, que consumen el mismo contrato.
         if ($input->getOption('vue')) {
@@ -118,6 +127,49 @@ class MakeFullModelCommand extends Command
         }
 
         return Command::SUCCESS;
+    }
+
+    /**
+     * Los endpoints que el manifiesto ya guarda para el modelo, para generarlos
+     * y volver a anotarlos.
+     *
+     * Este comando no tiene opción para declarar endpoints: sólo los declara
+     * el laraimport. Suelto, anotaba el modelo sin ellos y, con --force,
+     * regeneraba el controlador y las rutas sin sus métodos: los endpoints
+     * pasaban a dar 404 sin un aviso, y verify culpaba de sus requests a
+     * quien no las había escrito.
+     *
+     * @return array{0: string, 1: string}|null El error y cómo salir de él.
+     */
+    private function keepDeclaredEndpoints(string $modelName): ?array
+    {
+        $declared = (new Manifest)->declarationOf($modelName);
+
+        // Un `controllers[]` no tiene modelo: aquí le saldrían tabla, modelo y
+        // política, y la anotación diría que es un modelo.
+        if ($declared['controller']) {
+            return [
+                "{$modelName} está declarado en controllers[]: es un controlador sin modelo.",
+                'Se regenera con larapack:import. Si ahora quieres un modelo, declara sus endpoints en el modelo y retira el controlador del laraimport.',
+            ];
+        }
+
+        $actions = Declaration::of($modelName)['actions'];
+
+        foreach ($declared['endpoints'] as $endpoint) {
+            $ability = (string) ($endpoint['ability'] ?? '');
+
+            if (Endpoints::isCrudAbility($ability) && ! in_array(Endpoints::CRUD_ABILITIES[$ability][0], $actions, true)) {
+                return [
+                    "El endpoint {$endpoint['name']} pregunta a la política por '{$ability}', y con estas opciones {$modelName} no tendría ".Endpoints::CRUD_ABILITIES[$ability][0].'.',
+                    'Mantén esa acción o cambia el endpoint en el laraimport.',
+                ];
+            }
+        }
+
+        Declaration::withEndpoints($modelName, $declared['endpoints']);
+
+        return null;
     }
 
     /**

@@ -2,6 +2,7 @@
 
 namespace Innoboxrr\LarapackGenerator\Tests\Feature;
 
+use Innoboxrr\LarapackGenerator\Support\Manifest;
 use Innoboxrr\LarapackGenerator\Support\Verifier;
 use Innoboxrr\LarapackGenerator\Tests\Support\FakeProject;
 use Innoboxrr\LarapackGenerator\Tests\TestCase;
@@ -243,6 +244,46 @@ final class VerifyDeclaredEndpointsTest extends TestCase
         $findings = $this->findingsOf($report, 'route-not-declared');
         $this->assertCount(1, $findings);
         $this->assertSame('src/Http/Requests/Course/StatsRequest.php', $findings[0]['file']);
+    }
+
+    // FULL-MODEL SUELTO
+
+    /**
+     * larapack:full-model no sabe declarar endpoints: los toma del manifiesto.
+     * Antes anotaba el modelo sin ellos y, con --force, regeneraba el
+     * controlador y las rutas sin sus métodos: los endpoints daban 404.
+     */
+    public function test_full_model_suelto_conserva_los_endpoints_ya_declarados(): void
+    {
+        $this->assertSame(Command::SUCCESS, $this->runCommand('larapack:full-model', ['name' => 'Course', '--force' => true]), $this->lastOutput);
+
+        $this->assertStringContainsString("->name('publish')", $this->project->read('routes/api/models/course.php'));
+        $this->assertStringContainsString("->name('import.roster')", $this->project->read('routes/api/models/course.php'));
+        $this->assertStringContainsString('function publish(PublishRequest', $this->project->read('src/Http/Controllers/CourseController.php'));
+
+        $this->assertSame(['publish', 'importRoster'], array_column((new Manifest($this->project->path))->declarationOf('Course')['endpoints'], 'name'));
+
+        [$code, $report] = $this->verify(strict: true);
+
+        $this->assertSame(Command::SUCCESS, $code, json_encode($report['findings'], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+    }
+
+    public function test_full_model_suelto_tambien_con_opciones_de_forma(): void
+    {
+        $this->assertSame(Command::SUCCESS, $this->runCommand('larapack:full-model', ['name' => 'Course', '--except' => 'export', '--force' => true]), $this->lastOutput);
+
+        $declaration = (new Manifest($this->project->path))->declarationOf('Course');
+
+        $this->assertNotContains('export', $declaration['actions']);
+        $this->assertSame(['publish', 'importRoster'], array_column($declaration['endpoints'], 'name'));
+    }
+
+    public function test_full_model_no_le_crea_un_modelo_a_un_controlador_sin_modelo(): void
+    {
+        $this->assertSame(Command::FAILURE, $this->runCommand('larapack:full-model', ['name' => 'Desk', '--force' => true]));
+        $this->assertStringContainsString('controllers[]', $this->lastOutput);
+        $this->assertFalse($this->project->has('src/Models/Desk.php'));
+        $this->assertTrue((new Manifest($this->project->path))->declarationOf('Desk')['controller']);
     }
 
     // ENDPOINTS RETIRADOS DEL LARAIMPORT
