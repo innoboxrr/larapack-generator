@@ -106,6 +106,18 @@ es uno.
   `managed` (`mergeIfMissing` no cuenta), y `resource-appends`, un
   `setAppends()` alimentado por la petición sin pasar por una lista blanca.
   Como `controller-shape`, no dependen del manifiesto.
+- **`larapack:fix index-managed resource-appends`** las arregla de forma
+  determinista, con el mismo cambio en cada archivo y sacado de la plantilla:
+  `$this->merge(['managed' => true])` al principio de `prepareForValidation()`
+  (lo crea si falta, llamando al heredado si lo hay) y el bloque de
+  `$appendable` en el Resource, con la propiedad si falta. Trabaja sobre
+  tokens; lo que no reconoce con certeza lo deja y lo lista como `skipped` con
+  la razón (y sale con código distinto de cero). Nada cuenta como arreglado
+  hasta que parsea y `verify` ya no lo marca, así que es idempotente.
+  `--dry-run` enseña el diff unificado, `--format=json` da `fixed`, `skipped` y
+  `unchanged` por comprobación y `--path` acota a un subdirectorio. Pasa el Pint
+  del proyecto si lo tiene. En una copia de school-management arregló los 524
+  IndexRequests y los 691 Resources sin saltarse ninguno.
 
 ### Endpoints y controladores declarados (SPEC 02)
 
@@ -225,8 +237,10 @@ cambia es lo que `verify` deja pasar. En una aplicación como school-management:
    proyecto lo aprueba.
 4. **Regenera lo que no editaste** con `larapack:import --force` para recibir el
    IndexRequest, el Resource y la exportación nuevos. En los editados,
-   `index-managed` y `resource-appends` dicen cuáles faltan: fuerza `managed` en
-   `prepareForValidation()` y filtra `appends` con `$appendable`.
+   `index-managed` y `resource-appends` dicen cuáles faltan, y
+   `larapack:fix index-managed resource-appends` los arregla; lo que salte, a
+   mano: fuerza `managed` en `prepareForValidation()` y filtra `appends` con
+   `$appendable`.
 5. **Activa la guardia cuando `verify` esté limpio**, con
    `php artisan larapack:skill --hooks`. Antes, cada edición de uno de esos
    archivos y cada fin de turno que los toque retendrían al agente por errores

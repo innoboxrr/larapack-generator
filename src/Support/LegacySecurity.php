@@ -22,13 +22,17 @@ namespace Innoboxrr\LarapackGenerator\Support;
  *
  * Como ControllerShape, no depende del manifiesto: se recorren las
  * `Http/Requests` y `Http/Resources` del proyecto y de sus paquetes locales
- * (ProjectSources), los haya generado LaraPack o no. Es aviso y no error: el código viejo
- * funciona, y arreglarlo es trabajo del proyecto, no algo que `verify` pueda
- * exigir de golpe a quien actualiza.
+ * (ProjectSources), los haya generado LaraPack o no. Es aviso y no error: el
+ * código viejo funciona, y arreglarlo es trabajo del proyecto, no algo que
+ * `verify` pueda exigir de golpe a quien actualiza. `larapack:fix` lo arregla
+ * de forma determinista a partir de inspect(), que da lo mismo que run() pero
+ * con la clase y el método de cada caso en vez del mensaje.
  *
  * @phpstan-import-type ClassOutline from PhpOutline
  * @phpstan-import-type MethodOutline from PhpOutline
  * @phpstan-import-type Token from PhpOutline
+ *
+ * @phpstan-type Debt array{check: string, file: string, class: string, fqcn: string, line: int, method: string|null, extends: string|null, traits: list<string>}
  */
 final class LegacySecurity
 {
@@ -56,9 +60,20 @@ final class LegacySecurity
      */
     private array $requests = [];
 
-    public function __construct(string $root)
+    /**
+     * $overlay es ruta => código que se lee en lugar del archivo: lo que
+     * `larapack:fix` va a escribir, comprobado antes de escribirlo.
+     *
+     * @param  array<string, string>  $overlay
+     */
+    public function __construct(string $root, private array $overlay = [])
     {
         $this->project = new ProjectSources($root);
+    }
+
+    public function project(): ProjectSources
+    {
+        return $this->project;
     }
 
     /**
@@ -67,10 +82,47 @@ final class LegacySecurity
     public function run(): array
     {
         $findings = [];
+
+        foreach ($this->inspect()['debt'] as $debt) {
+            $findings[] = $debt['check'] === self::INDEX_MANAGED
+                ? $this->finding($debt,
+                    "{$debt['class']} (línea {$debt['line']}) lista con el Builder de SearchSurge y no fuerza `managed` en prepareForValidation(): ManagedFilter::canView() sólo acota si llega `managed`, y quien lo omite en la petición ve todas las filas. "
+                    ."Añade `\$this->merge(['managed' => true]);` en prepareForValidation(), como la plantilla actual del IndexRequest. Con `merge` gana sobre lo que mande el cliente; `mergeIfMissing` no. `larapack:fix index-managed` lo hace.")
+                : $this->finding($debt,
+                    "{$debt['class']}::{$debt['method']}() (línea {$debt['line']}) pasa a setAppends() lo que manda el cliente sin cruzarlo con una lista blanca: el cliente decide qué accessor del modelo se ejecuta en cada fila, también los de uso interno, y uno que no existe tumba la respuesta. "
+                    .'Declara los permitidos en `protected array $appendable = [...]` y pasa sólo `array_intersect($this->appendable, $appends)`, sumado a getAppends(), como la plantilla actual del Resource. `larapack:fix resource-appends` lo hace.');
+        }
+
+        return $findings;
+    }
+
+    /**
+     * @param  Debt  $debt
+     * @return array{level: string, check: string, model: string|null, file: string|null, message: string}
+     */
+    private function finding(array $debt, string $message): array
+    {
+        return ['level' => Verifier::WARNING, 'check' => $debt['check'], 'model' => null, 'file' => $this->project->relative($debt['file']), 'message' => $message];
+    }
+
+    /**
+     * Lo que run() avisa, con la clase y el método de cada caso, y por
+     * comprobación los archivos que se miraron y están bien: los IndexRequest
+     * que listan con SearchSurge y ya fuerzan `managed` (o heredan de una
+     * request que no se ve) y los Resources que llaman a setAppends() con una
+     * lista blanca.
+     *
+     * @return array{debt: list<Debt>, clean: array<string, list<string>>}
+     */
+    public function inspect(): array
+    {
+        $debt = [];
+        $clean = [self::INDEX_MANAGED => [], self::RESOURCE_APPENDS => []];
         $builders = [];
+        $this->requests = [];
 
         foreach ($this->project->files('/Http/Requests/') as $file) {
-            $code = (string) file_get_contents($file);
+            $code = $this->read($file);
             $usesSearchSurge = str_contains($code, 'SearchSurge\\Search\\Builder');
 
             foreach (PhpOutline::ofCode($code)->classes() as $class) {
@@ -88,27 +140,91 @@ final class LegacySecurity
 
         foreach ($builders as [$class, $file]) {
             if ($this->forcesManaged($class, []) === false) {
-                $findings[] = $this->finding(self::INDEX_MANAGED, $file,
-                    "{$class['name']} (línea {$class['line']}) lista con el Builder de SearchSurge y no fuerza `managed` en prepareForValidation(): ManagedFilter::canView() sólo acota si llega `managed`, y quien lo omite en la petición ve todas las filas. "
-                    ."Añade `\$this->merge(['managed' => true]);` en prepareForValidation(), como la plantilla actual del IndexRequest. Con `merge` gana sobre lo que mande el cliente; `mergeIfMissing` no.");
+                $debt[] = $this->debt(self::INDEX_MANAGED, $file, $class, $class['line'], null);
+            } else {
+                $clean[self::INDEX_MANAGED][] = $file;
             }
         }
 
         foreach ($this->project->files('/Http/Resources/') as $file) {
-            foreach (PhpOutline::ofFile($file)->classes() as $class) {
+            $code = $this->read($file);
+            $flagged = false;
+
+            foreach (PhpOutline::ofCode($code)->classes() as $class) {
                 foreach ($class['methods'] as $method) {
                     $line = $this->unfilteredAppends($method);
 
                     if ($line !== null) {
-                        $findings[] = $this->finding(self::RESOURCE_APPENDS, $file,
-                            "{$class['name']}::{$method['name']}() (línea {$line}) pasa a setAppends() lo que manda el cliente sin cruzarlo con una lista blanca: el cliente decide qué accessor del modelo se ejecuta en cada fila, también los de uso interno, y uno que no existe tumba la respuesta. "
-                            .'Declara los permitidos en `protected array $appendable = [...]` y pasa sólo `array_intersect($this->appendable, $appends)`, sumado a getAppends(), como la plantilla actual del Resource.');
+                        $debt[] = $this->debt(self::RESOURCE_APPENDS, $file, $class, $line, $method['name']);
+                        $flagged = true;
                     }
+                }
+            }
+
+            if (! $flagged && stripos($code, 'setAppends') !== false) {
+                $clean[self::RESOURCE_APPENDS][] = $file;
+            }
+        }
+
+        return ['debt' => $debt, 'clean' => array_map(fn (array $files): array => array_values(array_unique($files)), $clean)];
+    }
+
+    /**
+     * La visibilidad del prepareForValidation() que la clase hereda de una
+     * request del proyecto: null si no hereda ninguno antes de FormRequest
+     * (cuyo método está vacío), 'unknown' si la herencia sale del código que
+     * se ve. Sólo vale después de inspect().
+     */
+    public function inheritedPrepare(string $fqcn): ?string
+    {
+        $visited = [];
+        $class = $this->requests[strtolower($fqcn)][0] ?? null;
+
+        while ($class !== null) {
+            $parent = strtolower((string) $class['extends']);
+
+            if ($parent === '' || $parent === self::FORM_REQUEST) {
+                return null;
+            }
+
+            if (isset($visited[$parent]) || ! isset($this->requests[$parent])) {
+                return 'unknown';
+            }
+
+            $visited[$parent] = true;
+            $class = $this->requests[$parent][0];
+
+            foreach ($class['methods'] as $method) {
+                if (strcasecmp($method['name'], 'prepareForValidation') === 0) {
+                    return $method['visibility'];
                 }
             }
         }
 
-        return $findings;
+        return 'unknown';
+    }
+
+    /**
+     * @param  ClassOutline  $class
+     * @return Debt
+     */
+    private function debt(string $check, string $file, array $class, int $line, ?string $method): array
+    {
+        return [
+            'check' => $check,
+            'file' => $file,
+            'class' => $class['name'],
+            'fqcn' => $class['fqcn'],
+            'line' => $line,
+            'method' => $method,
+            'extends' => $class['extends'],
+            'traits' => $class['traits'],
+        ];
+    }
+
+    private function read(string $file): string
+    {
+        return $this->overlay[$file] ?? (string) file_get_contents($file);
     }
 
     // INDEX-MANAGED
@@ -413,13 +529,5 @@ final class LegacySecurity
         }
 
         return $statements;
-    }
-
-    /**
-     * @return array{level: string, check: string, model: string|null, file: string|null, message: string}
-     */
-    private function finding(string $check, string $file, string $message): array
-    {
-        return ['level' => Verifier::WARNING, 'check' => $check, 'model' => null, 'file' => $this->project->relative($file), 'message' => $message];
     }
 }

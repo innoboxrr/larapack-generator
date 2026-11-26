@@ -1133,7 +1133,35 @@ manifiesto:
 | `resource-appends` | aviso | Un `setAppends()` que recibe lo que manda el cliente sin una lista blanca. |
 
 Las dos últimas encuentran lo que se generó antes de 9.0 y lo que alguien copie
-de ello; lo que se genera ahora ya sale protegido.
+de ello; lo que se genera ahora ya sale protegido. Y las dos se arreglan solas:
+
+```
+php artisan larapack:fix index-managed resource-appends --dry-run   # el diff de cada archivo
+php artisan larapack:fix index-managed resource-appends             # escribe
+php artisan larapack:fix index-managed --path=packages/school-library --format=json
+```
+
+`larapack:fix` hace en cada archivo el mismo cambio, sacado de la plantilla
+actual: en el IndexRequest, `$this->merge(['managed' => true])` al principio de
+`prepareForValidation()` (si no existe lo crea, y si hereda uno del proyecto lo
+llama); en el Resource, el bloque de `$appendable` en lugar del `setAppends()`
+viejo, y la propiedad si falta. Lee tokens, no busca con expresiones regulares,
+y lo que no tiene una forma reconocida no lo toca: lo devuelve como `skipped`
+con la razón, y entonces sale con código distinto de cero. Nada se da por
+arreglado hasta que el resultado parsea y `verify` ya no lo marca, así que
+correrlo dos veces no cambia nada la segunda. Si el proyecto tiene Pint, lo pasa
+por lo que escribió; lo que el manifiesto conocía sin editar se vuelve a anotar.
+Con `--format=json`, un documento con `fixed`, `skipped` y `unchanged` por
+comprobación.
+
+Un `$appendable` vacío deja de añadir lo que pida el cliente. Si la interfaz
+pedía accessors con `appends[]`, decláralos en la lista de cada Resource.
+
+**Qué no mira la guardia, a propósito.** Sólo las clases de `Http/Controllers`,
+`Http/Requests` y `Http/Resources`. Un componente de Livewire, un recurso de
+Filament o un controlador fuera de `Http/Controllers` no reciben un FormRequest
+ni delegan en su `handle()`: exigirles esa forma sería un falso positivo en cada
+archivo.
 
 **El controlador sólo hace `return $request->handle();`, también el que se
 escribe a mano.** Un endpoint que no es CRUD se
@@ -2201,8 +2229,17 @@ como school-management:
    IndexRequest que fuerza `managed`, el Resource con `$appendable` y la
    exportación que no escribe fórmulas.
 
-5. **Lleva a mano la seguridad a lo editado.** `verify` avisa con
-   `index-managed` y `resource-appends`:
+5. **Lleva la seguridad a lo editado.** `verify` avisa con `index-managed` y
+   `resource-appends`, y `larapack:fix` lo arregla en todos los archivos a la
+   vez (en school-management, 524 IndexRequests y 691 Resources):
+
+   ```
+   php artisan larapack:fix index-managed resource-appends --dry-run
+   php artisan larapack:fix index-managed resource-appends
+   php artisan larapack:verify --check=index-managed --check=resource-appends
+   ```
+
+   Lo que salte (`skipped`, con su razón) se hace a mano, así:
 
    ```php
    // IndexRequest: el listado siempre pasa por ManagedFilter::canView().
@@ -2246,6 +2283,7 @@ larapack:import                  Genera varios modelos desde un laraimport.
 larapack:validate                Valida un laraimport sin generar nada.
 larapack:schema                  Emite el esquema del laraimport.
 larapack:verify                  Busca desviaciones respecto al manifiesto y en los controladores.
+larapack:fix                     Corrige index-managed y resource-appends en lo generado antes de 9.0.
 larapack:audit                   Comprueba la línea base del ecosistema.
 larapack:skill                   Instala las instrucciones para un agente; con --hooks, la guardia.
 larapack:guard                   Hook para agentes: comprueba el archivo recién editado.
