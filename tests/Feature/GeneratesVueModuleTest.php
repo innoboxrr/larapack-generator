@@ -272,6 +272,23 @@ final class GeneratesVueModuleTest extends TestCase
     }
 
     /**
+     * vue-router 5 y pinia 4 ya salieron y el modulo funciona con ellos: usa
+     * createRouter/useRoute/useRouter/RouterLink/RouterView, `resolve` y `push`
+     * por nombre, y un store de setup con defineStore, y nada de eso cambio.
+     * Con el peer viejo (`^4.5.0`, `^3.0.0`) una aplicacion que ya subio no
+     * podia instalar el modulo: npm 7+ falla con ERESOLVE en vez de avisar.
+     * Se mantiene la major anterior porque la mayoria de las aplicaciones
+     * sigue en ella.
+     */
+    public function test_los_peers_aceptan_las_majors_vigentes_del_router_y_del_store(): void
+    {
+        $peers = json_decode($this->project->read('resources/vue/package.json'), true)['peerDependencies'];
+
+        $this->assertSame('^4.5.0 || ^5.0.0', $peers['vue-router']);
+        $this->assertSame('^3.0.0 || ^4.0.0', $peers['pinia']);
+    }
+
+    /**
      * @return array<int, string>
      */
     private function generatedModuleFiles(): array
