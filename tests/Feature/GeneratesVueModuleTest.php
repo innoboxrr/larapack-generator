@@ -279,6 +279,10 @@ final class GeneratesVueModuleTest extends TestCase
      * podia instalar el modulo: npm 7+ falla con ERESOLVE en vez de avisar.
      * Se mantiene la major anterior porque la mayoria de las aplicaciones
      * sigue en ella.
+     *
+     * Con pinia 4 ya instala. Con vue-router 5 todavia no: innoboxrr-vue-datatable
+     * 3.1.1 declara `vue-router: ^4.5.0` como peer y npm sigue con ERESOLVE
+     * hasta que esa libreria amplie el suyo. Este peer deja de ser el cuello.
      */
     public function test_los_peers_aceptan_las_majors_vigentes_del_router_y_del_store(): void
     {
