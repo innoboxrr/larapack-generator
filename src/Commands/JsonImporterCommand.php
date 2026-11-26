@@ -48,6 +48,16 @@ class JsonImporterCommand extends Command
         // parte de los archivos ya escritos.
         ['document' => $document, 'errors' => $findings] = ImportDocument::fromFile($jsonPath);
 
+        // Lo que el laraimport no puede saber solo: qué hay ya generado.
+        if ($document !== null) {
+            $collisions = SemanticValidator::againstManifest($document->toArray(), new Manifest);
+            $findings = [...$findings, ...$collisions];
+
+            if ($collisions !== []) {
+                $document = null;
+            }
+        }
+
         // Los avisos de interfaz sólo tienen sentido si se genera la interfaz.
         if ($document !== null && ($input->getOption('vue') || $input->getOption('react'))) {
             $findings = [...$findings, ...SemanticValidator::interface($document->toArray())];

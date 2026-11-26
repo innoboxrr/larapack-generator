@@ -2,6 +2,7 @@
 
 namespace Innoboxrr\LarapackGenerator\Tests\Feature;
 
+use Innoboxrr\LarapackGenerator\Support\Manifest;
 use Innoboxrr\LarapackGenerator\Tests\Support\FakeProject;
 use Innoboxrr\LarapackGenerator\Tests\TestCase;
 use Symfony\Component\Console\Command\Command;
@@ -187,6 +188,40 @@ final class DeclaredEndpointsGenerationTest extends TestCase
         }
 
         $this->assertSame([], glob($this->project->path.'/database/migrations/*_desks_table.php'));
+    }
+
+    /**
+     * Otro laraimport del mismo proyecto: el validador sólo ve ese archivo, y
+     * Post viene del primero. Generar Post como controlador escribiría sobre
+     * su controlador y sus rutas, y su anotación diría que no es un modelo.
+     */
+    public function test_un_controlador_no_puede_llamarse_como_un_modelo_ya_generado(): void
+    {
+        $other = $this->project->path.'/otro.json';
+
+        file_put_contents($other, json_encode([
+            'models' => [['name' => 'Tag', 'props' => [['name' => 'title', 'type' => 'string']]]],
+            'controllers' => [
+                ['name' => 'Post', 'endpoints' => [['name' => 'overview', 'method' => 'get']]],
+                // Un controlador que ya era controlador se regenera sin más.
+                ['name' => 'Desk', 'endpoints' => [['name' => 'overview', 'method' => 'get']]],
+            ],
+        ]));
+
+        $routes = $this->project->read('routes/api/models/post.php');
+
+        $this->assertSame(Command::FAILURE, $this->runCommand('larapack:validate', ['jsonPath' => $other, '--format' => 'json']));
+        $this->assertSame(Command::FAILURE, $this->runCommand('larapack:import', ['jsonPath' => $other, '--force' => true, '--format' => 'json']));
+
+        $messages = array_column(json_decode($this->lastOutput, true)['findings'], 'message', 'path');
+
+        $this->assertSame(['/controllers/0/name'], array_keys($messages));
+        $this->assertStringContainsString('ya está generado', $messages['/controllers/0/name']);
+
+        // No se escribió nada: ni el modelo nuevo ni encima de Post.
+        $this->assertFalse($this->project->has('src/Models/Tag.php'));
+        $this->assertSame($routes, $this->project->read('routes/api/models/post.php'));
+        $this->assertFalse((new Manifest($this->project->path))->declarationOf('Post')['controller']);
     }
 
     public function test_el_manifiesto_guarda_los_endpoints_para_verify(): void

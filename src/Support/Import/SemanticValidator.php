@@ -3,6 +3,7 @@
 namespace Innoboxrr\LarapackGenerator\Support\Import;
 
 use Illuminate\Support\Pluralizer;
+use Innoboxrr\LarapackGenerator\Support\Manifest;
 
 /**
  * Comprobaciones que el esquema no puede expresar porque miran a varias partes
@@ -374,6 +375,37 @@ final class SemanticValidator
                         'message' => "{$model['name']} es authenticatable y no declara `{$required}`: sin él nadie puede iniciar sesión.",
                     ];
                 }
+            }
+        }
+
+        return $findings;
+    }
+
+    /**
+     * Un `controllers[]` que se llama como un modelo que ya está generado.
+     *
+     * validate() sólo ve este laraimport, y el choque con un modelo del mismo
+     * archivo ya lo dice. Pero el manifiesto guarda también lo que generaron
+     * otros laraimports del proyecto: el controlador escribiría encima del
+     * controlador y de las rutas de ese modelo —con --force, sus CRUD
+     * desaparecerían— y su anotación pasaría a decir que no es un modelo.
+     *
+     * Al revés no se comprueba a propósito: declarar como modelo lo que era
+     * un controlador sin modelo es la forma de convertirlo.
+     *
+     * @param  array<string, mixed>  $document
+     * @return array<int, array{level: string, path: string, message: string}>
+     */
+    public static function againstManifest(array $document, Manifest $manifest): array
+    {
+        $generated = $manifest->models();
+        $findings = [];
+
+        foreach ($document['controllers'] ?? [] as $index => $controller) {
+            $name = (string) $controller['name'];
+
+            if (in_array($name, $generated, true) && ! $manifest->declarationOf($name)['controller']) {
+                $findings[] = self::error("/controllers/{$index}/name", "El controlador '{$name}' se llama como el modelo {$name}, que ya está generado (está en .larapack/manifest.json): escribiría sobre su controlador, sus rutas y su carpeta de requests. Declara el endpoint en ese modelo o elige otro nombre.");
             }
         }
 
