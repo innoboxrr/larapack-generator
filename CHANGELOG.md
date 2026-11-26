@@ -94,7 +94,7 @@ php artisan larapack:skill --force --hooks               # añade el hook PreToo
 php artisan larapack:hand-rolled list                    # las dos, «sin candado»
 php artisan larapack:hand-rolled approve --all           # crea .larapack/hand-rolled.lock
 cat .larapack/hand-rolled.lock                            # revisa que sean esas dos y esas razones
-php artisan larapack:verify --strict --format=json       # ok: true antes de exigirlo
+php artisan larapack:verify --strict --format=json       # ok: true antes de exigirlo (ver abajo)
 php artisan larapack:ci --owner=@<dueño-o-equipo>
 git add .larapack/hand-rolled.lock .github .claude/settings.json && git commit
 ```
@@ -107,6 +107,14 @@ candado es de la raíz sobre la que corre `verify`.
 Si la CI de los paquetes corre `larapack:audit --strict`, el aviso `verify-job`
 la pone en rojo hasta que cada paquete tenga el job: añádelo
 (`larapack:ci --root=packages/<paquete>`) antes de subir a 9.1.
+
+Sus `<Modelo>EndpointsTest` son de antes de 9.1: `verify` avisará con
+`endpoint-tests-outdated` por cada uno (unos 128), y con `--strict` no da
+`ok: true` hasta regenerarlos. Las pruebas nuevas pueden destapar un
+`authorize()` que no pregunta o un listado sin acotar: es lo que buscan. Y antes
+de pasar a `controllers[]` sus controladores escritos a mano que dejan entrar a
+cualquiera con sesión (`DeskLayout`, `Tours`, `Documentation*`), declara en
+ellos `"authorize": "authenticated"`.
 
 ### Los tests generados prueban lo que cierra la autorización
 
@@ -131,10 +139,16 @@ no dependen de lo que decida la política del proyecto:
 - **`test_<modelo>_index_pasa_por_su_managed_filter`**: el `FilterRegistry` de
   SearchSurge se envuelve en el test para cambiar el `ManagedFilter` del modelo
   por uno que primero deja ver todo y después nada. Con `managed=false` en la
-  petición, el registro aparece y luego desaparece: prueba que SearchSurge
-  resuelve el `ManagedFilter` del modelo, que `IndexRequest` fuerza `managed` y
-  que `canView()` se aplica. Qué deja ver `canView()` es un hueco y no se
-  prueba; el comentario del test dice dónde hacerlo.
+  petición —en la query, como el front, y en el cuerpo—, el registro aparece y
+  luego desaparece: prueba que SearchSurge resuelve el `ManagedFilter` del
+  modelo, que `IndexRequest` fuerza `managed` y que `canView()` se aplica. El
+  test cuenta que se llame al `canView()` sustituto: SearchSurge lo invoca
+  sobre su `managedFilterClass`, el primer filtro crítico, y un segundo filtro
+  derivado de `Managed` ordenado antes lo dejaría sin efecto; así falla
+  diciendo eso y no otra cosa. El estado del sustituto es nuevo en cada
+  ejecución (la clase anónima se declara una vez por proceso). Qué deja ver
+  `canView()` es un hueco y no se prueba; el comentario del test dice dónde
+  hacerlo.
 
 Las acciones salen de `routes.only`/`except` e `immutable`, como el resto del
 test: un modelo de sólo lectura recorre `index` y `show`. Se agrupan en una
@@ -148,16 +162,47 @@ registro lo crea y pone su identificador donde lo lee la request, en el cuerpo o
 en la URI. En una aplicación, ese test usa ahora `RefreshDatabase` y su propio
 `signInApplicationUser()`.
 
+**`"authorize": "authenticated"` en un endpoint de `controllers[]`.** Un
+endpoint abierto a cualquiera con sesión, o cuya `authorize()` decide sin Gate
+—deja a `rules()` el 422 y responde 404 por lo ajeno, como el
+`InstalledModulesRequest` de la skill—, fallaría siempre ese 403. Ahora se
+declara: `authorize()` nace en `true` y su test pasa a ser
+**`test_con_sesion_basta_la_sesion`**, que con la autorización negando espera
+cualquier cosa menos 403; el 401 sin sesión se mantiene. No admite `ability` ni
+`public` (`validate` lo rechaza) y en un endpoint de modelo no existe: ahí
+«cualquiera con sesión» es el método de la política devolviendo `true`, y el
+test, que no consulta la política, sigue pasando. Sin declararlo, todo sale
+como antes y el manifiesto no cambia.
+
 Ninguna sale `skipped` ni `incomplete`. Los tests de EndToEnd ejecutan las
 nuevas en un paquete y en una aplicación generados, sin tocarlas, y pasan Pint
-y Larastan.
+y Larastan. El paquete de prueba cubre ahora, ejecutándolos y no sólo en foto,
+`routes.only` (un modelo de sólo `index`/`show` y otro de
+`index`/`update`/`bulkUpdate`), un endpoint de registro con otro parámetro en la
+URI (`{product_id}/move-to/{slot}`), uno de colección con `delete`, un
+`controllers[]` con parámetro (`import/{batch}`) y uno con `authorize:
+authenticated`.
 
-**En un proyecto existente** no se pisa nada: `<Modelo>EndpointsTest` se crea
-una sola vez y no se regenera nunca, y el test de un endpoint sólo se rehace con
-`--force` si nadie lo editó. Para tener las pruebas nuevas en un modelo que ya
-existía, borra su `EndpointsTest` (guarda antes lo que le añadiste) y vuelve a
-importar. Usan `mockery/mockery`, que traen `laravel/laravel` y
-`orchestra/testbench`.
+**En un proyecto existente, `import --force` reescribe el test de cada
+endpoint que nadie editó** (y `.larapack/manifest.json`) y le añade
+`test_con_sesion_pregunta_a_la_autorizacion`. Ese test **falla** en un
+`controllers[]` cuya `authorize()` se rellenó a mano para dejar pasar a
+cualquiera con sesión o decidir sin Gate: es lo que hay que declarar con
+`"authorize": "authenticated"` antes de regenerar. El test de endpoint editado
+se conserva.
+
+`<Modelo>EndpointsTest`, en cambio, se creó una vez y no se regenera nunca: no
+está en el manifiesto, así que no hay hash con el que saber si alguien lo editó
+y reescribirlo podría tirar pruebas escritas a mano. Por eso **`verify` avisa
+con `endpoint-tests-outdated`** por cada uno al que le falte alguna de las tres
+pruebas —la del `ManagedFilter`, sólo si el modelo tiene listado—, con el modelo
+y lo que hay que correr: guardar lo añadido, borrarlo, `larapack:import` (sin
+`--force` basta: crea el que falta) y volver a pegarlo. Es un aviso, así que
+**con `--strict` pone `verify` en rojo** hasta que se haga. No se añadió un paso
+en `larapack:fix`: sin hash no hay forma segura de saber que el archivo es el
+generado, e injertar métodos en una clase editada (sus `use`, sus ayudas)
+tampoco lo es. Las pruebas usan `mockery/mockery`, que traen `laravel/laravel`
+y `orchestra/testbench`.
 
 ### Seguridad: segunda auditoría, con pruebas por propiedades
 
