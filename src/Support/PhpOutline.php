@@ -18,7 +18,7 @@ namespace Innoboxrr\LarapackGenerator\Support;
  * @phpstan-type Token array{0: int|string, 1: string, 2: int}
  * @phpstan-type AttributeOutline array{name: string, line: int, args: list<Token>|null}
  * @phpstan-type ParameterOutline array{name: string, type: string|null, raw: string}
- * @phpstan-type MethodOutline array{name: string, line: int, visibility: string, static: bool, attributes: list<AttributeOutline>, params: list<ParameterOutline>, body: list<Token>|null}
+ * @phpstan-type MethodOutline array{name: string, line: int, visibility: string, static: bool, attributes: list<AttributeOutline>, params: list<ParameterOutline>, signature: list<Token>, body: list<Token>|null}
  * @phpstan-type ClassOutline array{kind: string, name: string, fqcn: string, line: int, abstract: bool, extends: string|null, traits: list<string>, attributes: list<AttributeOutline>, methods: list<MethodOutline>}
  * @phpstan-type ClosureOutline array{call: string, line: int, arrow: bool, params: list<Token>, body: list<Token>}
  *
@@ -673,6 +673,7 @@ final class PhpOutline
 
         $name = $this->tokens[$this->i][1] ?? '';
         $this->i++;
+        $signatureStart = $this->i;
 
         $params = ($this->tokens[$this->i][0] ?? null) === '(' ? $this->parseParams($this->balanced()) : [];
         $count = count($this->tokens);
@@ -680,6 +681,11 @@ final class PhpOutline
         while ($this->i < $count && ! in_array($this->tokens[$this->i][0], ['{', ';'], true)) {
             $this->i++;
         }
+
+        // Los parámetros completos —con sus valores por defecto— y el tipo de
+        // retorno, tal cual: lo que la huella de una excepción aprobada tiene
+        // que ver cambiar (HandRolledLock::fingerprint).
+        $signature = array_slice($this->tokens, $signatureStart, $this->i - $signatureStart);
 
         $body = null;
 
@@ -698,6 +704,7 @@ final class PhpOutline
             'static' => in_array('static', $modifiers, true),
             'attributes' => $attributes,
             'params' => $params,
+            'signature' => $signature,
             'body' => $body,
         ];
     }

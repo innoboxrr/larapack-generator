@@ -508,10 +508,12 @@ Y en **todos** los controladores, generados o no, con o sin manifiesto:
   `#[HandRolled('razón')]`. **Nunca lo añadas para que `verify` pase**: es una
   excepción que aprueba el dueño del proyecto, y con `--strict` falla igual.
 - **`hand-rolled-unapproved`** (error) y **`hand-rolled-stale`** (aviso): con
-  `.larapack/hand-rolled.lock`, una excepción sin aprobar o con la razón
-  cambiada, y una aprobación que ya no está en el código. **No son tuyos de
-  arreglar**: nunca edites el candado ni corras `larapack:hand-rolled approve`
-  o `revoke` —la guardia lo bloquea—. Devuelve la acción a
+  `.larapack/hand-rolled.lock`, una excepción sin aprobar o con la razón o el
+  código cambiados —el candado guarda la huella del código aprobado: añadir una
+  acción a una clase aprobada, o tocar el cuerpo de un método aprobado, la deja
+  sin aprobar—, y una aprobación que ya no está en el código. **No son tuyos de
+  arreglar**: nunca edites el candado, ni lo escribas desde Bash, ni corras
+  `larapack:hand-rolled approve` o `revoke` —la guardia lo bloquea—. Devuelve la acción a
   `return $request->handle();` o díselo al dueño. `larapack:hand-rolled list`
   sí puedes correrlo.
 - **`route-closure`** (aviso): una ruta con un closure con cuerpo.

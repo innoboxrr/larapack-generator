@@ -15,8 +15,17 @@ se comporta igual que antes, y el workflow y CODEOWNERS sólo se crean si se
 pide.
 
 **`.larapack/hand-rolled.lock` y `larapack:hand-rolled`.** El candado es una
-lista JSON de `{target, reason}`, ordenada y estable byte a byte. `target` es
-`Clase` o `Clase::metodo`, con el nombre completo:
+lista JSON de `{target, reason, fingerprint}`, ordenada y estable byte a byte.
+`target` es `Clase` o `Clase::metodo`, con el nombre completo. `fingerprint` es
+la huella del código aprobado —sha256 de sus tokens, sin espacios ni
+comentarios—: de un método, su firma y su cuerpo; de una clase, todos sus
+métodos, su padre y sus traits. Aprobar un nombre sería un cheque en blanco:
+una clase aprobada cubriría cada acción que se le añadiera después. Con la
+huella, añadir una acción, cambiar una sentencia o un parámetro deja la
+excepción sin aprobar, y el diff del candado que la vuelve a aprobar es lo que
+CODEOWNERS pide revisar. Reformatear o comentar no la cambia. Lo que el código
+aprobado llama fuera de la clase (otra clase, el cuerpo de un trait) no entra
+en la huella.
 
 ```
 php artisan larapack:hand-rolled list                          # estado de cada excepción
@@ -26,29 +35,49 @@ php artisan larapack:hand-rolled revoke 'App\Http\Controllers\InboundWebhookCont
 ```
 
 Basta el final del nombre que lo distinga; si coincide con más de uno, no se
-adivina. Aprobar es correr el comando, revisar el diff del candado y comitearlo.
+adivina. Aprobar es correr el comando, revisar el diff del candado y comitearlo;
+`approve` recalcula la huella. `list` marca `code-changed` lo que cambió desde
+que se aprobó. Sin candado y sin excepciones en el código, `approve --all` no
+crea uno vacío: el candado cambia el modo de `verify` (un `#[HandRolled]` nuevo
+pasa de aviso a error), y eso no ocurre de rebote.
 
 | Comprobación | Nivel | Con candado |
 | --- | --- | --- |
 | `hand-rolled` | info | La excepción está aprobada con esa misma razón. `--strict` pasa. |
-| `hand-rolled-unapproved` | error | No está en el candado, **o cambió la razón**: se aprobó otra cosa. También un candado ilegible, que deja todo sin aprobar. |
+| `hand-rolled-unapproved` | error | No está en el candado, **cambió la razón o cambió el código** (la huella no coincide): se aprobó otra cosa. También una entrada sin huella, y un candado ilegible, que deja todo sin aprobar. |
 | `hand-rolled-stale` | aviso | El candado aprueba algo que ya no lleva `#[HandRolled]`. Se retira con `revoke`. |
 
 Sin candado, `hand-rolled` sigue siendo aviso, como en 9.0.
 
-**La guardia no deja que un agente apruebe.** `larapack:guard` bloquea con 2 la
-edición del candado (`Write`, `Edit`, `MultiEdit`) y la orden de Bash que corre
-`larapack:hand-rolled approve` o `revoke`, también por el alias `make:`, por una
-abreviatura (`larapack:hand`) o dentro de `bash -c` y `eval`. La orden se lee
-como la shell —separadores, comillas y heredocs—, sin ejecutarla: un `git
-commit -m "approve"`, un `grep` o la documentación escrita con `cat <<'EOF'` no
-bloquean; un heredoc que recibe una shell (`bash <<EOF`), sí. `larapack:skill --hooks` añade para eso un
-hook **PreToolUse** (`Write|Edit|MultiEdit|Bash`, `larapack:guard --pre`): el
+**La guardia no deja que un agente apruebe.** `larapack:guard` bloquea con 2:
+
+- La edición del candado (`Write`, `Edit`, `MultiEdit`), con la ruta
+  normalizada antes de compararla: `//`, `/./`, `x/..`, relativa, con barras de
+  Windows o un punto final.
+- La orden de Bash que corre `larapack:hand-rolled approve` o `revoke`, también
+  por el alias `make:`, por una abreviatura (`larapack:hand`, `l:h`, y con el
+  espacio vacío, `:hand-rolled` o `:h`, que Symfony también acepta), con la
+  palabra partida por comillas (`appr''ove`) o por una continuación de línea
+  (barra invertida y salto), o dentro de `bash -c` y `eval`.
+- La orden de Bash que escribe el candado sin el comando: una redirección (`>`,
+  `>>`), `tee`, `cp`, `mv`, `install`, `ln`, `rsync`, `truncate`, `dd of=`,
+  `sed -i`, `perl -i`, y el código en línea de `php -r`, `python -c`,
+  `node -e`, `ruby -e` o `perl -e` que lo nombre. Leerlo (`cat`, `git diff`) o
+  devolverlo con `git checkout --` no.
+
+La orden se lee como la shell —separadores, comillas, continuaciones y
+heredocs—, sin ejecutarla: un `git commit -m "approve"`, un `grep` o la
+documentación escrita con `cat <<'EOF'` no bloquean; un heredoc que recibe una
+shell (`bash <<EOF`), sí. `larapack:skill --hooks` añade para eso un hook
+**PreToolUse** (`Write|Edit|MultiEdit|Bash`, `larapack:guard --pre`): el
 PostToolUse llega con el archivo ya escrito y su matcher no ve Bash. Como corre
 en cada orden, la shell sólo despierta a PHP si la entrada contiene `approve`,
-`revoke` o `hand-rolled`. Se fusiona como los demás y no se duplica. El
-PostToolUse también bloquea y pide deshacerlo, para quien siga con los hooks de
-9.0. No es infranqueable —un agente puede escribir el archivo por otra vía—: la
+`revoke` o `hand-rolled` —también quitando antes comillas y barras invertidas—,
+o una continuación de línea. Se fusiona como los demás y no se duplica. Con los
+hooks de 9.0, que sólo tienen el PostToolUse sobre `Write|Edit|MultiEdit`, la
+guardia ve la edición del candado con esas herramientas —ya hecha: bloquea y
+pide deshacerla—, pero ninguna orden de Bash. No es infranqueable —una
+variable, un glob o un script propio escriben el archivo por otra vía—: la
 barrera es la revisión del dueño en la rama protegida.
 
 **`larapack:ci`** pone `verify --strict` como check de la rama en un proyecto
@@ -69,14 +98,32 @@ php artisan larapack:ci --owner=@organizacion/arquitectura
   candado, el workflow y el propio CODEOWNERS: sin duplicar, sin tocar líneas
   ajenas, y sin cambiar un patrón que ya tiene otro dueño (lo dice). Sin
   `--owner` no inventa uno.
+- `--runs-on` (repetible, o una lista JSON: `--runs-on='["self-hosted","linux"]'`)
+  pone el job en los runners del proyecto. Sin él va a `ubuntu-latest`, y si
+  otros workflows corren en otro sitio lo dice con la opción ya escrita: un job
+  que no arranca deja el check exigido sin llegar y nada se fusiona, y en un
+  monorepo donde `verify` tarda minutos, el runner alojado los cobra en cada PR.
+- Si el workflow difiere y no hay `--force`, no escribe nada: tampoco
+  CODEOWNERS, que enseña como «añadiría».
 - Imprime lo que no puede hacer: proteger la rama exigiendo el check y *Require
   review from Code Owners*, con la orden `gh api --method PUT
-  repos/{dueño}/{repo}/branches/{rama}/protection` para que la corra el dueño.
-  Nunca la ejecuta.
+  'repos/{dueño}/{repo}/branches/{rama}/protection'` para que la corra el dueño.
+  Nunca la ejecuta. La rama sale del remoto: si tiene caracteres de shell, la
+  orden lleva `RAMA` y avisa.
+- **La puerta sólo vale si nadie entra por fuera de ella.** La orden pide
+  `enforce_admins=true`: con `false`, quien empuja como administrador se salta
+  el check y la revisión, y GitHub sólo lo anota. Es el caso de un orquestador
+  que sube el SHA ya verificado directo a la rama con la cuenta del dueño: cada
+  push pasaría sin `verify --strict`. El precio es que GitHub no deja aprobar
+  un PR propio, así que los PR del agente tienen que salir de una cuenta que no
+  sea la del único dueño de código (un bot sin administración). Con
+  `--no-enforce-admins` la orden lleva `false`, y la salida avisa.
 
 **Los paquetes nuevos** (`larapack:new`) traen el mismo job «LaraPack verify»
 en su `tests.yml`, y **`larapack:audit`** avisa con `verify-job` si la CI de un
-paquete que usa LaraPack no corre `larapack:verify --strict`.
+paquete que usa LaraPack no corre `larapack:verify --strict`. Un paquete en
+`packages/` de un repositorio cuya raíz ya corre `verify --strict` no avisa:
+el `verify` de la raíz recorre `packages/*` con un solo candado.
 
 **`empty-manifest` ya no avisa a un paquete sin modelos que tiene registrados
 sus proveedores** —una pasarela, un PAC: doce de los ochenta y un paquetes de
@@ -85,24 +132,47 @@ en la CI, ese aviso los habría dejado en rojo para siempre.
 
 ### Migrar: school-management
 
-school-management llega con dos excepciones que el dueño ya aprobó en 9.0,
-`InboundWebhookController` y `TokenController`. Una vez, **el dueño**:
+Hoy school-management pide `innoboxrr/larapack-generator` `^8.0` y no tiene
+ningún `#[HandRolled]`. Esto es para **cuando el proyecto ya esté en 9.0** y el
+dueño haya marcado sus excepciones; los nombres de abajo son ejemplos. Una vez,
+**el dueño**:
 
 ```
 composer require innoboxrr/larapack-generator:"^9.1" --dev
 php artisan larapack:skill --force --hooks               # añade el hook PreToolUse
-php artisan larapack:hand-rolled list                    # las dos, «sin candado»
-php artisan larapack:hand-rolled approve --all           # crea .larapack/hand-rolled.lock
-cat .larapack/hand-rolled.lock                            # revisa que sean esas dos y esas razones
+php artisan larapack:hand-rolled list                    # cada excepción, «sin candado»
+php artisan larapack:hand-rolled approve --all           # crea .larapack/hand-rolled.lock con sus huellas
+cat .larapack/hand-rolled.lock                            # revisa objetivos y razones
 php artisan larapack:verify --strict --format=json       # ok: true antes de exigirlo
-php artisan larapack:ci --owner=@<dueño-o-equipo>
+php artisan larapack:ci --owner=@<dueño-o-equipo> --runs-on='["self-hosted","linux","x64","ovh"]'
 git add .larapack/hand-rolled.lock .github .claude/settings.json && git commit
 ```
 
+Para retirar una, el nombre completo: hay dos `InboundWebhookController`
+(`App\Http\Controllers\InboundWebhookController` y
+`App\Http\Controllers\Integrations\InboundWebhookController`), y el final del
+nombre sólo vale si no se repite:
+
+```
+php artisan larapack:hand-rolled revoke 'App\Http\Controllers\Integrations\InboundWebhookController'
+```
+
 Después, el workflow corre una vez y el dueño protege `master` con la orden que
-imprime `larapack:ci`. Cada paquete de `packages/` que corre `verify --strict`
-en su propia CI necesita su propio candado (`--root=packages/<paquete>`): el
-candado es de la raíz sobre la que corre `verify`.
+imprime `larapack:ci`. Tres cosas propias de ese proyecto:
+
+- **El push directo a `master` se salta la puerta.** Su contrato de sesión sube
+  el SHA verificado directo a `master` con la cuenta del dueño. Con
+  `enforce_admins=true` ese push deja de entrar; con `false`, entra sin
+  `verify --strict` en cada vez. Para que la puerta valga, el orquestador tiene
+  que pasar por PR, o empujar con una cuenta que no sea de administración y sin
+  permiso para saltarse la protección.
+- **Runners propios.** Su CI corre en `[self-hosted, linux, x64, ovh]` porque
+  se acabaron los minutos alojados, y `verify` tarda minutos en ese monorepo:
+  sin `--runs-on`, el job gastaría minutos de pago en cada PR o no arrancaría.
+- **Un solo candado.** El `verify` de la raíz recorre `packages/*`: el candado
+  de la raíz aprueba también las excepciones de los paquetes, y `audit` no pide
+  un job por paquete. Sólo un paquete que se publique y corra `verify --strict`
+  en su propio repositorio necesita su candado (`--root=packages/<paquete>`).
 
 Si la CI de los paquetes corre `larapack:audit --strict`, el aviso `verify-job`
 la pone en rojo hasta que cada paquete tenga el job: añádelo

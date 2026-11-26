@@ -280,7 +280,7 @@ final class CiCommandTest extends TestCase
 
         $this->assertSame(['trunk'], $this->workflow()['on']['push']['branches']);
         $this->assertStringContainsString(
-            "gh api --method PUT repos/acme/notes/branches/trunk/protection -F 'required_status_checks[strict]=false' -f 'required_status_checks[contexts][]=LaraPack verify' -F 'enforce_admins=false' -F 'required_pull_request_reviews[require_code_owner_reviews]=true' -F 'required_pull_request_reviews[required_approving_review_count]=1' -F 'restrictions=null'",
+            "gh api --method PUT 'repos/acme/notes/branches/trunk/protection' -F 'required_status_checks[strict]=false' -f 'required_status_checks[contexts][]=LaraPack verify' -F 'enforce_admins=true' -F 'required_pull_request_reviews[require_code_owner_reviews]=true' -F 'required_pull_request_reviews[required_approving_review_count]=1' -F 'restrictions=null'",
             $this->lastOutput
         );
         $this->assertStringContainsString('Require review from Code Owners', $this->lastOutput);
@@ -292,6 +292,120 @@ final class CiCommandTest extends TestCase
         $this->ci();
 
         $this->assertStringContainsString('repos/DUEÑO/REPOSITORIO/branches/RAMA/protection', $this->lastOutput);
+    }
+
+    /**
+     * La puerta sólo vale si nadie empuja como administrador: de fábrica la
+     * orden pide enforce_admins=true y dice por qué; quitarlo es explícito y
+     * avisa.
+     */
+    public function test_la_proteccion_exige_tambien_a_los_administradores(): void
+    {
+        $this->assertSame(Command::SUCCESS, $this->ci(), $this->lastOutput);
+
+        $this->assertStringContainsString("-F 'enforce_admins=true'", $this->lastOutput);
+        $this->assertStringContainsString('tampoco un administrador se salta el check ni la revisión', $this->lastOutput);
+        $this->assertStringContainsString('un orquestador que sube el SHA ya verificado', $this->lastOutput);
+        $this->assertStringContainsString('GitHub no deja aprobar un PR propio', $this->lastOutput);
+
+        $this->assertSame(Command::SUCCESS, $this->ci(['--no-enforce-admins' => true]), $this->lastOutput);
+
+        $this->assertStringContainsString("-F 'enforce_admins=false'", $this->lastOutput);
+        $this->assertStringContainsString('Ojo: enforce_admins=false', $this->lastOutput);
+        $this->assertStringContainsString('se salta verify --strict', $this->lastOutput);
+    }
+
+    /**
+     * Una rama del remoto que no se puede escribir en una orden de shell no
+     * se escribe: se deja el marcador.
+     */
+    public function test_una_rama_con_caracteres_de_shell_no_llega_a_la_orden(): void
+    {
+        $this->git('init', '--quiet');
+        $this->git('remote', 'add', 'origin', 'https://github.com/acme/notes.git');
+        $this->git('symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/x;touch$(id)|y');
+
+        $this->assertSame(Command::SUCCESS, $this->ci(), $this->lastOutput);
+
+        $this->assertStringContainsString("gh api --method PUT 'repos/acme/notes/branches/RAMA/protection'", $this->lastOutput);
+        $this->assertStringContainsString('la orden lleva RAMA en su lugar', $this->lastOutput);
+        $this->assertStringNotContainsString('branches/x;touch', $this->lastOutput);
+
+        // En el YAML sí va, entre comillas: es un valor, no una orden.
+        $this->assertSame(['x;touch$(id)|y'], $this->workflow()['on']['push']['branches']);
+
+        $this->assertTrue(CiGate::isSafeBranch('release/2.x'));
+        $this->assertFalse(CiGate::isSafeBranch('-x'));
+        $this->assertFalse(CiGate::isSafeBranch('a..b'));
+        $this->assertFalse(CiGate::isSafeBranch('a`b`'));
+    }
+
+    public function test_runs_on_repetible_o_en_json(): void
+    {
+        $this->assertSame(Command::SUCCESS, $this->ci(['--runs-on' => ['self-hosted', 'linux', 'x64', 'ovh']]), $this->lastOutput);
+
+        $this->assertSame(['self-hosted', 'linux', 'x64', 'ovh'], $this->verifyJob($this->workflow())['runs-on']);
+        $this->assertStringContainsString('runs-on: [self-hosted, linux, x64, ovh]', $this->project->read(CiGate::WORKFLOW));
+
+        $this->assertSame(Command::SUCCESS, $this->ci(['--runs-on' => ['["self-hosted","linux"]'], '--force' => true]), $this->lastOutput);
+
+        $this->assertSame(['self-hosted', 'linux'], $this->verifyJob($this->workflow())['runs-on']);
+
+        $this->assertSame(Command::SUCCESS, $this->ci(['--runs-on' => ['ubuntu-24.04'], '--force' => true]), $this->lastOutput);
+
+        $this->assertSame('ubuntu-24.04', $this->verifyJob($this->workflow())['runs-on']);
+
+        foreach (['${{ matrix.os }}', 'self hosted', '["a", 1]', '[]', '{"a":"b"}'] as $invalid) {
+            $before = $this->project->read(CiGate::WORKFLOW);
+
+            $this->assertSame(Command::FAILURE, $this->ci(['--runs-on' => [$invalid], '--force' => true]), $invalid);
+            $this->assertSame($before, $this->project->read(CiGate::WORKFLOW), $invalid);
+        }
+    }
+
+    /**
+     * Sin --runs-on, si otros workflows corren en otros runners, se dice y
+     * se propone la opción.
+     */
+    public function test_sin_runs_on_propone_los_runners_de_los_otros_workflows(): void
+    {
+        mkdir($this->project->path.'/.github/workflows', 0777, true);
+        file_put_contents($this->project->path.'/.github/workflows/ci.yml', "jobs:\n    a:\n        runs-on: [self-hosted, linux, x64, ovh] # sin minutos\n    b:\n        runs-on: ubuntu-latest\n");
+        file_put_contents($this->project->path.'/.github/workflows/deploy.yaml', "jobs:\n    a:\n        runs-on:\n            - self-hosted\n            - 'linux'\n            - x64\n            - ovh\n    b:\n        runs-on: \${{ matrix.os }}\n");
+
+        $this->assertSame(Command::SUCCESS, $this->ci(), $this->lastOutput);
+
+        $this->assertSame('ubuntu-latest', $this->verifyJob($this->workflow())['runs-on']);
+        $this->assertStringContainsString('runs-on: [self-hosted, linux, x64, ovh] (ci.yml, deploy.yaml) -> --runs-on=\'["self-hosted","linux","x64","ovh"]\'', $this->lastOutput);
+        $this->assertStringContainsString('runs-on: ${{ matrix.os }} (deploy.yaml)', $this->lastOutput);
+        $this->assertStringNotContainsString('runs-on: ubuntu-latest (', $this->lastOutput);
+
+        // Con --runs-on ya se decidió: no se propone nada.
+        $this->ci(['--runs-on' => ['self-hosted'], '--force' => true]);
+
+        $this->assertStringNotContainsString('otros workflows del proyecto corren en otro sitio', $this->lastOutput);
+    }
+
+    /**
+     * Si el workflow no se escribe, CODEOWNERS tampoco: un intento fallido no
+     * deja el repositorio a medias.
+     */
+    public function test_si_el_workflow_falla_no_escribe_codeowners(): void
+    {
+        $this->ci();
+        $edited = $this->project->read(CiGate::WORKFLOW)."# editado\n";
+        file_put_contents($this->project->path.'/'.CiGate::WORKFLOW, $edited);
+
+        $this->assertSame(Command::FAILURE, $this->ci(['--owner' => ['@acme/arquitectura']]));
+
+        $this->assertFalse($this->project->has('.github/CODEOWNERS'));
+        $this->assertSame($edited, $this->project->read(CiGate::WORKFLOW));
+        $this->assertStringContainsString('añadiría', $this->lastOutput);
+        $this->assertStringContainsString('No se escribió nada', $this->lastOutput);
+
+        $this->assertSame(Command::SUCCESS, $this->ci(['--owner' => ['@acme/arquitectura'], '--force' => true]), $this->lastOutput);
+
+        $this->assertTrue($this->project->has('.github/CODEOWNERS'));
     }
 
     /**

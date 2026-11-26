@@ -353,8 +353,11 @@ daría ruido, y el ruido acaba desactivado.
 `controller-concern`, `hand-rolled`, `route-closure`. No depende del
 manifiesto: la deriva está justo en los controladores que el generador no
 escribió. La excepción aprobada por el dueño del proyecto se declara con
-[`#[HandRolled('razón')]`](src/Attributes/HandRolled.php) y se lista como aviso
-en cada ejecución.
+[`#[HandRolled('razón')]`](src/Attributes/HandRolled.php) y se aprueba en
+`.larapack/hand-rolled.lock` ([`HandRolledLock`](src/Support/HandRolledLock.php)),
+con la razón y la huella del código (`HandRolledLock::methodFingerprint`,
+`HandRolledLock::classFingerprint`): si cambia cualquiera de las dos, deja de
+estar aprobada. Sin candado se lista como aviso en cada ejecución.
 
 **Deuda de seguridad de lo generado antes** —[`LegacySecurity`](src/Support/LegacySecurity.php),
 `LegacySecurity::CHECKS`—: `index-managed` y `resource-appends`. Avisos, no
