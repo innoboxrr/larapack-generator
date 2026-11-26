@@ -68,6 +68,8 @@ final class AgentHooksTest extends TestCase
         $this->assertSame(['[ ! -f "$CLAUDE_PROJECT_DIR/vendor/bin/builder" ] || php "$CLAUDE_PROJECT_DIR/vendor/bin/builder" larapack:guard'], $this->commands('PostToolUse'));
         $this->assertSame(['[ ! -f "$CLAUDE_PROJECT_DIR/vendor/bin/builder" ] || php "$CLAUDE_PROJECT_DIR/vendor/bin/builder" larapack:guard --stop'], $this->commands('Stop'));
         $this->assertArrayNotHasKey('matcher', $settings['hooks']['Stop'][0], 'Stop no admite matcher.');
+        $this->assertSame('Write|Edit|MultiEdit|Bash', $settings['hooks']['PreToolUse'][0]['matcher']);
+        $this->assertStringContainsString('larapack:guard --pre', $this->commands('PreToolUse')[0]);
         $this->assertStringContainsString('Hooks añadidos', $this->lastOutput);
     }
 
@@ -121,6 +123,8 @@ final class AgentHooksTest extends TestCase
         $this->assertSame('https://json.schemastore.org/claude-code-settings.json', $settings['$schema']);
         $this->assertSame(['Bash(php artisan:*)'], $settings['permissions']['allow']);
         $this->assertSame('php scripts/generated_guard.php', $settings['hooks']['PreToolUse'][0]['hooks'][0]['command']);
+        $this->assertCount(2, $this->commands('PreToolUse'));
+        $this->assertStringContainsString('larapack:guard --pre', $this->commands('PreToolUse')[1]);
         $this->assertSame(['php scripts/docs_guard.php', '[ ! -f "$CLAUDE_PROJECT_DIR/vendor/bin/builder" ] || php "$CLAUDE_PROJECT_DIR/vendor/bin/builder" larapack:guard --stop'], $this->commands('Stop'));
         $this->assertCount(1, $this->commands('PostToolUse'));
     }
@@ -136,6 +140,7 @@ final class AgentHooksTest extends TestCase
         $this->assertSame($before, file_get_contents($this->settingsFile()));
         $this->assertCount(1, $this->commands('PostToolUse'));
         $this->assertCount(1, $this->commands('Stop'));
+        $this->assertCount(1, $this->commands('PreToolUse'));
         $this->assertStringContainsString('ya presentes', $this->lastOutput);
     }
 
@@ -153,7 +158,7 @@ final class AgentHooksTest extends TestCase
         $result = AgentHooks::installSettings($this->project->path);
 
         $this->assertSame(['PostToolUse'], $result['present']);
-        $this->assertSame(['Stop'], $result['added']);
+        $this->assertSame(['Stop', 'PreToolUse'], $result['added']);
         $this->assertSame(['php artisan larapack:guard'], $this->commands('PostToolUse'));
         $this->assertSame(5, $this->settings()['hooks']['PostToolUse'][0]['hooks'][0]['timeout']);
     }
@@ -299,6 +304,50 @@ final class AgentHooksTest extends TestCase
 
         $this->assertSame(2, $code, $output);
         $this->assertStringContainsString('controller-shape', $output);
+    }
+
+    /**
+     * El hook de antes de la herramienta corre en cada orden de Bash: la shell
+     * sólo despierta a PHP si la entrada puede ser una aprobación, y entonces
+     * el 2 que la impide llega intacto.
+     */
+    public function test_el_hook_previo_filtra_en_la_shell_y_bloquea_la_aprobacion(): void
+    {
+        if (DIRECTORY_SEPARATOR === '\\' || trim((string) shell_exec('command -v bash 2>/dev/null')) === '') {
+            $this->markTestSkipped('Hace falta bash, que es con lo que Claude Code ejecuta los hooks.');
+        }
+
+        $this->runCommand('larapack:skill', ['--hooks' => true]);
+
+        [$command] = $this->commands('PreToolUse');
+        $bash = fn (string $line): string => (string) json_encode(['hook_event_name' => 'PreToolUse', 'tool_name' => 'Bash', 'tool_input' => ['command' => $line], 'cwd' => $this->project->path]);
+        $write = (string) json_encode(['hook_event_name' => 'PreToolUse', 'tool_name' => 'Write', 'tool_input' => ['file_path' => $this->project->path.'/.larapack/hand-rolled.lock', 'content' => '[]'], 'cwd' => $this->project->path]);
+
+        // Sin vendor/bin/builder no hay a quién preguntar: no falla.
+        $this->assertSame([0, ''], $this->hook($command, $bash('php vendor/bin/builder larapack:hand-rolled approve --all')));
+
+        // Un PHP de mentira que falla siempre: si el filtro de la shell lo
+        // llama sin motivo, se nota.
+        mkdir($this->project->path.'/vendor/bin', 0777, true);
+        file_put_contents($this->project->path.'/vendor/bin/builder', "<?php\nfwrite(STDERR, 'no debía llamarse');\nexit(1);\n");
+
+        $this->assertSame([0, ''], $this->hook($command, $bash('git status && php vendor/bin/builder larapack:verify')));
+
+        copy(dirname(__DIR__, 2).'/builder', $this->project->path.'/vendor/bin/builder');
+        file_put_contents($this->project->path.'/vendor/bin/builder', str_replace(
+            '__DIR__',
+            var_export(dirname(__DIR__, 2), true),
+            (string) file_get_contents($this->project->path.'/vendor/bin/builder')
+        ));
+
+        foreach ([$bash('php vendor/bin/builder larapack:hand-rolled approve --all'), $write] as $payload) {
+            [$code, $output] = $this->hook($command, $payload);
+
+            $this->assertSame(2, $code, $output);
+            $this->assertStringContainsString('Sólo el dueño del proyecto aprueba excepciones', $output);
+        }
+
+        $this->assertSame([0, ''], $this->hook($command, $bash('php vendor/bin/builder larapack:hand-rolled list')));
     }
 
     /**

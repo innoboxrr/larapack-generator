@@ -31,6 +31,20 @@ final class Guard
         .'operación del modelo.';
 
     /**
+     * Lo que se dice cuando un agente toca la aprobación de una excepción.
+     */
+    public const LOCK_RULE = 'Sólo el dueño del proyecto aprueba excepciones #[HandRolled]: él corre '
+        .'`larapack:hand-rolled approve`, revisa '.HandRolledLock::PATH.' y lo comitea. Tú no editas ese '
+        .'archivo ni corres `approve` o `revoke`. Si una acción de verdad no puede ser '
+        .'`return $request->handle();`, dilo en tu respuesta y deja que el dueño decida.';
+
+    /**
+     * Los separadores de órdenes de la shell, y los de redirección: lo que
+     * los sigue ya no son argumentos de la orden anterior.
+     */
+    private const SHELL_SEPARATORS = [';', '&', '|', "\n", '(', ')', '`', '<', '>'];
+
+    /**
      * Las partes de un proyecto Laravel que son arquitectura, aunque el
      * archivo lo haya escrito alguien a mano: es justo ahí donde se pierde la
      * guía, porque el generador no tuvo nada que ver.
@@ -101,6 +115,188 @@ final class Guard
         }
 
         return array_values(array_unique($files));
+    }
+
+    /**
+     * Los archivos tocados que son el candado de las excepciones, de
+     * cualquier proyecto. Sin distinguir mayúsculas: en Windows y macOS
+     * `Hand-Rolled.lock` es el mismo archivo.
+     *
+     * @param  array<string, mixed>  $payload
+     * @return array<int, string>
+     */
+    public static function touchedLocks(array $payload): array
+    {
+        return array_values(array_filter(
+            self::touchedFiles($payload),
+            fn (string $file): bool => preg_match('#(^|/)\.larapack/hand-rolled\.lock$#i', $file) === 1
+        ));
+    }
+
+    /**
+     * Si la orden de Bash ejecuta `larapack:hand-rolled approve` o `revoke`.
+     *
+     * Se lee como la lee la shell, sin ejecutar nada: se parte en órdenes por
+     * sus separadores, respetando las comillas, y en cada una se busca el
+     * comando —también por el alias `make:` del binario y por las abreviaturas
+     * que Symfony admite, como `larapack:hand`— seguido de `approve` o
+     * `revoke` como palabra entera. Lo que la shell va a ejecutar como orden
+     * —el argumento de `-c` en `bash -c "…"`, lo que sigue a `eval`— se lee
+     * también como orden; un texto entre comillas cualquiera (`grep "…"`), no.
+     *
+     * No busca el subcomando en una posición concreta: una opción con su
+     * valor delante (`--root packages/x`) lo movería. Cualquier `approve` o
+     * `revoke` detrás del comando cuenta; las únicas órdenes que eso bloquea
+     * de más —`list approve`— fallan igual al ejecutarse.
+     *
+     * @param  array<string, mixed>  $payload
+     */
+    public static function approvesHandRolled(array $payload): bool
+    {
+        $input = is_array($payload['tool_input'] ?? null) ? $payload['tool_input'] : [];
+        $command = $input['command'] ?? null;
+
+        return is_string($command) && self::shellApproves($command, 0);
+    }
+
+    private static function shellApproves(string $command, int $depth): bool
+    {
+        foreach (self::shellCommands($command) as $words) {
+            $invoked = false;
+            $eval = ($words[0] ?? null) === 'eval';
+
+            foreach ($words as $index => $word) {
+                if ($invoked && in_array($word, ['approve', 'revoke'], true)) {
+                    return true;
+                }
+
+                $invoked = $invoked || self::namesHandRolled($word);
+                $nested = $eval || preg_match('/^-[a-z]*c$/i', $words[$index - 1] ?? '') === 1;
+
+                if ($nested && $depth < 3 && self::shellApproves($word, $depth + 1)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Si la palabra es un nombre con el que Symfony encontraría
+     * `larapack:hand-rolled`: el espacio, prefijo de `larapack` o del alias
+     * `make`; el nombre, prefijo de `hand-rolled`.
+     */
+    private static function namesHandRolled(string $word): bool
+    {
+        if (preg_match('/^([a-z]+):([a-z-]+)$/i', $word, $parts) !== 1) {
+            return false;
+        }
+
+        $namespace = strtolower($parts[1]);
+        $name = strtolower($parts[2]);
+
+        return (str_starts_with('larapack', $namespace) || str_starts_with('make', $namespace))
+            && str_starts_with('hand-rolled', $name);
+    }
+
+    /**
+     * Las órdenes de una línea de shell, cada una como sus palabras ya sin
+     * comillas.
+     *
+     * @return list<list<string>>
+     */
+    private static function shellCommands(string $line): array
+    {
+        $commands = [];
+        $words = [];
+        $word = null;
+        $quote = null;
+        $length = strlen($line);
+
+        for ($i = 0; $i < $length; $i++) {
+            $char = $line[$i];
+
+            if ($quote === "'") {
+                $quote = $char === "'" ? null : $quote;
+                $word .= $char === "'" ? '' : $char;
+
+                continue;
+            }
+
+            if ($char === '\\' && $i + 1 < $length && ($quote === null || in_array($line[$i + 1], ['"', '\\', '$', '`'], true))) {
+                $word .= $line[++$i];
+
+                continue;
+            }
+
+            if ($quote === '"') {
+                $quote = $char === '"' ? null : $quote;
+                $word .= $char === '"' ? '' : $char;
+
+                continue;
+            }
+
+            if ($char === "'" || $char === '"') {
+                $quote = $char;
+                $word ??= '';
+
+                continue;
+            }
+
+            if (ctype_space($char) || in_array($char, self::SHELL_SEPARATORS, true)) {
+                if ($word !== null) {
+                    $words[] = $word;
+                    $word = null;
+                }
+
+                if ($char !== ' ' && $char !== "\t" && $words !== []) {
+                    $commands[] = $words;
+                    $words = [];
+                }
+
+                continue;
+            }
+
+            $word .= $char;
+        }
+
+        if ($word !== null) {
+            $words[] = $word;
+        }
+
+        if ($words !== []) {
+            $commands[] = $words;
+        }
+
+        return $commands;
+    }
+
+    /**
+     * El mensaje de bloqueo por tocar la aprobación de una excepción.
+     *
+     * @param  array<int, string>  $locks  los candados tocados
+     * @param  bool  $done  si ya ocurrió (PostToolUse): hay que deshacerlo
+     */
+    public static function lockMessage(array $locks, bool $command, bool $done): string
+    {
+        $lines = [];
+
+        foreach ($locks as $lock) {
+            $lines[] = "LaraPack: {$lock} es la aprobación del dueño del proyecto, no un archivo que se edite.";
+        }
+
+        if ($command) {
+            $lines[] = 'LaraPack: `larapack:hand-rolled approve` y `revoke` los corre el dueño del proyecto, no un agente.';
+        }
+
+        $lines[] = self::LOCK_RULE;
+
+        if ($done) {
+            $lines[] = 'Ya está hecho: deshazlo (git checkout -- '.HandRolledLock::PATH.', o como estaba) antes de seguir.';
+        }
+
+        return implode("\n", $lines);
     }
 
     /**
