@@ -1,6 +1,6 @@
 {
-    ".larapack/manifest.json": "ed078536b39b74af2faabf3c925d15e1edec22761275032f2e2325b24fa1614a",
-    "app/Exports/PostsExports.php": "bf489f5779bf38ccb99888047baaf7858539076db2246cc5e134df86e877f364",
+    ".larapack/manifest.json": "e2b9077f7ed53bd47088350ce2ab0a1b293749c6b3a6c911380a85ff70249176",
+    "app/Exports/PostsExports.php": "bb89ed23dc4cc4ce457201dd4b5dd79ef9274ad3262a8d50e959bc7b7d95540a",
     "app/Http/Controllers/PostController.php": "ef7dcefe0c5c179fafbcd576b8ccc31a6a629b8285bc5301b8fe8fcb3362fd6f",
     "app/Http/Events/Post/Events/CreateEvent.php": "b531b60a72d788e63e33524c450dc6ab634ee4bfbd6a4294cac0f8f75bc34e2b",
     "app/Http/Events/Post/Events/DeleteEvent.php": "59d89eb6b3792dc80df6235b71fa9d03e1ed17bfb114f4c68486dd785829acf4",

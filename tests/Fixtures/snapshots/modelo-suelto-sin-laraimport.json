@@ -1,5 +1,5 @@
 {
-    ".larapack/manifest.json": "69361ac89e534b073a982d4a50f988b96c802d9f9712bddd5941e3a07e6e9d96",
+    ".larapack/manifest.json": "483bbf2df8150b259844820ee2a382ffc17a43d6fe681de297cdadc860f36c74",
     "composer.json": "dded2aaddb25ff97b89a8b0e047bfd8284706098a414f9124356b235318c7edb",
     "database/factories/ProductFactory.php": "0806ba1ba14cfe478dd6233d4d816f22c269cced3194a01cb9c2ffc95f9350b9",
     "database/migrations/TIMESTAMP_create_products_table.php": "f7a5e2cfbcaede43542bce452619a19f9a96e6d62d7c15f791f51618de0e4972",
@@ -53,7 +53,7 @@
     "resources/vue/src/theme.js": "56800ae3e52edaef8b3ac13350f2070a028cd0ffd06037e1a2f9e75196589cda",
     "resources/vue/vite.config.js": "ec70552bdbc59944bc071519e00e7fdfc53d79dec3fc11049dfd847205e017cc",
     "routes/api/models/product.php": "1ece240840fca517b30f30b2976b954b5bc942435873a1d26e79540a98d13bf1",
-    "src/Exports/ProductsExports.php": "e6307ad2bb7f50b90ccf1bfa43505f4a2716856b14e1635aeb1b71311df97b35",
+    "src/Exports/ProductsExports.php": "f5eceab497724260ddb284856a8007cb1d7c37f870711ef1a8d2e4280bc5b5a5",
     "src/Http/Controllers/Controller.php": "ed67648b2451524f869153325d6673e242647f581986a9e75d9dbe1b7c5b7eda",
     "src/Http/Controllers/ProductController.php": "79d8567385b8911e86b40458f7ef68863361fd6fd9e3d34a71a717b065a63d40",
     "src/Http/Events/Product/Events/CreateEvent.php": "dcfe2b0e21111f971a236d59261939c3feebff0a058fd0e8a62da7563edce2ea",
