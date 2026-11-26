@@ -18,8 +18,10 @@ class PascalCaseModelNameResource extends JsonResource
     public function toArray(Request $request): array
     {
 
-        if ($request->has('appends') && is_array($request->get('appends'))) {
-            $this->resource->setAppends($request->get('appends'));
+        // input() y no get(): Request::get() esta deprecado en Laravel 13 y en
+        // Symfony 7.4, y desaparece en Symfony 8, que Laravel 13 ya admite.
+        if ($request->has('appends') && is_array($request->input('appends'))) {
+            $this->resource->setAppends($request->input('appends'));
         }
 
         return parent::toArray($request) + [

@@ -31,9 +31,9 @@
         "innoboxrr-form-core": "^2.8.0",
         "innoboxrr-http-request": "^2.0.0",
         "innoboxrr-i18n": "^1.2.0",
-        "innoboxrr-js-validator": "^2.0.0",
-        "innoboxrr-react-datatable": "^3.1.0",
-        "innoboxrr-react-form-elements": "^3.7.0",
+        "innoboxrr-js-validator": "^2.0.1",
+        "innoboxrr-react-datatable": "^3.1.1",
+        "innoboxrr-react-form-elements": "^3.8.0",
         "innoboxrr-route-resolver": "^2.0.0"
     },
     "devDependencies": {

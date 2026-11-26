@@ -1,9 +1,10 @@
 {
     "$comment": "Fuente de verdad de versiones del ecosistema innoboxrr. Lo ejerce `larapack:audit`. Un paquete que no cumpla esto no debe publicarse.",
     "version": 1,
+    "$comment-php": "matrix es documental: ningun codigo la lee, la matriz real vive en el workflow reutilizable de innoboxrr/.github. Va igual que la CI de este repositorio (8.3, 8.4 y 8.5) para que no mienta.",
     "php": {
         "require": "^8.3",
-        "matrix": ["8.3", "8.4"]
+        "matrix": ["8.3", "8.4", "8.5"]
     },
     "laravel": {
         "illuminate": "^13.0",
@@ -18,10 +19,10 @@
         "engines": ">=20",
         "ci": "22"
     },
-    "$comment-js": "La cadena de pruebas de los paquetes npm. Sigue en Vite 7 y Vitest 3: Vitest 4 con Vite 8.3 no se instala con npm 10, el de Node 20 y 22 en la CI. El modulo generado ya pide Vite 8, el de Laravel 13, porque no instala Vitest.",
+    "$comment-js": "La cadena de pruebas de los paquetes npm. Vite 8 y Vitest 5: el bloqueo que la tenia en Vite 7 y Vitest 3 (Vitest 4 con Vite 8.3 no se instalaba con npm 10) ya no existe; vite 8.4 + vitest 5.1 + plugin-vue 6 / plugin-react 6 instalan limpio con el npm 10 de Node 22 y la suite corre. Es la misma major de Vite que pide el modulo generado y la de Laravel 13. Vitest 5 ya no corre en Node 20 (pide ^22.12 || ^24 || >=26; Node 20 salio de soporte en abril de 2026): la CI de los paquetes npm debe probar en 22 y 24. Ojo: subir esto hace que `larapack:audit` marque como error a todo paquete npm que siga en vite ^7 o vitest ^3.",
     "js": {
-        "vite": "^7.1.0",
-        "vitest": "^3.0.0",
+        "vite": "^8.0.0",
+        "vitest": "^5.0.0",
         "vue": "^3.5.0",
         "react": "^19.0.0"
     },
@@ -34,14 +35,14 @@
     "$comment-internalNpm": "Las versiones que el modulo generado declara. Viven aqui para que no se desfasen en silencio dentro de los stubs: hay un test que compara ambos.",
     "internalNpm": {
         "innoboxrr-form-core": "^2.8.0",
-        "innoboxrr-form-elements": "^6.7.0",
-        "innoboxrr-react-form-elements": "^3.7.0",
-        "innoboxrr-vue-datatable": "^3.1.0",
-        "innoboxrr-react-datatable": "^3.1.0",
+        "innoboxrr-form-elements": "^6.8.0",
+        "innoboxrr-react-form-elements": "^3.8.0",
+        "innoboxrr-vue-datatable": "^3.1.1",
+        "innoboxrr-react-datatable": "^3.1.1",
         "innoboxrr-http-request": "^2.0.0",
         "innoboxrr-i18n": "^1.2.0",
         "innoboxrr-locale-generator": "^2.0.0",
-        "innoboxrr-js-validator": "^2.0.0",
+        "innoboxrr-js-validator": "^2.0.1",
         "innoboxrr-route-resolver": "^2.0.0"
     },
     "$comment-generated": "Lo que usa el codigo generado y no es de la linea base. larapack:new lo declara desde aqui, y la suite EndToEnd lo instala para probar lo generado.",
