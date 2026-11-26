@@ -24,12 +24,21 @@ use SplFileInfo;
  *
  * Sigue siendo una comprobación determinista, no una opinión sobre "cuánta
  * lógica es demasiada": una acción es `return $var->handle(...);`, con `$var`
- * un parámetro tipado con un FormRequest propio, o no lo es. Lo que de verdad
- * no puede serlo se declara con #[HandRolled('razón')] y se lista.
+ * un parámetro tipado con un FormRequest propio, o no lo es. Lo mismo vale
+ * para las puertas laterales por las que el router o el framework ejecutan
+ * código del controlador sin pasar por una acción: __call, el constructor y
+ * los middleware en closure. Y, fuera de los controladores, para los closures
+ * con cuerpo de routes/*.php, que son acciones sin controlador.
+ *
+ * Lo que de verdad no puede seguir la forma se declara con
+ * #[HandRolled('razón')] y se lista como aviso en cada ejecución: con
+ * --strict falla. Es una excepción que aprueba el dueño del proyecto, y por
+ * eso ningún mensaje la ofrece como arreglo.
  *
  * @phpstan-import-type ClassOutline from PhpOutline
  * @phpstan-import-type MethodOutline from PhpOutline
  * @phpstan-import-type AttributeOutline from PhpOutline
+ * @phpstan-import-type ClosureOutline from PhpOutline
  */
 final class ControllerShape
 {
@@ -41,7 +50,9 @@ final class ControllerShape
 
     public const HAND_ROLLED = 'hand-rolled';
 
-    public const CHECKS = [self::SHAPE, self::REQUEST_HANDLE, self::CONCERN, self::HAND_ROLLED];
+    public const ROUTE_CLOSURE = 'route-closure';
+
+    public const CHECKS = [self::SHAPE, self::REQUEST_HANDLE, self::CONCERN, self::HAND_ROLLED, self::ROUTE_CLOSURE];
 
     /**
      * Tipar la acción con estas clases es lo que deja la validación y la
@@ -60,7 +71,25 @@ final class ControllerShape
 
     private const SKIPPED_DIRECTORIES = ['vendor', 'node_modules'];
 
+    /**
+     * Los métodos del router que registran una ruta con su acción.
+     */
+    private const ROUTE_METHODS = ['get', 'post', 'put', 'patch', 'delete', 'options', 'any', 'match', 'fallback', 'addroute'];
+
+    /**
+     * Lo que en una expresión ejecuta código que no se ve: un closure, un
+     * include, eval, exit o una orden de shell.
+     */
+    private const OPAQUE_TOKENS = [T_FUNCTION, T_FN, T_INCLUDE, T_INCLUDE_ONCE, T_REQUIRE, T_REQUIRE_ONCE, T_EVAL, T_EXIT, '`'];
+
     private string $root;
+
+    /**
+     * La raíz y la de cada paquete local: donde se buscan sus routes/.
+     *
+     * @var list<string>
+     */
+    private array $roots = [];
 
     /**
      * Prefijo PSR-4 => directorios absolutos, de la raíz y de cada paquete
@@ -134,7 +163,23 @@ final class ControllerShape
                 }
 
                 foreach ($class['methods'] as $method) {
-                    if (! $this->isAction($method)) {
+                    $side = $this->sideEntrance($method);
+
+                    if ($side !== null) {
+                        $where = "{$class['name']}::{$method['name']}()";
+
+                        if (! $this->handRolled($method['attributes'], $where, $relative, $findings) && ! $excused) {
+                            $findings[] = $this->finding(Verifier::ERROR, self::SHAPE, $relative, "{$where} (línea {$method['line']}) {$side}");
+                        }
+
+                        continue;
+                    }
+
+                    // El router nunca llama a una clase abstracta: sus métodos
+                    // públicos se comprueban en la concreta si los redeclara,
+                    // y los heredados ya no se cuentan. Su constructor y su
+                    // __call, que sí heredan todas, se acaban de mirar.
+                    if ($class['abstract'] || ! $this->isAction($method)) {
                         continue;
                     }
 
@@ -157,7 +202,233 @@ final class ControllerShape
             $this->checkRequestHandles($request, $where, $relative, $findings);
         }
 
+        $this->checkRouteClosures($findings);
+
         return $findings;
+    }
+
+    /**
+     * Las puertas por las que se ejecuta código del controlador sin pasar por
+     * una acción. Devuelve por qué no puede estar ahí, o null si no lo es o
+     * está bien.
+     *
+     * - __call: callAction() del router lo alcanza con cualquier nombre de
+     *   acción que no exista. Es una acción sin forma, invisible al leer la
+     *   clase. Siempre es error.
+     * - El constructor corre antes del middleware de la ruta y en todas las
+     *   acciones. Se admite lo que hace un constructor de controlador
+     *   legítimo: asignar propiedades sin llamar a nada (lo inyectado, un
+     *   literal, un `new`), `parent::__construct(...)` y
+     *   `$this->middleware(...)` con su `->only()`/`->except()` (Laravel 10 y
+     *   anteriores). Cualquier otra sentencia —una llamada, un if, leer
+     *   auth()— es lógica que ninguna acción muestra.
+     * - El middleware() estático de HasMiddleware puede registrar un closure
+     *   con cuerpo: lógica en el controlador por la puerta de atrás.
+     *
+     * @param  MethodOutline  $method
+     */
+    private function sideEntrance(array $method): ?string
+    {
+        $name = strtolower($method['name']);
+        $body = $method['body'] ?? [];
+
+        if ($name === '__call') {
+            return 'es __call: el router llega a él con cualquier nombre de acción que no exista (callAction), así que es una acción que no se ve al leer el controlador. '
+                .'Quítalo y declara cada acción como un método público que haga `return $request->handle();`.';
+        }
+
+        if ($name === '__construct') {
+            foreach (PhpOutline::splitTopLevel($body, ';') as $statement) {
+                if (! $this->isConstructorWiring($statement)) {
+                    return "hace algo más que asignar propiedades, llamar a parent::__construct() o registrar middleware (línea {$statement[0][2]}): "
+                        .'el constructor corre en cada acción y antes del middleware de la ruta, y lo que haga ahí es lógica que ninguna acción muestra. '
+                        .'Inyecta las dependencias como propiedades promovidas y deja el trabajo en el handle() de la request.';
+                }
+            }
+
+            return null;
+        }
+
+        if ($name === 'middleware' && $method['static'] && array_intersect(array_column($body, 0), [T_FUNCTION, T_FN]) !== []) {
+            return 'registra un middleware en un closure: es lógica en el controlador que no se ve al leer sus acciones. '
+                .'Hazlo una clase de middleware y regístrala por su nombre o su alias.';
+        }
+
+        return null;
+    }
+
+    /**
+     * @param  list<array{0: int|string, 1: string, 2: int}>  $statement
+     */
+    private function isConstructorWiring(array $statement): bool
+    {
+        if (array_intersect(array_column($statement, 0), self::OPAQUE_TOKENS) !== []) {
+            return false;
+        }
+
+        // $this->propiedad = <expresión sin llamadas>
+        if (count($statement) > 4
+            && $statement[0][1] === '$this'
+            && $statement[1][0] === T_OBJECT_OPERATOR
+            && $statement[2][0] === T_STRING
+            && $statement[3][0] === '='
+        ) {
+            return ! $this->callsSomething(array_slice($statement, 4));
+        }
+
+        // parent::__construct(...)
+        if (count($statement) > 3
+            && strtolower($statement[0][1]) === 'parent'
+            && $statement[1][0] === T_DOUBLE_COLON
+            && strtolower($statement[2][1]) === '__construct'
+            && $statement[3][0] === '('
+        ) {
+            return $this->onlyCalls(array_slice($statement, 3), []);
+        }
+
+        // $this->middleware(...)->only(...)->except(...)
+        if (count($statement) > 3
+            && $statement[0][1] === '$this'
+            && $statement[1][0] === T_OBJECT_OPERATOR
+            && strtolower($statement[2][1]) === 'middleware'
+            && $statement[3][0] === '('
+        ) {
+            return $this->onlyCalls(array_slice($statement, 3), ['only', 'except']);
+        }
+
+        return false;
+    }
+
+    /**
+     * Que lo que queda sea `(...)` seguido sólo de `->nombre(...)` con
+     * nombres de esta lista.
+     *
+     * @param  list<array{0: int|string, 1: string, 2: int}>  $tokens
+     * @param  list<string>  $chain
+     */
+    private function onlyCalls(array $tokens, array $chain): bool
+    {
+        $depth = 0;
+        $count = count($tokens);
+
+        for ($index = 0; $index < $count; $index++) {
+            $token = $tokens[$index];
+
+            if (in_array($token[0], ['(', '[', '{'], true)) {
+                $depth++;
+            } elseif (in_array($token[0], [')', ']', '}'], true)) {
+                $depth--;
+            } elseif ($depth === 0) {
+                if ($token[0] !== T_OBJECT_OPERATOR
+                    || ! in_array(strtolower($tokens[$index + 1][1] ?? ''), $chain, true)
+                    || ($tokens[$index + 2][0] ?? null) !== '('
+                ) {
+                    return false;
+                }
+
+                $index++;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Si la expresión llama a algo. `new Clase(...)` y los constructos que no
+     * ejecutan nada (array(), isset(), empty()) no cuentan.
+     *
+     * @param  list<array{0: int|string, 1: string, 2: int}>  $tokens
+     */
+    private function callsSomething(array $tokens): bool
+    {
+        foreach ($tokens as $index => $token) {
+            if ($token[0] !== '(' || $index === 0) {
+                continue;
+            }
+
+            $before = $tokens[$index - 1][0];
+            $named = in_array($before, [T_STRING, T_NAME_QUALIFIED, T_NAME_FULLY_QUALIFIED, T_NAME_RELATIVE, T_STATIC], true);
+
+            if ($named && ($tokens[$index - 2][0] ?? null) === T_NEW) {
+                continue;
+            }
+
+            if ($named || in_array($before, [T_VARIABLE, ')', ']', '}'], true)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Un closure con cuerpo en routes/*.php es una acción sin controlador:
+     * nada de lo que `verify` comprueba en los controladores lo alcanza. Es
+     * aviso y no error porque es el patrón de la documentación de Laravel y
+     * aparece en proyectos que nunca lo usaron como atajo; con --strict falla.
+     *
+     * No se cuenta el que sólo pinta una vista —`return view('welcome');`, el
+     * routes/web.php con el que nace toda aplicación—: equivale a
+     * Route::view() y no tiene dónde esconder lógica. Tampoco los closures de
+     * group(), que agrupan rutas y no son una acción.
+     *
+     * @param  list<array<string, mixed>>  $findings
+     */
+    private function checkRouteClosures(array &$findings): void
+    {
+        foreach ($this->routeFiles() as $file) {
+            foreach (PhpOutline::ofFile($file)->closuresPassedTo(self::ROUTE_METHODS) as $closure) {
+                if ($this->onlyRendersAView($closure)) {
+                    continue;
+                }
+
+                $findings[] = $this->finding(Verifier::WARNING, self::ROUTE_CLOSURE, $this->relative($file),
+                    "La ruta de la línea {$closure['line']} lleva su acción en un closure ({$closure['call']}()): es una acción sin controlador, y nada de lo que verify comprueba en los controladores la alcanza. "
+                    .'Llévala a un controlador cuya acción sea `return $request->handle();` con un FormRequest propio (o usa Route::view() si sólo pinta una vista).');
+            }
+        }
+    }
+
+    /**
+     * @param  ClosureOutline  $closure
+     */
+    private function onlyRendersAView(array $closure): bool
+    {
+        $body = $closure['body'];
+
+        if (! $closure['arrow']) {
+            if (($body[0][0] ?? null) !== T_RETURN || ($body[count($body) - 1][0] ?? null) !== ';') {
+                return false;
+            }
+
+            $body = array_slice($body, 1, -1);
+        }
+
+        return $closure['params'] === []
+            && count($body) === 4
+            && $body[0][0] === T_STRING && strtolower($body[0][1]) === 'view'
+            && $body[1][0] === '('
+            && $body[2][0] === T_CONSTANT_ENCAPSED_STRING
+            && $body[3][0] === ')';
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function routeFiles(): array
+    {
+        $files = [];
+
+        foreach ($this->roots as $root) {
+            if (is_dir($root.'/routes')) {
+                $files = [...$files, ...$this->phpFiles($root.'/routes')];
+            }
+        }
+
+        $files = array_values($files);
+        sort($files);
+
+        return $files;
     }
 
     /**
@@ -297,10 +568,15 @@ final class ControllerShape
         return "{$where} (línea {$line}) no delega: ".implode(', ', $reasons).'. '.$this->remedy();
     }
 
+    /**
+     * El arreglo es la forma. #[HandRolled] no se ofrece como salida: un
+     * agente que repite `verify` hasta verlo verde tomaría el atajo de una
+     * línea. Se nombra sólo para decir que no es suyo decidirlo.
+     */
     private function remedy(): string
     {
         return 'La acción es `return $request->handle();` con un FormRequest propio: authorize() autoriza, rules() valida y handle() hace el trabajo (o lo delega en la operación del modelo o en un soporte). '
-            .'Si de verdad no puede serlo —un webhook firmado, el canje de un token OAuth—, márcala con #[\\'.HandRolled::class."('razón')].";
+            .'Marcarla como escrita a mano (#[HandRolled]) no es un arreglo: es una excepción que sólo aprueba el dueño del proyecto, y verify la sigue listando como aviso.';
     }
 
     /**
@@ -446,15 +722,29 @@ final class ControllerShape
         return null;
     }
 
+    /**
+     * Si la clase cae bajo un prefijo PSR-4 del proyecto. El prefijo vacío no
+     * cuenta: es un directorio de respaldo para cualquier nombre, y no
+     * encontrar ahí una clase no dice que no exista.
+     */
     private function ownedByProject(string $class): bool
     {
         foreach (array_keys($this->autoload) as $prefix) {
-            if (str_starts_with($class, $prefix)) {
+            if ($prefix !== '' && self::hasPrefix($class, (string) $prefix)) {
                 return true;
             }
         }
 
         return false;
+    }
+
+    /**
+     * PHP no distingue mayúsculas en los nombres de clase: una request
+     * importada como `app\Http\...` es la misma.
+     */
+    private static function hasPrefix(string $class, string $prefix): bool
+    {
+        return strncasecmp($class, $prefix, strlen($prefix)) === 0;
     }
 
     private function locate(string $class): ?string
@@ -465,14 +755,18 @@ final class ControllerShape
         usort($prefixes, fn (string $a, string $b): int => strlen($b) <=> strlen($a));
 
         foreach ($prefixes as $prefix) {
-            if ($prefix !== '' && ! str_starts_with($class, $prefix)) {
+            $prefix = (string) $prefix;
+
+            if (! self::hasPrefix($class, $prefix)) {
                 continue;
             }
 
-            foreach ($this->autoload[$prefix] as $directory) {
-                $file = $directory.'/'.str_replace('\\', '/', substr($class, strlen($prefix))).'.php';
+            $path = str_replace('\\', '/', substr($class, strlen($prefix))).'.php';
 
-                if (is_file($file)) {
+            foreach ($this->autoload[$prefix] as $directory) {
+                $file = is_file($directory.'/'.$path) ? $directory.'/'.$path : self::findIgnoringCase($directory, $path);
+
+                if ($file !== null) {
                     return $file;
                 }
             }
@@ -482,9 +776,40 @@ final class ControllerShape
     }
 
     /**
+     * El archivo de un nombre escrito con otras mayúsculas que su ruta. Sólo
+     * se busca cuando la ruta exacta no existe.
+     */
+    private static function findIgnoringCase(string $directory, string $path): ?string
+    {
+        foreach (explode('/', $path) as $segment) {
+            $match = null;
+
+            foreach (is_dir($directory) ? (scandir($directory) ?: []) : [] as $entry) {
+                if (strcasecmp($entry, $segment) === 0) {
+                    $match = $entry;
+
+                    break;
+                }
+            }
+
+            if ($match === null) {
+                return null;
+            }
+
+            $directory .= '/'.$match;
+        }
+
+        return is_file($directory) ? $directory : null;
+    }
+
+    /**
      * Si la clase o el método llevan #[HandRolled]: true si excusa (tiene
-     * razón, y se lista como info), false si no lo lleva o no tiene razón (y
+     * razón, y se lista como aviso), false si no lo lleva o no tiene razón (y
      * entonces es error).
+     *
+     * Con razón es aviso y no información: así --strict falla mientras la
+     * excepción exista, y quien la añade no puede dejar el proyecto en verde
+     * con una línea sin que nadie lo apruebe.
      *
      * @param  list<AttributeOutline>  $attributes
      * @param  list<array<string, mixed>>  $findings
@@ -496,7 +821,7 @@ final class ControllerShape
                 continue;
             }
 
-            $reason = trim((string) PhpOutline::stringArgument($attribute['args'], 0, 'reason'));
+            $reason = self::sanitise((string) PhpOutline::stringArgument($attribute['args'], 0, 'reason'));
 
             if ($reason === '') {
                 $findings[] = $this->finding(Verifier::ERROR, self::HAND_ROLLED, $file,
@@ -505,12 +830,25 @@ final class ControllerShape
                 return false;
             }
 
-            $findings[] = $this->finding(Verifier::INFO, self::HAND_ROLLED, $file, "{$what} (línea {$attribute['line']}) escrito a mano a propósito: {$reason}");
+            $findings[] = $this->finding(Verifier::WARNING, self::HAND_ROLLED, $file,
+                "{$what} (línea {$attribute['line']}) escrito a mano a propósito: «{$reason}». Es una excepción al patrón que aprueba el dueño del proyecto; si no la aprobó, devuelve la acción a `return \$request->handle();`.");
 
             return true;
         }
 
         return false;
+    }
+
+    /**
+     * La razón la escribe el proyecto que se audita: sin caracteres de
+     * control ni de formato invisibles (secuencias de escape del terminal,
+     * cambios de dirección del texto), en una línea.
+     */
+    private static function sanitise(string $reason): string
+    {
+        $clean = preg_replace(['/[\p{Cc}\p{Cf}]+/u', '/\s+/u'], ' ', mb_scrub($reason, 'UTF-8'));
+
+        return trim((string) $clean);
     }
 
     /**
@@ -543,9 +881,11 @@ final class ControllerShape
             }
 
             $seen[$real] = true;
+            $this->roots[] = str_replace('\\', '/', $real);
             $psr4 = (array) ($this->composer($real)['autoload']['psr-4'] ?? []);
+            $declared = $psr4 !== [];
 
-            if ($psr4 === []) {
+            if (! $declared) {
                 $psr4 = ['' => ['app', 'src']];
             }
 
@@ -559,7 +899,10 @@ final class ControllerShape
 
                     $absolute = str_replace('\\', '/', $absolute);
 
-                    if ($prefix !== '') {
+                    // Un prefijo vacío declarado (`"": "src/"`) es un respaldo
+                    // donde buscar. El supuesto, sin composer.json, no: no se
+                    // sabe qué espacio de nombres corresponde a app/.
+                    if ($prefix !== '' || $declared) {
                         $this->autoload[(string) $prefix][] = $absolute;
                     }
 
@@ -579,24 +922,41 @@ final class ControllerShape
         $files = [];
 
         foreach ($this->sources as $source) {
-            $iterator = new RecursiveIteratorIterator(new RecursiveCallbackFilterIterator(
-                new RecursiveDirectoryIterator($source, FilesystemIterator::SKIP_DOTS),
-                fn (SplFileInfo $file): bool => ! $file->isDir()
-                    || ! (in_array($file->getFilename(), self::SKIPPED_DIRECTORIES, true) || str_starts_with($file->getFilename(), '.'))
-            ));
-
-            foreach ($iterator as $file) {
-                /** @var SplFileInfo $file */
-                $path = str_replace('\\', '/', $file->getPathname());
-
-                if ($file->getExtension() === 'php' && str_contains(substr($path, strlen($source)), '/Http/Controllers/')) {
-                    $files[(string) ($file->getRealPath() ?: $path)] = $path;
+            foreach ($this->phpFiles($source) as $real => $path) {
+                if (str_contains(substr($path, strlen($source)), '/Http/Controllers/')) {
+                    $files[$real] = $path;
                 }
             }
         }
 
         $files = array_values($files);
         sort($files);
+
+        return $files;
+    }
+
+    /**
+     * Los .php de un directorio, sin vendor, node_modules ni ocultos: ruta
+     * real => ruta tal como se recorrió.
+     *
+     * @return array<string, string>
+     */
+    private function phpFiles(string $directory): array
+    {
+        $files = [];
+        $iterator = new RecursiveIteratorIterator(new RecursiveCallbackFilterIterator(
+            new RecursiveDirectoryIterator($directory, FilesystemIterator::SKIP_DOTS),
+            fn (SplFileInfo $file): bool => ! $file->isDir()
+                || ! (in_array($file->getFilename(), self::SKIPPED_DIRECTORIES, true) || str_starts_with($file->getFilename(), '.'))
+        ));
+
+        foreach ($iterator as $file) {
+            /** @var SplFileInfo $file */
+            if ($file->getExtension() === 'php') {
+                $path = str_replace('\\', '/', $file->getPathname());
+                $files[(string) ($file->getRealPath() ?: $path)] = $path;
+            }
+        }
 
         return $files;
     }
