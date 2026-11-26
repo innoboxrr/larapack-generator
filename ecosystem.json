@@ -1,9 +1,10 @@
 {
     "$comment": "Fuente de verdad de versiones del ecosistema innoboxrr. Lo ejerce `larapack:audit`. Un paquete que no cumpla esto no debe publicarse.",
     "version": 1,
+    "$comment-php": "matrix es documental: ningun codigo la lee, la matriz real vive en el workflow reutilizable de innoboxrr/.github. Va igual que la CI de este repositorio (8.3, 8.4 y 8.5) para que no mienta.",
     "php": {
         "require": "^8.3",
-        "matrix": ["8.3", "8.4"]
+        "matrix": ["8.3", "8.4", "8.5"]
     },
     "laravel": {
         "illuminate": "^13.0",
