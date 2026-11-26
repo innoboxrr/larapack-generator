@@ -76,6 +76,9 @@ final class GuardHandRolledTest extends TestCase
             '(php artisan larapack:hand-rolled approve --all)',
             'eval "php artisan larapack:hand-rolled approve --all"',
             "bash -lc 'php artisan larapack:hand-rolled revoke X'",
+            "bash <<EOF\nphp artisan larapack:hand-rolled approve --all\nEOF",
+            "/bin/sh > log <<'X'\ncd app\nphp artisan larapack:hand-rolled revoke Y\nX\necho ok",
+            "cat > notas.md <<EOF\napprove\nEOF\nphp artisan larapack:hand-rolled approve --all",
         ];
     }
 
@@ -96,6 +99,10 @@ final class GuardHandRolledTest extends TestCase
             'php artisan larapack:handle approve',
             'echo larapack:hand-rolled',
             'echo "php artisan larapack:hand-rolled approve --all"',
+            // Documentación escrita con un heredoc: es texto, no una orden.
+            "cat > docs/aprobar.md <<'EOF'\nphp artisan larapack:hand-rolled approve --all\nEOF\ngit add docs",
+            "cat <<-EOF > x\n\tphp artisan larapack:hand-rolled revoke X\n\tEOF\n",
+            "bash <<EOF\ngit status\nEOF",
         ];
     }
 

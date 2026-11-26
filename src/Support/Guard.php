@@ -45,6 +45,11 @@ final class Guard
     private const SHELL_SEPARATORS = [';', '&', '|', "\n", '(', ')', '`', '<', '>'];
 
     /**
+     * Las órdenes que ejecutan como órdenes lo que reciben por la entrada.
+     */
+    private const SHELLS = ['bash', 'sh', 'zsh', 'dash', 'ksh'];
+
+    /**
      * Las partes de un proyecto Laravel que son arquitectura, aunque el
      * archivo lo haya escrito alguien a mano: es justo ahí donde se pierde la
      * guía, porque el generador no tuvo nada que ver.
@@ -161,7 +166,17 @@ final class Guard
 
     private static function shellApproves(string $command, int $depth): bool
     {
-        foreach (self::shellCommands($command) as $words) {
+        $scripts = [];
+        $commands = self::shellCommands($command, $scripts);
+
+        // Un heredoc que se le pasa a una shell (`bash <<EOF`) sí son órdenes.
+        foreach ($depth < 3 ? $scripts : [] as $script) {
+            if (self::shellApproves($script, $depth + 1)) {
+                return true;
+            }
+        }
+
+        foreach ($commands as $words) {
             $invoked = false;
             $eval = ($words[0] ?? null) === 'eval';
 
@@ -204,14 +219,25 @@ final class Guard
      * Las órdenes de una línea de shell, cada una como sus palabras ya sin
      * comillas.
      *
+     * El cuerpo de un heredoc no son órdenes: es el texto que recibe la
+     * anterior, y un agente que escribe documentación con `cat <<'EOF'` puede
+     * nombrar `larapack:hand-rolled approve` sin correrlo. Se salta hasta su
+     * delimitador, salvo que lo reciba una shell (`bash <<EOF`): entonces se
+     * devuelve en `$scripts` para leerlo como órdenes.
+     *
+     * @param  list<string>  $scripts
      * @return list<list<string>>
      */
-    private static function shellCommands(string $line): array
+    private static function shellCommands(string $line, array &$scripts = []): array
     {
         $commands = [];
         $words = [];
         $word = null;
         $quote = null;
+        $heredocs = [];
+        // La primera palabra de la orden en curso: las redirecciones no la
+        // terminan, así que en `bash > log <<EOF` sigue siendo `bash`.
+        $head = null;
         $length = strlen($line);
 
         for ($i = 0; $i < $length; $i++) {
@@ -247,12 +273,29 @@ final class Guard
             if (ctype_space($char) || in_array($char, self::SHELL_SEPARATORS, true)) {
                 if ($word !== null) {
                     $words[] = $word;
+                    $head ??= $word;
                     $word = null;
                 }
 
                 if ($char !== ' ' && $char !== "\t" && $words !== []) {
                     $commands[] = $words;
                     $words = [];
+                }
+
+                // `<<` abre un heredoc (`<<<` es otra cosa: una cadena).
+                if ($char === '<' && ($line[$i + 1] ?? '') === '<' && ($line[$i + 2] ?? '') !== '<') {
+                    [$delimiter, $strip, $i] = self::heredocDelimiter($line, $i + 2);
+
+                    if ($delimiter !== null) {
+                        $heredocs[] = [$delimiter, $strip, $head];
+                    }
+                } elseif ($char === "\n" && $heredocs !== []) {
+                    $i = self::skipHeredocs($line, $i + 1, $heredocs, $scripts) - 1;
+                    $heredocs = [];
+                }
+
+                if (! in_array($char, [' ', "\t", '<', '>'], true)) {
+                    $head = null;
                 }
 
                 continue;
@@ -270,6 +313,72 @@ final class Guard
         }
 
         return $commands;
+    }
+
+    /**
+     * El delimitador de un heredoc que empieza en `$position` (justo después
+     * de `<<`), sin comillas, si quita los tabuladores (`<<-`) y la última
+     * posición que ocupa.
+     *
+     * @return array{0: string|null, 1: bool, 2: int}
+     */
+    private static function heredocDelimiter(string $line, int $position): array
+    {
+        $length = strlen($line);
+        $strip = ($line[$position] ?? '') === '-';
+        $position += $strip ? 1 : 0;
+
+        while ($position < $length && ($line[$position] === ' ' || $line[$position] === "\t")) {
+            $position++;
+        }
+
+        $delimiter = '';
+
+        while ($position < $length && ! ctype_space($line[$position]) && ! in_array($line[$position], self::SHELL_SEPARATORS, true)) {
+            $delimiter .= in_array($line[$position], ["'", '"', '\\'], true) ? '' : $line[$position];
+            $position++;
+        }
+
+        return [$delimiter === '' ? null : $delimiter, $strip, $position - 1];
+    }
+
+    /**
+     * Salta los cuerpos de los heredocs abiertos en una línea, que empiezan
+     * en `$start`, y devuelve dónde acaba el último delimitador: el salto de
+     * línea que lo cierra, o el final de la orden. El cuerpo que recibe una
+     * shell se añade a `$scripts`.
+     *
+     * @param  list<array{0: string, 1: bool, 2: string|null}>  $heredocs
+     * @param  list<string>  $scripts
+     */
+    private static function skipHeredocs(string $line, int $start, array $heredocs, array &$scripts): int
+    {
+        $length = strlen($line);
+        $position = $start;
+        $end = $length;
+
+        foreach ($heredocs as [$delimiter, $strip, $head]) {
+            $body = [];
+
+            while ($position <= $length) {
+                $found = strpos($line, "\n", $position);
+                $end = $found === false ? $length : $found;
+                $text = rtrim(substr($line, $position, $end - $position), "\r");
+                $position = $end + 1;
+
+                if (($strip ? ltrim($text, "\t") : $text) === $delimiter) {
+                    break;
+                }
+
+                $body[] = $text;
+            }
+
+            if ($head !== null && in_array(basename(str_replace('\\', '/', $head)), self::SHELLS, true)) {
+                $scripts[] = implode("\n", $body);
+            }
+        }
+
+        return $end;
     }
 
     /**
