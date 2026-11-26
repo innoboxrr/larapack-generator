@@ -252,8 +252,9 @@ PHP;
         [$code, $report] = $this->fix();
 
         $this->assertSame(Command::SUCCESS, $code);
-        $this->assertSame(['fixed' => [], 'skipped' => [], 'unchanged' => 1], $report['checks']['index-managed']);
-        $this->assertSame(['fixed' => [], 'skipped' => [], 'unchanged' => 1], $report['checks']['resource-appends']);
+        $only = fn (array $entry): array => array_intersect_key($entry, array_flip(['fixed', 'skipped', 'unchanged']));
+        $this->assertSame(['fixed' => [], 'skipped' => [], 'unchanged' => 1], $only($report['checks']['index-managed']));
+        $this->assertSame(['fixed' => [], 'skipped' => [], 'unchanged' => 1], $only($report['checks']['resource-appends']));
         $this->assertSame($first, [$this->project->read('app/Http/Requests/Post/IndexRequest.php'), $this->project->read('app/Http/Resources/Models/PostResource.php')]);
     }
 

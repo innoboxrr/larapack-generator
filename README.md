@@ -1162,6 +1162,8 @@ de ello; lo que se genera ahora ya sale protegido. Y las dos se arreglan solas:
 php artisan larapack:fix index-managed resource-appends --dry-run   # el diff de cada archivo
 php artisan larapack:fix index-managed resource-appends             # escribe
 php artisan larapack:fix index-managed --path=packages/school-library --format=json
+php artisan larapack:fix index-managed resource-appends --package=school-library --dry-run
+php artisan larapack:fix index-managed resource-appends --package=app --format=json
 ```
 
 `larapack:fix` hace en cada archivo el mismo cambio, sacado de la plantilla
@@ -1177,8 +1179,42 @@ por lo que escribió; lo que el manifiesto conocía sin editar se vuelve a anota
 Con `--format=json`, un documento con `fixed`, `skipped` y `unchanged` por
 comprobación.
 
+**Sólo toca lo que viene del generador**: reescribe `prepareForValidation()` y
+el bloque `setAppends()` cuando tienen la forma generada; si no, `skipped`. La
+lógica propia que haya alrededor —otros métodos, sentencias propias en
+`prepareForValidation()`, el resto de `toArray()`— no se pierde.
+
+`--path` acota a un subdirectorio de la raíz y `--package` (repetible) a un
+paquete local, por el nombre de su directorio en `packages/` o su nombre de
+Composer, o a `app`: el núcleo, lo que no cuelga de ningún paquete. Las dos se
+combinan, y un paquete que no existe falla con la lista de los que hay.
+
+Además reporta dos cosas **sin arreglarlas**, que no cambian el código de
+salida:
+
+- **`admin_path_missing`** (en `index-managed`): los `ManagedFilter` cuyo
+  `canView()` no tiene camino para el administrador. Con `managed` forzado,
+  `canView()` acota a todos —el `before()` de la política no lo salta— y el
+  administrador vería el listado vacío. Cuenta como camino un `return $query;`
+  en una rama (el cuerpo de la plantilla también: no restringe a nadie) o una
+  llamada reconocible de alcance completo (`unrestricted`, `isUnrestricted`,
+  `viewAny`, `isAdmin`, `can('viewAny', ...)`), también dentro de los soportes
+  del proyecto que `canView()` llama estáticamente. Un ternario
+  `? ... : $query` no cuenta. Los IndexRequest cuyo filtro no se localiza salen
+  en `managed_filter_unresolved`. **Es una heurística de lectura, no una
+  prueba**: el reporte se revisa a mano.
+- **`appendable_proposals`** (en `resource-appends`): por Resource, los
+  accessors que el front pide con `appends` (`appends[]=x`, `appends: [...]`,
+  `params.appends`...) en `resources/` y en el `resources/{react,js,vue}` de
+  cada paquete, con `exists` según el modelo o sus traits declaren el accessor.
+  Lo que no se puede asociar a un Resource sale «sin asociar» con su
+  archivo:línea.
+
 Un `$appendable` vacío deja de añadir lo que pida el cliente. Si la interfaz
 pedía accessors con `appends[]`, decláralos en la lista de cada Resource.
+`appendable_proposals` es el punto de partida, **no la lista**: son propuestas
+sin confirmar, y una lista mal hecha deja de mostrar un dato en pantalla.
+`larapack:fix` nunca las escribe.
 
 **Qué no mira la guardia, a propósito.** Sólo las clases de `Http/Controllers`,
 `Http/Requests` y `Http/Resources`. Un componente de Livewire, un recurso de

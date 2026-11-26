@@ -103,6 +103,17 @@ final class PhpOutline
     }
 
     /**
+     * El nombre completo de una clase tal como se escribió en el archivo, con
+     * sus `use` y su espacio de nombres: lo que el outline hace con los tipos,
+     * para un nombre sacado de un cuerpo (`Post::class`). Con varios espacios
+     * de nombres en el archivo, vale el último.
+     */
+    public function resolveName(string $name): string
+    {
+        return $this->resolve($name);
+    }
+
+    /**
      * El valor de un argumento que es una cadena literal (o varias unidas con
      * `.`), por posición o por nombre. `null` si no está o si es cualquier
      * otra cosa: una constante, una variable, una llamada. Sólo vale lo que se
