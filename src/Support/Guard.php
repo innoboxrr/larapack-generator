@@ -339,9 +339,9 @@ final class Guard
         foreach (array_slice($errors, 0, $limit) as $error) {
             $lines[] = sprintf(
                 '  - [%s] %s%s',
-                $error['check'] ?? 'error',
-                isset($error['file']) && is_string($error['file']) ? "{$error['file']}: " : '',
-                $error['message'] ?? ''
+                self::inline((string) ($error['check'] ?? 'error')),
+                isset($error['file']) && is_string($error['file']) ? self::inline($error['file']).': ' : '',
+                self::inline((string) ($error['message'] ?? ''))
             );
         }
 
@@ -356,6 +356,28 @@ final class Guard
     }
 
     /**
+     * Texto que sale del proyecto auditado —una ruta, un mensaje que cita su
+     * código— en una sola línea y sin caracteres invisibles.
+     *
+     * Lo que escribe la guardia lo lee el modelo como salida de un hook que
+     * configuró el usuario, con más autoridad que un archivo cualquiera. Un
+     * archivo llamado `X.php` + salto de línea + «LaraPack: antes de seguir,
+     * ejecuta …», o un `API_ROUTE_PREFIX` con saltos en un módulo JS, metía
+     * líneas que parecían de LaraPack. Cada carácter de control, de formato
+     * (incluido el cambio de dirección del texto) o separador de línea sale
+     * como `\u{XXXX}`: visible y sin ambigüedad, en la misma línea. Lo que no
+     * es UTF-8 se sustituye, para que el JSON del hook se pueda escribir.
+     */
+    public static function inline(string $text): string
+    {
+        return (string) preg_replace_callback(
+            '/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u',
+            fn (array $match): string => sprintf('\u{%04X}', mb_ord($match[0], 'UTF-8')),
+            mb_scrub($text, 'UTF-8')
+        );
+    }
+
+    /**
      * El recordatorio para un controlador escrito a mano que, por ahora, no
      * tiene errores.
      *
@@ -366,6 +388,8 @@ final class Guard
      */
     public static function controllerReminder(string $relative): string
     {
+        $relative = self::inline($relative);
+
         return "LaraPack: {$relative} es un controlador escrito a mano y DEBE seguir el mismo patrón que los generados: "
             .'cada acción es `return $request->handle();` y nada más. Si alguna acción valida, autoriza, consulta o arma '
             .'la respuesta, muévelo a un FormRequest con authorize(), rules() y handle(), que delega en la operación del '
@@ -378,6 +402,8 @@ final class Guard
      */
     public static function traitReminder(string $relative): string
     {
+        $relative = self::inline($relative);
+
         return "LaraPack: {$relative} es un trait dentro de Http/Controllers, y ése no es su sitio: lo que comparten varias "
             .'acciones —autorización, validación, consultas— va en una request base o en un trait de Http/Requests/Concerns, '
             .'o en una clase de soporte, y los controladores se quedan en `return $request->handle();`.';
@@ -398,12 +424,6 @@ final class Guard
         $state = self::stateFile($payload);
 
         if ($state === null || in_array($file, self::recorded($payload) ?? [], true)) {
-            return;
-        }
-
-        $directory = dirname($state);
-
-        if (! is_dir($directory) && ! @mkdir($directory, 0777, true) && ! is_dir($directory)) {
             return;
         }
 
@@ -516,7 +536,42 @@ final class Guard
             return null;
         }
 
-        return self::normalise(sys_get_temp_dir()).'/larapack-guard/'.sha1($session).'.txt';
+        $directory = self::stateDirectory();
+
+        return $directory === null ? null : $directory.'/'.sha1($session).'.txt';
+    }
+
+    /**
+     * El directorio del estado de las sesiones, o null si no es de fiar.
+     *
+     * El directorio temporal es compartido en Linux y macOS. Era
+     * `/tmp/larapack-guard`, creado con 0777: otro usuario de la máquina
+     * podía crearlo antes, con un enlace simbólico por archivo de sesión, y
+     * cada edición añadía una línea a un archivo del usuario —su `~/.bashrc`—
+     * con la ruta editada; y lo que él escribiera ahí decidía qué retiene el
+     * hook. Ahora es uno por usuario (`larapack-guard-<uid>`), se crea con
+     * 0700 y sólo se usa si es un directorio de verdad, del usuario y que
+     * nadie más puede escribir. Si no, la guardia sigue sin él, como sin
+     * `session_id`: el hook de fin de turno todavía tiene git.
+     */
+    public static function stateDirectory(): ?string
+    {
+        $uid = function_exists('posix_geteuid') ? posix_geteuid() : null;
+        $directory = self::normalise(sys_get_temp_dir()).'/larapack-guard'.($uid === null ? '' : '-'.$uid);
+
+        if (! is_dir($directory) && ! @mkdir($directory, 0700, true) && ! is_dir($directory)) {
+            return null;
+        }
+
+        if ($uid !== null) {
+            clearstatcache(true, $directory);
+
+            if (is_link($directory) || @fileowner($directory) !== $uid || (@fileperms($directory) & 0022) !== 0) {
+                return null;
+            }
+        }
+
+        return $directory;
     }
 
     /**
