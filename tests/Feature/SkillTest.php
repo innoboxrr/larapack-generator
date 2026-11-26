@@ -66,6 +66,20 @@ final class SkillTest extends TestCase
     }
 
     /**
+     * La regla que se perdió en school-management tiene que estar escrita, con
+     * los endpoints a mano dentro, y con la guardia que la hace cumplir.
+     */
+    public function test_explica_el_patron_handle_tambien_para_los_endpoints_a_mano(): void
+    {
+        $skill = Skill::contents();
+
+        $this->assertStringContainsString('return $request->handle();', $skill);
+        $this->assertStringContainsString('Endpoints que LaraPack no genera', $skill);
+        $this->assertStringContainsString('larapack:guard', $skill);
+        $this->assertStringContainsString('Antes de terminar una tarea', $skill);
+    }
+
+    /**
      * Un skill que menciona comandos que no existen es peor que no tenerlo:
      * el agente los ejecuta, fallan, y deja de fiarse del resto del texto.
      */
