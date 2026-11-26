@@ -17,7 +17,7 @@ resources/vue/
                 store/
                     index.js        -> store Pinia
                 routes/
-                    index.js        -> rutas del modelo (vue-router 4 o 5)
+                    index.js        -> rutas del modelo (vue-router 4)
                 forms/
                     CreateForm.vue
                     EditForm.vue

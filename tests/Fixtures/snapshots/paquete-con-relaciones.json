@@ -1,5 +1,5 @@
 {
-    ".larapack/manifest.json": "f8d2387ca0bb5846da81d66ce310abff3fe49591bc92cc75a7da4532b8d645fe",
+    ".larapack/manifest.json": "361d2d34060f7391661e9e860234936534a8c63e2eac61d2a30a7700ef98c548",
     "composer.json": "dded2aaddb25ff97b89a8b0e047bfd8284706098a414f9124356b235318c7edb",
     "database/factories/CategoryFactory.php": "088a11140f5ec27ef2b0dc5e88074fee459ea0c8f6332d15bb851981cec894fc",
     "database/factories/PostFactory.php": "ee422906bc1937dc2bbfaecf20954553ea5163c79269e2be66ba08cd3178d825",
@@ -46,7 +46,7 @@
     "resources/views/excel/category.blade.php": "48b47b3ae88ed657eb302dde3df95eefb9038b7582aade0ba62e5e14df289458",
     "resources/views/excel/post.blade.php": "70c55a41b3b9abd92814109a64c89944c9b8baeba111a46af598c1986265c32b",
     "resources/vue/index.js": "f43496caa1c26228027ee2e74e08c5ddbb06f4b6f57e846f72b2633e3367956c",
-    "resources/vue/package.json": "9c89950b20f299a2b39cdef9d1bfe1d1fdc1ab4543d6f378f93173c5133f9216",
+    "resources/vue/package.json": "f3ef5d37e009b44af5547bed1d14cd0fa01cb4a4274e37eb0c71838cb9f80263",
     "resources/vue/src/components/ActionMenu.vue": "873d45315f575361acda4b8780326e388d66025dc81e4b75ca4dc7c331555c52",
     "resources/vue/src/components/Breadcrumbs.vue": "c1961cb62290dcbfbf59cce11479cb572ba477898b2a033bb534c6e62882f3eb",
     "resources/vue/src/i18n.js": "0eb494f597131b97e7d5af565b6da92698c808c97b9cdfbea3d9bd4602477962",
