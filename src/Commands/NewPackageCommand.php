@@ -3,6 +3,7 @@
 namespace Innoboxrr\LarapackGenerator\Commands;
 
 use Innoboxrr\LarapackGenerator\Commands\Concerns\ReportsGeneration;
+use Innoboxrr\LarapackGenerator\Support\AgentHooks;
 use Innoboxrr\LarapackGenerator\Support\Generation;
 use Innoboxrr\LarapackGenerator\Support\ProjectRoot;
 use Innoboxrr\LarapackGenerator\Support\Skill;
@@ -139,6 +140,15 @@ class NewPackageCommand extends Command
         $skill = Skill::install(Skill::DEFAULT_TARGET, false);
 
         Generation::record($skill['reason'] === '' ? 'create' : 'skipped', $skill['target'], Skill::path(), $skill['reason'] ?: null);
+
+        // La regla, también donde la leen Codex y compañía, y ejecutable en
+        // Claude Code desde el primer commit: un paquete nuevo es justo donde
+        // se escriben los primeros endpoints a mano.
+        AgentHooks::installAgentsBlock(root_path());
+
+        $hooks = AgentHooks::installSettings(root_path());
+
+        Generation::record('create', $hooks['target'], 'settings.json');
 
         // Las herramientas reescriben composer.json con json_encode y sin salto
         // final; se deja como lo dejaría Composer para que el primer diff no sea
