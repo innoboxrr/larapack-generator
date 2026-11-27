@@ -84,9 +84,38 @@ final class ImportDocument
         $blocking = array_filter($semantic, fn (array $f): bool => $f['level'] === SemanticValidator::ERROR);
 
         return [
-            'document' => $blocking === [] ? new self(self::resolve($normalised)) : null,
+            'document' => $blocking === [] ? new self(self::resolve(self::markDeclaredActions($normalised, $raw))) : null,
             'errors' => $semantic,
         ];
+    }
+
+    /**
+     * Qué acciones referenciales escribió el laraimport, y no puso el esquema.
+     *
+     * El esquema rellena `on_delete` y `on_update` con `restrict`, y para
+     * generar una llave da igual. Para alterar una que ya existe, no: una
+     * llave de 7.x que dice `cascade` y un laraimport que no declara nada no
+     * piden cambiarla —el contrato no la pidió—, y uno que declara `restrict`
+     * sí. Sin esta marca las dos cosas se leían igual.
+     *
+     * @param  array<string, mixed>  $document
+     * @param  array<string, mixed>  $raw
+     * @return array<string, mixed>
+     */
+    private static function markDeclaredActions(array $document, array $raw): array
+    {
+        foreach ($document['models'] ?? [] as $index => $model) {
+            foreach ($model['props'] ?? [] as $position => $prop) {
+                $declared = $raw['models'][$index]['props'][$position] ?? [];
+
+                $document['models'][$index]['props'][$position]['declared_actions'] = array_values(array_filter(
+                    ['on_delete', 'on_update'],
+                    fn (string $key): bool => is_array($declared) && array_key_exists($key, $declared)
+                ));
+            }
+        }
+
+        return $document;
     }
 
     /**

@@ -16,6 +16,7 @@ use Innoboxrr\LarapackGenerator\Support\Manifest;
 use Innoboxrr\LarapackGenerator\Support\MigrationTimestamp;
 use Innoboxrr\LarapackGenerator\Support\StubBlocks;
 use Innoboxrr\LarapackGenerator\Support\TablePrefix;
+use Innoboxrr\LarapackGenerator\Tools\Migration\Schema\ColumnTypes;
 
 class Tool
 {
@@ -662,14 +663,23 @@ class Tool
      * ahora entre comillas.
      *
      * Y no se exige que el número «valga lo mismo» leído de vuelta: `10.00`
-     * sale `10.00` y no `'10.00'`, igual que en 9.0. MigrationTool::alter()
-     * compara las definiciones como texto, y cambiar cómo se escribe un
-     * default que no cambió le hacía escribir un `->change()` por nada.
+     * sale `10.00` y no `'10.00'`, igual que en 9.0.
+     *
+     * Con el tipo de la columna (9.3.1), los números sin comillas son sólo
+     * para las columnas numéricas. En una de texto la base guarda una cadena,
+     * y `->default(1.50)` sin comillas es el número 1.5: la columna valía
+     * `'1.5'`. Ahí todo default que no sea un booleano va entre comillas. No
+     * escribe alteraciones por nada en los proyectos que ya tenían
+     * `->default(5)`: MigrationTool compara lo que vale la columna, no el texto.
      */
-    protected static function defaultLiteral(mixed $value): string
+    protected static function defaultLiteral(mixed $value, ?string $type = null): string
     {
         if (is_bool($value)) {
             return $value ? 'true' : 'false';
+        }
+
+        if ($type !== null && ! ColumnTypes::isNumeric($type)) {
+            return self::phpString((string) $value);
         }
 
         if (is_int($value) || is_float($value) || self::isPlainNumber($value)) {

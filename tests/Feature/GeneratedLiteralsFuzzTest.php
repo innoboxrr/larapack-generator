@@ -130,17 +130,10 @@ final class GeneratedLiteralsFuzzTest extends TestCase
         $model = $this->project->read((string) $this->project->glob('database/migrations/*_create_products_table.php'));
         $pivot = $this->project->read((string) $this->project->glob('database/migrations/*_create_product_tag_table.php'));
 
+        // Las columnas son de texto: desde 9.3.1 también una cadena con forma
+        // de número —`-0`, `1.50`— va entre comillas. Sin ellas `1.50` era el
+        // número 1.5 y la base guardaba `'1.5'`.
         foreach ($this->strings as $i => $value) {
-            // Una cadena con forma de número decimal normal —`-0`, `1.50`— va
-            // sin comillas, tal cual se declaró, como en 9.0: alter() compara
-            // las definiciones como texto (MigrationDefaultsTest).
-            if (preg_match('/^-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?\z/', $value) === 1) {
-                $this->assertStringContainsString("\$table->string('d{$i}')->default({$value});", $model);
-                $this->assertStringContainsString("\$table->string('p{$i}')->default({$value});", $pivot);
-
-                continue;
-            }
-
             $this->assertSame($value, $this->argumentAfter($model, "\$table->string('d{$i}')", '->default('), "default de d{$i}: ".json_encode($value));
             $this->assertSame($value, $this->argumentAfter($pivot, "\$table->string('p{$i}')", '->default('), "default de p{$i}: ".json_encode($value));
         }

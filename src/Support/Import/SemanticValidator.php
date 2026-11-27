@@ -932,6 +932,7 @@ final class SemanticValidator
 
         $findings = [];
         $edges = [];
+        $nullable = [];
 
         foreach ($models as $index => $model) {
             foreach ($model['props'] as $position => $prop) {
@@ -945,6 +946,8 @@ final class SemanticValidator
                 }
 
                 $edges[$model['name']][] = $tables[$prop['constraint']];
+                $nullable[$model['name'].'>'.$tables[$prop['constraint']]] = ! empty($prop['nullable'])
+                    || ! empty($nullable[$model['name'].'>'.$tables[$prop['constraint']]]);
 
                 if ($tables[$prop['constraint']] === $model['name'] && ! $prop['nullable']) {
                     $findings[] = [
@@ -972,19 +975,29 @@ final class SemanticValidator
             }
         }
 
-        return [...$findings, ...self::cycles($edges)];
+        return [...$findings, ...self::cycles($edges, $nullable)];
     }
 
     /**
+     * Un ciclo de llaves: A apunta a B y B a A.
+     *
+     * Si alguna de sus llaves admite nulos, tiene arreglo (9.3.1): las tablas
+     * se crean sin la llave que apunta a una tabla que aún no existe, y la
+     * llave va en una migración aparte, después de las dos. Se avisa, no se
+     * rechaza: brandai tiene dos ciclos así. Si ninguna admite nulos, no se
+     * puede insertar la primera fila de ninguna de las dos tablas: eso sí es
+     * un error.
+     *
      * @param  array<string, array<int, string>>  $edges
+     * @param  array<string, bool>  $nullable  'A>B' => si alguna llave de A hacia B admite nulos
      * @return list<Finding>
      */
-    private static function cycles(array $edges): array
+    private static function cycles(array $edges, array $nullable = []): array
     {
         $findings = [];
         $state = [];
 
-        $walk = function (string $node, array $path) use (&$walk, &$state, $edges, &$findings): void {
+        $walk = function (string $node, array $path) use (&$walk, &$state, $edges, $nullable, &$findings): void {
             if (($state[$node] ?? null) === 'done') {
                 return;
             }
@@ -998,12 +1011,23 @@ final class SemanticValidator
                     throw new \LogicException("{$node} está a medio visitar y no está en el camino.");
                 }
 
-                $cycle = array_slice($path, $start);
+                $cycle = [...array_slice($path, $start), $node];
+                $breakable = false;
 
-                $findings[] = [
+                for ($i = 0; $i < count($cycle) - 1; $i++) {
+                    $breakable = $breakable || ! empty($nullable[$cycle[$i].'>'.$cycle[$i + 1]]);
+                }
+
+                $findings[] = $breakable ? [
+                    'level' => self::WARNING,
+                    'path' => '/models',
+                    'message' => 'Ciclo de claves foráneas: '.implode(' -> ', $cycle).'. Se resuelve creando las tablas sin la llave que '
+                        .'apunta a una tabla que aún no existe y escribiéndola en una migración aparte, después de las dos.',
+                ] : [
                     'level' => self::ERROR,
                     'path' => '/models',
-                    'message' => 'Ciclo de claves foráneas: '.implode(' -> ', [...$cycle, $node]).'. No hay orden de migración posible.',
+                    'message' => 'Ciclo de claves foráneas: '.implode(' -> ', $cycle).'. Ninguna de sus llaves admite nulos: no se podría '
+                        .'insertar la primera fila de ninguna de las tablas. Haz nullable al menos una.',
                 ];
 
                 return;

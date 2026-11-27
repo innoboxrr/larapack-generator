@@ -180,6 +180,29 @@ final class ImportContractTest extends TestCase
         );
     }
 
+    /**
+     * brandai: `sites` apunta a `registered_domains` y al revés, con las dos
+     * llaves nullable. Tiene arreglo —las tablas se crean sin la llave y la
+     * llave va aparte—, así que se avisa y se genera (9.3.1).
+     */
+    public function test_un_ciclo_con_una_llave_nullable_se_avisa_y_no_se_rechaza(): void
+    {
+        ['document' => $document, 'errors' => $errors] = $this->parse([
+            ['name' => 'Site', 'props' => [
+                ['name' => 'subdomain', 'type' => 'string'],
+                ['name' => 'registered_domain_id', 'type' => 'foreignId', 'constraint' => 'registered_domains', 'nullable' => true],
+            ]],
+            ['name' => 'RegisteredDomain', 'props' => [
+                ['name' => 'domain', 'type' => 'string'],
+                ['name' => 'site_id', 'type' => 'foreignId', 'constraint' => 'sites'],
+            ]],
+        ]);
+
+        $this->assertNotNull($document);
+        $this->assertSame([], $this->messages($errors, 'error'));
+        $this->assertStringContainsString('migración aparte', implode("\n", $this->messages($errors, 'warning')));
+    }
+
     public function test_exige_que_update_valide_el_identificador(): void
     {
         ['errors' => $errors] = $this->parse([
