@@ -1,5 +1,5 @@
 {
-    ".larapack/manifest.json": "6014759fa8c3cf504c1058edb5eff9c939f7728fb48e4a57d2a7aa0c3f89ddd7",
+    ".larapack/manifest.json": "7e6b95e9ca712936865161a41271e1a44c88105d329eb36d7b76ed1cbe09cbbe",
     "composer.json": "dded2aaddb25ff97b89a8b0e047bfd8284706098a414f9124356b235318c7edb",
     "database/factories/CourseFactory.php": "44caaa4d09b822b9ed2edbee27bebeb6b6ef10543b398299fef8cd082fff04c3",
     "database/migrations/TIMESTAMP_create_courses_table.php": "ff5e172e8541d2bda96c6f58f77b173e8566dca38d954388e4b90b560b100e44",
