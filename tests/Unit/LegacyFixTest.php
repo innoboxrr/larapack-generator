@@ -569,6 +569,31 @@ final class LegacyFixTest extends TestCase
         $this->assertStringContainsString("'managed' => true", (string) file_get_contents($this->root.'/'.self::INDEX));
     }
 
+    public function test_lo_que_pint_deja_sin_poder_leer_se_devuelve(): void
+    {
+        $this->resource("\$this->resource->setAppends(\$request->get('appends'));");
+        $before = (string) file_get_contents($this->root.'/'.self::RESOURCE);
+        // Un Pint de mentira que se lleva el archivo.
+        $pint = $this->root.'/pint.php';
+        file_put_contents($pint, "<?php\nforeach (array_slice(\$argv, 1) as \$file) {\n    if (str_ends_with(\$file, 'PostResource.php')) {\n        unlink(\$file);\n    }\n}\n");
+
+        $fix = new LegacyFix($this->root, [LegacySecurity::RESOURCE_APPENDS]);
+        $fix->plan();
+        putenv('LARAPACK_PINT='.$pint);
+
+        try {
+            $result = ProjectRoot::using($this->root, fn (): array => $fix->apply());
+        } finally {
+            putenv('LARAPACK_PINT');
+        }
+
+        $this->assertSame(
+            [['file' => self::RESOURCE, 'reason' => 'Después de formatearlo no se podía leer, y se devolvió el original.']],
+            $result['report'][LegacySecurity::RESOURCE_APPENDS]['skipped']
+        );
+        $this->assertSame($before, file_get_contents($this->root.'/'.self::RESOURCE));
+    }
+
     /**
      * Dos métodos con el mismo nombre no compilan, pero se leen: el primero
      * es el que cuenta, como en LegacySecurity, y si es abstracto no hay

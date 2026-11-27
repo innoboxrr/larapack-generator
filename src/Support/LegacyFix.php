@@ -195,10 +195,12 @@ final class LegacyFix
 
         foreach ($byFile as $file => $debts) {
             $check = $debts[0]['check'];
-            try {
-                $original = Files::read($file);
-                $code = $original;
+            // Uno que no se puede leer para el arreglo entero, con su nombre:
+            // no es una forma que no se reconoce.
+            $original = Files::read($file);
+            $code = $original;
 
+            try {
                 foreach ($debts as $debt) {
                     $code = $check === LegacySecurity::INDEX_MANAGED
                         ? $this->fixIndex($code, $debt)
@@ -206,7 +208,7 @@ final class LegacyFix
                 }
 
                 self::assertParses($code);
-            } catch (RuntimeException|MakerException $e) {
+            } catch (RuntimeException $e) {
                 $this->skip($check, $file, $e->getMessage());
 
                 continue;
@@ -342,9 +344,12 @@ final class LegacyFix
             foreach ($this->fixes as $file => $code) {
                 try {
                     self::assertParses(Files::read($file));
-                } catch (RuntimeException|MakerException $e) {
+                } catch (RuntimeException) {
                     file_put_contents($file, $this->originals[$file]);
                     $this->revert($file, 'Después de formatearlo no parseaba, y se devolvió el original.');
+                } catch (MakerException) {
+                    file_put_contents($file, $this->originals[$file]);
+                    $this->revert($file, 'Después de formatearlo no se podía leer, y se devolvió el original.');
                 }
             }
         }
