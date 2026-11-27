@@ -169,6 +169,16 @@ final class HandRolledLockFormatTest extends TestCase
         );
     }
 
+    public function test_un_objetivo_aprobado_dos_veces_no_se_lee(): void
+    {
+        // Con dos entradas, ¿cuál vale? Ninguna: el candado lo revisa el
+        // dueño, y la ambigüedad se le devuelve.
+        $this->assertUnreadable(
+            '[{"target": "App\\\\A", "reason": "r", "fingerprint": null}, {"target": "App\\\\A", "reason": "otra", "fingerprint": null}]',
+            '.larapack/hand-rolled.lock aprueba dos veces App\\A.'
+        );
+    }
+
     public function test_sin_candado_no_hay_aprobaciones(): void
     {
         $this->assertNull(HandRolledLock::read($this->root));
@@ -225,6 +235,17 @@ final class HandRolledLockFormatTest extends TestCase
 
         $this->expectException(RuntimeException::class);
         $this->expectExceptionMessage('No se pudo crear el directorio '.$this->root.'/.larapack.');
+
+        @HandRolledLock::write($this->root, ['A' => ['reason' => 'r', 'fingerprint' => null]]);
+    }
+
+    public function test_si_no_puede_escribir_el_candado_lo_dice(): void
+    {
+        // Un directorio donde iría el archivo: file_put_contents() no puede.
+        mkdir($this->root.'/.larapack/hand-rolled.lock', 0777, true);
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('No se pudo escribir '.$this->root.'/.larapack/hand-rolled.lock.');
 
         @HandRolledLock::write($this->root, ['A' => ['reason' => 'r', 'fingerprint' => null]]);
     }
