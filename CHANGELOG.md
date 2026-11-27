@@ -7,29 +7,47 @@
 `phpstan.neon.dist` pasa del nivel 5 al 8 sobre `src/`, sin baseline ni
 `ignoreErrors`: los 442 errores que daba el nivel 8 sobre 9.1 se arreglaron
 uno a uno (335 del 6, casi todos tipos sin declarar en `src/Tools`; el resto,
-nulos y `false` sin comprobar). Cuatro eran fallos de verdad, y tienen su
+nulos y `false` sin comprobar). Estos eran fallos de verdad, y tienen su
 prueba en `StaticAnalysisRegressionTest`:
 
 - **Un `composer.json` que no es JSON válido se reescribía.** `json_decode()`
   daba null, se le añadía la clave de los proveedores o del PSR-4 y se escribía
-  encima un archivo con sólo eso. Ahora `larapack:providers`, `larapack:factory`
-  y `larapack:test` fallan con un mensaje y no lo tocan.
+  encima un archivo con sólo eso. Ahora `composer.json` se lee y se valida en
+  `Tool::init`, antes de escribir nada: todo comando que genera falla con un
+  mensaje y no lo toca. `larapack:test`, que escribía `tests/TestCase.php` y
+  `tests/User.php` antes de llegar a él, ya no deja nada a medias.
 - **`larapack:test` borraba lo que hubiera en `autoload-dev`** si no traía
   `psr-4`: la sección se sustituía entera. Ahora se añade la entrada.
-- **`larapack:factory` reventaba sin `autoload.psr-4`** (un TypeError de
-  `array_keys(null)`): leía la primera clave antes de comprobar que existía.
+- **Sin un `autoload.psr-4` que apunte a `src/` (o `app/`) no hay namespace, y
+  ahora se falla.** En 9.1 `get_namespace()` devolvía null: `larapack:factory`
+  reventaba con un TypeError de `array_keys(null)` y lo demás, con otro en el
+  manifiesto. Hacer que devolviera `''` habría sido peor —se probó—: el modelo
+  salía en el namespace global (`namespace Models;`) y la factoría escribía
+  `Database\Factories\` sin el prefijo del paquete en su `composer.json`, con
+  el comando en 0. Ahora es una `MakerException` que dice qué falta.
+- **Un `composer.json` roto en una aplicación** se leía como vacío, es decir,
+  como un paquete con destino `src/`. Ahora falla igual que en un paquete,
+  antes de escribir nada.
 - **Un modelo o un pivote que el laraimport no declara**, con el importador
   activo, acababa en un TypeError sin contexto; ahora dice cuál falta.
+- **`larapack:fix` dejaba en `fixed` el segundo de dos arreglos del mismo
+  archivo** cuando lo formateado no parseaba y se devolvía el original (quitaba
+  por índice mientras reindexaba). Las pruebas están en
+  `FixLegacySecurityTest`: un Pint que rompe lo que toca fuerza ese camino.
 
-Y otros que no tenían forma de probarse desde fuera, pero eran frágiles: un
-archivo que no se podía leer, o una expresión regular que fallaba, se
-reescribía vacío; `larapack:fix` dejaba sin revertir el segundo de dos arreglos
-del mismo archivo; y `full-model`, `remove-full-model` y `providers`
-instanciaban las herramientas por reflexión y llamaban a `create()` sobre un
-`object`. Las herramientas de un modelo implementan ahora `ModelArtifact`, y
-las del paquete, `PackageArtifact`.
+Y otros que eran frágiles: un archivo que no se podía leer, o una expresión
+regular que fallaba, se reescribía vacío; y donde una lectura decide algo —el
+manifiesto, el hash de un archivo, el esquema, `ecosystem.json`— un `false`
+pasaba por `''`: un manifiesto ilegible parecía vacío y un archivo ilegible,
+editado a mano. Ahora esas lecturas van por `Files::read`, que falla.
+`full-model`, `remove-full-model` y `providers` instanciaban las herramientas
+por reflexión y llamaban a `create()` sobre un `object`; ahora las de un modelo
+implementan `ModelArtifact` y las del paquete, `PackageArtifact`, y
+`Artifacts` falla si un nombre de la lista no resuelve a una de ellas, en vez
+de saltársela en silencio (`ArtifactsTest` recorre las tres listas).
 
-Nada cambia en lo que se genera: las fotos y la suite siguen idénticas.
+Con un `composer.json` válido y su PSR-4, nada cambia en lo que se genera: las
+fotos y la suite siguen idénticas.
 
 **Por qué no el 9.** El nivel 9 da 606 errores, y casi todos vienen de lo
 mismo: el laraimport, `ecosystem.json` y las opciones de consola llegan como
@@ -44,11 +62,18 @@ un proyecto temporal y luego se carga—, que habría que callar una a una.
 
 ### Al actualizar
 
-Nada que hacer. Si extiendes las herramientas: los métodos de `Tool` llevan
-ahora tipos nativos, y una subclase que sobrescriba uno sin ellos
-(`processFileWithJson()`, `init()`…) no compila; `create()` de `EventsTool`,
-`RequestsTool` y `TestTool` devuelve `bool`, como las demás; y `get_namespace()`
-devuelve `''` en vez de nada cuando ningún PSR-4 apunta a `src/` o `app/`.
+- **Un proyecto sin `autoload.psr-4` hacia `src/` (o `app/`), o con un
+  `composer.json` que no es JSON válido, ya no genera**: falla con un mensaje.
+  En 9.1 tampoco generaba nada correcto (acababa en un TypeError); añade la
+  entrada (`"Acme\\Blog\\": "src/"`) y vuelve a ejecutar.
+- **Rompe si extiendes `Tool` fuera del generador**, aunque sea una menor. Las
+  herramientas no se pensaron como punto de extensión, pero nada lo impedía:
+  los métodos de `Tool` llevan ahora tipos nativos y una subclase que
+  sobrescriba uno sin ellos (`processFileWithJson(): void`, `init(): static`,
+  `addProvidersToComposerJson(): void`…) no compila; `create()` de
+  `EventsTool`, `RequestsTool` y `TestTool` devuelve `bool`, como las demás, y
+  una subclase que lo declare sin tipo tampoco. Hay que añadir los mismos tipos
+  a las firmas que sobrescribes.
 
 ## 9.1.0
 

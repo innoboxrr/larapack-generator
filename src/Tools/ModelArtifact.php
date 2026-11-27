@@ -8,7 +8,8 @@ namespace Innoboxrr\LarapackGenerator\Tools;
  * larapack:full-model y larapack:remove-full-model recorren una lista de
  * herramientas por nombre. Antes las instanciaban por reflexión y llamaban a
  * create()/remove() sobre un `object`: nada garantizaba que existieran, ni con
- * qué firma. Una herramienta de la lista que no cumple esto no se ejecuta.
+ * qué firma. Una herramienta de la lista que no cumple esto hace fallar el
+ * comando (`Artifacts::model`), en vez de quedarse sin ejecutar en silencio.
  */
 interface ModelArtifact
 {

@@ -78,7 +78,7 @@ final class Manifest
             return self::EMPTY;
         }
 
-        $decoded = json_decode((string) file_get_contents($this->path()), true);
+        $decoded = json_decode(Files::read($this->path()), true);
 
         if (! is_array($decoded) || ! isset($decoded['models'])) {
             return self::EMPTY;
@@ -326,8 +326,10 @@ final class Manifest
     public function hash(string $file): string
     {
         // Se normalizan los finales de línea: el mismo contenido no debe
-        // parecer modificado por haber pasado por git en Windows.
-        return hash('sha256', str_replace("\r\n", "\n", (string) file_get_contents($file)));
+        // parecer modificado por haber pasado por git en Windows. Uno que no
+        // se puede leer falla: con '' su hash no coincidía y pasaba por editado
+        // a mano.
+        return hash('sha256', str_replace("\r\n", "\n", Files::read($file)));
     }
 
     private function relative(string $file): string

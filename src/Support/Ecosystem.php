@@ -53,7 +53,7 @@ final class Ecosystem
             throw new RuntimeException("No se encontró {$this->manifestPath}.");
         }
 
-        $decoded = json_decode((string) file_get_contents($this->manifestPath), true);
+        $decoded = json_decode(Files::read($this->manifestPath), true);
 
         if (! is_array($decoded)) {
             throw new RuntimeException("{$this->manifestPath} no es JSON válido.");
@@ -407,7 +407,7 @@ final class Ecosystem
             return null;
         }
 
-        $decoded = json_decode((string) file_get_contents($path), true);
+        $decoded = json_decode(Files::read($path), true);
 
         return is_array($decoded) ? $decoded : null;
     }

@@ -49,4 +49,13 @@ class MakerException extends Exception
     {
         return new self("{$file} no es un objeto JSON válido ({$reason}): no se modifica un composer.json que no se entiende.");
     }
+
+    /**
+     * Sin el namespace no hay nada correcto que generar: el modelo saldría en
+     * el namespace global y el PSR-4 de las factorías, sin el del paquete.
+     */
+    public static function missingNamespace(string $file, string $directory): self
+    {
+        return new self("{$file} no declara en `autoload.psr-4` ningún namespace para {$directory}/, y es el namespace de todo lo que se genera. Añádelo (por ejemplo, \"Acme\\\\Blog\\\\\": \"{$directory}/\") y vuelve a ejecutar.");
+    }
 }

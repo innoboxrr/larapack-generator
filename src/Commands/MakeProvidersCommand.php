@@ -3,7 +3,7 @@
 namespace Innoboxrr\LarapackGenerator\Commands;
 
 use Innoboxrr\LarapackGenerator\Commands\Concerns\ReportsGeneration;
-use Innoboxrr\LarapackGenerator\Tools\PackageArtifact;
+use Innoboxrr\LarapackGenerator\Tools\Artifacts;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
@@ -34,13 +34,7 @@ class MakeProvidersCommand extends Command
         $this->applyGenerationOptions($input);
 
         foreach ($this->commands as $command) {
-
-            $className = 'Innoboxrr\LarapackGenerator\Tools\Providers\\'.$command.'ServiceProviderTool';
-
-            if (is_a($className, PackageArtifact::class, true)) {
-                (new $className)->create();
-            }
-
+            Artifacts::provider($command)->create();
         }
 
         $this->reportGeneration($input, $output);

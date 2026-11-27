@@ -149,9 +149,10 @@ temprano discreparían.
 3. Por cada modelo, ya ordenado, ejecuta
    [`MakeFullModelCommand`](src/Commands/MakeFullModelCommand.php) anidado. La
    lista de herramientas es `MakeFullModelCommand::$commands`, y cada nombre se
-   resuelve por convención a `Tools\<Nombre>\<Nombre>Tool`, que sólo se ejecuta
-   si implementa [`ModelArtifact`](src/Tools/ModelArtifact.php). `--vue`,
-   `--react` y `metas` añaden la suya.
+   resuelve por convención a `Tools\<Nombre>\<Nombre>Tool` con
+   `Artifacts::model`, que falla si no existe o no implementa
+   [`ModelArtifact`](src/Tools/ModelArtifact.php): saltársela dejaba esa pieza
+   sin generar y el comando en 0. `--vue`, `--react` y `metas` añaden la suya.
 4. Los pivotes van a `PivotMigrationTool`; los `controllers[]`, a
    `ControllerTool`, `RouteTool`, `EndpointTool` y, con interfaz, sólo al
    contrato JS.
@@ -185,7 +186,11 @@ Los helpers globales de [`src/Helpers/app.php`](src/Helpers/app.php) —
 `ProjectRoot`. `app_dir_name()` decide si el destino es un paquete (`src/`, tipo
 `library` en `composer.json`) o una aplicación (`app/`), y de esa decisión
 cuelgan el namespace de factorías y tests, la clave de configuración y el
-prefijo de las vistas de exportación (`Tool::init`).
+prefijo de las vistas de exportación (`Tool::init`). Los dos leen `composer.json`
+con `root_composer_json()`, que falla si no se puede leer o no es un objeto
+JSON, y `get_namespace()` falla si ningún `autoload.psr-4` apunta a ese
+directorio: sin namespace, lo generado acababa en el global
+(`namespace Models;`). `Tool::init` los llama antes de escribir nada.
 
 ---
 
@@ -224,11 +229,15 @@ Una herramienta puede especializar un paso sin salirse del camino:
 del modelo, y `ControllerTool::applyEndpoints` saca de `auth:sanctum` los
 endpoints públicos. Siguen pasando por `generate()`, con todo lo demás.
 
-Lo que una herramienta reescribe lo lee con `Tool::contents`, que falla si no
-puede leer: con `file_get_contents()` suelto, un `false` acababa como `''` y el
-archivo quedaba vacío. Y `composer.json` sólo lo toca `Tool::editComposerJson`
-—los proveedores, el PSR-4 de factorías y el de tests—, que no escribe en una
-aplicación ni en una simulación, y no reescribe uno que no sea un objeto JSON.
+Lo que una herramienta reescribe lo lee con `Tool::contents` (`Files::read`),
+que falla si no puede leer: con `file_get_contents()` suelto, un `false`
+acababa como `''` y el archivo quedaba vacío. Lo mismo donde una lectura decide
+algo: el manifiesto, su hash, el esquema. Entre las herramientas,
+`composer.json` sólo lo toca `Tool::editComposerJson` —los proveedores, el
+PSR-4 de factorías y el de tests—, que no escribe en una aplicación ni en una
+simulación, y no reescribe uno que no sea un objeto JSON. Fuera de ellas lo
+escribe `NewPackageCommand`, que lo crea al hacer el paquete y lo vuelve a
+escribir al final, con el salto de línea que dejaría Composer.
 
 ### Lo que no pasa por `Tool::generate`
 

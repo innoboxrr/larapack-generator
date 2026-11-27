@@ -8,7 +8,7 @@ use Innoboxrr\LarapackGenerator\Support\Generation;
 use Innoboxrr\LarapackGenerator\Support\Import\Actions;
 use Innoboxrr\LarapackGenerator\Support\Import\Endpoints;
 use Innoboxrr\LarapackGenerator\Support\Manifest;
-use Innoboxrr\LarapackGenerator\Tools\ModelArtifact;
+use Innoboxrr\LarapackGenerator\Tools\Artifacts;
 use Innoboxrr\LarapackGenerator\Tools\Tool;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
@@ -112,11 +112,10 @@ class MakeFullModelCommand extends Command
             Declaration::enableMetas($modelName);
         }
 
+        // Un nombre que no resuelve a un ModelArtifact falla aquí: saltárselo
+        // dejaba esa pieza sin generar y el comando salía en 0.
         foreach ($commands as $command) {
-            $className = 'Innoboxrr\LarapackGenerator\Tools\\'.$command.'\\'.$command.'Tool';
-            if (is_a($className, ModelArtifact::class, true)) {
-                (new $className)->create($modelName);
-            }
+            Artifacts::model($command)->create($modelName);
         }
 
         if (! Generation::isDryRun()) {

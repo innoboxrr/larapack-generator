@@ -9,6 +9,7 @@ use Illuminate\Support\Pluralizer;
 use Illuminate\Support\Str;
 use Innoboxrr\LarapackGenerator\Exceptions\MakerException;
 use Innoboxrr\LarapackGenerator\Support\Declaration;
+use Innoboxrr\LarapackGenerator\Support\Files;
 use Innoboxrr\LarapackGenerator\Support\Generation;
 use Innoboxrr\LarapackGenerator\Support\Literal;
 use Innoboxrr\LarapackGenerator\Support\Manifest;
@@ -122,7 +123,7 @@ class Tool
      * Cada herramienta hacía `collect($data['models'])->where(...)` sobre lo que
      * fuera que hubiera en esa clave; aquí se lee una vez y con su tipo.
      *
-     * @return list<array<string, mixed>>
+     * @return list<array<mixed>>
      */
     protected static function jsonEntries(string $key): array
     {
@@ -135,7 +136,7 @@ class Tool
      * La entrada con ese nombre de una lista del laraimport, o null si no la
      * declara.
      *
-     * @return array<string, mixed>|null
+     * @return array<mixed>|null
      */
     protected static function jsonEntry(string $key, string $name): ?array
     {
@@ -146,7 +147,7 @@ class Tool
      * La primera entrada de una lista cuyo `name` es ése: un modelo, un
      * pivote, una request declarada. Lo que no es un objeto no cuenta.
      *
-     * @return array<string, mixed>|null
+     * @return array<mixed>|null
      */
     protected static function firstNamed(mixed $entries, string $name): ?array
     {
@@ -162,7 +163,7 @@ class Tool
     /**
      * El modelo que se está generando, tal como lo declara el laraimport.
      *
-     * @return array<string, mixed>|null
+     * @return array<mixed>|null
      */
     protected function jsonModel(): ?array
     {
@@ -177,7 +178,7 @@ class Tool
      * TypeError que no decía qué faltaba en el laraimport.
      *
      * @param  'models'|'pivots'  $key
-     * @return array<string, mixed>
+     * @return array<mixed>
      */
     protected static function declaredEntry(string $key, string $name): array
     {
@@ -407,12 +408,21 @@ class Tool
      * declara `autoload.psr-4`, como siempre. Lo demás de la sección se queda
      * como estaba.
      *
+     * Sin namespace no se escribe nada: `Database\Factories\` a secas, en el
+     * composer.json de un paquete, choca con el de la aplicación que lo instala.
+     * init() ya falla antes (get_namespace()); esto es para quien llegue aquí
+     * sin pasar por él.
+     *
      * @param  'autoload'|'autoload-dev'  $section
      */
     protected function addPsr4ToComposerJson(string $section, string $suffix, string $directory): void
     {
         $this->editComposerJson(function (array $composer) use ($section, $suffix, $directory): array {
             $base = (string) (array_key_first(self::arrayAt($composer, 'autoload', 'psr-4')) ?? $this->namespace);
+
+            if ($base === '') {
+                throw MakerException::missingNamespace(root_path().'/composer.json', app_dir_name());
+            }
 
             $entries = self::arrayAt($composer, $section);
             $psr4 = self::arrayAt($entries, 'psr-4');
@@ -440,14 +450,7 @@ class Tool
             return;
         }
 
-        $path = root_path().'/composer.json';
-        $composer = json_decode(self::contents($path), true);
-
-        if (! is_array($composer)) {
-            throw MakerException::invalidComposerJson($path, json_last_error_msg());
-        }
-
-        file_put_contents($path, json_encode($edit($composer), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+        file_put_contents(root_path().'/composer.json', json_encode($edit(root_composer_json()), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
     }
 
     /**
@@ -471,17 +474,11 @@ class Tool
      *
      * file_get_contents() suelto devuelve false si no puede leer, y ese false
      * acababa como '' en el file_put_contents() de después: el archivo se
-     * reescribía vacío. Aquí no se lee, se falla.
+     * reescribía vacío. Aquí no se lee, se falla (`Files::read`).
      */
     protected static function contents(string $file): string
     {
-        $content = file_get_contents($file);
-
-        if ($content === false) {
-            throw MakerException::readFailed($file);
-        }
-
-        return $content;
+        return Files::read($file);
     }
 
     // GENERACION

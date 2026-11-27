@@ -1,5 +1,7 @@
 <?php
 
+use Innoboxrr\LarapackGenerator\Exceptions\MakerException;
+use Innoboxrr\LarapackGenerator\Support\Files;
 use Innoboxrr\LarapackGenerator\Support\ProjectRoot;
 
 if (! function_exists('root_path')) {
@@ -9,12 +11,33 @@ if (! function_exists('root_path')) {
     }
 }
 
+if (! function_exists('root_composer_json')) {
+    /**
+     * El composer.json de la raíz, ya decodificado.
+     *
+     * De él sale si se genera en src/ o en app/ y con qué namespace. Uno que
+     * no se puede leer o que no es un objeto JSON no se interpreta: antes se
+     * leía como vacío, y un proyecto pasaba a ser un paquete sin namespace.
+     *
+     * @return array<mixed>
+     */
+    function root_composer_json(): array
+    {
+        $path = root_path().'/composer.json';
+        $composerJson = json_decode(Files::read($path), true);
+
+        if (! is_array($composerJson)) {
+            throw MakerException::invalidComposerJson($path, json_last_error_msg());
+        }
+
+        return $composerJson;
+    }
+}
+
 if (! function_exists('app_dir_name')) {
     function app_dir_name(): string
     {
-        $rootPath = root_path();
-        $composerJson = json_decode((string) file_get_contents($rootPath.'/composer.json'), true);
-        $packageType = (is_array($composerJson) && isset($composerJson['type'])) ? $composerJson['type'] : 'library';
+        $packageType = root_composer_json()['type'] ?? 'library';
 
         return ($packageType == 'library') ? 'src' : 'app';
     }
@@ -45,23 +68,23 @@ if (! function_exists('get_namespace')) {
     /**
      * El namespace PSR-4 que apunta a src/ o app/, con su separador final.
      *
-     * Sin ninguno devuelve '' —lo mismo que daba el null de antes al
-     * concatenarlo—, y un composer.json sin `autoload.psr-4` ya no avisa de
-     * que recorre un null.
+     * Sin ninguno no hay namespace que dar, y se falla. En 9.1 devolvía null y
+     * reventaba más abajo con un TypeError; devolver '' era peor: el modelo
+     * salía en el namespace global (`namespace Models;`) y la factoría
+     * escribía `Database\Factories\` sin el del paquete en su composer.json.
      */
     function get_namespace(): string
     {
-        $rootPath = root_path();
-        $composerJson = json_decode((string) file_get_contents($rootPath.'/composer.json'), true);
-        $psr4 = is_array($composerJson) ? ($composerJson['autoload']['psr-4'] ?? []) : [];
+        $directory = app_dir_name();
+        $psr4 = root_composer_json()['autoload']['psr-4'] ?? [];
 
         foreach (is_array($psr4) ? $psr4 : [] as $key => $path) {
-            if (is_string($path) && strpos($path, app_dir_name().'/') !== false) {
-                return (string) $key;
+            if (is_string($key) && $key !== '' && is_string($path) && strpos($path, $directory.'/') !== false) {
+                return $key;
             }
         }
 
-        return '';
+        throw MakerException::missingNamespace(root_path().'/composer.json', $directory);
     }
 }
 

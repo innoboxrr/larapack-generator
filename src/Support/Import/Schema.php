@@ -2,6 +2,7 @@
 
 namespace Innoboxrr\LarapackGenerator\Support\Import;
 
+use Innoboxrr\LarapackGenerator\Support\Files;
 use JsonException;
 use Opis\JsonSchema\Errors\ErrorFormatter;
 use Opis\JsonSchema\Resolvers\SchemaResolver;
@@ -45,7 +46,7 @@ final class Schema
             return self::$decoded;
         }
 
-        $decoded = json_decode((string) file_get_contents(self::path()), true);
+        $decoded = json_decode(Files::read(self::path()), true);
 
         if (! is_array($decoded)) {
             throw new RuntimeException('schema/laraimport.schema.json no es un objeto JSON válido.');
@@ -71,7 +72,7 @@ final class Schema
         // El resolvedor se crea aquí, y no se pide al Validator: resolver()
         // puede devolver null y el registro del esquema se perdería.
         $resolver = new SchemaResolver;
-        $resolver->registerRaw((string) file_get_contents(self::path()), self::id());
+        $resolver->registerRaw(Files::read(self::path()), self::id());
 
         $validator = (new Validator)->setResolver($resolver);
 

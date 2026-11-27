@@ -325,7 +325,7 @@ final class Verifier
                     basename(dirname($relative))
                 );
 
-                if (! preg_match("/API_ROUTE_PREFIX\s*=\s*'([^']+)'/", (string) file_get_contents($absolute), $matches)) {
+                if (! preg_match("/API_ROUTE_PREFIX\s*=\s*'([^']+)'/", Files::read($absolute), $matches)) {
                     $findings[] = [
                         'level' => self::ERROR,
                         'check' => 'route-prefix',

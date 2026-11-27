@@ -489,4 +489,70 @@ PHP);
         $this->lint('app/Http/Resources/Models/PostResource.php');
         $this->assertSame([], $this->legacyFindings());
     }
+
+    /**
+     * Si lo formateado no parsea, se devuelve el original y el arreglo pasa de
+     * `fixed` a `skipped`. Un Pint de mentira que rompe lo que toca fuerza ese
+     * camino, que ninguna prueba recorría.
+     */
+    public function test_lo_que_no_parsea_tras_formatear_se_devuelve_y_se_salta(): void
+    {
+        $pint = $this->project->path.'/broken-pint.php';
+        file_put_contents($pint, "<?php\nforeach (array_slice(\$argv, 1) as \$file) {\n    file_put_contents(\$file, \"<?php\\nfunction (\\n\");\n}\n");
+
+        $this->write('app/Http/Requests/Post/IndexRequest.php', self::OLD_INDEX);
+        $this->write('app/Http/Resources/Models/PostResource.php', self::OLD_RESOURCE);
+
+        putenv('LARAPACK_PINT='.$pint);
+
+        try {
+            [$code, $report] = $this->fix();
+        } finally {
+            putenv('LARAPACK_PINT');
+        }
+
+        $this->assertSame(Command::FAILURE, $code);
+        $reason = 'Después de formatearlo no parseaba, y se devolvió el original.';
+
+        foreach (['index-managed' => 'app/Http/Requests/Post/IndexRequest.php', 'resource-appends' => 'app/Http/Resources/Models/PostResource.php'] as $check => $file) {
+            $this->assertSame([], $report['checks'][$check]['fixed'], $check);
+            $this->assertSame([['file' => $file, 'reason' => $reason]], $report['checks'][$check]['skipped'], $check);
+        }
+
+        $this->assertSame(self::OLD_INDEX, $this->project->read('app/Http/Requests/Post/IndexRequest.php'));
+        $this->assertSame(self::OLD_RESOURCE, $this->project->read('app/Http/Resources/Models/PostResource.php'));
+    }
+
+    /**
+     * Dos arreglos del mismo archivo en una comprobación, y el archivo hay que
+     * devolverlo: los dos salen de `fixed` y los dos acaban en `skipped`.
+     * Quitando por índice mientras se reindexaba, el segundo se quedaba en
+     * `fixed` aunque el archivo ya fuera el original.
+     *
+     * plan() hoy anota cada archivo una vez, así que se prepara el informe a
+     * mano: lo que se fija es que revert() no dependa de esa casualidad.
+     */
+    public function test_revertir_quita_todos_los_arreglos_del_archivo(): void
+    {
+        $this->write('app/Http/Requests/Post/IndexRequest.php', self::OLD_INDEX);
+        $this->write('app/Http/Requests/Tag/IndexRequest.php', self::PINT_INDEX);
+
+        $fix = new LegacyFix($this->project->path, ['index-managed']);
+        $planned = $fix->plan()['index-managed']['fixed'];
+
+        $this->assertSame([['file' => 'app/Http/Requests/Post/IndexRequest.php'], ['file' => 'app/Http/Requests/Tag/IndexRequest.php']], $planned);
+
+        $report = new \ReflectionProperty(LegacyFix::class, 'report');
+        $state = $report->getValue($fix);
+        $post = ['file' => 'app/Http/Requests/Post/IndexRequest.php'];
+        $state['index-managed']['fixed'] = [$post, $post, ['file' => 'app/Http/Requests/Tag/IndexRequest.php']];
+        $report->setValue($fix, $state);
+
+        (new \ReflectionMethod(LegacyFix::class, 'revert'))->invoke($fix, $this->project->path.'/app/Http/Requests/Post/IndexRequest.php', 'motivo');
+
+        $after = $report->getValue($fix)['index-managed'];
+
+        $this->assertSame([['file' => 'app/Http/Requests/Tag/IndexRequest.php']], $after['fixed']);
+        $this->assertSame([$post + ['reason' => 'motivo'], $post + ['reason' => 'motivo']], $after['skipped']);
+    }
 }
