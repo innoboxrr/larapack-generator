@@ -6,6 +6,8 @@ use Innoboxrr\LarapackGenerator\Commands\Concerns\TargetsProject;
 use Innoboxrr\LarapackGenerator\Commands\Concerns\WritesJson;
 use Innoboxrr\LarapackGenerator\Support\ControllerShape;
 use Innoboxrr\LarapackGenerator\Support\HandRolledLock;
+use Innoboxrr\LarapackGenerator\Support\Realign\Exceptions;
+use Innoboxrr\LarapackGenerator\Support\Realign\ExceptionTargets;
 use RuntimeException;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Formatter\OutputFormatter;
@@ -32,6 +34,15 @@ use Symfony\Component\Console\Output\OutputInterface;
  * clase, con `::metodo` si la excepción es de una acción. Basta el final que
  * lo distinga —`TokenController::issue`—, para no tener que escapar las
  * barras invertidas en la terminal; si coincide con más de uno, no se adivina.
+ *
+ * Desde 9.4.0 aprueba también las excepciones del realineamiento: lo que no
+ * puede llevar atributo (el closure de una ruta, un controlador o un modelo
+ * que se deja fuera del contrato, un hallazgo que se acepta). Las pide
+ * cualquiera con `larapack:realign except` (Realign\Exceptions); su objetivo
+ * empieza por `realign:` y basta su final —`routes/web.php#fallback()`—. Se
+ * aprueban en este mismo candado, con la razón de la solicitud y la huella de
+ * lo que cubren hoy, y por eso las protege todo lo que ya protege la
+ * aprobación de #[HandRolled].
  */
 class HandRolledCommand extends Command
 {
@@ -97,8 +108,26 @@ class HandRolledCommand extends Command
             return $this->reportFailure($input, $output, $e->getMessage(), 'Corrígelo a mano (o bórralo y aprueba de nuevo); no se toca.');
         }
 
+        try {
+            $realign = Exceptions::forRoot($root);
+            $requested = $realign->requests();
+        } catch (RuntimeException $e) {
+            return $this->reportFailure($input, $output, $e->getMessage(), 'Las solicitudes las escribe larapack:realign except; corrígelas o bórralas y vuelve a pedirlas.');
+        }
+
         if ($action === 'list') {
-            return $this->list($input, $output, $exceptions, $approved);
+            return $this->list($input, $output, $exceptions, $approved, $realign);
+        }
+
+        // Lo que se puede aprobar: cada #[HandRolled] con razón del código y
+        // cada excepción del realineamiento solicitada, con la huella de lo
+        // que cubre hoy. Una cuyo código ya no existe no se aprueba.
+        foreach ($requested as $target => $request) {
+            $fingerprint = str_starts_with($request['file'], 'model:') ? $request['fingerprint'] : $realign->fingerprint($target);
+
+            if ($fingerprint !== null) {
+                $exceptions[$target] = ['reason' => $request['reason'], 'fingerprint' => $fingerprint, 'file' => $request['file'], 'line' => $request['line'] ?? 0];
+            }
         }
 
         $current = $approved ?? [];
@@ -195,14 +224,17 @@ class HandRolledCommand extends Command
     }
 
     /**
-     * Las excepciones del código y las del candado, con su estado.
+     * Las excepciones del código y las del candado, con su estado; después,
+     * las del realineamiento (solicitadas o aprobadas).
      *
      * @param  array<string, array{reason: string, fingerprint: string, file: string, line: int}>  $exceptions
      * @param  array<string, array{reason: string, fingerprint: string|null}>|null  $approved
      */
-    private function list(InputInterface $input, OutputInterface $output, array $exceptions, ?array $approved): int
+    private function list(InputInterface $input, OutputInterface $output, array $exceptions, ?array $approved, Exceptions $realign): int
     {
         $rows = [];
+        $requested = $realign->requests();
+        $approved = $approved === null ? null : array_filter($approved, fn (string|int $target): bool => ! ExceptionTargets::isRealign((string) $target), ARRAY_FILTER_USE_KEY);
 
         foreach ($exceptions as $target => $exception) {
             $locked = $approved[$target] ?? null;
@@ -226,6 +258,23 @@ class HandRolledCommand extends Command
             $rows[] = ['target' => (string) $target, 'reason' => $approval['reason'], 'file' => null, 'line' => null, 'status' => 'stale'];
         }
 
+        $realignTargets = array_unique([...array_keys($requested), ...array_keys($realign->approvals())]);
+        sort($realignTargets, SORT_STRING);
+
+        foreach ($realignTargets as $target) {
+            $request = $requested[$target] ?? null;
+            $parts = ExceptionTargets::parse($target);
+            $rows[] = [
+                'target' => $target,
+                'reason' => $request['reason'] ?? $realign->approvals()[$target]['reason'],
+                'file' => $parts === null || str_starts_with($parts['file'], 'model:') ? null : $parts['file'],
+                'line' => $request['line'] ?? null,
+                'status' => $realign->status($target),
+                'realign' => true,
+                'step' => $request['step'] ?? null,
+            ];
+        }
+
         if ($this->wantsJson($input)) {
             $this->writeJson($output, ['ok' => true, 'lock' => $approved === null ? null : HandRolledLock::PATH, 'exceptions' => $rows]);
 
@@ -235,11 +284,11 @@ class HandRolledCommand extends Command
         foreach ($rows as $row) {
             $output->writeln(sprintf('  %s %s', $this->tag($row['status']), OutputFormatter::escape($row['target'])));
             $output->writeln('             «'.OutputFormatter::escape($row['reason']).'»'
-                .($row['file'] === null ? '' : ' — '.OutputFormatter::escape($row['file']).':'.$row['line']));
+                .($row['file'] === null ? '' : ' — '.OutputFormatter::escape($row['file']).($row['line'] === null ? '' : ':'.$row['line'])));
         }
 
         if ($rows === []) {
-            $output->writeln('  No hay excepciones #[HandRolled] en el código ni en el candado.');
+            $output->writeln('  No hay excepciones #[HandRolled] en el código ni en el candado, ni excepciones del realineamiento solicitadas.');
         }
 
         if ($approved === null) {
@@ -261,7 +310,10 @@ class HandRolledCommand extends Command
             return [$target];
         }
 
-        return array_values(array_filter($pool, fn (string $candidate): bool => str_ends_with($candidate, '\\'.$target)));
+        // Una del realineamiento, por el final de su objetivo: después de
+        // `:` (el archivo), de `/` (parte de la ruta) o de `#` (el sujeto).
+        return array_values(array_filter($pool, fn (string $candidate): bool => str_ends_with($candidate, '\\'.$target)
+            || (ExceptionTargets::isRealign($candidate) && (str_ends_with($candidate, ':'.$target) || str_ends_with($candidate, '/'.$target) || str_ends_with($candidate, '#'.$target)))));
     }
 
     /**
@@ -271,7 +323,7 @@ class HandRolledCommand extends Command
     {
         if ($matches === []) {
             return $action === 'approve'
-                ? "{$target} no es una excepción #[HandRolled] con razón del código. Míralas con larapack:hand-rolled list; no se aprobó nada."
+                ? "{$target} no es una excepción #[HandRolled] con razón del código ni una excepción del realineamiento solicitada (larapack:realign except) cuyo código siga ahí. Míralas con larapack:hand-rolled list; no se aprobó nada."
                 : "{$target} no está en ".HandRolledLock::PATH.'. No se retiró nada.';
         }
 

@@ -20,9 +20,17 @@ namespace Innoboxrr\LarapackGenerator\Support\Realign;
  *    que ya existían (`larapack:fix`).
  *  - guided: `playbook` es el nombre en resources/realign/playbooks/.
  *  - decision: `options`, cada una con lo que pasa al elegirla y, si la
- *    lleva, la orden que la aplica.
+ *    lleva, la orden que la aplica y el playbook con que se hace después de
+ *    decidirla (`playbook` de la opción). Una decisión puede llevar además
+ *    su propio `playbook`: cómo pensar la decisión antes de tomarla.
  *
- * @phpstan-type Option array{key: string, label: string, consequences: string, run?: string}
+ * Las opciones que dejan algo como está piden una excepción
+ * (`larapack:realign except {id} --option reason=…`). Pedirla no la
+ * aprueba: la aprueba el dueño del proyecto con `larapack:hand-rolled
+ * approve`, y el paso no se da por hecho hasta entonces (Exceptions,
+ * DoneWhen).
+ *
+ * @phpstan-type Option array{key: string, label: string, consequences: string, run?: string, playbook?: string}
  * @phpstan-type StepType array{category: string, title: string, risk: string, why: string, reversible: bool, run?: string, playbook?: string, options?: list<Option>}
  */
 final class StepTypes
@@ -87,7 +95,7 @@ final class StepTypes
             'risk' => self::MEDIUM,
             'why' => 'Mueve código: la validación pasa antes que la autorización o al revés (un 403 que llega antes que un 422), y una respuesta puede cambiar de forma. Las pruebas del paquete tienen que pasar antes y después.',
             'reversible' => true,
-            'playbook' => 'controller-shape',
+            'playbook' => 'controller-to-request',
         ],
         'controller-concern' => [
             'category' => Category::GUIDED,
@@ -153,20 +161,22 @@ final class StepTypes
             'risk' => self::MEDIUM,
             'why' => 'Una excepción aprobada deja de vigilarse mientras no cambie. Aprobarla sin leerla es aceptar lógica en el controlador para siempre.',
             'reversible' => true,
+            'playbook' => 'decide-hand-rolled',
             'options' => [
                 ['key' => 'approve', 'label' => 'Aprobarlas', 'consequences' => 'Quedan en .larapack/hand-rolled.lock con su razón y su huella; si el código cambia, vuelven a avisar.', 'run' => 'larapack:hand-rolled approve --all'],
-                ['key' => 'refactor', 'label' => 'Llevarlas a su request', 'consequences' => 'Se quita el atributo y la lógica va a la request, como cualquier controlador (el playbook controller-shape).'],
+                ['key' => 'refactor', 'label' => 'Llevarlas a su request', 'consequences' => 'Se quita el atributo y la lógica va a la request, como cualquier controlador.', 'playbook' => 'controller-to-request'],
             ],
         ],
         'route-closure' => [
             'category' => Category::DECISION,
             'title' => 'Rutas con closure que no son el fallback de la SPA',
             'risk' => self::MEDIUM,
-            'why' => 'Una ruta con closure no pasa por una request: ni autorización ni validación generadas. A veces es lo correcto (un OPTIONS de CORS, la raíz de la SPA según el Host).',
+            'why' => 'Una ruta con closure no pasa por una request: ni autorización ni validación generadas. A veces es lo correcto (un OPTIONS de CORS, la raíz de la SPA según el Host, un health check).',
             'reversible' => true,
+            'playbook' => 'decide-route-closure',
             'options' => [
-                ['key' => 'except', 'label' => 'Declararlas excepción', 'consequences' => 'Quedan aprobadas con su razón y dejan de contar como deuda.', 'run' => 'larapack:realign except {id}'],
-                ['key' => 'refactor', 'label' => 'Llevarlas a un controlador con su request', 'consequences' => 'Se escriben controlador y request (o se declaran en controllers[]) conservando la URI y el nombre de la ruta.'],
+                ['key' => 'except', 'label' => 'Declararlas excepción', 'consequences' => 'Se pide una excepción por closure, con su razón y la huella de su código; cuenta cuando la aprueba el dueño del proyecto (larapack:hand-rolled approve), y si el closure cambia vuelve a pedir aprobación.', 'run' => 'larapack:realign except {id} --option reason="por qué"'],
+                ['key' => 'refactor', 'label' => 'Llevarlas a un controlador con su request', 'consequences' => 'Se escriben controlador y request (o se declaran en controllers[]) conservando la URI y el nombre de la ruta.', 'playbook' => 'closure-to-controller'],
             ],
         ],
         'inconsistent-entity' => [
@@ -176,7 +186,7 @@ final class StepTypes
             'why' => 'Le falta a un modelo algo que todos los de su forma tienen (el User de Laravel sin factory de LaraPack). Puede ser legítimo.',
             'reversible' => true,
             'options' => [
-                ['key' => 'except', 'label' => 'Aceptar la diferencia', 'consequences' => 'Se declara como excepción y deja de avisar.', 'run' => 'larapack:realign except {id}'],
+                ['key' => 'except', 'label' => 'Aceptar la diferencia', 'consequences' => 'Se pide una excepción con su razón; cuando la aprueba el dueño del proyecto deja de avisar, mientras verify diga lo mismo.', 'run' => 'larapack:realign except {id} --option reason="por qué"'],
                 ['key' => 'complete', 'label' => 'Completarlo', 'consequences' => 'Se genera lo que falta desde el contrato (larapack:import).'],
             ],
         ],
@@ -188,7 +198,7 @@ final class StepTypes
             'reversible' => true,
             'options' => [
                 ['key' => 'restore', 'label' => 'Restaurarlos desde el contrato', 'consequences' => 'Se vuelven a generar tal cual los produce hoy el contrato.', 'run' => 'larapack:realign apply {id}'],
-                ['key' => 'forget', 'label' => 'Dejarlos borrados', 'consequences' => 'Se olvidan en el manifiesto y se declara la excepción; si lo pide el contrato, hay que retirarlo del contrato (p. ej. `routes.only`).', 'run' => 'larapack:realign except {id}'],
+                ['key' => 'forget', 'label' => 'Dejarlos borrados', 'consequences' => 'Se pide una excepción por archivo (aprobada por el dueño, vale mientras el archivo no vuelva); lo limpio es retirarlo del contrato (p. ej. `routes.only`).', 'run' => 'larapack:realign except {id} --option reason="por qué"'],
             ],
         ],
         'untracked-edited' => [
@@ -199,7 +209,7 @@ final class StepTypes
             'reversible' => true,
             'options' => [
                 ['key' => 'adopt', 'label' => 'Adoptarlos como editados', 'consequences' => 'Quedan en el manifiesto con el hash de lo regenerado: verify los verá personalizados y --force no los toca.', 'run' => 'larapack:realign adopt {id}'],
-                ['key' => 'except', 'label' => 'Dejarlos fuera de LaraPack', 'consequences' => 'Se declaran excepción: el contrato no debería generarlos (se retira del contrato lo que los produce).', 'run' => 'larapack:realign except {id}'],
+                ['key' => 'except', 'label' => 'Dejarlos fuera de LaraPack', 'consequences' => 'Se pide una excepción por archivo, que vale mientras el archivo no cambie; lo limpio es retirar del contrato lo que los produce.', 'run' => 'larapack:realign except {id} --option reason="por qué"'],
             ],
         ],
         'unmanaged-http' => [
@@ -208,9 +218,10 @@ final class StepTypes
             'risk' => self::HIGH,
             'why' => 'Declararlos en el contrato (endpoints o controllers[]) trae pruebas y autorización generadas, pero no puede cambiar ni un nombre de ruta ni una URI que use el front. Dejarlos fuera es legítimo si delegan en su request (controller-shape lo comprueba).',
             'reversible' => true,
+            'playbook' => 'decide-unmanaged-http',
             'options' => [
-                ['key' => 'declare', 'label' => 'Declararlos en el contrato', 'consequences' => 'Se infieren endpoints/controllers[] conservando nombre de ruta y URI, y se adoptan.', 'run' => 'larapack:realign infer {id}'],
-                ['key' => 'keep', 'label' => 'Dejarlos como código propio', 'consequences' => 'Siguen bajo controller-shape; no reciben pruebas generadas.', 'run' => 'larapack:realign except {id}'],
+                ['key' => 'declare', 'label' => 'Declararlos en el contrato', 'consequences' => 'Se infieren endpoints/controllers[] conservando nombre de ruta y URI, y se adoptan.', 'run' => 'larapack:realign infer {id}', 'playbook' => 'declare-handwritten-controller'],
+                ['key' => 'keep', 'label' => 'Dejarlos como código propio', 'consequences' => 'Siguen bajo controller-shape; no reciben pruebas generadas. Se pide una excepción por archivo, que vale mientras el archivo no cambie.', 'run' => 'larapack:realign except {id} --option reason="por qué"'],
             ],
         ],
         'unmanaged-models' => [
@@ -219,9 +230,10 @@ final class StepTypes
             'risk' => self::HIGH,
             'why' => 'Adoptarlos genera CRUD, políticas y rutas para ellos: a veces es justo lo que no se quiere (un registro inmutable que nadie debe tocar por la API).',
             'reversible' => true,
+            'playbook' => 'decide-adopt-model',
             'options' => [
                 ['key' => 'adopt', 'label' => 'Inferirlos al contrato y adoptarlos', 'consequences' => 'Se infieren sus columnas de las migraciones y del modelo; lo de interfaz (formularios, enum) se completa a mano.', 'run' => 'larapack:realign infer {id}'],
-                ['key' => 'keep', 'label' => 'Dejarlos fuera', 'consequences' => 'Siguen siendo código propio; LaraPack no les genera nada.', 'run' => 'larapack:realign except {id}'],
+                ['key' => 'keep', 'label' => 'Dejarlos fuera', 'consequences' => 'Siguen siendo código propio; LaraPack no les genera nada. Se pide una excepción por modelo, que vale mientras el archivo no cambie.', 'run' => 'larapack:realign except {id} --option reason="por qué"'],
             ],
         ],
         'no-contract' => [
@@ -232,7 +244,7 @@ final class StepTypes
             'reversible' => true,
             'options' => [
                 ['key' => 'infer', 'label' => 'Inferir el contrato', 'consequences' => 'Se escribe un laraimport.json desde el código; lo que no se puede inferir (formularios, enum, decisiones de rutas) se marca para completar.', 'run' => 'larapack:realign infer {id}'],
-                ['key' => 'keep', 'label' => 'Dejarlo fuera de LaraPack', 'consequences' => 'Sólo se vigila la forma de los controladores (controller-shape).', 'run' => 'larapack:realign except {id}'],
+                ['key' => 'keep', 'label' => 'Dejarlo fuera de LaraPack', 'consequences' => 'Sólo se vigila la forma de los controladores (controller-shape). Se pide una excepción que vale mientras el ámbito no tenga laraimport.json.', 'run' => 'larapack:realign except {id} --option reason="por qué"'],
             ],
         ],
         'contract-invalid' => [
@@ -241,6 +253,7 @@ final class StepTypes
             'risk' => self::LOW,
             'why' => 'Sin un contrato válido no se puede regenerar la referencia, y nada del ámbito se puede comparar. Un paquete de integración sin modelos (`models: []`) es el caso conocido.',
             'reversible' => true,
+            'playbook' => 'decide-package-without-models',
             'options' => [
                 ['key' => 'fix', 'label' => 'Corregir el laraimport', 'consequences' => 'Se corrige el JSON hasta que larapack:validate pase; el código no se toca.'],
                 ['key' => 'drop', 'label' => 'Retirar el laraimport del ámbito', 'consequences' => 'El ámbito deja de estar gestionado por LaraPack (su código lo sigue midiendo verify).'],

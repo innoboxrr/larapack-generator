@@ -107,7 +107,7 @@ final class Planner
             $path = (string) $path;
             $regeneration = is_array($scope) ? ($scope['regeneration'] ?? null) : null;
 
-            if (is_array($scope) && ! ($scope['contract'] ?? false)) {
+            if (is_array($scope) && ! ($scope['contract'] ?? false) && ! ($scope['excepted'] ?? false)) {
                 $add('no-contract', $path, null, ['scope' => $scope]);
             } elseif (is_array($regeneration) && ! ($regeneration['ok'] ?? false)) {
                 $add('contract-invalid', $path, null, ['scope' => $scope]);
@@ -239,6 +239,11 @@ final class Planner
 
         if (isset($meta['playbook'])) {
             $step['playbook'] = $meta['playbook'];
+            $annexes = Playbooks::annexesFor($type, $findings);
+
+            if ($annexes !== []) {
+                $step['annexes'] = $annexes;
+            }
         }
 
         if (isset($meta['options'])) {
@@ -264,9 +269,17 @@ final class Planner
     private static function doneWhen(string $type, array $group, array $paths, array $findings, ?string $package): array
     {
         if ($findings !== []) {
+            // Un controlador está hecho cuando delega y cuando la request en
+            // la que delega tiene handle(): las dos, aunque hoy sólo falle una.
+            $checks = array_column($findings, 'check');
+
+            if ($type === 'controller-shape') {
+                $checks = [...$checks, 'controller-shape', 'request-handle'];
+            }
+
             return [
                 'kind' => 'verify',
-                'checks' => array_values(array_unique(array_column($findings, 'check'))),
+                'checks' => array_values(array_unique($checks)),
                 'package' => $package,
                 'files' => array_values(array_unique(array_filter(array_column($findings, 'file'), 'is_string'))),
             ];

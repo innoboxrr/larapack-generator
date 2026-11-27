@@ -7,6 +7,7 @@ use Innoboxrr\LarapackGenerator\Support\GeneratorVersion;
 use Innoboxrr\LarapackGenerator\Support\Manifest;
 use Innoboxrr\LarapackGenerator\Support\ProjectSources;
 use Innoboxrr\LarapackGenerator\Support\ProjectVerification;
+use Innoboxrr\LarapackGenerator\Support\Verifier;
 
 /**
  * `larapack:realign diagnose`: dónde está el proyecto respecto del contrato.
@@ -104,6 +105,10 @@ final class Diagnosis
                 'counts' => $counts,
                 'total' => array_sum($counts),
                 'conforming' => count(array_filter($entries, fn (array $entry): bool => $entry['category'] === null)),
+                // Un ámbito sin contrato que el dueño aprobó dejar fuera de
+                // LaraPack (una excepción `no-contract`): el plan no lo vuelve
+                // a proponer.
+                'excepted' => ! $scope['contract'] && $exceptions->covers(['type' => 'no-contract', 'scope' => $scope['path']]),
             ];
 
             foreach ($classifier->unmanaged() as $item) {
@@ -213,6 +218,13 @@ final class Diagnosis
         $findings = [];
 
         foreach ($verification->run()['findings'] as $finding) {
+            // Lo que verify sólo informa no pide nada: una excepción aprobada
+            // (#[HandRolled] o del realineamiento), una request de vendor que
+            // no se pudo comprobar.
+            if ($finding['level'] === Verifier::INFO) {
+                continue;
+            }
+
             $type = StepTypes::forFinding($finding);
 
             if ($type === null) {

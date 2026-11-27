@@ -102,11 +102,58 @@ final class RealignCatalogTest extends TestCase
         }
     }
 
+    public function test_cada_playbook_que_se_nombra_existe(): void
+    {
+        // El de un tipo guiado puede faltar a propósito y caer en el genérico
+        // (test_un_playbook_que_no_existe_cae_en_el_generico); el de una
+        // decisión o una opción, no: se nombra para mostrarlo.
+        foreach (StepTypes::TYPES as $type => $meta) {
+            $own = $meta['category'] === Category::GUIDED ? null : ($meta['playbook'] ?? null);
+
+            foreach ([$own, ...array_column($meta['options'] ?? [], 'playbook')] as $playbook) {
+                if ($playbook !== null) {
+                    $this->assertTrue(Playbooks::exists($playbook), "{$type} nombra el playbook {$playbook}, que no está en resources/realign/playbooks.");
+                }
+            }
+        }
+
+        // Los anexos que puede pedir un controlador.
+        $annexes = Playbooks::annexesFor('controller-shape', [
+            ['message' => 'X::a() (línea 3) no delega: recibe Illuminate\\Http\\Request, valida en el controlador con validate(). …'],
+            ['message' => 'X::b() (línea 9) tipa $request con illuminate\\http\\request, que no tiene handle(). …'],
+        ]);
+        $this->assertSame(['raw-request-to-formrequest', 'validate-to-rules'], $this->sorted($annexes));
+
+        foreach ($annexes as $annex) {
+            $this->assertTrue(Playbooks::exists($annex));
+        }
+
+        $this->assertSame([], Playbooks::annexesFor('controller-shape', [['message' => 'X::a() (línea 3) no delega: hace algo más que `return $request->handle();`.']]));
+        $this->assertSame([], Playbooks::annexesFor('security', [['message' => 'valida en el controlador con validate()']]));
+    }
+
+    public function test_la_guia_de_los_pasos_guiados_nombra_cada_playbook(): void
+    {
+        $guide = (string) file_get_contents(dirname(__DIR__, 2).'/docs/realign/guided.md');
+
+        foreach (Playbooks::names() as $name) {
+            $this->assertStringContainsString('`'.$name.'`', $guide, "docs/realign/guided.md no nombra el playbook `{$name}`.");
+        }
+    }
+
+    public function test_un_playbook_se_lee_sin_un_paso(): void
+    {
+        $described = Playbooks::describe('controller-to-request');
+
+        $this->assertStringNotContainsString('{{', $described);
+        $this->assertStringContainsString('<la orden que comprueba que está hecho>', $described);
+    }
+
     public function test_un_playbook_que_no_existe_cae_en_el_generico(): void
     {
         $this->assertSame(Playbooks::GENERIC, Playbooks::resolve('no-existe'));
         $this->assertSame(Playbooks::GENERIC, Playbooks::resolve('../../etc/passwd'));
-        $this->assertSame('controller-shape', Playbooks::resolve('controller-shape'));
+        $this->assertSame('controller-to-request', Playbooks::resolve('controller-to-request'));
 
         $rendered = Playbooks::render(['id' => 'x@.', 'playbook' => 'no-existe', 'title' => 'T', 'scope' => ['package' => null, 'path' => '.'],
             'risk' => ['level' => 'low', 'why' => 'w'], 'done_when' => ['kind' => 'decision'], 'details' => ['files' => [], 'findings' => [], 'unmanaged' => []]]);
@@ -123,5 +170,16 @@ final class RealignCatalogTest extends TestCase
         foreach ([...Category::ALL, ...FileClass::ALL, ...array_keys(StepTypes::TYPES), ...DoneWhen::KINDS, ...Operations::ACTIONS] as $name) {
             $this->assertStringContainsString('`'.$name.'`', $guide, "docs/realign/README.md no nombra `{$name}`.");
         }
+    }
+
+    /**
+     * @param  list<string>  $values
+     * @return list<string>
+     */
+    private function sorted(array $values): array
+    {
+        sort($values, SORT_STRING);
+
+        return $values;
     }
 }

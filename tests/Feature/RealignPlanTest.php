@@ -93,13 +93,15 @@ final class RealignPlanTest extends TestCase
         $this->assertSame(['kind' => 'classification', 'files' => [self::CONTROLLER], 'accept' => ['identical', 'format_only'], 'tracked' => true, 'hash_current' => true], $adopt['done_when']);
 
         $shape = $this->step('controller-shape@'.self::REPORT_CONTROLLER);
-        $this->assertSame('controller-shape', $shape['playbook']);
-        $this->assertSame(['kind' => 'verify', 'checks' => ['controller-shape'], 'package' => null, 'files' => [self::REPORT_CONTROLLER]], $shape['done_when']);
+        $this->assertSame('controller-to-request', $shape['playbook']);
+        // Valida con validate() y recibe Illuminate\Http\Request: sus dos anexos.
+        $this->assertSame(['validate-to-rules', 'raw-request-to-formrequest'], $shape['annexes']);
+        $this->assertSame(['kind' => 'verify', 'checks' => ['controller-shape', 'request-handle'], 'package' => null, 'files' => [self::REPORT_CONTROLLER]], $shape['done_when']);
         $this->assertStringContainsString('validate()', $shape['details']['findings'][0]['message']);
 
         $decision = $this->step('unmanaged-http@.');
         $this->assertSame(['declare', 'keep'], array_column($decision['options'], 'key'));
-        $this->assertSame('larapack:realign except unmanaged-http@.', $decision['options'][1]['run']);
+        $this->assertSame('larapack:realign except unmanaged-http@. --option reason="por qué"', $decision['options'][1]['run']);
     }
 
     public function test_next_da_el_paso_con_su_orden_y_su_comprobacion(): void
@@ -124,7 +126,7 @@ final class RealignPlanTest extends TestCase
         $next = $this->realign('next');
 
         $this->assertSame('controller-shape@'.self::REPORT_CONTROLLER, $next['step']['id']);
-        $this->assertSame('controller-shape', $next['how']['playbook']);
+        $this->assertSame('controller-to-request', $next['how']['playbook']);
         $this->assertStringContainsString(self::REPORT_CONTROLLER, $next['how']['instructions']);
         $this->assertStringContainsString('larapack:realign check controller-shape@'.self::REPORT_CONTROLLER, $next['how']['instructions']);
         $this->assertStringContainsString('--check=controller-shape', $next['how']['instructions']);
@@ -196,7 +198,7 @@ final class RealignPlanTest extends TestCase
         $decided = $this->realign('decide', ['targets' => ['unmanaged-http@.', 'keep'], '--note' => 'Es un informe interno.']);
         $this->assertSame('keep', $decided['decision']['option']);
         $this->assertSame('Es un informe interno.', $decided['decision']['note']);
-        $this->assertSame('larapack:realign except unmanaged-http@.', $decided['then']);
+        $this->assertSame('larapack:realign except unmanaged-http@. --option reason="por qué"', $decided['then']);
         $this->assertSame('keep', $this->step('unmanaged-http@.')['decision']['option']);
 
         // Decidir no es hacer: hasta que el controlador se apruebe o se
@@ -292,7 +294,7 @@ final class RealignPlanTest extends TestCase
     {
         $help = $this->realign('help');
 
-        $this->assertSame(['diagnose', 'plan', 'status', 'next', 'check', 'decide', 'adopt', 'apply', 'infer', 'except'], array_keys($help['actions']));
+        $this->assertSame(['diagnose', 'plan', 'status', 'next', 'check', 'decide', 'playbook', 'adopt', 'apply', 'infer', 'except'], array_keys($help['actions']));
         $this->assertSame(Category::ALL, $help['categories']);
         $this->assertSame('docs/realign/README.md', $help['guide']);
     }

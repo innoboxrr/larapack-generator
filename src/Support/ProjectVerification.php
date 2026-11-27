@@ -2,6 +2,8 @@
 
 namespace Innoboxrr\LarapackGenerator\Support;
 
+use Innoboxrr\LarapackGenerator\Support\Realign\Exceptions;
+
 /**
  * `verify` sobre un proyecto entero: la raíz y sus paquetes locales.
  *
@@ -80,7 +82,7 @@ final class ProjectVerification
 
     /**
      * @param  array<int, string>  $only  sólo estas comprobaciones; vacío, todas
-     * @return array{findings: list<ScopedFinding>, summary: list<Scope>}
+     * @return array{findings: list<ScopedFinding>, summary: list<Scope>, exceptions: list<array{target: string, reason: string, fingerprint: string|null, status: string}>}
      */
     public function run(array $only = []): array
     {
@@ -120,7 +122,31 @@ final class ProjectVerification
             fn (array $finding): bool => $this->selected($this->rootOfPackage($finding['package']))
         ));
 
-        return ['findings' => $findings, 'summary' => $this->summary($findings, $verified)];
+        // Las excepciones del realineamiento aprobadas por el dueño
+        // (Exceptions): lo que cubren pasa a info diciéndolo, y lo aprobado
+        // que ya no cubre nada se avisa como lo de #[HandRolled].
+        $exceptions = Exceptions::forRoot($root);
+
+        $changes = $exceptions->review($findings);
+        $reviewed = [];
+
+        foreach ($findings as $index => $finding) {
+            $reviewed[] = isset($changes[$index])
+                ? ['level' => $changes[$index]['level'], 'message' => $changes[$index]['message']] + $finding
+                : $finding;
+        }
+
+        $findings = $reviewed;
+
+        $ran = $only === [] ? Verifier::CHECKS : array_values($only);
+
+        if ($only === [] || in_array(ControllerShape::HAND_ROLLED_STALE, $only, true)) {
+            foreach ($exceptions->staleFindings($ran, fn (string $file): bool => $this->selected($this->ownerOf($file))) as $stale) {
+                $findings[] = $stale + ['package' => null];
+            }
+        }
+
+        return ['findings' => $findings, 'summary' => $this->summary($findings, $verified), 'exceptions' => $exceptions->all()];
     }
 
     /**

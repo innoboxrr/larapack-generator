@@ -2,7 +2,9 @@
 
 namespace Innoboxrr\LarapackGenerator\Tests\Feature;
 
+use Innoboxrr\LarapackGenerator\Support\HandRolledLock;
 use Innoboxrr\LarapackGenerator\Support\Realign\Category;
+use Innoboxrr\LarapackGenerator\Support\Realign\ExceptionTargets;
 use Innoboxrr\LarapackGenerator\Support\Realign\FileClass;
 use Innoboxrr\LarapackGenerator\Support\Realign\RealignState;
 use Innoboxrr\LarapackGenerator\Tests\Support\RealignProject;
@@ -370,18 +372,28 @@ final class RealignDiagnoseTest extends TestCase
 
     public function test_una_excepcion_aprobada_deja_de_proponerse(): void
     {
+        $file = 'src/Http/Controllers/Admin/HookController.php';
+        $target = ExceptionTargets::forFile('unmanaged-http', null, $file);
         @mkdir($this->project->path.'/src/Http/Controllers/Admin', 0777, true);
-        file_put_contents($this->project->path.'/src/Http/Controllers/Admin/HookController.php', "<?php\n\nnamespace Acme\\Blog\\Http\\Controllers\\Admin;\n\nclass HookController {}\n");
+        file_put_contents($this->project->path.'/'.$file, "<?php\n\nnamespace Acme\\Blog\\Http\\Controllers\\Admin;\n\nclass HookController {}\n");
+
+        // Sólo solicitada no cubre nada.
         @mkdir($this->project->path.'/.larapack/realign', 0777, true);
-        file_put_contents($this->project->path.'/.larapack/realign/exceptions.json', json_encode(['format_version' => 1, 'exceptions' => [
-            ['type' => 'unmanaged-http', 'file' => 'src/Http/Controllers/Admin/HookController.php', 'reason' => 'Firma sobre el cuerpo en bruto.'],
-            // Sin razón no cuenta.
-            ['type' => 'unmanaged-models', 'file' => 'src/Models/Post.php'],
+        file_put_contents($this->project->path.'/.larapack/realign/exceptions.json', json_encode(['format_version' => 1, 'requests' => [
+            ['target' => $target, 'reason' => 'Firma sobre el cuerpo en bruto.'],
         ]]));
-
         $this->realign('diagnose');
+        $this->assertSame([$file], array_column($this->report()['unmanaged'], 'file'));
 
+        // Aprobada sobre este código, sí.
+        HandRolledLock::write($this->project->path, [$target => ['reason' => 'Firma sobre el cuerpo en bruto.', 'fingerprint' => ExceptionTargets::fingerprint($this->project->path, $target)]]);
+        $this->realign('diagnose');
         $this->assertSame([], $this->report()['unmanaged']);
+
+        // Y si el código cambia, deja de cubrirlo.
+        file_put_contents($this->project->path.'/'.$file, "<?php\n\nnamespace Acme\\Blog\\Http\\Controllers\\Admin;\n\nclass HookController { public function x() {} }\n");
+        $this->realign('diagnose');
+        $this->assertSame([$file], array_column($this->report()['unmanaged'], 'file'));
     }
 
     public function test_la_segunda_vez_usa_lo_regenerado_si_nada_cambio(): void
