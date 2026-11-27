@@ -1,0 +1,187 @@
+{
+    "models": [
+        {
+            "name": "User",
+            "authenticatable": true,
+            "metas": true,
+            "editable_metas": [
+                "avatar"
+            ],
+            "display": "name",
+            "routes": {
+                "except": [
+                    "create"
+                ]
+            },
+            "props": [
+                {
+                    "name": "uuid",
+                    "type": "uuid",
+                    "fillable": false,
+                    "creatable": false,
+                    "updatable": false,
+                    "datatable": false
+                },
+                {
+                    "name": "name",
+                    "type": "string",
+                    "datatable": true,
+                    "form": true,
+                    "form_component": "TextInputComponent",
+                    "form_submit": true
+                },
+                {
+                    "name": "email",
+                    "type": "string",
+                    "datatable": true,
+                    "form": true,
+                    "form_component": "TextInputComponent",
+                    "form_submit": true
+                },
+                {
+                    "name": "email_verified_at",
+                    "type": "timestamp",
+                    "nullable": true,
+                    "fillable": false,
+                    "creatable": false,
+                    "updatable": false,
+                    "datatable": true
+                },
+                {
+                    "name": "status",
+                    "type": "string",
+                    "default": "ACTIVE",
+                    "datatable": true,
+                    "form": true,
+                    "form_component": "SelectInputComponent",
+                    "form_submit": true,
+                    "enum": {
+                        "ACTIVE": "Activa",
+                        "SUSPENDED": "Suspendida"
+                    }
+                },
+                {
+                    "name": "password",
+                    "type": "string",
+                    "updatable": false,
+                    "exports_cols": false,
+                    "secret": true
+                }
+            ],
+            "requests": [
+                {
+                    "name": "Update",
+                    "rules": {
+                        "user_id": "required|numeric",
+                        "name": "sometimes|required|string|max:255",
+                        "email": "sometimes|required|email|max:255"
+                    }
+                }
+            ]
+        },
+        {
+            "name": "ProviderModuleGrant",
+            "display": "grant_key",
+            "props": [
+                {
+                    "name": "provider_agreement_version_id",
+                    "type": "foreignId",
+                    "constraint": "provider_agreement_versions",
+                    "updatable": false,
+                    "datatable": true,
+                    "form": true,
+                    "form_component": "SelectSearchInputComponent",
+                    "form_submit": true
+                },
+                {
+                    "name": "module_id",
+                    "type": "foreignId",
+                    "constraint": "modules",
+                    "updatable": false,
+                    "datatable": true,
+                    "form": true,
+                    "form_component": "SelectSearchInputComponent",
+                    "form_submit": true
+                },
+                {
+                    "name": "parent_grant_id",
+                    "type": "foreignId",
+                    "constraint": "provider_module_grants",
+                    "updatable": false,
+                    "datatable": true,
+                    "nullable": true,
+                    "form": true,
+                    "form_component": "SelectSearchInputComponent",
+                    "form_submit": true
+                },
+                {
+                    "name": "authorized_by_user_id",
+                    "type": "foreignId",
+                    "constraint": "users",
+                    "updatable": false,
+                    "datatable": true,
+                    "fillable": false,
+                    "creatable": false,
+                    "form": false
+                },
+                {
+                    "name": "grant_key",
+                    "type": "string",
+                    "updatable": false,
+                    "datatable": true,
+                    "fillable": false,
+                    "creatable": false,
+                    "form": false
+                },
+                {
+                    "name": "can_resell",
+                    "type": "boolean",
+                    "default": false,
+                    "cast": "boolean",
+                    "updatable": true,
+                    "datatable": true,
+                    "form": true,
+                    "form_component": "SwitchComponent",
+                    "form_submit": true
+                },
+                {
+                    "name": "can_delegate_resale",
+                    "type": "boolean",
+                    "default": false,
+                    "cast": "boolean",
+                    "updatable": true,
+                    "datatable": true,
+                    "form": true,
+                    "form_component": "SwitchComponent",
+                    "form_submit": true
+                },
+                {
+                    "name": "valid_from",
+                    "type": "dateTime",
+                    "cast": "datetime",
+                    "updatable": true,
+                    "datatable": true,
+                    "form": true,
+                    "form_component": "TextInputComponent",
+                    "form_submit": true
+                },
+                {
+                    "name": "valid_until",
+                    "type": "dateTime",
+                    "cast": "datetime",
+                    "updatable": true,
+                    "datatable": true,
+                    "nullable": true,
+                    "form": true,
+                    "form_component": "TextInputComponent",
+                    "form_submit": true
+                }
+            ],
+            "routes": {
+                "except": [
+                    "create"
+                ]
+            }
+        }
+    ]
+}
