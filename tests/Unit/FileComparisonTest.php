@@ -56,11 +56,14 @@ final class FileComparisonTest extends TestCase
         $this->assertSame(FileComparison::FORMAT, FileComparison::compare($formatted, self::CODE, 'php'));
     }
 
-    public function test_un_comentario_anadido_es_una_edicion(): void
+    public function test_un_comentario_anadido_se_distingue_del_formato(): void
     {
         $commented = str_replace('return [', "// a mano\n        return [", self::CODE);
 
-        $this->assertSame(FileComparison::DIFFERENT, FileComparison::compare($commented, self::CODE, 'php'));
+        // El mismo código: «formato» según el encargo, pero dicho aparte,
+        // porque adoptarlo deja que --force reemplace el comentario.
+        $this->assertSame(FileComparison::COMMENTS, FileComparison::compare($commented, self::CODE, 'php'));
+        $this->assertSame(FileComparison::DIFFERENT, FileComparison::compare(str_replace("'required'", "'nullable'", $commented), self::CODE, 'php'));
         // Pero el mismo comentario con otros espacios es formato.
         $this->assertSame(FileComparison::FORMAT, FileComparison::compare(
             str_replace('// a mano', '//   a   mano', $commented),
@@ -97,6 +100,13 @@ final class FileComparisonTest extends TestCase
         $this->assertSame(['method:rules'], FileComparison::members($rules, self::CODE));
         $this->assertSame(['method:helper', 'outside'], FileComparison::members($added, self::CODE));
         $this->assertSame([], FileComparison::members(self::CODE, self::CODE));
+
+        // Un `use` nuevo en la cabecera es `imports`, no `outside`; reordenar
+        // los que había no es nada.
+        $imported = str_replace('use Acme\\Blog\\Models\\Post;', "use Acme\\Blog\\Models\\Post;\nuse Acme\\Blog\\Support\\Scope;", $rules);
+        $this->assertSame(['imports', 'method:rules'], FileComparison::members($imported, self::CODE));
+        $reordered = str_replace("use Illuminate\\Foundation\\Http\\FormRequest;\nuse Acme\\Blog\\Models\\Post;", "use Acme\\Blog\\Models\\Post;\nuse Illuminate\\Foundation\\Http\\FormRequest;", self::CODE);
+        $this->assertSame([], FileComparison::members($reordered, self::CODE));
     }
 
     public function test_un_closure_o_una_clase_anonima_no_parten_mal_los_metodos(): void
@@ -113,6 +123,8 @@ final class FileComparisonTest extends TestCase
         $this->assertFalse(Holes::onlyHoles('Requests/CreateRequest.txt', ['method:rules', 'method:authorize']));
         $this->assertFalse(Holes::onlyHoles('Requests/CreateRequest.txt', ['outside']));
         $this->assertTrue(Holes::onlyHoles('Filters/ManagedFilterTemplate.txt', ['method:canview']));
+        $this->assertTrue(Holes::onlyHoles('Filters/ManagedFilterTemplate.txt', ['imports', 'method:canview']));
+        $this->assertFalse(Holes::onlyHoles('Controller/ControllerTemplate.txt', ['imports']));
         $this->assertTrue(Holes::onlyHoles('Policy/PolicyTemplate.txt', ['outside', 'method:view']));
         $this->assertTrue(Holes::onlyHoles('ModelTraits/Operations/OperationsTemplate.txt', ['outside']));
         $this->assertFalse(Holes::onlyHoles('Controller/ControllerTemplate.txt', ['method:index']));

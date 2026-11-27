@@ -21,11 +21,12 @@ que hay que arreglar.
 8. [`verify`](#verify)
 9. [La guardia y los hooks](#la-guardia-y-los-hooks)
 10. [`fix`](#fix)
-11. [`audit` y la línea base](#audit-y-la-línea-base)
-12. [Cómo se registra un comando](#cómo-se-registra-un-comando)
-13. [Principios de diseño](#principios-de-diseño)
-14. [Mapa de directorios](#mapa-de-directorios)
-15. [Dónde mirar para cada cambio](#dónde-mirar-para-cada-cambio)
+11. [`realign`](#realign)
+12. [`audit` y la línea base](#audit-y-la-línea-base)
+13. [Cómo se registra un comando](#cómo-se-registra-un-comando)
+14. [Principios de diseño](#principios-de-diseño)
+15. [Mapa de directorios](#mapa-de-directorios)
+16. [Dónde mirar para cada cambio](#dónde-mirar-para-cada-cambio)
 
 ---
 
@@ -380,18 +381,27 @@ proyecto destino:
 
 ```
 {
-  "version": 1,
-  "package": { "namespace": "...", "files": { "<ruta>": { "stub": "...", "hash": "sha256" } } },
+  "version": 2,
+  "package": { "namespace": "...", "files": { "<ruta>": { "stub": "...", "hash": "sha256", "generator": "9.4.0" } } },
   "models": {
     "<Modelo>": {
       "namespace": "...",
-      "files": { "<ruta>": { "stub": "Model/ModelTemplate.txt", "hash": "..." } },
+      "files": { "<ruta>": { "stub": "Model/ModelTemplate.txt", "hash": "...", "generator": "9.4.0", "state": "adopted" } },
       "declaration": { "actions": [...], "immutable": true, "secret": [...], "endpoints": [...] }
     }
   }
 }
 ```
 
+- **La versión 2 (9.4.0) añade a cada archivo** la versión del generador que
+  lo escribió (`generator`, de [`GeneratorVersion`](src/Support/GeneratorVersion.php))
+  y, si no lo escribió sino que se adoptó, `state: adopted`
+  (`Manifest::adopt`). Uno de la versión 1 se lee igual —sin versión ni
+  estado— y la siguiente escritura lo pasa a la 2; uno de una versión
+  posterior no se reescribe (`MakerException::manifestTooNew`). Para el
+  realineamiento hay además `Manifest::relink` (una ruta renombrada),
+  `Manifest::drop` (olvidar un archivo) y `Manifest::entryOf` (el registro
+  completo de un archivo).
 - **El hash es del contenido al generarlo**, con los finales de línea
   normalizados. Si cambia, el archivo se editó, que es legítimo: se conserva y
   `verify` lo informa como `customised`. Un archivo que el manifiesto no conoce
@@ -555,6 +565,90 @@ cambian el código de salida y nunca se escriben solas.
 
 ---
 
+## `realign`
+
+[`RealignCommand`](src/Commands/RealignCommand.php) (`larapack:realign`) lleva
+de vuelta al contrato un proyecto que se desvió, sin reconstruirlo. La guía para
+quien lo ejecuta está en [docs/realign/README.md](docs/realign/README.md); aquí,
+cómo está hecho y dónde se extiende. Todo vive en `src/Support/Realign/`.
+
+Es **un comando con la acción como argumento** (`diagnose`, `plan`, `status`,
+`next`, `check`, `decide` y las operaciones), como `larapack:hand-rolled`: todas
+comparten la raíz, el estado, `--package` y `--format`, y así una operación
+nueva se enchufa sin registrar un comando. Cada acción declara qué opciones usa
+(`RealignCommand::ACCEPTS`); una que no usa es un error, no un silencio.
+
+**El diagnóstico** ([`Diagnosis`](src/Support/Realign/Diagnosis.php)):
+
+1. [`Scopes`](src/Support/Realign/Scopes.php) da los ámbitos: la raíz y cada
+   paquete local (los mismos de `ProjectSources`) con contrato o manifiesto
+   propio.
+2. [`Regeneration`](src/Support/Realign/Regeneration.php) regenera el
+   contrato de cada uno en `.larapack/realign/cache/<ámbito>/<clave>/`: copia
+   el `composer.json`, el `laraimport.json` y el `pint.json` y corre
+   `larapack:import` en un **proceso hijo** con `--root` ahí (el estado de una
+   generación es estático, y así van varios a la vez con `--jobs`). La clave
+   es el hash de lo que decide el resultado —versión, plantillas, contrato,
+   Pint, interfaz—; `Regeneration::uiOf` lee del manifiesto si se generó
+   React o Vue.
+3. [`ScopeClassifier`](src/Support/Realign/ScopeClassifier.php) compara cada
+   archivo con su par regenerado —una migración, por el nombre sin la fecha—
+   con [`FileComparison`](src/Support/Realign/FileComparison.php) (bytes,
+   tokens sin espacios con comentarios, JSON por valor) y, lo que sigue
+   distinto, con [`PintPass`](src/Support/Realign/PintPass.php) (la copia por
+   la misma Pint). Lo distinto se separa por piezas
+   (`FileComparison::members`) contra [`Holes`](src/Support/Realign/Holes.php).
+   La clase sale de [`FileClass`](src/Support/Realign/FileClass.php) y la
+   categoría de [`Category`](src/Support/Realign/Category.php). Es la misma
+   función para el diagnóstico y para comprobar un paso: un archivo no se
+   clasifica de dos formas según quién pregunte.
+4. Los hallazgos de `ProjectVerification` reciben su paso con
+   `StepTypes::forFinding`.
+5. [`Exceptions`](src/Support/Realign/Exceptions.php) lee las excepciones
+   aprobadas (`.larapack/realign/exceptions.json`): lo que cubren no se vuelve
+   a proponer.
+
+**El plan** ([`Planner`](src/Support/Realign/Planner.php)) agrupa por tipo de
+paso y ámbito —por archivo en `controller-shape`, por familia de plantilla en
+`edited-outside`—, ordena (lo que desbloquea, lo guiado del ámbito que más
+cumple al que menos, las decisiones), pone las dependencias y, al volver a
+planificar, conserva el estado de cada id (`Planner::build`). El catálogo de
+tipos, con su categoría, riesgo, forma de ejecutarse y orden, es
+[`StepTypes`](src/Support/Realign/StepTypes.php). El estado visible de un paso
+(`blocked`, `awaiting_decision`, `decided`) se calcula al leer
+(`Planner::effectiveStatus`): no se guarda nada que pueda desincronizarse.
+
+**`check`** corre el `done_when` del paso con
+[`DoneWhen`](src/Support/Realign/DoneWhen.php): `verify` acotado, la misma
+clasificación, el código sin gestionar o la validación del contrato. Hacer un
+paso no lo marca hecho; sólo esto.
+
+**`next`** rellena el playbook de un paso guiado con
+[`Playbooks`](src/Support/Realign/Playbooks.php)
+(`resources/realign/playbooks/<tipo>.md`, `generic.md` si no hay). Un marcador
+desconocido es un error: una instrucción a medias es peor que ninguna.
+
+**Las operaciones que escriben** implementan
+[`RealignOperation`](src/Support/Realign/Operations/RealignOperation.php) y
+se descubren por el nombre (`Operations::for`: `adopt` busca
+`AdoptOperation`); sin implementación, una
+[`PendingOperation`](src/Support/Realign/Operations/PendingOperation.php) lo
+dice. [`OperationRunner`](src/Support/Realign/Operations/OperationRunner.php)
+hace lo común: resuelve los pasos (los nombrados o los pendientes que la
+operación sabe hacer, nunca uno hecho o bloqueado), exige el árbol git limpio
+fuera de `.larapack/realign/` salvo `--allow-dirty`, pasa `--dry-run` y las
+`--option`, y anota en la historia del paso lo que hizo. La operación recibe un
+[`OperationContext`](src/Support/Realign/Operations/OperationContext.php) y
+devuelve un [`OperationResult`](src/Support/Realign/Operations/OperationResult.php)
+con `fixed`, `skipped` y `unchanged`, como `fix`.
+
+**El estado** ([`RealignState`](src/Support/Realign/RealignState.php)) es
+`report.json` y `plan.json`, con `RealignState::FORMAT_VERSION`, escritos de
+forma atómica; la caché queda fuera de git por el `.gitignore` del directorio.
+Lo mismo lleva toda salida `--format=json`.
+
+---
+
 ## `audit` y la línea base
 
 [`ecosystem.json`](ecosystem.json) es la fuente de verdad de versiones del
@@ -665,6 +759,9 @@ que rompe está en [CONTRIBUTING](CONTRIBUTING.md#qué-cuenta-como-cambio-que-ro
 | [`src/Commands/`](src/Commands/) | Un archivo por comando; `Concerns/` con lo común. |
 | [`src/Support/Import/`](src/Support/Import/) | Esquema, valores por omisión, validación semántica, documento resuelto, acciones y endpoints. |
 | [`src/Support/`](src/Support/) | El resto del núcleo: estado de ejecución, manifiesto, formateo, `verify`, guardia, `fix`, `audit`. |
+| [`src/Support/Realign/`](src/Support/Realign/) | `larapack:realign`: ámbitos, regeneración de referencia, clasificación, plan, comprobaciones, playbooks y, en `Operations/`, el contrato de las operaciones que escriben. |
+| [`resources/realign/playbooks/`](resources/realign/playbooks/) | Las instrucciones de cada tipo de paso guiado, que `larapack:realign next` rellena. |
+| [`docs/realign/`](docs/realign/) | La guía del realineamiento para quien lo ejecuta, persona o agente. |
 | [`src/Tools/`](src/Tools/) | Una herramienta por pieza generada, sobre `Tool`. |
 | [`src/Stubs/`](src/Stubs/) | Las plantillas, por área. |
 | [`src/Attributes/`](src/Attributes/) | `#[HandRolled]`, lo único que el código del proyecto importa del generador. |
@@ -784,6 +881,29 @@ cambia algo que ve quien usa el generador.
   `Concerns/` en lugar de reimplementar `--root` o la salida JSON. Va a
   «Referencia de comandos» del README; si el skill lo menciona, `SkillTest`
   comprueba que exista.
+
+### Una pieza del realineamiento
+
+- **Un tipo de paso**: su entrada en `StepTypes::TYPES` (categoría, riesgo
+  con su razón, si se deshace, y `run`, `playbook` u `options`), su sitio en
+  `StepTypes::ORDER` y, si lo pide una comprobación de verify, en
+  `StepTypes::CHECKS`. Si su `done_when` no es el de siempre, en
+  `Planner::doneWhen`. `RealignCatalogTest` comprueba que no falte nada y que
+  [docs/realign/README.md](docs/realign/README.md) lo nombre.
+- **Un playbook**: `resources/realign/playbooks/<tipo>.md`, con los
+  marcadores de `Playbooks::PLACEHOLDERS`; el tipo apunta a él con
+  `playbook`. Uno que use un marcador que no existe falla la prueba.
+- **Una operación que escribe** (`adopt`, `apply`, `infer`, `except`): la
+  clase `src/Support/Realign/Operations/<Acción>Operation.php` que implemente
+  [`RealignOperation`](src/Support/Realign/Operations/RealignOperation.php).
+  Nada más: `Operations::for` la descubre por el nombre y
+  `OperationRunner::run` hace lo común. Su prueba, como
+  `RealignOperationsTest`, sobre un proyecto con git.
+- **Un hueco nuevo** del README va también a
+  [`Holes`](src/Support/Realign/Holes.php), o el diagnóstico verá su
+  edición como «fuera de los huecos».
+- **Un `kind` de comprobación**: en `DoneWhen::check` y `DoneWhen::KINDS`, y
+  en la guía.
 
 ### Una versión del ecosistema
 

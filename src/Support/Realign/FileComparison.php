@@ -20,9 +20,12 @@ use Innoboxrr\LarapackGenerator\Support\Files;
  *  3. Distintos: y entonces members() dice qué piezas cambiaron, para saber
  *     si la edición cae dentro de los huecos (Holes).
  *
- * Los comentarios cuentan a propósito: un comentario añadido a mano es una
- * edición, y adoptar el archivo como «sólo formato» dejaría que un
- * `--force` lo borrara.
+ * Entre el 2 y el 3, COMMENTS: el mismo código y otros comentarios. El
+ * realineamiento lo trata como formato (es lo que pide su definición), pero
+ * se distingue porque adoptar un archivo así deja que un `--force` reemplace
+ * esos comentarios por los de la plantilla; ScopeClassifier lo marca
+ * (`comments: true`) y, en lo que nadie editó o en un hueco, no lo trata
+ * como formato.
  *
  * @phpstan-type Piece array{0: int|string, 1: string}
  */
@@ -31,6 +34,9 @@ final class FileComparison
     public const IDENTICAL = 'identical';
 
     public const FORMAT = 'format';
+
+    /** El mismo código; sólo cambian los comentarios. */
+    public const COMMENTS = 'comments';
 
     public const DIFFERENT = 'different';
 
@@ -55,7 +61,13 @@ final class FileComparison
             return self::IDENTICAL;
         }
 
-        return self::normalise($current, $kind) === self::normalise($regenerated, $kind) ? self::FORMAT : self::DIFFERENT;
+        if (self::normalise($current, $kind, true) === self::normalise($regenerated, $kind, true)) {
+            return self::FORMAT;
+        }
+
+        return $kind === 'php' && self::normalise($current, $kind, false) === self::normalise($regenerated, $kind, false)
+            ? self::COMMENTS
+            : self::DIFFERENT;
     }
 
     /**
@@ -73,9 +85,11 @@ final class FileComparison
     /**
      * Las piezas de un PHP que difieren entre los dos: `method:<nombre>` (en
      * minúsculas, como los compara PHP) por cada método distinto, añadido o
-     * quitado, y `outside` si cambió algo fuera de los métodos —un `use`,
-     * una propiedad, la cabecera de la clase—. Sin espacios ni comentarios:
-     * aquí importa dónde está la diferencia, no si es de formato.
+     * quitado; `imports` si cambiaron los `use` de la cabecera (el código de
+     * un hueco suele traer los suyos), y `outside` si cambió algo más fuera
+     * de los métodos —una propiedad, la cabecera de la clase—. Sin espacios
+     * ni comentarios: aquí importa dónde está la diferencia, no si es de
+     * formato.
      *
      * @return list<string>
      */
@@ -99,7 +113,7 @@ final class FileComparison
     /**
      * @param  'php'|'json'|'text'  $kind
      */
-    private static function normalise(string $content, string $kind): string
+    private static function normalise(string $content, string $kind, bool $comments): string
     {
         if ($kind === 'json') {
             $decoded = json_decode($content, true);
@@ -113,7 +127,9 @@ final class FileComparison
             return (string) preg_replace('/\s+/', '', $content);
         }
 
-        return implode(' ', self::sortImports(self::tokens($content)));
+        [$head, $imports, $rest] = self::header(self::tokens($content, $comments));
+
+        return implode(' ', [...$head, ...$imports, ...$rest]);
     }
 
     /**
@@ -136,12 +152,12 @@ final class FileComparison
     }
 
     /**
-     * Los tokens de un PHP sin espacios, con los comentarios sin espacios
-     * dentro y sin coma final.
+     * Los tokens de un PHP sin espacios y sin coma final; con $comments, los
+     * comentarios van sin espacios dentro, y sin él, no van.
      *
      * @return list<string>
      */
-    private static function tokens(string $code): array
+    private static function tokens(string $code, bool $comments): array
     {
         $tokens = [];
 
@@ -154,7 +170,7 @@ final class FileComparison
 
             [$id, $text] = $token;
 
-            if ($id === T_WHITESPACE) {
+            if ($id === T_WHITESPACE || (! $comments && ($id === T_COMMENT || $id === T_DOC_COMMENT))) {
                 continue;
             }
 
@@ -168,16 +184,17 @@ final class FileComparison
     }
 
     /**
-     * Los `use` de importación de la cabecera, ordenados: Pint los ordena
-     * (ordered_imports) y el orden no cambia lo que significan. Sólo los de
-     * arriba del todo: la cabecera termina en la primera sentencia que no es
-     * `namespace`, `declare` ni `use` (los `use` de traits van dentro de la
-     * clase y no se tocan).
+     * La cabecera de un PHP partida en tres: lo que va antes (`<?php`,
+     * `namespace`, `declare`), los `use` de importación —ordenados: Pint los
+     * ordena (ordered_imports) y el orden no cambia lo que significan— y el
+     * resto. La cabecera termina en la primera sentencia que no es
+     * `namespace`, `declare` ni `use`; los `use` de traits van dentro de la
+     * clase y no se tocan.
      *
      * @param  list<string>  $tokens
-     * @return list<string>
+     * @return array{0: list<string>, 1: list<string>, 2: list<string>}
      */
-    private static function sortImports(array $tokens): array
+    private static function header(array $tokens): array
     {
         $head = [];
         $imports = [];
@@ -189,15 +206,14 @@ final class FileComparison
         for (; $index < $count; $index++) {
             $token = $tokens[$index];
 
-            // El primer token es `<?php`: no abre ninguna sentencia.
-            if ($current === [] && $depth === 0 && $index > 0 && ! in_array(strtolower($token), ['namespace', 'declare', 'use'], true)) {
+            if ($current === [] && $depth === 0 && ! in_array(strtolower($token), ['<?php', 'namespace', 'declare', 'use'], true)) {
                 break;
             }
 
             $current[] = $token;
             $depth += in_array($token, self::OPENING, true) ? 1 : (in_array($token, self::CLOSING, true) ? -1 : 0);
 
-            if ($index === 0 || ($token === ';' && $depth === 0)) {
+            if (strtolower($token) === '<?php' || ($token === ';' && $depth === 0)) {
                 if (strtolower($current[0]) === 'use') {
                     $imports[] = implode(' ', $current);
                 } else {
@@ -210,7 +226,7 @@ final class FileComparison
 
         sort($imports);
 
-        return [...$head, ...$imports, ...$current, ...array_slice($tokens, $index)];
+        return [$head, $imports, [...$current, ...array_slice($tokens, $index)]];
     }
 
     /**
@@ -269,7 +285,9 @@ final class FileComparison
             $outside[] = $text;
         }
 
-        return ['outside' => implode(' ', self::withoutTrailingCommas($outside))] + $methods;
+        [$head, $imports, $rest] = self::header(self::withoutTrailingCommas($outside));
+
+        return ['imports' => implode(' ', $imports), 'outside' => implode(' ', [...$head, ...$rest])] + $methods;
     }
 
     /**

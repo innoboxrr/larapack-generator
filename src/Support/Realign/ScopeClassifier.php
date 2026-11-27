@@ -20,7 +20,7 @@ use Innoboxrr\LarapackGenerator\Support\ProjectSources;
  *
  * @phpstan-import-type Scope from Scopes
  *
- * @phpstan-type Entry array{scope: string, package: string|null, file: string, path: string, model: string|null, stub: string|null, class: string, category: string|null, type: string|null, reason: string, tracked: bool, hash_current: bool|null, generator: string|null, to?: string, members?: list<string>, cause?: string}
+ * @phpstan-type Entry array{scope: string, package: string|null, file: string, path: string, model: string|null, stub: string|null, class: string, category: string|null, type: string|null, reason: string, tracked: bool, hash_current: bool|null, generator: string|null, to?: string, members?: list<string>, cause?: string, comments?: bool}
  * @phpstan-type Unmanaged array{scope: string, package: string|null, file: string, kind: string, category: string, type: string}
  */
 final class ScopeClassifier
@@ -172,7 +172,10 @@ final class ScopeClassifier
 
         // Lo que sigue distinto por tokens, por la misma Pint de una vez.
         $equal = PintPass::equivalent(
-            array_filter($pintPairs, fn (array $pair): bool => FileComparison::kindOf($pair[0]) === 'php'),
+            array_map(
+                fn (array $pair): array => [$pair[0], $pair[1]],
+                array_filter($pintPairs, fn (array $pair): bool => FileComparison::kindOf($pair[0]) === 'php')
+            ),
             $this->scope['root'],
             $this->pintConfig
         );
@@ -182,9 +185,21 @@ final class ScopeClassifier
                 continue;
             }
 
-            $entries[$index] = isset($equal['f'.$index])
-                ? $this->resolve($entry, FileClass::FORMAT_ONLY, 'igual tras pasarlo por la Pint del proyecto')
-                : $this->different($entry, ...$pintPairs['f'.$index]);
+            [$current, $regenerated, $before] = $pintPairs['f'.$index];
+            $after = $equal['f'.$index] ?? $before;
+
+            $entries[$index] = match ($after) {
+                FileComparison::IDENTICAL, FileComparison::FORMAT => $this->resolve($entry, FileClass::FORMAT_ONLY, 'igual tras pasarlo por la Pint del proyecto'),
+                // Sólo comentarios en lo que nadie editó es la plantilla que
+                // cambió sus comentarios (version_delta), y en un hueco
+                // entero, el hueco. Lo demás es formato —como lo define el
+                // realineamiento— y se marca, porque adoptarlo deja que
+                // --force reemplace esos comentarios.
+                FileComparison::COMMENTS => $entry['hash_current'] === true || ($entry['tracked'] && Holes::wholeFile((string) $entry['stub']))
+                    ? $this->different($entry, $current, $regenerated)
+                    : $this->resolve($entry + ['comments' => true], FileClass::FORMAT_ONLY, 'el mismo código; sólo cambian los comentarios'),
+                default => $this->different($entry, $current, $regenerated),
+            };
         }
 
         return array_values($entries);
@@ -194,7 +209,7 @@ final class ScopeClassifier
      * La primera pasada: todo lo que se decide sin Pint. Devuelve también
      * el par a comparar con Pint, si hace falta.
      *
-     * @return array{0: Entry, 1: array{0: string, 1: string}|null}
+     * @return array{0: Entry, 1: array{0: string, 1: string, 2: string}|null}
      */
     private function first(string $relative): array
     {
@@ -253,7 +268,7 @@ final class ScopeClassifier
             return [$this->resolve($entry, FileClass::FORMAT_ONLY, 'igual salvo espacios, comentarios u orden de imports'), null];
         }
 
-        return [$entry, [$absolute, $regenerated]];
+        return [$entry, [$absolute, $regenerated, $comparison]];
     }
 
     /**
@@ -313,6 +328,22 @@ final class ScopeClassifier
                 : $this->resolve($entry, FileClass::MISSING, 'el contrato lo generaría y no está');
         }
 
+        // Una migración registrada dos veces —generada otra vez con otra
+        // fecha— cuya otra copia sigue ahí: la que falta sobra en el
+        // manifiesto (school-xapi).
+        $key = self::migrationKey($relative);
+
+        if ($key !== null) {
+            foreach (array_keys($this->tracked) as $other) {
+                if ($other !== $relative && self::migrationKey($other) === $key && is_file($this->scope['root'].'/'.$other)) {
+                    $entry['cause'] = 'superseded';
+                    $entry['to'] = $this->projectRelative($other);
+
+                    return $this->resolve($entry, FileClass::MISSING, "borrado; el manifiesto registra la misma migración en {$entry['to']}");
+                }
+            }
+        }
+
         $renamed = $this->renamed($relative, $tracked['hash']);
 
         if ($renamed !== null) {
@@ -356,7 +387,7 @@ final class ScopeClassifier
             FileClass::EDITED_OUTSIDE => [Category::GUIDED, 'edited-outside'],
             FileClass::RENAMED => [Category::DETERMINISTIC, 'relink'],
             FileClass::MISSING => match ($entry['cause'] ?? null) {
-                'retired', 'not_regenerated' => [Category::DETERMINISTIC, 'prune'],
+                'retired', 'not_regenerated', 'superseded' => [Category::DETERMINISTIC, 'prune'],
                 'deleted' => [Category::DECISION, 'missing'],
                 // Ni el manifiesto lo conoce: el contrato lo pide y nunca se generó.
                 default => [Category::DETERMINISTIC, 'regenerate'],

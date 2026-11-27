@@ -31,7 +31,7 @@ final class PintPass
      * copia del archivo del proyecto.
      *
      * @param  array<string, array{0: string, 1: string}>  $pairs  clave => [archivo del proyecto, regenerado]
-     * @return array<string, true> las claves que sí
+     * @return array<string, string> clave => la comparación tras Pint (FileComparison::IDENTICAL, FORMAT o COMMENTS) de las que ya no son distintas
      */
     public static function equivalent(array $pairs, string $scopeRoot, ?string $config): array
     {
@@ -67,8 +67,10 @@ final class PintPass
         $equal = [];
 
         foreach ($copies as $key => $copy) {
-            if (FileComparison::compareFiles($copy, $pairs[$key][1]) !== FileComparison::DIFFERENT) {
-                $equal[$key] = true;
+            $comparison = FileComparison::compareFiles($copy, $pairs[$key][1]);
+
+            if ($comparison !== FileComparison::DIFFERENT) {
+                $equal[$key] = $comparison;
             }
         }
 

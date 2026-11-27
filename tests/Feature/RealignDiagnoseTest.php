@@ -91,6 +91,83 @@ final class RealignDiagnoseTest extends TestCase
         $this->assertSame($diagnosis['totals']['files'], $diagnosis['totals']['conforming']);
     }
 
+    public function test_un_hueco_con_sus_imports_sigue_en_el_hueco(): void
+    {
+        // Los 605 canView() de school-management traían su `use`.
+        $filter = 'src/Models/Filters/Post/ManagedFilter.php';
+        $content = $this->project->read($filter);
+        $content = (string) preg_replace('/^use /m', "use Acme\\Blog\\Support\\Scope;\nuse ", $content, 1);
+        $content = (string) preg_replace('/(function canView\([^)]*\)[^{]*\{)/', "\$1\n        Scope::apply(\$query);\n", $content, 1);
+        file_put_contents($this->project->path.'/'.$filter, $content);
+
+        $diagnosis = $this->realign('diagnose');
+
+        $this->assertNull($this->entry($filter));
+        $this->assertSame(1, $diagnosis['totals']['classes'][FileClass::HOLE_EDITED]);
+    }
+
+    public function test_solo_comentarios_es_formato_y_se_marca(): void
+    {
+        // 158 IndexRequest de school-management: el arreglo de `managed`
+        // hecho a mano con sus propios comentarios.
+        $index = 'src/Http/Requests/Post/IndexRequest.php';
+        $this->edit($index, 'protected function prepareForValidation', "// Lo dejamos así a propósito.\n    protected function prepareForValidation");
+
+        $this->realign('diagnose');
+        $entry = $this->entry($index);
+
+        $this->assertSame(FileClass::FORMAT_ONLY, $entry['class'] ?? null);
+        $this->assertTrue($entry['comments'] ?? null);
+        $this->assertSame('adopt', $entry['type'] ?? null);
+    }
+
+    public function test_una_migracion_registrada_dos_veces_se_olvida_la_que_falta(): void
+    {
+        // school-xapi: la misma creación generada dos veces con dos fechas;
+        // una se borró y el manifiesto conserva las dos.
+        $original = (string) $this->project->glob('database/migrations/*_create_post_metas_table.php');
+        $copy = 'database/migrations/2030_01_01_000000_create_post_metas_table.php';
+        rename($this->project->path.'/'.$original, $this->project->path.'/'.$copy);
+        $this->changeManifest(function (array $manifest) use ($original, $copy): array {
+            $files = &$manifest['models']['Post']['files'];
+            $files[$copy] = $files[$original];
+
+            return $manifest;
+        });
+
+        $this->realign('diagnose');
+        $entry = $this->entry($original);
+
+        $this->assertSame(FileClass::MISSING, $entry['class'] ?? null);
+        $this->assertSame('superseded', $entry['cause'] ?? null);
+        $this->assertSame('prune', $entry['type'] ?? null);
+        $this->assertSame($copy, $entry['to'] ?? null);
+    }
+
+    public function test_lo_que_solo_reconoce_pint_es_formato(): void
+    {
+        // `array(...)` frente a `[...]`: por tokens es otro código; pasado por
+        // la misma Pint que formateó lo regenerado, es lo mismo.
+        $previous = getenv('LARAPACK_PINT');
+        putenv('LARAPACK_PINT='.dirname(__DIR__, 2).'/vendor/laravel/pint/builds/pint');
+
+        try {
+            $this->assertSame(Command::SUCCESS, $this->runCommand('larapack:import', ['--react' => true, '--force' => true, '--format' => 'json']), $this->lastOutput);
+            $index = 'src/Http/Requests/Post/IndexRequest.php';
+            $this->assertStringContainsString('$this->merge([', $this->project->read($index));
+            $this->edit($index, '$this->merge([', '$this->merge(array(');
+            $this->edit($index, ']);', '));');
+
+            $this->realign('diagnose');
+            $entry = $this->entry($index);
+        } finally {
+            putenv($previous === false ? 'LARAPACK_PINT' : 'LARAPACK_PINT='.$previous);
+        }
+
+        $this->assertSame(FileClass::FORMAT_ONLY, $entry['class'] ?? null);
+        $this->assertSame('igual tras pasarlo por la Pint del proyecto', $entry['reason'] ?? null);
+    }
+
     public function test_lo_editado_fuera_de_los_huecos_es_guiado_y_dice_que_pieza(): void
     {
         $this->edit(self::SHOW_REQUEST, "public function authorize(): bool\n    {", "public function authorize(): bool\n    {\n        if (true) {\n            return true;\n        }");

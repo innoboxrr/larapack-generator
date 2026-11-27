@@ -105,11 +105,11 @@ No escribe código: sólo `.larapack/realign/report.json` y la caché.
 | Clase | Qué es | Categoría | Paso |
 |---|---|---|---|
 | `identical` | Byte a byte lo que generaría el contrato. | cumple; si el manifiesto tiene otro hash o no lo conoce, `deterministic` | `adopt` |
-| `format_only` | Igual salvo formato: espacios, comentarios con otros espacios, coma final, orden de imports, o igual tras pasar el archivo por la misma Pint. | igual que `identical` | `adopt` |
+| `format_only` | Igual salvo formato: espacios, coma final, orden de imports, o igual tras pasar el archivo por la misma Pint. También el mismo código con **otros comentarios**, marcado `comments: true` (salvo en lo que nadie editó, que es `version_delta`, y en un hueco entero, que es `hole_edited`). | igual que `identical` | `adopt` |
 | `version_delta` | Nadie lo editó (su hash es el del manifiesto) y difiere: la plantilla cambió (`cause: generator`, escrito por una versión anterior o sin versión) o el contrato cambió (`cause: contract`). | `deterministic` | `regenerate` |
 | `hole_edited` | Editado sólo dentro de sus huecos. | cumple | — |
 | `edited_outside` | Editado fuera de sus huecos. La entrada dice qué piezas (`members`). | `guided` | `edited-outside` |
-| `missing` | No está en disco. Si el contrato lo sigue pidiendo y se borró, `decision`; si es de un modelo retirado del contrato o el contrato no lo volvería a generar, `deterministic` (`prune`); si el contrato lo pide y nunca se generó, `deterministic` (`regenerate`). | según el caso | `missing`, `prune`, `regenerate` |
+| `missing` | No está en disco. Si el contrato lo sigue pidiendo y se borró, `decision`; si es de un modelo retirado del contrato (`cause: retired`), el contrato no lo volvería a generar (`not_regenerated`) o es una migración registrada dos veces cuya otra copia sigue ahí (`superseded`), `deterministic` (`prune`); si el contrato lo pide y nunca se generó, `deterministic` (`regenerate`). | según el caso | `missing`, `prune`, `regenerate` |
 | `renamed` | El manifiesto lo conoce con otra ruta: una migración renombrada a mano, o el mismo contenido en el mismo directorio. | `deterministic` | `relink` |
 | `not_regenerated` | Lo registró el generador, pero `import` no lo regenera (proveedores, configuración, alteraciones, lo de un modelo que ya no está en el contrato). | `out_of_scope` | — |
 | `migration_history` | Una migración generada que ya no es la que produciría hoy el contrato. **Las migraciones no se reescriben nunca.** | `out_of_scope` | — |
@@ -398,9 +398,14 @@ contrato (`infer`) o dejar el proyecto fuera de LaraPack y quedarse con
   editado: el diagnóstico lo reconoce como `identical`/`format_only` y lo
   propone para `adopt`, pero si además se editó, no se distingue la edición del
   formato hasta adoptar.
-- **«Igual salvo formato»** considera los comentarios: un comentario añadido es
-  una edición. Sin Pint disponible (`LARAPACK_PINT=off`), sólo se reconocen los
-  cambios de formato por tokens.
+- **«Igual salvo formato» incluye los comentarios** cuando el código es el
+  mismo (`comments: true`). Adoptar un archivo así deja que un `import --force`
+  posterior reemplace esos comentarios por los de la plantilla: quien adopta
+  puede conservarlos adoptándolo como editado. Sin Pint disponible
+  (`LARAPACK_PINT=off`), sólo se reconocen los cambios de formato por tokens.
+- **Un hueco con métodos** (`rules()`, `canView()`) admite además `use` nuevos
+  en la cabecera (`imports`): el código del hueco trae los suyos. Una propiedad
+  o un método nuevos están fuera.
 - **Las migraciones** se comparan sólo por nombre y contenido. Si una tabla se
   creó con otra migración, la regenerada no tiene con qué compararse y no se
   propone nada.

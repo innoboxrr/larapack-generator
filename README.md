@@ -2799,6 +2799,8 @@ larapack:guard                   Hook para agentes: comprueba el archivo recién
 larapack:hand-rolled             Lista, aprueba o retira las excepciones #[HandRolled] (el dueño).
 larapack:ci                      Crea el workflow «LaraPack verify», el ruleset para la rama y, con --owner, CODEOWNERS;
                                  con --check, dice si la rama exige el check.
+larapack:realign                 Realinea con el contrato un proyecto que se desvió: diagnose, plan, status, next, check,
+                                 decide y las operaciones adopt, apply, infer, except. Guía: docs/realign/README.md.
 
 larapack:full-model              Crea un entorno completo de modelo.
 larapack:remove-full-model       Elimina todas las entidades de un modelo.

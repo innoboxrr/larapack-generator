@@ -78,7 +78,9 @@ final class Holes
     /**
      * Si un archivo de este stub, con estas piezas distintas de lo
      * generado, sólo cambió dentro de sus huecos. `$members` son los nombres
-     * que da FileComparison::members(): `method:<nombre>` o `outside`.
+     * que da FileComparison::members(): `method:<nombre>`, `imports` u
+     * `outside`. Los `imports` cuentan como hueco en un archivo con métodos
+     * hueco: son los del código que se escribió en ellos.
      *
      * @param  list<string>  $members
      */
@@ -88,7 +90,11 @@ final class Holes
             return true;
         }
 
-        $allowed = array_map(fn (string $method): string => 'method:'.strtolower($method), self::methods($stub));
+        $methods = self::methods($stub);
+
+        // El código de un hueco trae sus `use`: añadirlos es parte de
+        // escribir en él (en school-management, 605 canView() con los suyos).
+        $allowed = $methods === [] ? [] : ['imports', ...array_map(fn (string $method): string => 'method:'.strtolower($method), $methods)];
 
         return $members !== [] && array_diff(array_map('strtolower', $members), $allowed) === [];
     }
