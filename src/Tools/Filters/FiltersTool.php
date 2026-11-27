@@ -6,13 +6,14 @@ use Innoboxrr\LarapackGenerator\Tools\Tool;
 
 class FiltersTool extends Tool
 {
-    protected $filtersPath;
+    protected string $filtersPath = '';
 
-    protected $filtersTemplatePath;
+    protected string $filtersTemplatePath = '';
 
-    protected $mainFiltersPath;
+    protected string $mainFiltersPath = '';
 
-    protected $filters = [
+    /** @var list<string> */
+    protected array $filters = [
         'CreationFilter',
         'EagerLoadingFilter',
         'IdFilter',
@@ -20,7 +21,7 @@ class FiltersTool extends Tool
         'UpdatedFilter',
     ];
 
-    private function setFiltersPath()
+    private function setFiltersPath(): static
     {
 
         $this->filtersPath = get_path(app_dir_name().'/Models/Filters');
@@ -29,7 +30,7 @@ class FiltersTool extends Tool
 
     }
 
-    private function setFiltersTemplatePath()
+    private function setFiltersTemplatePath(): static
     {
 
         $this->filtersTemplatePath = stubs_path('Filters');
@@ -38,7 +39,7 @@ class FiltersTool extends Tool
 
     }
 
-    protected function setMainFiltersPath()
+    protected function setMainFiltersPath(): static
     {
 
         $path = $this->filtersPath.'/'.$this->PascalCaseModelName;
@@ -53,7 +54,7 @@ class FiltersTool extends Tool
 
     }
 
-    public function create(string $ModelName)
+    public function create(string $ModelName): bool
     {
 
         $this->init($ModelName)
@@ -71,7 +72,7 @@ class FiltersTool extends Tool
 
     }
 
-    protected function createRequestFile($filterName)
+    protected function createRequestFile(string $filterName): bool
     {
 
         $filterFile = $this->mainFiltersPath.'/'.$filterName.'.php';
@@ -80,7 +81,7 @@ class FiltersTool extends Tool
 
     }
 
-    public function remove(string $ModelName)
+    public function remove(string $ModelName): bool
     {
 
         $this->init($ModelName)

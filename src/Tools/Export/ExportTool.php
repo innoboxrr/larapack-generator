@@ -6,11 +6,11 @@ use Innoboxrr\LarapackGenerator\Tools\Tool;
 
 class ExportTool extends Tool
 {
-    protected $exportPath;
+    protected string $exportPath = '';
 
-    protected $exportTemplatePath;
+    protected string $exportTemplatePath = '';
 
-    private function setExportPath()
+    private function setExportPath(): static
     {
 
         $this->exportPath = get_path(app_dir_name().'/Exports');
@@ -19,7 +19,7 @@ class ExportTool extends Tool
 
     }
 
-    private function setExportTemplatePath()
+    private function setExportTemplatePath(): static
     {
 
         $this->exportTemplatePath = stubs_path('Export');
@@ -28,7 +28,7 @@ class ExportTool extends Tool
 
     }
 
-    private function setUp(string $ModelName)
+    private function setUp(string $ModelName): void
     {
 
         $this->init($ModelName)
@@ -37,7 +37,7 @@ class ExportTool extends Tool
 
     }
 
-    public function create(string $ModelName)
+    public function create(string $ModelName): bool
     {
 
         if (! $this->init($ModelName)->declares('export')) {
@@ -52,7 +52,7 @@ class ExportTool extends Tool
 
     }
 
-    public function remove(string $ModelName)
+    public function remove(string $ModelName): bool
     {
 
         $this->setUp($ModelName);

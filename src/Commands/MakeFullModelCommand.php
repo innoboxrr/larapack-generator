@@ -19,7 +19,8 @@ class MakeFullModelCommand extends Command
 {
     use ReportsGeneration;
 
-    protected $commands = [
+    /** @var list<string> */
+    protected array $commands = [
         'Migration',
         'Controller',
         'Events',

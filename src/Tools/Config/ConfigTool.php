@@ -6,11 +6,11 @@ use Innoboxrr\LarapackGenerator\Tools\Tool;
 
 class ConfigTool extends Tool
 {
-    protected $configPath;
+    protected string $configPath = '';
 
-    protected $configTemplatePath;
+    protected string $configTemplatePath = '';
 
-    private function setConfigPath()
+    private function setConfigPath(): static
     {
 
         $this->configPath = get_path('config');
@@ -19,7 +19,7 @@ class ConfigTool extends Tool
 
     }
 
-    private function setConfigTemplatePath()
+    private function setConfigTemplatePath(): static
     {
 
         $this->configTemplatePath = stubs_path('Config');
@@ -28,7 +28,7 @@ class ConfigTool extends Tool
 
     }
 
-    private function setUp()
+    private function setUp(): void
     {
 
         $this->init('')
@@ -37,7 +37,7 @@ class ConfigTool extends Tool
 
     }
 
-    public function create()
+    public function create(): bool
     {
 
         $this->setUp();
@@ -48,7 +48,7 @@ class ConfigTool extends Tool
 
     }
 
-    public function remove()
+    public function remove(): bool
     {
 
         $this->setUp();

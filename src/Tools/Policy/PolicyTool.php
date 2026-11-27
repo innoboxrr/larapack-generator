@@ -7,11 +7,11 @@ use Innoboxrr\LarapackGenerator\Tools\Tool;
 
 class PolicyTool extends Tool
 {
-    protected $policyPath;
+    protected string $policyPath = '';
 
-    protected $policyTemplatePath;
+    protected string $policyTemplatePath = '';
 
-    private function setPolicyPath()
+    private function setPolicyPath(): static
     {
 
         $this->policyPath = get_path(app_dir_name().'/Policies');
@@ -20,7 +20,7 @@ class PolicyTool extends Tool
 
     }
 
-    private function setPolicyTemplatePath()
+    private function setPolicyTemplatePath(): static
     {
 
         $this->policyTemplatePath = stubs_path('Policy');
@@ -29,7 +29,7 @@ class PolicyTool extends Tool
 
     }
 
-    public function create(string $ModelName)
+    public function create(string $ModelName): bool
     {
 
         $this->init($ModelName)
@@ -92,7 +92,7 @@ class PolicyTool extends Tool
         return $lines;
     }
 
-    public function remove(string $ModelName)
+    public function remove(string $ModelName): bool
     {
 
         $this->init($ModelName)

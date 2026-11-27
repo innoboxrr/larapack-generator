@@ -8,15 +8,15 @@ use Innoboxrr\LarapackGenerator\Tools\Tool;
 
 class TestTool extends Tool
 {
-    protected $testPath;
+    protected string $testPath = '';
 
-    protected $testTemplatePath;
+    protected string $testTemplatePath = '';
 
-    protected $testCasePath;
+    protected string $testCasePath = '';
 
-    protected $testUnitPath;
+    protected string $testUnitPath = '';
 
-    private function setTestPath()
+    private function setTestPath(): static
     {
 
         $this->testPath = get_path('tests/Feature/Models');
@@ -25,7 +25,7 @@ class TestTool extends Tool
 
     }
 
-    private function setTestCasePath()
+    private function setTestCasePath(): static
     {
 
         $this->testCasePath = get_path('tests');
@@ -34,7 +34,7 @@ class TestTool extends Tool
 
     }
 
-    private function setTestUnitPath()
+    private function setTestUnitPath(): static
     {
 
         $this->testUnitPath = get_path('tests/Unit');
@@ -43,7 +43,7 @@ class TestTool extends Tool
 
     }
 
-    private function setTestTemplatePath()
+    private function setTestTemplatePath(): static
     {
 
         $this->testTemplatePath = stubs_path('Test');
@@ -52,7 +52,7 @@ class TestTool extends Tool
 
     }
 
-    public function create(string $ModelName)
+    public function create(string $ModelName): void
     {
 
         $this->init($ModelName)
@@ -71,7 +71,7 @@ class TestTool extends Tool
     /**
      * Lo que un proyecto necesita para tener tests antes de su primer modelo.
      */
-    public function createScaffold()
+    public function createScaffold(): static
     {
 
         $this->init('')
@@ -119,7 +119,7 @@ class TestTool extends Tool
 
     }
 
-    private function createTestCaseClass()
+    private function createTestCaseClass(): static
     {
 
         $testCaseFile = $this->testCasePath.'/TestCase.php';
@@ -145,7 +145,7 @@ class TestTool extends Tool
      * El usuario con que se autentican los tests de un paquete. Una aplicacion
      * ya tiene el suyo; un paquete no conoce el de quien lo instale.
      */
-    private function createTestUserClass()
+    private function createTestUserClass(): static
     {
 
         $userFile = $this->testCasePath.'/User.php';
@@ -160,7 +160,7 @@ class TestTool extends Tool
 
     }
 
-    private function createPhpUnitXmlFile()
+    private function createPhpUnitXmlFile(): static
     {
 
         $phpunitFile = root_path().'/phpunit.xml';
@@ -194,7 +194,7 @@ class TestTool extends Tool
 
     }
 
-    private function addTestNamespaceToComposerJson()
+    private function addTestNamespaceToComposerJson(): static
     {
 
         // Una simulación no escribe nada, tampoco composer.json.
@@ -235,7 +235,7 @@ class TestTool extends Tool
 
     }
 
-    private function createFeatureTest()
+    private function createFeatureTest(): bool
     {
 
         $testFile = $this->testPath.'/'.$this->PascalCaseModelName.'EndpointsTest.php';
@@ -252,7 +252,8 @@ class TestTool extends Tool
 
                 Generation::record('create', $testFile, $templateFile);
 
-                return $this;
+                // Como generate(): en una simulación, true es «se escribiría».
+                return true;
 
             }
 
@@ -277,7 +278,7 @@ class TestTool extends Tool
 
     }
 
-    public function remove(string $ModelName)
+    public function remove(string $ModelName): bool
     {
 
         $this->init($ModelName)

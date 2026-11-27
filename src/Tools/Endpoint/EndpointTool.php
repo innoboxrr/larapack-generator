@@ -29,7 +29,7 @@ class EndpointTool extends Tool
      */
     private ?array $endpoint = null;
 
-    public function create(string $ModelName)
+    public function create(string $ModelName): bool
     {
         $this->init($ModelName);
 
@@ -55,7 +55,7 @@ class EndpointTool extends Tool
     /**
      * Las requests las retira RequestsTool con su carpeta; aquí, los tests.
      */
-    public function remove(string $ModelName)
+    public function remove(string $ModelName): bool
     {
         $this->init($ModelName);
 

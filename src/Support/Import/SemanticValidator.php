@@ -704,7 +704,15 @@ final class SemanticValidator
                 continue;
             }
 
-            $prop = collect($model['props'])->firstWhere('name', $model['display']);
+            $prop = null;
+
+            foreach ($model['props'] as $candidate) {
+                if ($candidate['name'] === $model['display']) {
+                    $prop = $candidate;
+
+                    break;
+                }
+            }
 
             if ($prop === null) {
                 $findings[] = [

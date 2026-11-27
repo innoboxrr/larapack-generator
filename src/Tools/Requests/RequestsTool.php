@@ -6,13 +6,14 @@ use Innoboxrr\LarapackGenerator\Tools\Tool;
 
 class RequestsTool extends Tool
 {
-    protected $requestPath;
+    protected string $requestPath = '';
 
-    protected $requestsTemplatePath;
+    protected string $requestsTemplatePath = '';
 
-    protected $mainRequestsPath;
+    protected string $mainRequestsPath = '';
 
-    protected $requests = [
+    /** @var list<string> */
+    protected array $requests = [
         'CreateRequest',
         'DeleteRequest',
         'ExportRequest',
@@ -27,21 +28,21 @@ class RequestsTool extends Tool
         'BulkDeleteRequest',
     ];
 
-    private function setRequestPath()
+    private function setRequestPath(): static
     {
         $this->requestPath = get_path(app_dir_name().'/Http/Requests');
 
         return $this;
     }
 
-    private function setRequestsTemplatePath()
+    private function setRequestsTemplatePath(): static
     {
         $this->requestsTemplatePath = stubs_path('Requests');
 
         return $this;
     }
 
-    protected function setMainRequestsPath()
+    protected function setMainRequestsPath(): static
     {
         $path = $this->requestPath.'/'.$this->PascalCaseModelName;
         if (! file_exists($path)) {
@@ -52,14 +53,14 @@ class RequestsTool extends Tool
         return $this;
     }
 
-    protected function createRequest($requestName)
+    protected function createRequest(string $requestName): bool
     {
         $requestFile = $this->mainRequestsPath.'/'.$requestName.'.php';
 
         return $this->generate($this->requestsTemplatePath.'/'.$requestName.'.txt', $requestFile);
     }
 
-    public function create(string $ModelName)
+    public function create(string $ModelName): void
     {
         $this->init($ModelName)
             ->setRequestPath()
@@ -75,7 +76,7 @@ class RequestsTool extends Tool
         }
     }
 
-    public function remove(string $ModelName)
+    public function remove(string $ModelName): bool
     {
         $this->init($ModelName)
             ->setRequestPath();
@@ -128,20 +129,19 @@ class RequestsTool extends Tool
      * Ahora se inyecta en un marcador, como hacen los demas tools: lo que el
      * stub declara fuera del marcador es intocable.
      */
-    protected function processFileWithJson($filePath)
+    protected function processFileWithJson(string $filePath): void
     {
         if (! in_array(basename($filePath), ['CreateRequest.php', 'UpdateRequest.php'])) {
             return;
         }
 
-        $data = self::getJsonContent();
-        $model = collect($data['models'])->where('name', $this->ModelName)->first();
+        $model = $this->jsonModel();
         if (! $model) {
             return;
         }
 
         $requestType = str_contains(basename($filePath), 'CreateRequest') ? 'Create' : 'Update';
-        $requestData = collect($model['requests'] ?? [])->firstWhere('name', $requestType);
+        $requestData = self::firstNamed($model['requests'] ?? [], $requestType);
         if (! $requestData) {
             return;
         }
@@ -164,7 +164,7 @@ class RequestsTool extends Tool
             );
         }
 
-        return file_put_contents($filePath, str_replace(
+        file_put_contents($filePath, str_replace(
             '//RULES//',
             $this->buildRules($rules),
             $fileContent

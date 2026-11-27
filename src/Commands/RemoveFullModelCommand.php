@@ -14,7 +14,8 @@ class RemoveFullModelCommand extends Command
 {
     use TargetsProject;
 
-    protected $commands = [
+    /** @var list<string> */
+    protected array $commands = [
         'Controller',
         'Events',
         'Excel',

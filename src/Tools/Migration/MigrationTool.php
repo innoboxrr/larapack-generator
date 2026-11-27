@@ -16,25 +16,25 @@ class MigrationTool extends Tool
      */
     private const COLUMN = '/^\s*(\$table->(\w+)\(\'([A-Za-z0-9_]+)\'\).*;)\s*$/m';
 
-    protected $migrationPath;
+    protected string $migrationPath = '';
 
-    protected $migrationTemplatePath;
+    protected string $migrationTemplatePath = '';
 
-    private function setMigrationPath()
+    private function setMigrationPath(): static
     {
         $this->migrationPath = get_path('database/migrations');
 
         return $this;
     }
 
-    private function setMigrationTemplatePath()
+    private function setMigrationTemplatePath(): static
     {
         $this->migrationTemplatePath = stubs_path('Migration');
 
         return $this;
     }
 
-    public function create(string $ModelName)
+    public function create(string $ModelName): bool
     {
         $this->init($ModelName)
             ->setMigrationPath()
@@ -79,7 +79,7 @@ class MigrationTool extends Tool
      */
     private function alter(string $createFile): ?bool
     {
-        $model = collect(self::getJsonContent()['models'])->where('name', $this->ModelName)->first();
+        $model = $this->jsonModel();
 
         $desired = [];
 
@@ -249,7 +249,7 @@ class MigrationTool extends Tool
         return str_contains($definition, '->constrained(');
     }
 
-    public function remove(string $ModelName)
+    public function remove(string $ModelName): bool
     {
         $this->init($ModelName)
             ->setMigrationPath()
@@ -272,17 +272,19 @@ class MigrationTool extends Tool
         return true;
     }
 
-    protected function processFileWithJson($migrationFile)
+    protected function processFileWithJson(string $migrationFile): void
     {
-        $data = self::getJsonContent();
-        $model = collect($data['models'])->where('name', $this->ModelName)->first();
+        $model = $this->jsonModel();
         $fileContent = file_get_contents($migrationFile);
         $columnsSchema = $this->generateMigrationColumns($model['props']);
         $updatedFileContent = str_replace('//EDIT//', $columnsSchema, $fileContent);
         file_put_contents($migrationFile, $updatedFileContent);
     }
 
-    private function generateMigrationColumns(array $props)
+    /**
+     * @param  list<array<string, mixed>>  $props
+     */
+    private function generateMigrationColumns(array $props): string
     {
         $columns = '';
         foreach ($props as $index => $prop) {
@@ -299,7 +301,10 @@ class MigrationTool extends Tool
         return $columns;
     }
 
-    private function getColumnDefinition(array $prop)
+    /**
+     * @param  array<string, mixed>  $prop
+     */
+    private function getColumnDefinition(array $prop): string
     {
         $column = "\$table->{$prop['type']}('{$prop['name']}')";
 

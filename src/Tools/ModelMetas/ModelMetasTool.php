@@ -7,43 +7,43 @@ use Innoboxrr\LarapackGenerator\Tools\Tool;
 
 class ModelMetasTool extends Tool
 {
-    protected $modelMetasPath;
+    protected string $modelMetasPath = '';
 
-    protected $migrationMetasPath;
+    protected string $migrationMetasPath = '';
 
-    protected $modelMetasTemplatePath;
+    protected string $modelMetasTemplatePath = '';
 
-    protected $migrationMetasTemplatePath;
+    protected string $migrationMetasTemplatePath = '';
 
-    private function setModelMetasPath()
+    private function setModelMetasPath(): static
     {
         $this->modelMetasPath = get_path(app_dir_name().'/Models');
 
         return $this;
     }
 
-    private function setMigrationMetasPath()
+    private function setMigrationMetasPath(): static
     {
         $this->migrationMetasPath = get_path('database/migrations');
 
         return $this;
     }
 
-    private function setModelMetasTemplatePath()
+    private function setModelMetasTemplatePath(): static
     {
         $this->modelMetasTemplatePath = stubs_path('ModelMetas');
 
         return $this;
     }
 
-    private function setMigrationMetasTemplatePath()
+    private function setMigrationMetasTemplatePath(): static
     {
         $this->migrationMetasTemplatePath = stubs_path('MigrationMetas');
 
         return $this;
     }
 
-    public function create(string $ModelName)
+    public function create(string $ModelName): bool
     {
         $this->init($ModelName)
             ->setModelMetasPath()
@@ -62,7 +62,7 @@ class ModelMetasTool extends Tool
      * anotaba en el manifiesto, ignoraba --dry-run y --force, y no se protegía
      * si se había editado.
      */
-    private function createModelMetas()
+    private function createModelMetas(): bool
     {
         return $this->generate(
             $this->modelMetasTemplatePath.'/ModelMetasTemplate.txt',
@@ -70,7 +70,7 @@ class ModelMetasTool extends Tool
         );
     }
 
-    private function createMigrationMetas()
+    private function createMigrationMetas(): bool
     {
         date_default_timezone_set('UTC');
         // Añade 3 segundos a la fecha actual
@@ -81,7 +81,7 @@ class ModelMetasTool extends Tool
         return $this->generate($this->migrationMetasTemplatePath.'/MigrationTemplate.txt', $migrationMetasFile);
     }
 
-    public function remove(string $ModelName)
+    public function remove(string $ModelName): bool
     {
         $this->init($ModelName)
             ->setModelMetasPath()
@@ -113,14 +113,14 @@ class ModelMetasTool extends Tool
      * Se buscaba `<Modelo>ModelMetas.php`, pero el archivo que se crea es
      * `<Modelo>Meta.php`: el modelo Meta no se borraba nunca.
      */
-    private function removeModelMetas()
+    private function removeModelMetas(): bool
     {
         $path = $this->metaModelFile();
 
         return (file_exists($path)) ? $this->dropFile($path) : false;
     }
 
-    private function removeMigrationMetas()
+    private function removeMigrationMetas(): bool
     {
         date_default_timezone_set('UTC');
         $migrationFilename = MigrationTimestamp::next().'_drop_'.$this->metasTableName().'_table.php';

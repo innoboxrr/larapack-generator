@@ -7,13 +7,13 @@ use Innoboxrr\LarapackGenerator\Tools\Tool;
 
 class ExportNotificationTool extends Tool
 {
-    protected $exportNotificationPath;
+    protected string $exportNotificationPath = '';
 
-    protected $exportNotificationTemplatePath;
+    protected string $exportNotificationTemplatePath = '';
 
-    protected $modelExportNotificationPath;
+    protected string $modelExportNotificationPath = '';
 
-    private function setExportNotificationPath()
+    private function setExportNotificationPath(): static
     {
 
         $this->exportNotificationPath = get_path(app_dir_name().'/Notifications');
@@ -22,7 +22,7 @@ class ExportNotificationTool extends Tool
 
     }
 
-    private function setExportNotificationTemplatePath()
+    private function setExportNotificationTemplatePath(): static
     {
 
         $this->exportNotificationTemplatePath = stubs_path('ExportNotification');
@@ -31,7 +31,7 @@ class ExportNotificationTool extends Tool
 
     }
 
-    protected function setModelExportNotificationPath()
+    protected function setModelExportNotificationPath(): static
     {
 
         $path = $this->exportNotificationPath.'/'.$this->PascalCaseModelName;
@@ -46,7 +46,7 @@ class ExportNotificationTool extends Tool
 
     }
 
-    public function create(string $ModelName)
+    public function create(string $ModelName): bool
     {
 
         if (! $this->init($ModelName)->declares('export')) {
@@ -68,7 +68,7 @@ class ExportNotificationTool extends Tool
 
     }
 
-    public function remove(string $ModelName)
+    public function remove(string $ModelName): bool
     {
 
         $this->init($ModelName)

@@ -6,11 +6,11 @@ use Innoboxrr\LarapackGenerator\Tools\Tool;
 
 class ObserverTool extends Tool
 {
-    protected $observerPath;
+    protected string $observerPath = '';
 
-    protected $observerTemplatePath;
+    protected string $observerTemplatePath = '';
 
-    private function setObserverPath()
+    private function setObserverPath(): static
     {
 
         $this->observerPath = get_path(app_dir_name().'/Observers');
@@ -19,7 +19,7 @@ class ObserverTool extends Tool
 
     }
 
-    private function setObserverTemplatePath()
+    private function setObserverTemplatePath(): static
     {
 
         $this->observerTemplatePath = stubs_path('Observer');
@@ -28,7 +28,7 @@ class ObserverTool extends Tool
 
     }
 
-    public function create(string $ModelName)
+    public function create(string $ModelName): bool
     {
 
         $this->init($ModelName)
@@ -41,7 +41,7 @@ class ObserverTool extends Tool
 
     }
 
-    public function remove(string $ModelName)
+    public function remove(string $ModelName): bool
     {
 
         $this->init($ModelName)

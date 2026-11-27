@@ -11,7 +11,8 @@ class MakeProvidersCommand extends Command
 {
     use ReportsGeneration;
 
-    protected $commands = [
+    /** @var list<string> */
+    protected array $commands = [
         'App',
         'Auth',
         'Event',

@@ -6,11 +6,11 @@ use Innoboxrr\LarapackGenerator\Tools\Tool;
 
 class ExcelTool extends Tool
 {
-    protected $excelPath;
+    protected string $excelPath = '';
 
-    protected $excelTemplatePath;
+    protected string $excelTemplatePath = '';
 
-    private function setExcelPath()
+    private function setExcelPath(): static
     {
 
         $this->excelPath = get_path('resources/views/excel');
@@ -19,7 +19,7 @@ class ExcelTool extends Tool
 
     }
 
-    private function setExcelTemplatePath()
+    private function setExcelTemplatePath(): static
     {
 
         $this->excelTemplatePath = stubs_path('Excel');
@@ -28,7 +28,7 @@ class ExcelTool extends Tool
 
     }
 
-    private function setUp(string $ModelName)
+    private function setUp(string $ModelName): void
     {
 
         $this->init($ModelName)
@@ -37,7 +37,7 @@ class ExcelTool extends Tool
 
     }
 
-    public function create(string $ModelName)
+    public function create(string $ModelName): bool
     {
 
         if (! $this->init($ModelName)->declares('export')) {
@@ -52,7 +52,7 @@ class ExcelTool extends Tool
 
     }
 
-    public function remove(string $ModelName)
+    public function remove(string $ModelName): bool
     {
 
         $this->setUp($ModelName);

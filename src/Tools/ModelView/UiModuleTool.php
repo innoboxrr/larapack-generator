@@ -124,7 +124,7 @@ abstract class UiModuleTool extends Tool
         return get_path('resources/'.$this->framework());
     }
 
-    public function create(string $ModelName)
+    public function create(string $ModelName): bool
     {
         $this->init($ModelName);
 
@@ -236,7 +236,7 @@ abstract class UiModuleTool extends Tool
         }
     }
 
-    public function remove(string $ModelName)
+    public function remove(string $ModelName): bool
     {
         $this->init($ModelName);
 
@@ -249,7 +249,7 @@ abstract class UiModuleTool extends Tool
      * Tool::generate() llama aqui una vez por archivo generado cuando venimos
      * del importador; se despacha por nombre de archivo.
      */
-    protected function processFileWithJson($fileToProcess)
+    protected function processFileWithJson(string $fileToProcess): void
     {
         $file = str_replace('\\', '/', $fileToProcess);
 
@@ -275,9 +275,7 @@ abstract class UiModuleTool extends Tool
      */
     protected function props(): array
     {
-        $model = collect(self::getJsonContent()['models'] ?? [])
-            ->where('name', $this->ModelName)
-            ->first();
+        $model = $this->jsonModel();
 
         return $model['props'] ?? [];
     }
@@ -290,9 +288,7 @@ abstract class UiModuleTool extends Tool
      */
     protected function editableMetas(): array
     {
-        $model = collect(self::getJsonContent()['models'] ?? [])
-            ->where('name', $this->ModelName)
-            ->first() ?? [];
+        $model = $this->jsonModel() ?? [];
 
         if (empty($model['metas'])) {
             return [];
@@ -772,6 +768,9 @@ abstract class UiModuleTool extends Tool
         return $actions;
     }
 
+    /**
+     * @param  array<int|string, mixed>  $enum  valor => etiqueta
+     */
     protected function enumLabels(array $enum): string
     {
         $pairs = [];

@@ -18,70 +18,78 @@ use Innoboxrr\LarapackGenerator\Support\TablePrefix;
 
 class Tool
 {
-    protected static $fromJsonImporter = false;
+    protected static bool $fromJsonImporter = false;
 
-    protected static $jsonContent;
+    /**
+     * El laraimport ya resuelto, tal como lo deja ImportDocument::toArray().
+     *
+     * @var array<string, mixed>
+     */
+    protected static array $jsonContent = [];
 
     // INFLECTOR
-    protected $inflector;
+    protected Inflector $inflector;
 
     // NAMESPACE
-    protected $namespace;
+    //
+    // Todas las cadenas de nombres las rellena init(). Valen '' hasta entonces,
+    // que es lo mismo que daba el null de antes al concatenarlas.
+    protected string $namespace = '';
 
-    protected $dotNamespace;
+    protected string $dotNamespace = '';
 
-    protected $kebabNamespace;
+    protected string $kebabNamespace = '';
 
-    protected $packageName;
+    protected string $packageName = '';
 
-    protected $namespaceWithoutSeparation;
+    protected string $namespaceWithoutSeparation = '';
 
-    protected $lowerNamespace;
+    protected string $lowerNamespace = '';
 
-    protected $slashLowerNamespace;
+    protected string $slashLowerNamespace = '';
 
-    protected $databaseNamespace;
+    protected string $databaseNamespace = '';
 
-    protected $testsNamespace;
+    protected string $testsNamespace = '';
 
-    protected $configKey;
+    protected string $configKey = '';
 
-    protected $excelViewPrefix;
+    protected string $excelViewPrefix = '';
 
     // MODEL NAME
-    protected $ModelName;
+    protected string $ModelName = '';
 
-    protected $snake_case_model_name;
+    protected string $snake_case_model_name = '';
 
-    protected $camelCaseModelName;
+    protected string $camelCaseModelName = '';
 
-    protected $PascalCaseModelName;
+    protected string $PascalCaseModelName = '';
 
-    protected $kebabcasemodelname;
+    protected string $kebabcasemodelname = '';
 
-    protected $dotModelName;
+    protected string $dotModelName = '';
 
-    protected $pluralModelName;
+    protected string $pluralModelName = '';
 
-    protected $plural_snake_case_model_name;
+    protected string $plural_snake_case_model_name = '';
 
-    protected $pluralCamelCaseModelName;
+    protected string $pluralCamelCaseModelName = '';
 
-    protected $PluralPascalCaseModelName;
+    protected string $PluralPascalCaseModelName = '';
 
-    protected $pluralkebabcasemodelname;
+    protected string $pluralkebabcasemodelname = '';
 
-    protected $pluralDotModelName;
+    protected string $pluralDotModelName = '';
 
-    protected $SingularModelLabel;
+    protected string $SingularModelLabel = '';
 
-    protected $PluralModelLabel;
+    protected string $PluralModelLabel = '';
 
     // MANIFIESTO
     protected ?Manifest $manifest = null;
 
     // SET FROM JSON IMPORTER
-    public static function setFromJsonImporter(bool $value)
+    public static function setFromJsonImporter(bool $value): void
     {
         self::$fromJsonImporter = $value;
     }
@@ -91,17 +99,77 @@ class Tool
         return self::$fromJsonImporter;
     }
 
-    public static function setJsonContent(array $content)
+    /**
+     * @param  array<string, mixed>  $content
+     */
+    public static function setJsonContent(array $content): void
     {
         self::$jsonContent = $content;
     }
 
+    /**
+     * @return array<string, mixed>
+     */
     public static function getJsonContent(): array
     {
         return self::$jsonContent;
     }
 
-    protected function processFileWithJson($fileToProcess) {}
+    /**
+     * Las entradas de una lista del laraimport importado —`models`, `pivots`—,
+     * sólo las que son objetos. Sin importación, o si no la declara, ninguna.
+     *
+     * Cada herramienta hacía `collect($data['models'])->where(...)` sobre lo que
+     * fuera que hubiera en esa clave; aquí se lee una vez y con su tipo.
+     *
+     * @return list<array<string, mixed>>
+     */
+    protected static function jsonEntries(string $key): array
+    {
+        $entries = self::$jsonContent[$key] ?? [];
+
+        return is_array($entries) ? array_values(array_filter($entries, 'is_array')) : [];
+    }
+
+    /**
+     * La entrada con ese nombre de una lista del laraimport, o null si no la
+     * declara.
+     *
+     * @return array<string, mixed>|null
+     */
+    protected static function jsonEntry(string $key, string $name): ?array
+    {
+        return self::firstNamed(self::jsonEntries($key), $name);
+    }
+
+    /**
+     * La primera entrada de una lista cuyo `name` es ése: un modelo, un
+     * pivote, una request declarada. Lo que no es un objeto no cuenta.
+     *
+     * @return array<string, mixed>|null
+     */
+    protected static function firstNamed(mixed $entries, string $name): ?array
+    {
+        foreach (is_array($entries) ? $entries : [] as $entry) {
+            if (is_array($entry) && ($entry['name'] ?? null) === $name) {
+                return $entry;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * El modelo que se está generando, tal como lo declara el laraimport.
+     *
+     * @return array<string, mixed>|null
+     */
+    protected function jsonModel(): ?array
+    {
+        return self::jsonEntry('models', $this->ModelName);
+    }
+
+    protected function processFileWithJson(string $fileToProcess): void {}
 
     // INIT
 
@@ -132,7 +200,7 @@ class Tool
      *                             (proveedores, configuración), que no nombran
      *                             ningún modelo.
      */
-    protected function init(string $ModelName)
+    protected function init(string $ModelName): static
     {
         if ($ModelName !== '' && ! self::isValidModelName($ModelName)) {
             throw MakerException::invalidModelName($ModelName);
@@ -198,7 +266,7 @@ class Tool
 
     // MODEL NAME
 
-    private function setModelNames($ModelName)
+    private function setModelNames(string $ModelName): void
     {
         $this->ModelName = $ModelName;
         $this->snake_case_model_name = $this->inflector->tableize($this->ModelName);
@@ -290,7 +358,7 @@ class Tool
         return strtr($content, $this->replacementMap());
     }
 
-    protected function replaceData($file)
+    protected function replaceData(string $file): void
     {
         file_put_contents($file, $this->replaceTokens(file_get_contents($file)));
 
@@ -299,7 +367,10 @@ class Tool
         Generation::written($file);
     }
 
-    public function addProvidersToComposerJson(array $providers)
+    /**
+     * @param  list<string>  $providers
+     */
+    public function addProvidersToComposerJson(array $providers): void
     {
         // Una simulacion no escribe nada, tampoco composer.json.
         if (app_dir_name() == 'src' && ! Generation::isDryRun()) {
@@ -630,7 +701,7 @@ class Tool
 
     // TOOLS
 
-    protected function dropFile(string $file)
+    protected function dropFile(string $file): bool
     {
         return unlink($file);
     }
@@ -655,7 +726,7 @@ class Tool
         return (is_dir($path) || is_link($path)) ? $this->dropDir($path) : false;
     }
 
-    protected function dropDir(string $path)
+    protected function dropDir(string $path): bool
     {
         // Si la carpeta misma es un enlace, se quita el enlace: recorrerlo
         // vaciaba el destino y luego rmdir() fallaba sobre el enlace.

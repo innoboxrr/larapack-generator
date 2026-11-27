@@ -6,11 +6,11 @@ use Innoboxrr\LarapackGenerator\Tools\Tool;
 
 class EventServiceProviderTool extends Tool
 {
-    protected $eventServiceProviderPath;
+    protected string $eventServiceProviderPath = '';
 
-    protected $eventServiceProviderTemplatePath;
+    protected string $eventServiceProviderTemplatePath = '';
 
-    private function setEventServiceProviderPath()
+    private function setEventServiceProviderPath(): static
     {
 
         $this->eventServiceProviderPath = get_path(app_dir_name().'/Providers');
@@ -19,7 +19,7 @@ class EventServiceProviderTool extends Tool
 
     }
 
-    private function setEventServiceProviderTemplatePath()
+    private function setEventServiceProviderTemplatePath(): static
     {
 
         $this->eventServiceProviderTemplatePath = stubs_path('Providers');
@@ -28,7 +28,7 @@ class EventServiceProviderTool extends Tool
 
     }
 
-    public function create()
+    public function create(): bool
     {
 
         $this->init('')

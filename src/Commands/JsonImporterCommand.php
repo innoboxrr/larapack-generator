@@ -167,7 +167,7 @@ class JsonImporterCommand extends Command
     /**
      * @param  array<string, bool>  $ui  que modulos de interfaz generar
      */
-    private function callMakeFullModelCommand($modelName, array $ui, $metas, OutputInterface $output)
+    private function callMakeFullModelCommand(string $modelName, array $ui, bool $metas, OutputInterface $output): void
     {
         // Crear la instancia del comando MakeFullModelCommand
         $command = new MakeFullModelCommand;

@@ -6,11 +6,11 @@ use Innoboxrr\LarapackGenerator\Tools\Tool;
 
 class AppServiceProviderTool extends Tool
 {
-    protected $appServiceProviderPath;
+    protected string $appServiceProviderPath = '';
 
-    protected $appServiceProviderTemplatePath;
+    protected string $appServiceProviderTemplatePath = '';
 
-    private function setAppServiceProviderPath()
+    private function setAppServiceProviderPath(): static
     {
 
         $this->appServiceProviderPath = get_path(app_dir_name().'/Providers');
@@ -19,7 +19,7 @@ class AppServiceProviderTool extends Tool
 
     }
 
-    private function setAppServiceProviderTemplatePath()
+    private function setAppServiceProviderTemplatePath(): static
     {
 
         $this->appServiceProviderTemplatePath = stubs_path('Providers');
@@ -28,7 +28,7 @@ class AppServiceProviderTool extends Tool
 
     }
 
-    public function create()
+    public function create(): bool
     {
 
         $this->init('')
