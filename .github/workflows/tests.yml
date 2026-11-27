@@ -70,3 +70,6 @@ jobs:
 
             - name: Análisis estático
               run: vendor/bin/phpstan analyse --no-progress --memory-limit=1G
+
+    # Las pruebas de mutación tienen su propio workflow, mutation.yml: sólo
+    # corren en un pull request que toca lo que miden.

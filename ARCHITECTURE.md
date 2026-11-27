@@ -711,6 +711,10 @@ cambia algo que ve quien usa el generador.
 7. Un test en `tests/Feature/Verify*Test.php`, con el caso que debe marcar y,
    sobre todo, los que **no** debe marcar. Su tabla en «Verificar la
    arquitectura» del README.
+8. Si vive en una de las piezas de `infection.json5`, corre su mutación
+   ([CONTRIBUTING](CONTRIBUTING.md#las-pruebas-de-mutación)): el trabajo
+   «Mutación» de la CI no deja bajar el MSI de las ocho juntas ni el de cada
+   una por debajo de su suelo (`.github/mutation-floors.json`).
 
 ### Una opción o un comando
 

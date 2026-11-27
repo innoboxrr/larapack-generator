@@ -433,6 +433,50 @@ final class AgentHooksTest extends TestCase
     }
 
     /**
+     * El filtro le pasa la entrada a PHP con `printf … |`. Antes, la
+     * comprobación de que existe vendor/bin/builder iba DENTRO de la tubería:
+     * sin builder, el lado que lee salía sin leer nada, y si salía antes de
+     * que printf escribiera, printf recibía EPIPE y la shell escribía
+     * «printf: write error: Broken pipe». Era intermitente con una orden
+     * corta —una carrera—, y siempre con una entrada mayor que el búfer de la
+     * tubería, que es lo que se usa aquí para que el fallo no dependa de la
+     * suerte. Lo mismo con un builder que sale sin leer la entrada.
+     */
+    public function test_el_hook_previo_no_falla_por_una_tuberia_cerrada(): void
+    {
+        if (DIRECTORY_SEPARATOR === '\\' || trim((string) shell_exec('command -v bash 2>/dev/null')) === '') {
+            $this->markTestSkipped('Hace falta bash, que es con lo que Claude Code ejecuta los hooks.');
+        }
+
+        $this->runCommand('larapack:skill', ['--hooks' => true]);
+
+        [$command] = $this->commands('PreToolUse');
+        $bash = fn (string $line): string => (string) json_encode(['hook_event_name' => 'PreToolUse', 'tool_name' => 'Bash', 'tool_input' => ['command' => $line], 'cwd' => $this->project->path]);
+        // 256 KiB: más que el búfer de una tubería en Linux (64 KiB) y en
+        // Git Bash. Con `approve` dentro, para que el filtro llame a PHP.
+        $large = $bash('echo '.str_repeat('x', 256 * 1024).' approve');
+        $short = $bash('php vendor/bin/builder larapack:hand-rolled approve --all');
+
+        // Sin builder: ni error ni nada en la salida, las veces que sea.
+        $this->assertSame([0, ''], $this->hook($command, $large));
+
+        for ($i = 0; $i < 25; $i++) {
+            $this->assertSame([0, ''], $this->hook($command, $short), "vuelta {$i}");
+        }
+
+        // Un builder que sale sin leer la entrada: lo que cuenta es lo que
+        // dice él, no que printf se quede con la tubería cerrada.
+        mkdir($this->project->path.'/vendor/bin', 0777, true);
+        file_put_contents($this->project->path.'/vendor/bin/builder', "<?php\nexit(0);\n");
+
+        $this->assertSame([0, ''], $this->hook($command, $large));
+
+        file_put_contents($this->project->path.'/vendor/bin/builder', "<?php\nfwrite(STDERR, 'bloqueado');\nexit(2);\n");
+
+        $this->assertSame([2, 'bloqueado'], $this->hook($command, $large));
+    }
+
+    /**
      * @return array{0: int, 1: string}
      */
     private function hook(string $command, string $stdin): array

@@ -88,6 +88,107 @@ se importó sí recibe el aviso: ahí el rojo de verify es real. Está en
 `AuditTest`. Cuántos paquetes del ecosistema dejan de recibirlo no se midió
 aquí: el ecosistema no está en este repositorio.
 
+### Pruebas de mutación de lo que sostiene la garantía
+
+Que la suite pase por una línea no dice que compruebe lo que hace. Ahora se
+mide: [`infection.json5`](infection.json5) muta las ocho piezas de las que
+depende lo que LaraPack promete —`Verifier`, `ControllerShape`,
+`LegacySecurity`, `PhpOutline`, `HandRolledLock`, `Guard`, `LegacyFix` y
+`CiGate`— y el trabajo «Mutación» de la CI
+([`mutation.yml`](.github/workflows/mutation.yml)) falla si el MSI de las ocho
+juntas, o el de cualquiera, baja de lo logrado. Cómo correrlo en local, en
+CONTRIBUTING («Las pruebas de mutación»); el MSI de cada pieza antes y después,
+y los mutantes que sobreviven con su razón, en
+[`docs/mutacion.md`](docs/mutacion.md).
+
+MSI antes → después: `HandRolledLock` 53,7 → 97,9 %, `CiGate` 79,7 → 95,9 %,
+`Guard` 75,0 → 95,7 %, `ControllerShape` 77,4 → 95,3 %, `Verifier` 82,7 →
+93,3 %, `LegacySecurity` 74,5 → 92,8 %, `PhpOutline` 83,8 → 90,3 %,
+`LegacyFix` 72,5 → 89,9 %; las ocho juntas, 77,0 → 93,4 %
+(4335 mutantes; 93,9 % de los que algún test recorre). «Antes» se
+midió sin `--with-uncovered`, sólo con lo que la suite de la 9.1.0 recorría;
+«después», con él: lo que ningún test recorre también se muta y cuenta en
+contra. Sin eso, Infection no muta lo no cubierto, y borrar el test que cubría
+un mutante difícil subía el MSI. La CI exige `--min-msi=93` y
+`--min-covered-msi=93`, y a cada pieza su suelo de
+[`.github/mutation-floors.json`](.github/mutation-floors.json), que comprueba
+`.github/scripts/mutation-floors.php` (con su test). Corre con PHP 8.3,
+PHPUnit 12.5 e Infection 0.31.9, la configuración con la que se midió, sólo en
+los pull requests que tocan `src/`, `tests/` o su configuración (y a mano), con
+un límite de una hora y cancelando la corrida anterior de la misma rama. Hasta
+que corra en un pull request, no se ha visto pasar en GitHub: lo de aquí está
+medido en local con esa misma configuración.
+
+Las pruebas nuevas comparan mensajes enteros y casos límite, y convierten los
+avisos de PHP en excepciones como Laravel: un mutante que sólo deja un aviso
+también cuenta.
+
+Queda pendiente, y apuntado en `docs/mutacion.md`: los mutantes de las barras
+invertidas de `CiGate` sólo los mataría una CI en Windows, y el trabajo
+`windows-guard` no corre `CiGateTest` ni `GuardInputsTest` (lo que en ellos
+depende del sistema —`posix_geteuid()`, permisos, enlaces— no está escrito para
+Windows). Una primera versión de ese documento decía lo contrario.
+
+Los mutantes que sobrevivían destaparon fallos, y se arreglan con su prueba:
+
+- **`PhpOutline` llamaba `&` a un método que devuelve por referencia**
+  (`public function &items()`). Desde PHP 8.1 el `&` es un token con nombre
+  (`T_AMPERSAND_NOT_FOLLOWED_BY_VAR_OR_VARARG`) y se comparaba con el carácter
+  suelto. ControllerShape lo leía como una acción llamada `&`, y la huella de
+  una excepción aprobada sobre ese método no nombraba el método. El `&` no se
+  pierde: el esquema del método lo apunta (`byRef`) y la huella lo pone
+  delante de la firma, como en el código, así que pasar un método aprobado a
+  devolver por referencia (o al revés) deja la aprobación sin efecto. La
+  huella de los métodos sin `&` no cambia.
+- **La línea de un `;` o un `(` tras un salto dentro de un espacio** era la de
+  la línea anterior. Afecta a la línea que citan los mensajes de la forma del
+  constructor.
+- **La guardia no veía `bash -ce '…'`**: sólo leía como orden el argumento de
+  un grupo de opciones que *acaba* en `c` (`-c`, `-ec`). `bash -ce` ejecuta el
+  texto igual.
+- **La guardia leía `<<<` como un heredoc.** Su segundo `<` abría un heredoc
+  con la cadena de delimitador, y las líneas siguientes —órdenes— se tomaban
+  por su cuerpo: `cat <<< x` y debajo `larapack:hand-rolled approve` pasaba.
+  Ahora `<<<` se salta entero, y la cadena que recibe una shell
+  (`bash <<< '…'`) se lee como órdenes, igual que su heredoc.
+- **La guardia dejaba pasar lo que no terminaba de leer.** Lee hasta tres
+  shells dentro de la orden (`bash -c`, `eval`, un heredoc que recibe una
+  shell); más adentro no leía nada y lo daba por bueno, así que
+  `larapack:hand-rolled approve` dentro de cuatro `bash -c` pasaba. Una prueba
+  de mutación lo fijaba como si fuera lo esperado. Ahora falla cerrado: lo que
+  no se termina de leer cuenta como una aprobación y se bloquea. Al hook sólo
+  llegan las órdenes que nombran `approve`, `revoke` o `hand-rolled`, así que
+  lo único que se bloquea de más son cuatro shells anidadas que además nombran
+  una de esas palabras.
+- **`LegacySecurity` confundía `$Appends` con `$appends`**: las variables de
+  PHP distinguen mayúsculas, y bajar todo a minúsculas avisaba de un
+  setAppends() que recibía la variable limpia.
+- Código muerto: `PhpOutline::skipTo()`, que saltaba hasta el `;` de un
+  `use function` lo que `parseFile()` ya recorre sin registrar nada.
+
+Al actualizar: un método que devuelve por referencia y estaba aprobado en
+`.larapack/hand-rolled.lock` se aprobó como `Clase::&`. Ahora es
+`Clase::metodo`, con otra huella: la aprobación vieja sale como sobrante y el
+método vuelve a pedir la del dueño.
+
+### El hook previo ya no escribe «Broken pipe»
+
+El hook `PreToolUse` que instala `larapack:skill --hooks` le pasa la entrada a
+PHP con `printf … |`, y comprobaba que existiera `vendor/bin/builder` (o
+`vendor/autoload.php`) *dentro* de la tubería. Sin `vendor/`, el lado que lee
+salía sin leer; si salía antes de que printf escribiera, la shell añadía
+`printf: write error: Broken pipe` a la salida del hook. Con una orden corta
+era una carrera —el test `AgentHooksTest` que fallaba de vez en cuando—, y con
+una entrada mayor que el búfer de la tubería, siempre. Ahora la comprobación va
+delante de la tubería, y el error de escritura de printf (que aquí sólo puede
+ser esa tubería cerrada) va a `/dev/null`: lo que cuenta es lo que dice PHP y
+su código de salida. El test nuevo lo prueba con 256 KiB de entrada, sin
+builder y con uno que sale sin leer, y repite la orden corta veinticinco veces.
+
+Al actualizar: un hook ya instalado se reconoce y no se reescribe. Para tener
+el nuevo, quita el grupo `PreToolUse` de LaraPack de `.claude/settings.json` y
+vuelve a correr `larapack:skill --hooks`.
+
 ### Al actualizar
 
 - **Un proyecto sin `autoload.psr-4` hacia `src/` (o `app/`), o con un

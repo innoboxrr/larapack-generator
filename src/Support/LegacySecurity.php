@@ -402,20 +402,22 @@ final class LegacySecurity
         }
 
         // Variable => si lleva datos de la petición sin filtrar. Los
-        // parámetros de toArray() son la petición.
+        // parámetros de toArray() son la petición. Por su nombre exacto: en
+        // PHP `$Appends` y `$appends` son dos variables, y confundirlas
+        // avisaba de un setAppends() que recibía la que estaba limpia.
         $tainted = [];
 
         foreach ($method['params'] as $param) {
             $type = strtolower((string) $param['type']);
 
             if (str_ends_with($type, 'request') || ($param['type'] === null && strtolower($param['name']) === '$request')) {
-                $tainted[strtolower($param['name'])] = true;
+                $tainted[$param['name']] = true;
             }
         }
 
         foreach ($this->statements($body) as $statement) {
             if (count($statement) > 2 && $statement[0][0] === T_VARIABLE && $statement[1][0] === '=') {
-                $tainted[strtolower($statement[0][1])] = $this->carriesInput(array_slice($statement, 2), $tainted);
+                $tainted[$statement[0][1]] = $this->carriesInput(array_slice($statement, 2), $tainted);
             }
 
             foreach ($statement as $index => $token) {
@@ -450,7 +452,7 @@ final class LegacySecurity
             $call = ($tokens[$index + 1][0] ?? null) === '(' || ($tokens[$index + 1][0] ?? null) === T_DOUBLE_COLON;
 
             $input = $input
-                || ($token[0] === T_VARIABLE && ($tainted[strtolower($token[1])] ?? false))
+                || ($token[0] === T_VARIABLE && ($tainted[$token[1]] ?? false))
                 || ($token[0] === T_STRING && $call && strtolower($token[1]) === 'request' && ! $this->isMethodCall($tokens, $index));
         }
 

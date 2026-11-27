@@ -1,0 +1,81 @@
+name: Mutación
+
+# Las pruebas de mutación de las piezas que sostienen la garantía
+# (infection.json5): que los tests comprueben lo que hacen, no sólo que lo
+# recorran. Cómo se corre en local y qué hacer con un mutante que sobrevive,
+# en CONTRIBUTING («Las pruebas de mutación»); los números, en docs/mutacion.md.
+#
+# Sólo en un pull request que toca lo que mide, o a mano: son de veinte a
+# cuarenta minutos de runner, y un push a master ya pasó por su pull request.
+# Un push nuevo a la misma rama cancela la corrida que había.
+on:
+    pull_request:
+        paths:
+            - 'src/**'
+            - 'tests/**'
+            - 'composer.json'
+            - 'infection.json5'
+            - '.github/mutation-floors.json'
+            - '.github/scripts/mutation-floors.php'
+            - '.github/workflows/mutation.yml'
+    workflow_dispatch:
+
+concurrency:
+    group: mutation-${{ github.ref }}
+    cancel-in-progress: true
+
+jobs:
+    mutation:
+        name: Mutación
+        runs-on: ubuntu-latest
+        # Con cuatro núcleos tarda unos veinte minutos; con dos, el doble.
+        timeout-minutes: 60
+
+        steps:
+            - uses: actions/checkout@v5
+
+            # La configuración con la que se midieron los suelos: PHP 8.3,
+            # PHPUnit 12.5 e Infection 0.31.9 con pcov. En 8.4 composer
+            # resolvería PHPUnit 13, que Infection 0.31 no declara probado:
+            # otra combinación podría medir otra cosa.
+            - uses: shivammathur/setup-php@v2
+              with:
+                  php-version: '8.3'
+                  coverage: pcov
+
+            - name: Instalar dependencias
+              run: composer update --prefer-dist --no-interaction --no-progress --with 'phpunit/phpunit:^12.5'
+
+            # Infection se instala aparte y no en require-dev: trae su propio
+            # php-parser y su Symfony, y sin composer.lock cambiaría lo que
+            # resuelve cada versión de la matriz. Composer comprueba la firma
+            # de lo que baja.
+            - name: Instalar Infection
+              run: |
+                  mkdir -p "$RUNNER_TEMP/infection"
+                  echo '{"config":{"allow-plugins":{"infection/extension-installer":false}}}' > "$RUNNER_TEMP/infection/composer.json"
+                  composer require --working-dir="$RUNNER_TEMP/infection" --no-interaction --no-progress infection/infection:0.31.9
+
+            - name: Versiones
+              run: |
+                  php -v | head -1
+                  vendor/bin/phpunit --version
+                  "$RUNNER_TEMP/infection/vendor/bin/infection" --version
+
+            # --with-uncovered: el código que ningún test recorre también se
+            # muta y cuenta en contra. Sin él Infection no lo muta, y borrar el
+            # test que cubría un mutante difícil SUBÍA el MSI. Por eso hay dos
+            # umbrales: --min-msi (todo) y --min-covered-msi (lo recorrido).
+            # Los dos son lo logrado, redondeado hacia abajo: bajarlos para
+            # pasar no es una salida (CONTRIBUTING, «Las pruebas de mutación»).
+            - name: Pruebas de mutación
+              run: >-
+                  "$RUNNER_TEMP/infection/vendor/bin/infection"
+                  --threads=max --only-covering-test-cases --no-progress --with-uncovered
+                  --min-msi=93 --min-covered-msi=93
+
+            # El umbral de arriba es de las ocho piezas juntas: una podría
+            # bajar mientras las demás la compensan. Cada una, contra su suelo.
+            - name: El suelo de cada pieza
+              if: ${{ !cancelled() }}
+              run: php -d memory_limit=2G .github/scripts/mutation-floors.php .infection/infection.json .github/mutation-floors.json

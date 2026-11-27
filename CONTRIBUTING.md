@@ -16,11 +16,12 @@ silencio lo que ya está generado.
 3. [Las fotos de lo generado](#las-fotos-de-lo-generado)
 4. [Las pruebas de punta a punta](#las-pruebas-de-punta-a-punta)
 5. [Formato y análisis estático](#formato-y-análisis-estático)
-6. [Cómo se escribe aquí](#cómo-se-escribe-aquí)
-7. [Commits](#commits)
-8. [Versionar](#versionar)
-9. [Publicar](#publicar)
-10. [El ecosistema](#el-ecosistema)
+6. [Las pruebas de mutación](#las-pruebas-de-mutación)
+7. [Cómo se escribe aquí](#cómo-se-escribe-aquí)
+8. [Commits](#commits)
+9. [Versionar](#versionar)
+10. [Publicar](#publicar)
+11. [El ecosistema](#el-ecosistema)
 
 ---
 
@@ -146,6 +147,81 @@ repetir `array<string, mixed>`.
 Los dos corren en el trabajo `quality` de la CI, igual que en cada paquete que
 crea `larapack:new`. `tests/Fixtures` queda fuera de Pint a propósito: son
 archivos con la forma exacta que se quiere probar, también la mala.
+
+## Las pruebas de mutación
+
+Que una línea la recorra un test no dice que el test la compruebe. Infection
+cambia el código de `src/` de una en una —un `&&` por un `||`, un `[0]` por un
+`[1]`, una sentencia fuera— y corre los tests que pasan por esa línea: si
+ninguno falla, el cambio «sobrevive», y eso es una regla que la suite no
+sostiene.
+
+No se muta todo el generador. [`infection.json5`](infection.json5) lo acota a
+las piezas que sostienen la garantía: lo que `verify` comprueba
+([`Verifier`](src/Support/Verifier.php),
+[`ControllerShape`](src/Support/ControllerShape.php),
+[`LegacySecurity`](src/Support/LegacySecurity.php)), cómo se lee el código
+([`PhpOutline`](src/Support/PhpOutline.php)), la aprobación de las excepciones
+([`HandRolledLock`](src/Support/HandRolledLock.php)), lo que la guardia deja
+pasar ([`Guard`](src/Support/Guard.php)), lo que `fix` reescribe
+([`LegacyFix`](src/Support/LegacyFix.php)) y la puerta de la CI
+([`CiGate`](src/Support/CiGate.php)). Y los tests que corre son los suyos, con
+el `--filter` del mismo archivo: la suite entera tardaría una hora.
+
+Infection no está en `require-dev`, y es a propósito: trae su propio
+`nikic/php-parser` y su Symfony, y como el repositorio no versiona
+`composer.lock`, sumarlos cambiaría lo que resuelve cada versión de PHP de la
+matriz. Se instala aparte, en un directorio propio, y se le pasa el proyecto:
+
+```
+mkdir -p ../infection
+echo '{"config":{"allow-plugins":{"infection/extension-installer":false}}}' > ../infection/composer.json
+composer require --working-dir=../infection infection/infection:0.31.9
+
+php -m | grep -E -i 'pcov|xdebug'      # hace falta un driver de cobertura; pcov es el rápido
+../infection/vendor/bin/infection --threads=max --only-covering-test-cases --with-uncovered
+../infection/vendor/bin/infection --threads=max --only-covering-test-cases --with-uncovered --filter=src/Support/Guard.php --show-mutations
+php -d memory_limit=2G .github/scripts/mutation-floors.php .infection/infection.json .github/mutation-floors.json
+```
+
+La primera orden mide todo (unos veinte minutos con cuatro núcleos); la segunda,
+una pieza, con cada mutante superviviente en pantalla; la tercera compara cada
+pieza con su suelo. El detalle queda en `.infection/` (fuera de git):
+`infection.log` con el diff de cada superviviente y `infection.json` para
+leerlo con un script.
+
+`--with-uncovered` no es un detalle. Sin él, Infection sólo muta las líneas
+que algún test recorre: lo que ningún test toca no produce mutantes y no cuenta
+en contra, y borrar el test que cubría un mutante difícil *subía* el MSI. Con
+él, esas líneas se mutan y cuentan como no detectadas, y `--min-msi` (todo) y
+`--min-covered-msi` (sólo lo recorrido) dejan de ser el mismo número.
+
+El trabajo «Mutación» de la CI ([`.github/workflows/mutation.yml`](.github/workflows/mutation.yml))
+corre lo mismo con PHP 8.3, PHPUnit 12.5 e Infection 0.31.9 —la configuración
+con la que se midió—, en cada pull request que toca `src/`, `tests/` o la
+propia configuración, y a mano desde Actions. Tiene dos barreras:
+
+- `--min-msi` y `--min-covered-msi`, de las ocho piezas juntas.
+- El suelo de cada pieza, en [`.github/mutation-floors.json`](.github/mutation-floors.json),
+  que comprueba [`.github/scripts/mutation-floors.php`](.github/scripts/mutation-floors.php)
+  (`MutationFloorsTest`). Sin él, una pieza podía bajar mientras las otras la
+  compensaban. Falla también si una pieza con suelo deja de tener mutantes o si
+  se muta un archivo sin suelo: una pieza nueva en `infection.json5` entra con
+  el suyo.
+
+Los umbrales y los suelos son lo logrado, redondeado hacia abajo. Si una pieza
+sube, su suelo sube en el mismo cambio; lo que se baje de ahí no entra. Con un
+mutante que sobrevive hay tres salidas, y sólo tres:
+
+1. **Falta un test.** Se escribe el que comprueba el comportamiento que el
+   mutante cambia —el mensaje entero, el segundo de dos hallazgos, el caso con
+   mayúsculas—, no uno que mire el detalle interno.
+2. **Es un fallo o código muerto.** Se arregla, con su test. Así salieron en
+   la 9.2.0 el método que devuelve por referencia, el `bash -ce` de la guardia
+   y el `<<<` que escondía las órdenes siguientes.
+3. **Es equivalente**: ningún test puede distinguirlo porque el programa hace
+   lo mismo. Se apunta en [`docs/mutacion.md`](docs/mutacion.md) con su razón.
+   No se baja el umbral ni se excluye en bloque.
 
 ## Cómo se escribe aquí
 

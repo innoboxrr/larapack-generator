@@ -52,6 +52,12 @@ final class Guard
     private const SHELLS = ['bash', 'sh', 'zsh', 'dash', 'ksh'];
 
     /**
+     * Cuántas shells dentro de la orden se leen; más adentro, falla cerrado
+     * (shellScan()).
+     */
+    private const MAX_SHELL_DEPTH = 3;
+
+    /**
      * Lo que va delante de la orden de verdad sin cambiar qué orden es:
      * `sudo tee …` escribe igual que `tee …`.
      */
@@ -233,6 +239,15 @@ final class Guard
      * Recorre una orden de shell: devuelve si aprueba o retira una excepción,
      * y añade a `$locks` cada candado que escribe (tal como se escribió).
      *
+     * Lee hasta tres shells dentro de la orden (`bash -c`, `eval`, un heredoc
+     * que recibe una shell). Lo que haya más adentro no se lee, y antes se
+     * daba por bueno: `larapack:hand-rolled approve` dentro de cuatro `bash -c`
+     * pasaba. Ahora falla cerrado: una orden que no se termina de leer cuenta
+     * como si aprobara, y se bloquea. Al hook sólo llegan las órdenes con
+     * `approve`, `revoke` o `hand-rolled` (AgentHooks::preCommand()), así que
+     * lo que esto bloquea de más son cuatro shells anidadas que además nombran
+     * una de esas palabras.
+     *
      * @param  list<string>  $locks
      */
     private static function shellScan(string $command, int $depth, array &$locks): bool
@@ -249,8 +264,8 @@ final class Guard
         }
 
         // Un heredoc que se le pasa a una shell (`bash <<EOF`) sí son órdenes.
-        foreach ($depth < 3 ? $scripts : [] as $script) {
-            $approves = self::shellScan($script, $depth + 1, $locks) || $approves;
+        foreach ($scripts as $script) {
+            $approves = self::nestedScan($script, $depth, $locks) || $approves;
         }
 
         foreach ($commands as $words) {
@@ -264,15 +279,33 @@ final class Guard
                 }
 
                 $invoked = $invoked || self::namesHandRolled($word);
-                $nested = $eval || preg_match('/^-[a-z]*c$/i', $words[$index - 1] ?? '') === 1;
+                // `-c` puede ir en cualquier punto del grupo de opciones:
+                // `bash -ce '…'` ejecuta el texto igual que `bash -ec '…'`.
+                $nested = $eval || preg_match('/^-[a-z]*c[a-z]*$/i', $words[$index - 1] ?? '') === 1;
 
-                if ($nested && $depth < 3) {
-                    $approves = self::shellScan($word, $depth + 1, $locks) || $approves;
+                if ($nested) {
+                    $approves = self::nestedScan($word, $depth, $locks) || $approves;
                 }
             }
         }
 
         return $approves;
+    }
+
+    /**
+     * Una orden dentro de otra, que está en la profundidad `$depth`. Pasado
+     * el límite no se lee y cuenta como aprobación (shellScan()); vacía no
+     * ejecuta nada.
+     *
+     * @param  list<string>  $locks
+     */
+    private static function nestedScan(string $script, int $depth, array &$locks): bool
+    {
+        if ($depth < self::MAX_SHELL_DEPTH) {
+            return self::shellScan($script, $depth + 1, $locks);
+        }
+
+        return trim($script) !== '';
     }
 
     /**
@@ -380,6 +413,9 @@ final class Guard
         $head = null;
         // Si la palabra que viene es el destino de una redirección de salida.
         $redirect = false;
+        // Si la palabra que viene es la cadena de un `<<<`: si la recibe una
+        // shell (`bash <<< '…'`), son órdenes, como el cuerpo de un heredoc.
+        $hereString = false;
         $length = strlen($line);
 
         for ($i = 0; $i < $length; $i++) {
@@ -428,6 +464,11 @@ final class Guard
                         $redirect = false;
                     }
 
+                    if ($hereString) {
+                        self::hereString($word, $head, $scripts);
+                        $hereString = false;
+                    }
+
                     $word = null;
                 }
 
@@ -440,8 +481,14 @@ final class Guard
                     $words = [];
                 }
 
-                // `<<` abre un heredoc (`<<<` es otra cosa: una cadena).
-                if ($char === '<' && ($line[$i + 1] ?? '') === '<' && ($line[$i + 2] ?? '') !== '<') {
+                // `<<` abre un heredoc; `<<<` es otra cosa —una cadena— y se
+                // salta entero. Si no, su segundo `<` abría un heredoc con la
+                // cadena de delimitador y las líneas siguientes, que son
+                // órdenes, se leían como su cuerpo.
+                if ($char === '<' && substr($line, $i + 1, 2) === '<<') {
+                    $i += 2;
+                    $hereString = true;
+                } elseif ($char === '<' && ($line[$i + 1] ?? '') === '<') {
                     [$delimiter, $strip, $i] = self::heredocDelimiter($line, $i + 2);
 
                     if ($delimiter !== null) {
@@ -468,6 +515,10 @@ final class Guard
             if ($redirect) {
                 $redirects[] = $word;
             }
+
+            if ($hereString) {
+                self::hereString($word, $head, $scripts);
+            }
         }
 
         if ($words !== []) {
@@ -475,6 +526,18 @@ final class Guard
         }
 
         return $commands;
+    }
+
+    /**
+     * La cadena de un `<<<` es un guion si la recibe una shell.
+     *
+     * @param  list<string>  $scripts
+     */
+    private static function hereString(string $word, ?string $head, array &$scripts): void
+    {
+        if ($head !== null && in_array(basename(str_replace('\\', '/', $head)), self::SHELLS, true)) {
+            $scripts[] = $word;
+        }
     }
 
     /**

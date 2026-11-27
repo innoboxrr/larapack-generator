@@ -127,9 +127,10 @@ final class AgentHooks
      */
     public static function hooks(string $root): array
     {
-        $binary = is_file(rtrim($root, '/').'/artisan')
-            ? '[ ! -f "$CLAUDE_PROJECT_DIR/vendor/autoload.php" ] || php "$CLAUDE_PROJECT_DIR/artisan"'
-            : '[ ! -f "$CLAUDE_PROJECT_DIR/vendor/bin/builder" ] || php "$CLAUDE_PROJECT_DIR/vendor/bin/builder"';
+        [$required, $php] = is_file(rtrim($root, '/').'/artisan')
+            ? ['"$CLAUDE_PROJECT_DIR/vendor/autoload.php"', 'php "$CLAUDE_PROJECT_DIR/artisan"']
+            : ['"$CLAUDE_PROJECT_DIR/vendor/bin/builder"', 'php "$CLAUDE_PROJECT_DIR/vendor/bin/builder"'];
+        $binary = "[ ! -f {$required} ] || {$php}";
 
         return [
             'PostToolUse' => (object) [
@@ -153,7 +154,7 @@ final class AgentHooks
                 'matcher' => 'Write|Edit|MultiEdit|Bash',
                 'hooks' => [(object) [
                     'type' => 'command',
-                    'command' => self::preCommand($binary),
+                    'command' => self::preCommand($required, $php),
                     'timeout' => 30,
                 ]],
             ],
@@ -175,14 +176,27 @@ final class AgentHooks
      * siempre una barra invertida seguida de salto de línea (en el JSON,
      * `\\\n`): la continuación de línea puede partir una palabra por
      * cualquier sitio, y quitarla aquí con la shell no es fiable.
+     *
+     * La entrada le llega a PHP por una tubería, y el lado que lee puede
+     * cerrarla sin haber leído. Antes, la comprobación de `$required` iba
+     * dentro de la tubería (`printf … | { [ ! -f … ] || php …; }`): sin
+     * vendor/, el lado que lee salía en el acto, y si lo hacía antes de que
+     * printf escribiera, la shell añadía «printf: write error: Broken pipe» a
+     * la salida del hook. Era una carrera con una orden corta y una certeza con
+     * una entrada mayor que el búfer de la tubería. Ahora la comprobación va
+     * delante (`a || b | c` es `a || (b | c)`): sin `$required` no hay
+     * tubería. Y el error de printf va a /dev/null: el único que puede tener
+     * aquí es esa tubería cerrada —un PHP que salió sin leer, por ejemplo
+     * porque la aplicación no arranca—, y lo que cuenta entonces es lo que
+     * dice PHP, con su código de salida, que es el de la tubería.
      */
-    private static function preCommand(string $binary): string
+    private static function preCommand(string $required, string $php): string
     {
         $filter = <<<'SH'
         input=$(cat); bare=$(printf '%s' "$input" | tr -d '\\"'"'"); case "$input $bare" in *approve*|*revoke*|*[Hh][Aa][Nn][Dd]-[Rr][Oo][Ll][Ll][Ee][Dd]*|*'\\\'[nr]*)
         SH;
 
-        return $filter." printf '%s' \"\$input\" | { {$binary} larapack:guard --pre; };; esac";
+        return $filter." [ ! -f {$required} ] || printf '%s' \"\$input\" 2>/dev/null | {$php} larapack:guard --pre;; esac";
     }
 
     /**
