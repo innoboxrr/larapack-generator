@@ -162,8 +162,10 @@ final class RealignApplyTest extends TestCase
     {
         $trait = 'src/Http/Controllers/Concerns/ResolvesPost.php';
         $this->put($trait, "<?php\n\nnamespace Acme\\Blog\\Http\\Controllers\\Concerns;\n\ntrait ResolvesPost\n{\n    protected function resolvePost(): int\n    {\n        return 1;\n    }\n}\n");
-        $this->edit(self::SHOW, "use Illuminate\\Validation\\Rule;\n", "use Illuminate\\Validation\\Rule;\nuse Acme\\Blog\\Http\\Controllers\\Concerns\\ResolvesPost;\n");
-        $this->edit(self::SHOW, "class ShowRequest extends FormRequest\n{\n", "class ShowRequest extends FormRequest\n{\n    use ResolvesPost;\n");
+        // Dos en la misma corrida: el segundo no puede tropezar con el primero ya movido.
+        $this->put('src/Http/Controllers/Concerns/ResolvesTag.php', "<?php\n\nnamespace Acme\\Blog\\Http\\Controllers\\Concerns;\n\ntrait ResolvesTag\n{\n    protected function resolveTag(): int\n    {\n        return 2;\n    }\n}\n");
+        $this->edit(self::SHOW, "use Illuminate\\Validation\\Rule;\n", "use Illuminate\\Validation\\Rule;\nuse Acme\\Blog\\Http\\Controllers\\Concerns\\ResolvesPost;\nuse Acme\\Blog\\Http\\Controllers\\Concerns\\ResolvesTag;\n");
+        $this->edit(self::SHOW, "class ShowRequest extends FormRequest\n{\n", "class ShowRequest extends FormRequest\n{\n    use ResolvesPost;\n    use ResolvesTag;\n");
         $this->prepare();
 
         $id = 'controller-concern@.';
@@ -178,6 +180,8 @@ final class RealignApplyTest extends TestCase
         $this->assertFileDoesNotExist($this->project->path.'/'.$trait);
         $this->assertStringContainsString('namespace Acme\\Blog\\Http\\Requests\\Concerns;', $this->project->read('src/Http/Requests/Concerns/ResolvesPost.php'));
         $this->assertStringContainsString('use Acme\\Blog\\Http\\Requests\\Concerns\\ResolvesPost;', $this->project->read(self::SHOW));
+        $this->assertStringContainsString('use Acme\\Blog\\Http\\Requests\\Concerns\\ResolvesTag;', $this->project->read(self::SHOW));
+        $this->assertFileExists($this->project->path.'/src/Http/Requests/Concerns/ResolvesTag.php');
         $this->assertTrue($this->realign('check', ['targets' => [$id]])['done']);
     }
 

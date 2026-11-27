@@ -97,7 +97,8 @@ final class ConcernMove
         $references = [];
 
         foreach ($this->phpFiles() as $file) {
-            if ($file === $absolute) {
+            // Otro movimiento de la misma corrida pudo quitarlo.
+            if ($file === $absolute || ! is_file($file)) {
                 continue;
             }
 

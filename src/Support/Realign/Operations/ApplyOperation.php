@@ -105,16 +105,22 @@ final class ApplyOperation implements RealignOperation
                 continue;
             }
 
-            match ($type) {
-                'regenerate' => $this->regenerate($step, $reference, $context, $result),
-                'missing' => $this->restore($step, $reference, $context, $result),
-                'fix' => $this->fix($step, $context, $result),
-                'endpoint-tests' => $this->endpointTests($step, $reference, $context, $result),
-                'controller-concern' => $this->concerns($step, $context, $result),
-                'model-lists' => $this->modelLists($step, $reference, $context, $result),
-                'pin-foreign-keys' => $this->pins($step, $reference, $context, $result),
-                default => $result->skipped(null, "{$step['id']}: apply no sabe hacer pasos {$type}.", ['step' => $step['id']]),
-            };
+            try {
+                match ($type) {
+                    'regenerate' => $this->regenerate($step, $reference, $context, $result),
+                    'missing' => $this->restore($step, $reference, $context, $result),
+                    'fix' => $this->fix($step, $context, $result),
+                    'endpoint-tests' => $this->endpointTests($step, $reference, $context, $result),
+                    'controller-concern' => $this->concerns($step, $context, $result),
+                    'model-lists' => $this->modelLists($step, $reference, $context, $result),
+                    'pin-foreign-keys' => $this->pins($step, $reference, $context, $result),
+                    default => $result->skipped(null, "{$step['id']}: apply no sabe hacer pasos {$type}.", ['step' => $step['id']]),
+                };
+            } catch (MakerException|\RuntimeException $e) {
+                // Un paso que revienta no se lleva a los demás: lo que ya
+                // escribió es un cambio entero (Changes), se dice y se sigue.
+                $result->skipped(null, "{$step['id']}: se interrumpió ({$e->getMessage()}). Lo que escribió antes queda; vuelve a diagnosticar.", ['step' => $step['id']]);
+            }
         }
 
         ConcernMove::reset();
