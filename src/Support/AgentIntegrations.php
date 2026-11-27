@@ -125,7 +125,7 @@ final class AgentIntegrations
         }
 
         $file = rtrim($root, '/').'/'.self::HOOK_FILES[$agent];
-        $contents = is_file($file) ? (string) file_get_contents($file) : '';
+        $contents = is_file($file) ? Files::read($file) : '';
 
         return str_contains($contents, 'larapack:guard') && str_contains($contents, '--agent='.$agent);
     }
@@ -152,7 +152,7 @@ final class AgentIntegrations
         }
 
         $rules = $root.'/'.self::RULE_FILES[$agent];
-        $contents = is_file($rules) ? (string) file_get_contents($rules) : '';
+        $contents = is_file($rules) ? Files::read($rules) : '';
 
         return ['hooks' => $hooks, 'rules' => str_contains($contents, AgentHooks::BEGIN) ? 'installed' : 'missing'];
     }
@@ -444,7 +444,7 @@ final class AgentIntegrations
         $contents = self::FRONTMATTER[$agent].AgentHooks::BEGIN."\n".AgentHooks::agentsBlock($skillPath).AgentHooks::END."\n";
 
         if (is_file($target)) {
-            $current = (string) file_get_contents($target);
+            $current = Files::read($target);
 
             if (! str_contains($current, AgentHooks::BEGIN)) {
                 return ['target' => $target, 'action' => 'kept'];
@@ -470,11 +470,11 @@ final class AgentIntegrations
      */
     private static function readJson(string $target): stdClass
     {
-        if (! is_file($target) || trim((string) file_get_contents($target)) === '') {
+        if (! is_file($target) || trim(Files::read($target)) === '') {
             return new stdClass;
         }
 
-        $decoded = json_decode((string) file_get_contents($target), false);
+        $decoded = json_decode(Files::read($target), false);
 
         if (! $decoded instanceof stdClass) {
             throw new RuntimeException("{$target} no es un objeto JSON válido. Corrígelo a mano; no se sobrescribe.");
