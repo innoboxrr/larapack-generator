@@ -45,9 +45,25 @@
 #                           instala con `git archive`, como la dist de
 #                           Packagist: lo que no esté comiteado no entra.
 #   ECOSYSTEM_LARAPACK_VERSION  la versión con la que se presenta (VERSION).
-#   ECOSYSTEM_LARAVEL_SETUP la versión de laravel-setup (la última estable
-#                           publicada).
+#   SETUP_CONSTRAINT        qué laravel-setup se prueba (^7.2.1). Se toma la
+#                           última estable publicada que la cumpla y se fija a
+#                           esa versión exacta; una versión exacta también es
+#                           una restricción. Si ninguna la cumple, el script
+#                           falla diciéndolo; si hay una más nueva fuera de
+#                           ella, lo avisa.
 #   ECOSYSTEM_LARAVEL       la restricción del esqueleto (^13.0).
+#   ECOSYSTEM_COMPOSER_AUTH el COMPOSER_AUTH para Composer (el workflow pone
+#                           ahí el token de GitHub). Ésta y COMPOSER_AUTH se
+#                           sacan del entorno al empezar y sólo se le pasan a
+#                           Composer y a app:install, que lo lanza: npm y los
+#                           tests de la aplicación no las ven.
+#
+# `larapack:verify --strict` tiene que salir limpio, sin hallazgos esperados ni
+# excepciones: un aviso conocido que se deja en rojo tapa al siguiente.
+#
+# Las lecturas (qué versión, de dónde salió LaraPack, el informe JUnit, el de
+# verify) están en ecosystem-e2e-checks.php, que sale con 1 al fallar y tiene
+# sus propios tests (tests/Unit/EcosystemE2eChecksTest.php).
 #
 # Composer se lanza tal cual: lo que cambie cómo descarga (COMPOSER_HOME con
 # preferred-install=source en una máquina sin acceso a las dist de GitHub,
@@ -65,6 +81,8 @@ REPO="${GITHUB_WORKSPACE:-$(pwd)}"
 [ -f "$REPO/composer.json" ] && [ -f "$REPO/VERSION" ] || { echo "Corre el script desde la raíz de larapack-generator (o define GITHUB_WORKSPACE)." >&2; exit 64; }
 
 FIXTURE="$REPO/.github/scripts/ecosystem-e2e.laraimport.json"
+CHECKS="$REPO/.github/scripts/ecosystem-e2e-checks.php"
+SETUP_CONSTRAINT="${SETUP_CONSTRAINT:-^7.2.1}"
 LARAPACK_REF="${ECOSYSTEM_LARAPACK_REF:-HEAD}"
 LARAPACK_VERSION="${ECOSYSTEM_LARAPACK_VERSION:-$(tr -d '[:space:]' < "$REPO/VERSION")}"
 LARAVEL="${ECOSYSTEM_LARAVEL:-^13.0}"
@@ -92,18 +110,40 @@ on_exit() {
 }
 trap on_exit EXIT
 
-# Nada de lo que corre aquí puede quedarse esperando una respuesta.
-composer() { command composer --no-interaction "$@"; }
-artisan() { (cd "$APP" && php artisan --no-interaction "$@"); }
+# El token sólo le hace falta a Composer. Se saca del entorno para que no lo
+# hereden npm install (los postinstall de terceros) ni php artisan test: queda
+# en una variable sin exportar y se le pone a Composer en cada llamada.
+COMPOSER_AUTH_JSON="${ECOSYSTEM_COMPOSER_AUTH:-${COMPOSER_AUTH:-}}"
+unset ECOSYSTEM_COMPOSER_AUTH COMPOSER_AUTH
 
-annotate() {
-    # En Actions, el error aparece en el resumen del run; fuera, sólo en stderr.
-    # Los dos puntos y las comas cortarían el título de la anotación.
+# Nada de lo que corre aquí puede quedarse esperando una respuesta.
+composer() {
+    if [ -n "$COMPOSER_AUTH_JSON" ]; then
+        COMPOSER_AUTH="$COMPOSER_AUTH_JSON" command composer --no-interaction "$@"
+    else
+        command composer --no-interaction "$@"
+    fi
+}
+artisan() { (cd "$APP" && php artisan --no-interaction "$@"); }
+# Para la orden de artisan que lanza Composer por dentro (app:install).
+artisan_with_composer() {
+    if [ -n "$COMPOSER_AUTH_JSON" ]; then
+        (cd "$APP" && COMPOSER_AUTH="$COMPOSER_AUTH_JSON" php artisan --no-interaction "$@")
+    else
+        artisan "$@"
+    fi
+}
+
+annotate() { # [error|warning] título mensaje
+    # En Actions, la anotación aparece en el resumen del run; fuera, sólo en
+    # stderr. Los dos puntos y las comas cortarían el título.
+    local level=error
+    case "$1" in error | warning) level="$1"; shift ;; esac
     if [ -n "${GITHUB_ACTIONS:-}" ]; then
         local title="${1//'%'/'%25'}" msg="${2//'%'/'%25'}"
         title="${title//':'/'%3A'}"; title="${title//','/'%2C'}"
         msg="${msg//$'\r'/'%0D'}"; msg="${msg//$'\n'/'%0A'}"
-        echo "::error title=$title::$msg"
+        echo "::$level title=$title::$msg"
     fi
 }
 
@@ -178,7 +218,7 @@ step() {
             [ -z "$why" ] || printf '%s\n' "$why"
             echo "Registro completo: $log"
         } >&2
-        annotate "Ecosistema ($UI): $title" "Responsable: $owner."$'\n'"$why"
+        annotate error "Ecosistema ($UI): $title" "Responsable: $owner."$'\n'"$why"
         [ "$KEEP_GOING" = 1 ] || exit 1
         FAILED+=("$title")
     fi
@@ -190,7 +230,7 @@ check() {
     echo >&2
     echo "FALLO: $msg" >&2
     echo "Responsable: $owner." >&2
-    annotate "Ecosistema ($UI)" "$msg Responsable: $owner."
+    annotate error "Ecosistema ($UI)" "$msg Responsable: $owner."
     exit 1
 }
 
@@ -216,13 +256,26 @@ export_larapack() {
 }
 step "LaraPack $LARAPACK_REF como dist" "este repositorio (git archive)" export_larapack
 
+# La última estable publicada que cumpla $1 (sin $1, la última de todas).
+# `composer show` con una restricción ya lista sólo las que la cumplen, y sale
+# con error si no hay ninguna.
 latest_setup() {
-    (cd "$WORK" && composer show --all --format=json innoboxrr/laravel-setup) \
-        | php -r '$v = array_values(array_filter(json_decode(stream_get_contents(STDIN), true)["versions"] ?? [], fn ($x) => preg_match("/^v?\d+\.\d+\.\d+$/", $x))); usort($v, fn ($a, $b) => version_compare(ltrim($b, "v"), ltrim($a, "v"))); echo $v[0] ?? "";'
+    (cd "$WORK" && composer show --all --format=json innoboxrr/laravel-setup ${1:+"$1"} 2>/dev/null) \
+        | php "$CHECKS" pick-version "${1:-*}"
 }
-SETUP_VERSION="${ECOSYSTEM_LARAVEL_SETUP:-$(latest_setup)}"
-[ -n "$SETUP_VERSION" ] || check "Packagist" "no se pudo leer la última versión publicada de innoboxrr/laravel-setup."
-echo "laravel-setup: $SETUP_VERSION"
+SETUP_VERSION="$(latest_setup "$SETUP_CONSTRAINT")" \
+    || check "innoboxrr/laravel-setup" "ninguna versión publicada de innoboxrr/laravel-setup cumple SETUP_CONSTRAINT=$SETUP_CONSTRAINT (o Packagist no respondió). Si la que se espera aún no está publicada, el arreglo es publicarla; para probar otra, SETUP_CONSTRAINT."
+echo "laravel-setup: $SETUP_VERSION (la última que cumple $SETUP_CONSTRAINT)"
+
+# Que la restricción no deje de probar lo que instala un cliente: si hay una
+# laravel-setup más nueva fuera de ella, se avisa (no es un fallo: se probó lo
+# que se pidió).
+SETUP_NEWEST="$(latest_setup "" || true)"
+if [ -n "$SETUP_NEWEST" ] && [ "$SETUP_NEWEST" != "$SETUP_VERSION" ] \
+    && [ "$(printf '%s\n%s\n' "$SETUP_VERSION" "$SETUP_NEWEST" | sort -V | tail -n 1)" = "$SETUP_NEWEST" ]; then
+    echo "AVISO: la última laravel-setup publicada es $SETUP_NEWEST, fuera de SETUP_CONSTRAINT=$SETUP_CONSTRAINT: no es la que se prueba." >&2
+    annotate warning "Ecosistema ($UI): laravel-setup $SETUP_NEWEST sin probar" "SETUP_CONSTRAINT=$SETUP_CONSTRAINT deja fuera la última publicada; se probó $SETUP_VERSION."
+fi
 
 # La versión exacta: sin ella, si la última laravel-setup no admitiera este
 # LaraPack, Composer bajaría en silencio a una laravel-setup más vieja que sí,
@@ -239,12 +292,17 @@ step "composer require laravel-setup $SETUP_VERSION y LaraPack $LARAPACK_VERSION
     "innoboxrr/laravel-setup $SETUP_VERSION: su restricción sobre innoboxrr/larapack-generator no admite $LARAPACK_VERSION, o alguna dependencia de los dos choca" \
     require_ecosystem
 
-# Que el LaraPack instalado sea éste y no el de Packagist.
-installed_from() {
-    php -r '$i = json_decode(file_get_contents($argv[1]), true); foreach ($i["packages"] ?? $i as $p) if ($p["name"] === "innoboxrr/larapack-generator") { echo ($p["dist"]["type"] ?? "?")." ".$p["version"]; exit; }' "$APP/vendor/composer/installed.json"
+# Que el LaraPack instalado sea éste y no el de Packagist. No basta mirarlo
+# una vez: app:setup reescribe la restricción de LaraPack en composer.json y
+# app:install corre composer update, así que se vuelve a mirar después de cada
+# paso que puede reinstalarlo.
+assert_installed_from() { # $1 = después de qué
+    local why
+    why="$(php "$CHECKS" installed-from "$APP/vendor/composer/installed.json" "$LARAPACK_VERSION" 2>&1)" \
+        || check "el script (o $1, que cambió el origen de LaraPack)" "después de $1: $why"
+    echo "$why"
 }
-[ "$(installed_from)" = "path $LARAPACK_VERSION" ] \
-    || check "el script" "el LaraPack instalado no es el de este checkout ($(installed_from)); se probaría la versión publicada."
+assert_installed_from "composer require"
 
 # --- 3 y 4. La aplicación base -----------------------------------------------
 
@@ -259,7 +317,8 @@ step "app:setup ($UI)" \
 # los módulos de este laraimport incluidos.
 step "app:install --without-build" \
     "innoboxrr/laravel-setup (app:install) o el paquete que nombre Composer" \
-    artisan app:install --without-build
+    artisan_with_composer app:install --without-build
+assert_installed_from "app:install"
 
 # --- 5. Lo que declara quien usa la aplicación ------------------------------
 
@@ -281,6 +340,7 @@ step "larapack:validate --$UI --strict" \
 
 step "larapack:import --$UI" "innoboxrr/larapack-generator (import)" \
     artisan larapack:import laraimport.json "--$UI"
+assert_installed_from "larapack:import"
 
 # --- 6. Base de datos y rutas ------------------------------------------------
 
@@ -305,36 +365,11 @@ step "npm run build" "el módulo $UI que genera innoboxrr/larapack-generator, o 
 step "php artisan test" "innoboxrr/larapack-generator (los tests y el código los genera él) sobre la aplicación de innoboxrr/laravel-setup" \
     bash -c "cd '$APP' && php artisan test --log-junit '$WORK/junit.xml'"
 
-# Que se ejecutaran todos los generados y que estén los que cierran la
-# autorización (9.1). Un test que no se carga no falla, y un total que cuadra
-# puede esconder uno que falta detrás de los de la aplicación: se cuentan por
-# archivo, los escritos contra los ejecutados.
+# Que se ejecutaran todos los generados, enteros, y que estén los que cierran
+# la autorización (9.1). Se cuentan por archivo, los escritos contra los
+# ejecutados: ecosystem-e2e-checks.php junit.
 junit_check() {
-    php -r '
-        [$junit, $root] = [$argv[1], realpath($argv[2])];
-        $x = simplexml_load_file($junit) ?: exit("PHPUnit no dejó el informe\n");
-        $s = $x->testsuite;
-        if ((int) $s["skipped"] > 0) exit($s["skipped"]." tests saltados\n");
-        $ran = [];
-        $names = [];
-        foreach ($x->xpath("//testcase") as $t) {
-            $file = realpath((string) $t["file"]) ?: (string) $t["file"];
-            $ran[$file] = ($ran[$file] ?? 0) + 1;
-            $names[] = (string) $t["name"];
-        }
-        $generated = [...(glob("$root/tests/Feature/Models/*EndpointsTest.php") ?: []), ...(glob("$root/tests/Feature/Endpoints/*/*Test.php") ?: [])];
-        if (! $generated) exit("no hay tests generados en tests/Feature/Models ni tests/Feature/Endpoints\n");
-        $short = [];
-        foreach ($generated as $file) {
-            $written = preg_match_all("/public function test_\w+\(\)/", (string) file_get_contents($file));
-            $done = $ran[realpath($file)] ?? 0;
-            if ($done !== $written) $short[] = substr($file, strlen($root) + 1)." ($done de $written)";
-        }
-        if ($short) exit("tests generados que no se ejecutaron enteros: ".implode(", ", $short)."\n");
-        $missing = array_values(array_filter(array_slice($argv, 3), fn ($want) => ! array_filter($names, fn ($n) => str_ends_with($n, $want))));
-        if ($missing) exit("faltan tests generados: ".implode(", ", $missing)."\n");
-        echo count($generated)." archivos generados ejecutados enteros; ".$s["tests"]." tests en total, ".$s["assertions"]." aserciones, ninguno saltado\n";
-    ' "$WORK/junit.xml" "$APP" \
+    php "$CHECKS" junit "$WORK/junit.xml" "$APP" \
         user_cada_accion_requiere_sesion \
         user_cada_accion_pregunta_a_la_politica \
         product_cada_accion_requiere_sesion \
@@ -353,26 +388,17 @@ step "los tests generados se ejecutaron" "innoboxrr/larapack-generator (faltan t
 # (los hooks y la skill), y deja el controlador como estaba.
 KEEP_GOING=1
 
-# Cada hallazgo, con quién puso el archivo: si está entre los stubs de
-# laravel-setup, lo copió app:setup; si no, lo generó LaraPack. Es lo que hace
-# falta para saber a qué repositorio va el arreglo.
+# Limpio, sin excepciones: ni un error ni un aviso. Cada hallazgo dice de
+# dónde viene el archivo —idéntico a un stub de laravel-setup, en sus stubs
+# pero reescrito, o generado por LaraPack—, que es lo que hace falta para saber
+# a qué repositorio va el arreglo (ecosystem-e2e-checks.php verify).
 verify_strict() {
     cd "$APP"
     local code=0
     php artisan --no-interaction larapack:verify --strict --format=json > "$WORK/verify.json" || code=$?
     cat "$WORK/verify.json"
-    php -r '
-        $r = json_decode(file_get_contents($argv[1]), true) ?? exit("verify --format=json no devolvió JSON\n");
-        $stubs = glob("vendor/innoboxrr/laravel-setup/stubs/app/*", GLOB_ONLYDIR) ?: [];
-        foreach ($r["findings"] ?? [] as $f) {
-            if (! in_array($f["level"], ["error", "warning"], true)) continue;
-            $file = (string) ($f["file"] ?? "");
-            $from = "innoboxrr/larapack-generator o la aplicación";
-            foreach ($stubs as $dir) if ($file !== "" && is_file("$dir/$file")) { $from = "innoboxrr/laravel-setup (stubs/app/".basename($dir)."/$file)"; break; }
-            printf("  %s %s en %s: lo puso %s\n      %s\n", $f["level"], $f["check"], $file ?: "-", $from, $f["message"]);
-        }
-        exit(($r["ok"] ?? false) ? 0 : 1);
-    ' "$WORK/verify.json" || code=1
+    echo
+    php "$CHECKS" verify "$WORK/verify.json" "$APP" || code=1
     return "$code"
 }
 step "larapack:verify --strict --format=json" \

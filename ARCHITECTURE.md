@@ -601,7 +601,7 @@ que rompe está en [CONTRIBUTING](CONTRIBUTING.md#qué-cuenta-como-cambio-que-ro
 | [`tests/Feature/`](tests/Feature/) | Comandos sobre un proyecto falso en un temporal (`tests/Support/FakeProject.php`). |
 | [`tests/EndToEnd/`](tests/EndToEnd/) | Lo generado se instala y se ejecuta: migra, llama a las rutas, compila el front. |
 | [`tests/Fixtures/`](tests/Fixtures/) | Laraimports de prueba y las fotos de `GeneratedOutputSnapshotTest`. |
-| [`.github/`](.github/) | La CI, que llama a los workflows reutilizables de `innoboxrr/.github`, y la prueba nocturna del ecosistema publicado (`.github/scripts/ecosystem-e2e.sh`). |
+| [`.github/`](.github/) | La CI, que llama a los workflows reutilizables de `innoboxrr/.github`, y la prueba del ecosistema publicado (`.github/scripts/ecosystem-e2e.sh`, con sus lecturas en `.github/scripts/ecosystem-e2e-checks.php`), que corre cada noche y antes de etiquetar una versión nueva. |
 
 ---
 

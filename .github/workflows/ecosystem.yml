@@ -13,13 +13,32 @@ on:
         # los cron de GitHub.
         - cron: '37 4 * * *'
     workflow_dispatch:
+        inputs:
+            setup_constraint:
+                description: 'Qué innoboxrr/laravel-setup probar (restricción de Composer; vacío = la del script)'
+                required: false
+                default: ''
+    # La puerta de release.yml: antes de etiquetar una versión nueva, la prueba
+    # con lo publicado. Es lo que habría parado la 9.0.
+    workflow_call:
+        inputs:
+            setup_constraint:
+                type: string
+                required: false
+                default: ''
     pull_request:
+        # VERSION, porque el incidente fue un cambio de versión: el PR que la
+        # sube ve aquí si la laravel-setup publicada la admite. Los cambios de
+        # src/ no lo disparan (son 45 minutos por interfaz): los cubren la
+        # noche y la puerta de release.yml, que corre esto antes de publicar.
         paths:
             - .github/workflows/ecosystem.yml
             - .github/scripts/ecosystem-e2e.sh
+            - .github/scripts/ecosystem-e2e-checks.php
             - .github/scripts/ecosystem-e2e.laraimport.json
             - ecosystem.json
             - composer.json
+            - VERSION
 
 permissions:
     contents: read
@@ -57,9 +76,13 @@ jobs:
               run: bash .github/scripts/ecosystem-e2e.sh ${{ matrix.ui }}
               env:
                   ECOSYSTEM_WORK: ${{ runner.temp }}/ecosystem
+                  # Vacía (la noche, un PR) deja la del script: ^7.2.1.
+                  SETUP_CONSTRAINT: ${{ inputs.setup_constraint }}
                   # Sin token, Composer se queda en el límite anónimo de la API
-                  # de GitHub al bajar decenas de dist.
-                  COMPOSER_AUTH: '{"github-oauth": {"github.com": "${{ github.token }}"}}'
+                  # de GitHub al bajar decenas de dist. No va como COMPOSER_AUTH:
+                  # el script lo saca del entorno y sólo se lo pasa a Composer,
+                  # para que no lo vean npm install ni los tests.
+                  ECOSYSTEM_COMPOSER_AUTH: '{"github-oauth": {"github.com": "${{ github.token }}"}}'
 
             - name: Registros
               if: failure()

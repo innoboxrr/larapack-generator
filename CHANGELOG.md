@@ -2,39 +2,90 @@
 
 ## 9.2.0 (sin publicar)
 
-### La CI prueba el ecosistema publicado, cada noche
+### La CI prueba el ecosistema publicado, cada noche y antes de publicar
 
 El choque entre `innoboxrr/laravel-setup` y la 9.0 —laravel-setup pedía
 `^7.10 || ^8.0` y Composer no dejaba instalar la 9— lo descubrió un cliente: las
 pruebas de punta a punta usan el `vendor/` de este repositorio y nunca instalan
 LaraPack junto a lo publicado.
 
-`.github/workflows/ecosystem.yml` corre cada noche, a mano y en los *pull
-request* que tocan el workflow, su script, su laraimport, `ecosystem.json` o
-`composer.json`, con Vue y con React. Los pasos están en
-`.github/scripts/ecosystem-e2e.sh`, que se corre igual en local: Laravel 13
-recién creado con `create-project`, la última laravel-setup publicada fijada a
-su versión exacta, LaraPack desde este checkout como dist (`git archive`, con la
-versión de `VERSION`), `app:setup` y `app:install`, un laraimport de ejemplo
-(dos modelos con relación, endpoints de modelo y un `controllers[]`),
-`validate --strict` e `import`, `migrate` en SQLite, `npm run build`,
-`php artisan test` contando por archivo que cada test generado se ejecute
-—incluidos los de autorización de la 9.1— y ninguno se salte,
+`.github/workflows/ecosystem.yml` corre cada noche, a mano, en los *pull
+request* que tocan el workflow, su script, sus comprobaciones, su laraimport,
+`ecosystem.json`, `composer.json` o `VERSION`, y **antes de publicar**: con Vue
+y con React. Los pasos están en `.github/scripts/ecosystem-e2e.sh`, que se corre
+igual en local: Laravel 13 recién creado con `create-project`, la última
+laravel-setup publicada que cumpla `SETUP_CONSTRAINT` (`^7.2.1` por omisión)
+fijada a su versión exacta, LaraPack desde este checkout como dist
+(`git archive`, con la versión de `VERSION`), `app:setup` y `app:install`, un
+laraimport de ejemplo (dos modelos con relación, endpoints de modelo y un
+`controllers[]`), `validate --strict` e `import`, `migrate` en SQLite,
+`npm run build`, `php artisan test` contando por archivo que cada test generado
+se ejecute —incluidos los de autorización de la 9.1— y ninguno se salte,
 `verify --strict --format=json`, `larapack:ci --dry-run` y la guardia de los
 hooks con el `artisan` de la aplicación.
 
+**La puerta de `Release`.** El incidente fue una subida de versión, así que la
+prueba corre también donde se publica: `release.yml` mira si la versión de
+`VERSION` ya tiene tag y, si no, llama a `ecosystem.yml` (ahora también
+`workflow_call`) y sólo etiqueta si pasa. Una mayor que la laravel-setup
+publicada no admita se queda sin publicar, en vez de descubrirse a la noche
+siguiente con Packagist ya sirviéndola. El orden para una mayor queda en
+CONTRIBUTING: primero laravel-setup amplía su restricción, después se sube
+`VERSION`. Los PR que cambian `src/` no la disparan (45 minutos por interfaz):
+los cubren la noche y esta puerta.
+
+**Las comprobaciones pueden fallar.** Las lecturas del script —qué
+laravel-setup, de dónde salió LaraPack, el informe JUnit, el de `verify`— están
+en `.github/scripts/ecosystem-e2e-checks.php`. En la primera versión eran
+`php -r` con `exit("mensaje")`, que en PHP imprime y sale con 0: la que cuenta
+los tests generados no podía fallar ni con tests saltados, ni con un archivo
+generado sin ejecutar, ni con el XML roto. Ahora cada fallo sale con 1 y el
+motivo en stderr, y `EcosystemE2eChecksTest` lo comprueba con esos informes
+rotos. `EcosystemE2eScriptTest` corre el principio del script con un `composer`
+de mentira: qué laravel-setup elige, que falla si ninguna cumple la
+restricción, que vuelve a mirar el origen de LaraPack y a quién le llega el
+token.
+
 Si un paso falla, el mensaje dice qué paquete y por qué: el choque que cita
 Composer, los paquetes de `vendor/innoboxrr/` de la traza, el paquete npm que
-no resuelve o, para cada hallazgo de `verify`, si el archivo es de los stubs de
-laravel-setup o lo generó LaraPack.
+no resuelve o, para cada hallazgo de `verify`, de dónde viene el archivo. Que
+la ruta exista entre los stubs de laravel-setup no basta para culparla —LaraPack
+regenera encima el User, su política o las rutas—: sólo un archivo idéntico al
+stub se le atribuye; uno con otro contenido se dice «en sus stubs, pero
+reescrito».
+
+Además: el origen de LaraPack (el repositorio `path`, con la versión de
+`VERSION`) se mira después del `require`, de `app:install` y de `import`, porque
+`app:setup` reescribe su restricción en `composer.json` y `app:install` corre
+`composer update`; y el token de GitHub llega como `ECOSYSTEM_COMPOSER_AUTH`,
+que el script saca del entorno y sólo pasa a Composer y a `app:install`: ni
+`npm install` ni los tests de la aplicación lo ven.
 
 **Lo primero que encontró:** una aplicación recién hecha con laravel-setup 7.2.0
 no pasa `larapack:verify --strict`, la puerta que pone `larapack:ci` desde la
-9.1. El `Route::fallback()` de la SPA en `routes/web.php` (de los stubs de
+9.1: el `Route::fallback()` de la SPA en `routes/web.php` (de los stubs de
 laravel-setup) lleva lógica en un closure, y `verify` lo avisa como
-`route-closure`; con `--strict`, el aviso es un fallo. El arreglo es de
-laravel-setup, así que el workflow sale en rojo en ese paso hasta que se publique;
-lo demás pasa con Vue y con React.
+`route-closure`. No se deja como hallazgo esperado: `verify --strict` tiene que
+salir limpio, sin excepciones, porque un rojo conocido tapa al siguiente. El
+arreglo es de laravel-setup (el fallback pasa a un controlador que sólo hace
+`return $request->handle();`), sale en su 7.2.1, y por eso `SETUP_CONSTRAINT`
+pide `^7.2.1`. Si ninguna versión publicada cumple la restricción, el workflow
+falla en el paso que la busca con «ninguna versión publicada de
+innoboxrr/laravel-setup cumple SETUP_CONSTRAINT=^7.2.1»: un rojo distinto del
+de cualquier regresión. Al cerrar este cambio Packagist ya sirve la 7.2.1 (que
+admite `^9.0`) y el script la elige. Con la 7.2.0, la primera versión del
+script pasaba todo salvo `verify`, con Vue y con React.
+
+Lo que no se ha podido probar aquí, y por qué: la corrida entera con la 7.2.1
+y con este script. El contenedor donde se hizo el cambio no puede bajar las
+dist de GitHub (el proxy las rechaza) y los clones de git con los que Composer
+lo suple llenaron el disco a mitad del `create-project`. Lo nuevo del script se
+probó por partes: las comprobaciones con `EcosystemE2eChecksTest`, el principio
+del script con `EcosystemE2eScriptTest` y la elección de versión contra
+Packagist de verdad. La primera noche o el primer PR que toque `VERSION` es la
+corrida entera. La puerta de `Release` y el `workflow_call` sólo existen en
+GitHub Actions: los tests comprueban la forma de los workflows, no una
+ejecución.
 
 Cómo correrlo en local, también sin acceso a las dist de GitHub, en
 CONTRIBUTING.md.
