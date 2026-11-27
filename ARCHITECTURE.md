@@ -95,7 +95,11 @@ que decide y no catorce booleanos por columna.
 partes del documento a la vez: modelos y columnas repetidos, claves ajenas que
 apuntan a algo que existe y sin ciclos, relaciones que resuelven, reglas sobre
 campos que existen, `secret`, `metas`, `display`, `authenticatable`,
-`table_prefix`, acciones referenciales y endpoints. Devuelve hallazgos con
+`table_prefix`, acciones referenciales y endpoints; y, desde 9.4.0, que
+`length`, `precision`/`scale` y `use_current` vayan en un tipo que los admite,
+que los `indexes` nombren columnas que existen sin repetirse, que dos modelos
+no compartan `table` y que un `route_name` no se repita ni sea el de una
+acción CRUD que exista. Devuelve hallazgos con
 nivel `error` o `warning`; sólo los errores bloquean.
 
 Dos validaciones más viven aparte porque necesitan algo que el documento no
@@ -641,6 +645,19 @@ fuera de `.larapack/realign/` salvo `--allow-dirty`, pasa `--dry-run` y las
 [`OperationContext`](src/Support/Realign/Operations/OperationContext.php) y
 devuelve un [`OperationResult`](src/Support/Realign/Operations/OperationResult.php)
 con `fixed`, `skipped` y `unchanged`, como `fix`.
+
+**`infer`** ([`InferOperation`](src/Support/Realign/Operations/InferOperation.php))
+sólo lee código: [`ContractInferrer`](src/Support/Realign/Infer/ContractInferrer.php)
+toma el esquema de `SchemaHistory` —el mismo lector que decide qué alterar,
+sobre las migraciones de TODOS los ámbitos, porque comparten base—, los
+modelos de [`ModelSource`](src/Support/Realign/Infer/ModelSource.php) (con las
+relaciones de sus traits) y las rutas conservables de
+[`RouteSource`](src/Support/Realign/Infer/RouteSource.php), y devuelve el
+borrador con su procedencia, lo no inferido, lo perdido y las decisiones.
+[`ContractComparison`](src/Support/Realign/Infer/ContractComparison.php) lo
+mide contra el contrato que exista. Escribe `laraimport.inferred.json` y
+`.larapack/realign/infer/<ámbito>.json`; nunca `laraimport.json` si ya existe
+(guía: [docs/realign/infer.md](docs/realign/infer.md)).
 
 **El estado** ([`RealignState`](src/Support/Realign/RealignState.php)) es
 `report.json` y `plan.json`, con `RealignState::FORMAT_VERSION`, escritos de

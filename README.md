@@ -712,6 +712,10 @@ restricción a mano en una alteración.
 | `routes` | Qué acciones genera el modelo: `only` o `except`. Sin la clave, todas. |
 | `immutable` | La fila no cambia una vez creada. |
 | `authenticatable` | El modelo es el usuario que inicia sesión. Ver [El usuario que inicia sesión](#el-usuario-que-inicia-sesión). |
+| `props[].length`, `precision`/`scale`, `use_current` | Longitud de un `string`/`char`, dígitos de un `decimal` y `->useCurrent()` de una fecha (9.4.0). Sin ellas, lo de Laravel. |
+| `indexes[]` | Índices del modelo, simples o compuestos: `{"columns": [...], "unique": true, "name": "…"}` (9.4.0). En una tabla que existe sólo se añaden los que faltan. |
+| `table` | La tabla del modelo tal cual, sin `table_prefix`: para adoptar una que ya tiene nombre (9.4.0). |
+| `endpoints[].route_name` | Conserva el nombre de una ruta que ya llama el front (9.4.0). Ver [docs/realign/infer.md](docs/realign/infer.md). |
 
 ### Un modelo completo
 

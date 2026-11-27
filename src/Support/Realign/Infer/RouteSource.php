@@ -259,10 +259,17 @@ final class RouteSource
             $result['not_inferred'][] = ['model' => $owner, 'key' => "endpoints.{$candidate}.ability", 'reason' => "la habilidad de la política: por omisión '{$candidate}', que nace denegando. Decide cuál pregunta, o se cerrará la ruta"];
         }
 
+        // Sin `auth` a la vista no se sabe si es pública: la sesión puede
+        // pedirla el controlador (HasMiddleware, un constructor). Se declara
+        // CON sesión —cerrar por error es un 401 que se ve; abrir por error es
+        // un agujero que no— y se pregunta.
         if (! $authenticated) {
-            $endpoint['public'] = true;
-            $result['not_inferred'][] = ['model' => $owner, 'key' => "endpoints.{$candidate}", 'reason' => 'la ruta no exige sesión: se declaró public, y su autorización nace cerrada hasta que se decida (ability o el handle() de su request)'];
-        } elseif (! $isModel) {
+            $result['decisions'][] = ['type' => 'route-auth-unknown', 'subject' => $owner.'.'.$candidate, 'file' => $where,
+                'why' => 'La ruta no pone auth a la vista: se declaró con sesión. Si de verdad es pública (un webhook, un formulario de contacto), declárala public con su throttle; si la sesión la pide el controlador, déjala así.',
+                'options' => [['key' => 'session', 'label' => 'Con sesión (como quedó)'], ['key' => 'public', 'label' => 'Pública: "public": true y un throttle en middleware']]];
+        }
+
+        if (! $isModel) {
             $endpoint['authorize'] = 'authenticated';
         }
 
@@ -483,7 +490,7 @@ final class RouteSource
             $verb = null;
             $route = ['uri' => null, 'action' => [], 'name' => null, 'middleware' => []];
 
-            foreach ($calls as $position => [$call, $args]) {
+            foreach ($calls as [$call, $args]) {
                 $string = self::firstString($args);
 
                 switch ($call) {
@@ -513,12 +520,12 @@ final class RouteSource
                         $group = $args;
                         break;
                     default:
-                        if ($position === 0 && in_array($call, self::VERBS, true)) {
+                        if ($verb === null && in_array($call, self::VERBS, true)) {
                             $verb = $call;
                             $parts = PhpOutline::splitTopLevel($args);
                             $route['uri'] = self::firstString($parts[0] ?? []);
                             $route['action'] = $parts[1] ?? [];
-                        } elseif ($position === 0 && in_array($call, ['match', 'any', 'resource', 'apiResource', 'resources', 'apiResources'], true)) {
+                        } elseif ($verb === null && in_array($call, ['match', 'any', 'resource', 'apiResource', 'resources', 'apiResources'], true)) {
                             $routes[] = $this->unreadable($file, $line, "Route::{$call}(): el laraimport declara un verbo por endpoint");
                         }
                 }
@@ -553,7 +560,8 @@ final class RouteSource
                 'line' => $line,
                 'verb' => $verb,
                 'uri' => self::join($inner['prefix'], $route['uri']),
-                'name' => $route['name'] !== null ? $inner['as'].$route['name'] : null,
+                // `Route::name('x')->get(...)`: el nombre puesto antes del verbo es el de la ruta.
+                'name' => $route['name'] !== null ? $inner['as'].$route['name'] : ($inner['as'] !== $context['as'] ? $inner['as'] : null),
                 'controller' => $controller,
                 'method' => $method,
                 'middleware' => array_values(array_unique([...$inner['middleware'], ...$route['middleware']])),

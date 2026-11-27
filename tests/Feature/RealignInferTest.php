@@ -81,7 +81,9 @@ final class RealignInferTest extends TestCase
             ['name' => 'today', 'method' => 'get', 'uri' => 'today', 'route_name' => 'today', 'authorize' => 'authenticated'],
             ['name' => 'scribeIndex', 'method' => 'get', 'uri' => 'index', 'route_name' => 'list', 'authorize' => 'authenticated'],
         ], $controllers['Scribe']['endpoints']);
-        $this->assertSame([['name' => 'enviar', 'method' => 'post', 'uri' => 'contacto', 'route_name' => 'contacto', 'public' => true, 'middleware' => ['throttle:6,1']]], $controllers['Publico']['endpoints']);
+        // Sin auth a la vista no se adivina que sea pública: se declara con
+        // sesión (cerrar por error se ve; abrir por error, no) y se pregunta.
+        $this->assertSame([['name' => 'enviar', 'method' => 'post', 'uri' => 'contacto', 'route_name' => 'contacto', 'authorize' => 'authenticated', 'middleware' => ['throttle:6,1']]], $controllers['Publico']['endpoints']);
         $this->assertSame([['name' => 'publish', 'method' => 'post', 'uri' => '{site_id}/publish', 'route_name' => 'publish', 'target' => 'record']], $models['Site']['endpoints']);
     }
 
@@ -108,6 +110,7 @@ final class RealignInferTest extends TestCase
         $this->assertSame('Tag', $decisions['duplicate-model-name']);
         $this->assertSame('api.app.panel', $decisions['route-not-preservable']);
         $this->assertSame('routes/web.php', $decisions['route-file-prefix']);
+        $this->assertSame('Publico.enviar', $decisions['route-auth-unknown']);
         $this->assertContains(['model' => 'Site', 'key' => 'model', 'reason' => 'app/Models/Site.php: visitsThroughAssets(): hasManyThrough, que el laraimport no sabe declarar'], $report['not_inferred']);
         $this->assertContains('display', array_column($report['not_inferred'], 'key'));
         $this->assertContains('(rutas)', array_column($report['lost'], 'model'), 'La ruta con closure se dice.');
@@ -161,7 +164,13 @@ final class RealignInferTest extends TestCase
         $this->commitAll();
         $contract = $this->project->read('laraimport.json');
 
-        $this->realign('infer', ['targets' => [$this->stepOfType('unmanaged-models')]]);
+        // Los dos pasos del mismo ámbito van a UN borrador.
+        file_put_contents($this->project->path.'/routes/api/models/desk.php', "<?php\n\nuse Acme\\Blog\\Http\\Controllers\\DeskController;\nuse Illuminate\\Support\\Facades\\Route;\n\nRoute::middleware('auth:sanctum')->get('summary', [DeskController::class, 'summary'])->name('summary');\n");
+        $this->realign('diagnose');
+        $this->realign('plan');
+        $this->commitAll();
+
+        $this->realign('infer', ['targets' => [$this->stepOfType('unmanaged-models'), $this->stepOfType('unmanaged-http')]]);
 
         $this->assertSame($contract, $this->project->read('laraimport.json'), 'infer tocó el contrato.');
         $draft = json_decode($this->project->read('laraimport.inferred.json'), true);
@@ -170,7 +179,9 @@ final class RealignInferTest extends TestCase
         $this->assertSame([['name' => 'label', 'type' => 'string', 'length' => 40]], end($draft['models'])['props']);
 
         $report = json_decode($this->project->read('.larapack/realign/infer/app.json'), true);
-        $this->assertSame(['models/Badge'], $report['added']);
+        $this->assertSame(['models/Badge', 'controllers/Desk'], $report['added']);
+        $this->assertSame([['name' => 'summary', 'method' => 'get', 'uri' => 'summary', 'route_name' => 'summary', 'authorize' => 'authenticated']], end($draft['controllers'])['endpoints']);
+        $this->assertSame(['unmanaged-models', 'unmanaged-http'], $report['step_types']);
         $this->assertTrue($report['validation']['ok'], json_encode($report['validation']['findings']) ?: '');
     }
 

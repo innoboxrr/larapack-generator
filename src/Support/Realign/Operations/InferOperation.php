@@ -71,58 +71,73 @@ final class InferOperation implements RealignOperation
         $sources = new ProjectSources($context->root);
         $base = $sources->root();
         $shared = $this->sharedMigrations($sources);
-        $done = [];
+        // Todos los pasos de un mismo ámbito van a UN borrador: dos pasos que
+        // escribieran cada uno el suyo se pisarían.
+        $scopes = [];
 
         foreach ($context->steps as $step) {
             $path = (string) ($step['scope']['path'] ?? '.');
             $type = (string) $step['type'];
-            $directory = $path === '.' ? $base : $base.'/'.$path;
-            $targets = [[$path, $directory]];
+            $targets = [$path => $path === '.' ? $base : $base.'/'.$path];
 
             if ($type === 'no-contract' && $path === '.' && $context->option('packages', '1') !== '0') {
                 foreach ($sources->roots() as $root) {
                     if ($root !== $base && str_starts_with($root, $base.'/') && ! is_file($root.'/laraimport.json') && ! is_file($root.'/.larapack/manifest.json')) {
-                        $targets[] = [substr($root, strlen($base) + 1), $root];
+                        $targets[substr($root, strlen($base) + 1)] = $root;
                     }
                 }
             }
 
-            foreach ($targets as [$scopePath, $scopeDirectory]) {
-                $key = $scopePath.'|'.$type;
+            foreach ($targets as $scopePath => $directory) {
+                $scopes[$scopePath] ??= ['directory' => $directory, 'types' => [], 'steps' => [], 'models' => [], 'explicit' => $scopePath === $path];
+                $scopes[$scopePath]['types'][] = $type;
+                $scopes[$scopePath]['steps'][] = (string) ($step['id'] ?? '');
+                $scopes[$scopePath]['explicit'] = $scopes[$scopePath]['explicit'] || $scopePath === $path;
 
-                if (isset($done[$key])) {
-                    continue;
+                if ($type === 'unmanaged-models') {
+                    foreach ((array) ($step['files'] ?? []) as $file) {
+                        $scopes[$scopePath]['models'][] = $scopePath === '.' ? (string) $file : (string) preg_replace('#^'.preg_quote((string) $scopePath, '#').'/#', '', (string) $file);
+                    }
                 }
-
-                $done[$key] = true;
-                $this->inferScope($context, $result, $step, $type, $scopePath, $scopeDirectory, $shared);
             }
+        }
+
+        foreach ($scopes as $path => $scope) {
+            $this->inferScope($context, $result, (string) $path, $scope, $shared);
         }
 
         return $result;
     }
 
     /**
-     * @param  array<string, mixed>  $step
+     * @param  array{directory: string, types: list<string>, steps: list<string>, models: list<string>, explicit: bool}  $scope
      * @param  list<string>  $shared
      */
-    private function inferScope(OperationContext $context, OperationResult $result, array $step, string $type, string $path, string $directory, array $shared): void
+    private function inferScope(OperationContext $context, OperationResult $result, string $path, array $scope, array $shared): void
     {
-        $only = null;
+        $directory = $scope['directory'];
+        $types = array_values(array_unique($scope['types']));
+        $stepIds = array_values(array_unique($scope['steps']));
+        $http = $context->option('http', '1') !== '0' && array_intersect($types, ['no-contract', 'unmanaged-http']) !== [];
 
-        if ($type === 'unmanaged-models') {
-            $only = array_values(array_map(
-                fn (string $file): string => $path === '.' ? $file : (string) preg_replace('#^'.preg_quote($path, '#').'/#', '', $file),
-                array_filter((array) ($step['files'] ?? []), 'is_string')
-            ));
+        // Siempre se infiere el ámbito entero: con contrato, para compararlo
+        // con todo lo declarado; lo que entra al borrador lo deciden los pasos.
+        $inferred = (new ContractInferrer($directory, $shared))->infer(null, $http);
+        $contractFile = $directory.'/laraimport.json';
+
+        // Un paquete sin modelos, pivotes ni rutas que conservar (un paquete de
+        // sólo front) no recibe un borrador vacío: no hay nada que adoptar.
+        if (! $scope['explicit'] && $inferred['contract']['models'] === [] && empty($inferred['contract']['pivots']) && empty($inferred['contract']['controllers'])) {
+            $result->unchanged($path, 'no hay modelos, pivotes ni rutas que inferir', ['step' => $stepIds[0] ?? null]);
+
+            return;
         }
 
-        $inferred = (new ContractInferrer($directory, $shared))->infer($only, $context->option('http', '1') !== '0');
-        $contractFile = $directory.'/laraimport.json';
         $existing = is_file($contractFile) ? json_decode((string) file_get_contents($contractFile), true) : null;
         $existing = is_array($existing) ? $existing : null;
         $added = [];
-        $draft = $existing === null ? $inferred['contract'] : $this->merge($existing, $inferred['contract'], $type, $added);
+        $draft = $existing === null ? $inferred['contract'] : $this->merge($existing, $inferred, $types, $scope['models'], $added);
+        $step = ['id' => implode(', ', $stepIds)];
         $validation = $existing === null ? $inferred['validation'] : $this->validate($draft);
         $writeContract = $existing === null && $context->option('write') === 'contract';
         $target = $writeContract ? $contractFile : $directory.'/'.self::DRAFT;
@@ -134,8 +149,8 @@ final class InferOperation implements RealignOperation
             'format_version' => self::FORMAT_VERSION,
             'generated_at' => gmdate('c'),
             'scope' => $path,
-            'step' => $step['id'] ?? null,
-            'step_type' => $type,
+            'steps' => $stepIds,
+            'step_types' => $types,
             'draft' => $relative,
             'contract_existed' => $existing !== null,
             'added' => $added,
@@ -165,10 +180,11 @@ final class InferOperation implements RealignOperation
         }
 
         $verb = $context->dryRun() ? 'escribiría' : 'escrito';
-        $result->fixed($relative, "borrador {$verb} desde el código: {$summary}.", ['step' => $step['id'] ?? null, 'report' => $reportPath]);
+        $summary = $existing === null ? $summary : count($added).' entradas añadidas al contrato que ya existe ('.$summary.')';
+        $result->fixed($relative, "borrador {$verb} desde el código: {$summary}.", ['step' => $step['id'], 'report' => $reportPath]);
 
         if (! $validation['ok']) {
-            $result->skipped($relative, "el borrador no pasa larapack:validate ({$validation['errors']} errores): corrígelo antes de adoptarlo. Detalle en {$reportPath}.", ['step' => $step['id'] ?? null]);
+            $result->skipped($relative, "el borrador no pasa larapack:validate ({$validation['errors']} errores): corrígelo antes de adoptarlo. Detalle en {$reportPath}.", ['step' => $step['id']]);
         }
 
         if ($inferred['decisions'] !== []) {
@@ -185,25 +201,29 @@ final class InferOperation implements RealignOperation
      * algo que ya está declarado.
      *
      * @param  array<string, mixed>  $existing
-     * @param  array<string, mixed>  $inferred
+     * @param  array<string, mixed>  $result  Lo que devuelve ContractInferrer::infer().
+     * @param  list<string>  $types  Los tipos de paso que se hacen.
+     * @param  list<string>  $models  Los archivos de modelo de `unmanaged-models`.
      * @param  list<string>  $added
      * @return array<string, mixed>
      */
-    private function merge(array $existing, array $inferred, string $type, array &$added): array
+    private function merge(array $existing, array $result, array $types, array $models, array &$added): array
     {
+        $inferred = $result['contract'];
         $draft = $existing;
         $declared = array_column((array) ($existing['models'] ?? []), 'name');
 
-        if (in_array($type, ['unmanaged-models', 'no-contract'], true)) {
-            foreach ((array) ($inferred['models'] ?? []) as $model) {
-                if (! in_array($model['name'], $declared, true)) {
-                    $draft['models'][] = $model;
-                    $added[] = 'models/'.$model['name'];
-                }
+        foreach ((array) ($inferred['models'] ?? []) as $model) {
+            $wanted = in_array('no-contract', $types, true)
+                || (in_array('unmanaged-models', $types, true) && in_array($result['files'][$model['name']] ?? null, $models, true));
+
+            if ($wanted && ! in_array($model['name'], $declared, true)) {
+                $draft['models'][] = $model;
+                $added[] = 'models/'.$model['name'];
             }
         }
 
-        if (in_array($type, ['unmanaged-http', 'no-contract'], true)) {
+        if (array_intersect($types, ['unmanaged-http', 'no-contract']) !== []) {
             $controllers = array_column((array) ($existing['controllers'] ?? []), 'name');
 
             foreach ((array) ($inferred['controllers'] ?? []) as $controller) {

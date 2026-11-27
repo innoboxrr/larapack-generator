@@ -88,6 +88,103 @@ versión posterior no se reescribe. Nuevas primitivas: `Manifest::adopt`,
   siguen sin versión, y el diagnóstico los trata como de una versión
   anterior.
 
+### El contrato aprende lo que hace falta para adoptar un proyecto real
+
+Sin esto, describir brandai con laraimport perdía 1 633 longitudes, 104
+precisiones, 816 índices y todos sus `morphTo`, y expediente no podía declarar
+un endpoint sin cambiar el nombre de ruta que llaman 339 llamadas de su front.
+Todo es opcional: **lo que no se declara se genera exactamente como en 9.3.1**
+(las instantáneas no cambiaron).
+
+- `props[].length` (`string`, `char`), `precision` y `scale` (`decimal`) y
+  `use_current` (`timestamp`, `timestampTz`, `dateTime`, `dateTimeTz`) van a
+  la migración: `$table->string('code', 20)`, `decimal('amount', 16, 4)`,
+  `->useCurrent()`. La validación rechaza la medida en un tipo que no la
+  admite, una `scale` sin `precision` o mayor que ella y `use_current` junto a
+  un `default`.
+- **`indexes[]`** en el modelo: `{"columns": [...], "unique": true, "name":
+  "…"}`, simples o compuestos. Van en la migración de creación y, en una tabla
+  que ya existe, en una alteración con **los que falten**: nunca se quita un
+  índice que no esté declarado. El lector de migraciones guarda ahora los
+  índices de cada tabla (`$table->index()`, `->unique()` en columna,
+  `dropIndex`, `renameIndex`, columnas quitadas o renombradas), así que un
+  índice escrito a mano no se vuelve a añadir.
+- **`table`** en el modelo: la tabla tal cual, sin `table_prefix`, para un
+  modelo que ya tiene la suya. Va al `$table`, a `Schema::create` y al nombre
+  de la migración; dos modelos con la misma tabla son un error.
+- **`morphTo` sin `related`**: `return $this->morphTo();` sin `use`. Las
+  demás relaciones siguen exigiéndolo.
+- **El nombre de una relación puede ir en camelCase** (`practitionerLocations`),
+  como el método que ya existe, y lo mismo en `load_counts`.
+- **`route_name`** en un endpoint de modelo o de `controllers[]`: el nombre de
+  la ruta, relativo al grupo de su archivo. Y **la `uri` admite** segmentos con
+  `_`, mayúsculas o `.` y parámetros en camelCase, para conservar la URI que ya
+  usa el front. Un `route_name` repetido o igual al de una acción CRUD que
+  exista es un error.
+- **Una URI CRUD sólo choca con la acción que existe**: un `controllers[]` no
+  tiene ninguna, y un modelo sólo las de sus `routes`. Antes `…/create` de un
+  controlador sin modelo se rechazaba siempre.
+- **Un pivote o unas metas cuya tabla ya crea otra migración no se vuelven a
+  crear**, como ya pasaba con la de un modelo: al adoptar un proyecto,
+  `import` las salta con «no la generó LaraPack».
+
+### `larapack:realign infer`: un laraimport borrador desde el código
+
+Para los pasos `no-contract`, `unmanaged-models` y `unmanaged-http`. Guía
+completa en [docs/realign/infer.md](docs/realign/infer.md).
+
+```bash
+larapack:realign infer no-contract@. [--dry-run] [--option write=contract] [--option packages=0] [--option http=0]
+```
+
+- **Lee y no toca nada.** Escribe `laraimport.inferred.json` junto al
+  contrato y **nunca** `laraimport.json` si ya existe (`--option
+  write=contract` lo escribe sólo si no existe). Con contrato, el borrador es
+  el contrato que hay **más** lo que le falta; varios pasos del mismo ámbito
+  van a un borrador. En un `no-contract` de la raíz infiere también cada
+  paquete local sin contrato.
+- **El esquema**, de `SchemaHistory` sobre las migraciones de TODOS los
+  ámbitos (comparten base) y las que carga cada proveedor con
+  `loadMigrationsFrom`. **Los modelos**, de su clase y de sus traits:
+  `$table`, `$fillable`/`$guarded`, `$hidden`, las listas de LaraPack,
+  `casts()`/`$casts` y las relaciones. **Las rutas** escritas a mano, con el
+  prefijo de su archivo leído del proveedor que las carga: sólo se declaran
+  las que conservan su nombre y su URI.
+- **El informe** `.larapack/realign/infer/<ámbito>.json` (formato 1) dice de
+  dónde salió cada prop y con qué confianza (`provenance`), lo que no se
+  infirió (`not_inferred`: formularios, `display`, `routes`, reglas,
+  habilidades), lo que el laraimport no expresa (`lost`: un `comment()`, un
+  default que es una expresión, un índice FULLTEXT, una columna que pone un
+  bucle), las decisiones (`duplicate-model-name`, `foreign-key-cycle`,
+  `table-without-model`, `model-without-table`, `model-without-columns`,
+  `primary-key`, `route-not-preservable`, `route-file-prefix`,
+  `route-auth-unknown`), si el borrador pasa `larapack:validate` y, con
+  contrato, la comparación con lo declarado.
+- **Una ruta sin `auth` a la vista se declara con sesión** y se pregunta:
+  cerrar por error es un 401 que se ve; abrir por error, un agujero.
+
+**Medido** sobre copias de solo lectura, contra el laraimport que escribieron
+sus autores (props encontradas; y de ésas, tipo / nullable / FK / default):
+
+| Proyecto | Props | Encontradas | Tipo | Nullable | FK | Default |
+|---|---:|---:|---:|---:|---:|---:|
+| school-management (raíz + 81 paquetes) | 7 753 | 7 726 (99,7 %) | 7 725 | 7 719 | 7 726 | 7 726 |
+| expediente | 813 | 788 (96,9 %) | 788 | 787 | 788 | 788 |
+
+En expediente, además, 190 de 190 relaciones; las 25 props que no aparecen las
+añade una migración en un bucle con `hasColumn()`, y el informe lo dice. En
+brandai, sin contrato, **las 20 zonas** dan un borrador que pasa
+`larapack:validate` (426 modelos, 5 201 props, 1 330 índices); ninguna de sus
+rutas se puede conservar (913 decisiones), porque se sirven bajo `api/v1` con
+nombres que no siguen el prefijo de LaraPack.
+
+- **Al actualizar.** Nada cambia si no se usa: el esquema sólo añade claves
+  opcionales, la validación sólo relaja dos reglas (la URI CRUD en un
+  controlador sin esa acción y el nombre de relación en camelCase) y añade las
+  de las claves nuevas. Lo único que cambia en un proyecto existente es que
+  un `import` ya no vuelve a crear un pivote o unas metas que crea otra
+  migración (antes habría fallado en `migrate`).
+
 ## 9.3.1
 
 ### Migraciones: se leen todas antes de escribir ninguna

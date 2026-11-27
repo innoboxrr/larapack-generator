@@ -25,6 +25,19 @@ final class SchemaHistory
     private array $tables = [];
 
     /**
+     * @var array<string, list<array{0: int, 1: MigrationReading, 2: array<string, mixed>}>>|null
+     */
+    private ?array $byTable = null;
+
+    /**
+     * Las operaciones que no nombran una tabla fija: se aplican a todas, y
+     * cada una decide si la toca.
+     *
+     * @var list<array{0: int, 1: MigrationReading, 2: array<string, mixed>}>
+     */
+    private array $loose = [];
+
+    /**
      * @param  list<string>  $others  Más directorios de migraciones que corren
      *                                contra la misma base (9.4.0): los de los
      *                                paquetes de un proyecto que comparten
@@ -58,18 +71,18 @@ final class SchemaHistory
      */
     public function tables(): array
     {
-        $this->readings ??= array_map(fn (string $file): MigrationReading => MigrationReader::read($file), $this->files());
+        $this->index();
         $names = [];
 
-        foreach ($this->readings as $reading) {
+        foreach ($this->readings ?? [] as $reading) {
             foreach ($reading->operations as $operation) {
-                if (($operation['kind'] ?? null) === 'create' && is_string($operation['table'] ?? null) && ! in_array($operation['table'], $names, true)) {
-                    $names[] = $operation['table'];
+                if (($operation['kind'] ?? null) === 'create' && is_string($operation['table'] ?? null)) {
+                    $names[$operation['table']] = true;
                 }
             }
         }
 
-        return array_values(array_filter($names, fn (string $name): bool => $this->table($name)->exists));
+        return array_values(array_filter(array_map('strval', array_keys($names)), fn (string $name): bool => $this->table($name)->exists));
     }
 
     public function table(string $name): TableState
@@ -78,17 +91,54 @@ final class SchemaHistory
             return $this->tables[$name];
         }
 
-        $this->readings ??= array_map(fn (string $file): MigrationReading => MigrationReader::read($file), $this->files());
-
+        $this->index();
         $state = new TableState($name);
 
-        foreach ($this->readings as $reading) {
-            foreach ($reading->operations as $operation) {
-                $this->apply($state, $reading, $operation);
-            }
+        // Las operaciones de ESTA tabla y las que no dicen de qué tabla son
+        // (SQL, una tabla en una variable, un rename), en el orden en que
+        // corren. Recorrer todas por cada tabla era cuadrático: con las
+        // migraciones de un ecosistema entero (9.4.0, `realign infer`) pasaba
+        // de los dos minutos.
+        $operations = $this->byTable[$name] ?? [];
+
+        if ($this->loose !== []) {
+            $operations = array_merge($operations, $this->loose);
+            usort($operations, fn (array $a, array $b): int => $a[0] <=> $b[0]);
+        }
+
+        foreach ($operations as [, $reading, $operation]) {
+            $this->apply($state, $reading, $operation);
         }
 
         return $this->tables[$name] = $state;
+    }
+
+    /**
+     * Las operaciones por tabla, con su posición en el orden de `migrate`.
+     */
+    private function index(): void
+    {
+        if ($this->byTable !== null) {
+            return;
+        }
+
+        $this->readings ??= array_map(fn (string $file): MigrationReading => MigrationReader::read($file), $this->files());
+        $this->byTable = [];
+        $position = 0;
+
+        foreach ($this->readings as $reading) {
+            foreach ($reading->operations as $operation) {
+                $entry = [$position++, $reading, $operation];
+                $kind = $operation['kind'] ?? null;
+                $table = $operation['table'] ?? null;
+
+                if (in_array($kind, ['sql', 'rename', 'dynamic'], true) || ! is_string($table)) {
+                    $this->loose[] = $entry;
+                } else {
+                    $this->byTable[$table][] = $entry;
+                }
+            }
+        }
     }
 
     /**

@@ -115,6 +115,10 @@ Lo que conviene saber sin tener que leer el esquema entero:
 | `controllers` | En la raíz: endpoints sin modelo (un escritorio, un asistente, un webhook). |
 | `immutable` | La fila no cambia una vez creada: sin `update`, `delete`, `restore` ni `forceDelete`, y el modelo lanza si algo lo intenta. Crear sigue permitido. |
 | `props[].secret` | Nunca sale por la API: va a `$hidden`, fuera de la exportación y de la tabla. Se escribe, no se lee. |
+| `props[].length` / `precision` + `scale` / `use_current` | Longitud de `string`/`char`, dígitos de `decimal`, `->useCurrent()` de una fecha. Sin ellas, lo de Laravel. |
+| `indexes[]` | Índices del modelo: `{"columns": [...], "unique": true, "name": "…"}`. Nunca se quita uno que no esté aquí. |
+| `table` | La tabla tal cual, sin prefijo: sólo para adoptar una que ya existe con otro nombre. |
+| `endpoints[].route_name` | El nombre de la ruta (relativo al archivo), para conservar uno que ya llama el front. |
 | `authenticatable` | El modelo es el usuario que inicia sesión: hereda de `Illuminate\Foundation\Auth\User`, con `Notifiable`, `HasApiTokens` e `isAdmin()` (lee `config('auth.admins')`). `password` y `remember_token` van a `$hidden` y fuera de la tabla y la exportación. Exige declarar `email` y `password`. |
 
 ### Las claves ajenas restringen por omisión

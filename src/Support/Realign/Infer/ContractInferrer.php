@@ -113,6 +113,7 @@ final class ContractInferrer
             'decisions' => [],
             'out_of_scope' => [],
             'stats' => ['models' => 0, 'props' => 0, 'relations' => 0, 'indexes' => 0, 'pivots' => 0, 'controllers' => 0, 'endpoints' => 0],
+            'files' => [],
         ];
 
         $mine = self::migrationDirectories($this->directory);
@@ -131,7 +132,10 @@ final class ContractInferrer
 
             return false;
         }));
-        $models = $this->models($only);
+        // Se leen TODOS los modelos aunque se pida sólo algunos: sus tablas no
+        // son «tablas sin modelo», y sus nombres resuelven relaciones y llaves.
+        $models = $this->models();
+        $selected = fn (array $model): bool => $only === null || in_array($model['name'], $only, true) || in_array($this->relative($model['file']), $only, true);
         $metas = $this->metaModels($models, $tables);
         $byTable = [];
 
@@ -143,6 +147,10 @@ final class ContractInferrer
             $table = $model['table'] ?? self::laravelTable($model['name']);
 
             if (! in_array($table, $tables, true)) {
+                if (! $selected($model)) {
+                    continue;
+                }
+
                 $this->decision('model-without-table', $model['name'], "{$model['name']} usa la tabla {$table}, que no crea ninguna migración de este ámbito.", [
                     ['key' => 'outside', 'label' => 'La tabla es de otro paquete o de la aplicación: declararlo allí'],
                     ['key' => 'skip', 'label' => 'Dejar el modelo fuera del contrato'],
@@ -178,15 +186,24 @@ final class ContractInferrer
 
         foreach ($byTable as $table => $fqcn) {
             $model = $models[$fqcn];
+
+            if (! $selected($model)) {
+                continue;
+            }
+
             $state = $history->table($table);
             $entry = $this->model($model, $state, $table, $prefix, $constraintOf, $names, in_array($fqcn, $metas, true));
 
             if ($entry !== null) {
                 $this->result['contract']['models'][] = $entry;
+                $this->result['files'][$entry['name']] = $this->relative($model['file']);
             }
         }
 
-        $this->pivots($history, $ownTables, $byTable, $models, $constraintOf);
+        // Los pivotes son del ámbito entero: sólo cuando se infiere entero.
+        if ($only === null) {
+            $this->pivots($history, $ownTables, $byTable, $models, $constraintOf);
+        }
         $this->cycles();
 
         foreach ($ownTables as $table) {
@@ -254,10 +271,9 @@ final class ContractInferrer
      * corto en namespaces distintos son una decisión: el laraimport exige
      * nombres únicos. Se queda el del namespace más corto.
      *
-     * @param  list<string>|null  $only
      * @return array<string, ModelInfo>
      */
-    private function models(?array $only): array
+    private function models(): array
     {
         $files = [];
         $traits = [];
@@ -301,10 +317,6 @@ final class ContractInferrer
         foreach ($files as $file) {
             foreach (ModelSource::read($file) as $model) {
                 if (! ModelSource::looksLikeModel($model)) {
-                    continue;
-                }
-
-                if ($only !== null && ! in_array($model['name'], $only, true) && ! in_array($this->relative($file), $only, true)) {
                     continue;
                 }
 
@@ -481,10 +493,22 @@ final class ContractInferrer
         // Una columna que alguna migración añade de una forma que no se lee (en
         // un bucle con la tabla en una variable, dentro de un `if` que no es
         // una guarda) no se infiere: puede existir o no. Se dice cuál.
+        // Se agrupa por archivo: un SQL armado en el momento deja inciertos
+        // todos los nombres que escribe, y uno por nombre era ruido.
+        $byFile = [];
+
         foreach ($state->uncertain as $column => $files) {
-            if (! isset($state->columns[$column]) && ! in_array($column, self::TEMPLATE_COLUMNS, true)) {
-                $this->lost($name, $column, implode(', ', array_unique(array_map('basename', $files))), 'la columna la toca una migración de una forma que no se lee (un bucle, un if): no se sabe si existe, y no se infirió');
+            if (! isset($state->columns[$column]) && ! in_array($column, self::TEMPLATE_COLUMNS, true) && preg_match('/^[a-z][a-z0-9_]*$/', (string) $column)) {
+                foreach (array_unique(array_map('basename', $files)) as $uncertainFile) {
+                    $byFile[$uncertainFile][] = (string) $column;
+                }
             }
+        }
+
+        foreach ($byFile as $uncertainFile => $columns) {
+            $shown = array_slice($columns, 0, 12);
+            $this->lost($name, null, $uncertainFile, 'toca la tabla de una forma que no se lee (un bucle, un if, SQL armado): no se sabe si existen, y no se infirieron, '
+                .implode(', ', $shown).(count($columns) > 12 ? ' y '.(count($columns) - 12).' nombres más' : ''));
         }
 
         if ($props === []) {
