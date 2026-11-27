@@ -177,12 +177,22 @@ final class AdoptOperation implements RealignOperation
             return $dropped;
         }
 
-        foreach (array_keys($manifest->filesFor($retiredModel)) as $relative) {
-            $owner = $reference->producedBy((string) $relative);
+        $package = (string) $manifest->namespaceOf('');
+        $namespace = $package !== '' ? $package : (string) $manifest->namespaceOf($retiredModel);
 
-            if ($owner !== null && $owner['model'] !== $retiredModel && is_file($reference->scope['root'].'/'.$relative)) {
-                $manifest->move($reference->scope['root'].'/'.$relative, $owner['model'], $owner['namespace']);
+        foreach (array_keys($manifest->filesFor($retiredModel)) as $relative) {
+            $absolute = $reference->scope['root'].'/'.$relative;
+
+            // Lo que todavía falta en disco lo olvida su propio paso.
+            if (! is_file($absolute)) {
+                continue;
             }
+
+            // Lo que hoy genera otro, a ese dueño; lo que no genera nadie
+            // (una vista de exportación que se quedó) sigue registrado, sin
+            // dueño: lo vigila verify y no cuenta como una entidad.
+            $owner = $reference->producedBy((string) $relative);
+            $manifest->move($absolute, $owner['model'] ?? '', $owner === null ? $namespace : $owner['namespace']);
         }
 
         if ($manifest->filesFor($retiredModel) === []) {

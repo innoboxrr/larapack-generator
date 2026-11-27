@@ -109,11 +109,15 @@ final class RealignAdoptTest extends TestCase
                 'src/Policies/RetiredPolicy.php' => ['stub' => 'Policy/PolicyTemplate.txt', 'hash' => 'y'],
                 // Lo compartido que registró el retirado y hoy genera otro.
                 self::POLICY => $manifest['models']['Post']['files'][self::POLICY],
+                // Y lo que se quedó en disco y no genera nadie.
+                'resources/views/excel/retired.blade.php' => ['stub' => 'Excel/ExcelTemplate.txt', 'hash' => hash('sha256', 'vista')],
             ]];
             unset($manifest['models']['Post']['files'][self::POLICY]);
 
             return $manifest;
         });
+        is_dir($this->project->path.'/resources/views/excel') || mkdir($this->project->path.'/resources/views/excel', 0777, true);
+        file_put_contents($this->project->path.'/resources/views/excel/retired.blade.php', 'vista');
         $this->prepare();
 
         $this->assertSame('retired', $this->entry('src/Models/Retired.php')['cause'] ?? null);
@@ -122,6 +126,7 @@ final class RealignAdoptTest extends TestCase
         // Sin el modelo vacío, verify no lo ve como una entidad a la que le falta todo.
         $this->assertNotContains('Retired', $this->manifest()->models());
         $this->assertSame('Post', $this->manifest()->entryOf(self::POLICY)['model'] ?? null);
+        $this->assertSame('', $this->manifest()->entryOf('resources/views/excel/retired.blade.php')['model'] ?? null);
         $this->runCommand('larapack:verify', ['--root' => $this->project->path, '--format' => 'json']);
         $this->assertSame([], array_values(array_filter(
             json_decode($this->lastOutput, true)['findings'],
