@@ -163,6 +163,10 @@ final class RealignExceptionsTest extends TestCase
         $this->assertStringContainsString('Excepción aprobada por el dueño del proyecto', $this->closures($report)[0]['message']);
         $this->assertSame(['approved', 'approved', 'approved'], array_column($report['exceptions'], 'status'));
 
+        $this->runCommand('larapack:verify', ['--root' => $this->project->path, '--strict' => true, '--check' => ['route-closure']]);
+        $this->assertStringContainsString('Excepciones del realineamiento en .larapack/hand-rolled.lock: 3 aprobadas sobre el código de hoy', $this->lastOutput);
+        $this->assertStringContainsString('escrito así a propósito: «'.self::CSP_REASON.'»', $this->lastOutput);
+
         $this->assertTrue($this->realign('check', ['targets' => ['route-closure@.']])['done']);
 
         // Y lo que cubre no vuelve al plan.
