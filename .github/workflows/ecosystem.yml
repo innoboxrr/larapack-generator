@@ -1,0 +1,97 @@
+name: Ecosistema
+
+# Punta a punta con lo PUBLICADO: Laravel 13 recién creado, la última
+# laravel-setup de Packagist y LaraPack desde este checkout. El choque entre
+# laravel-setup y larapack 9 lo descubrió un cliente porque ninguna CI
+# instalaba los dos juntos; esto lo hace cada noche.
+#
+# Los pasos viven en .github/scripts/ecosystem-e2e.sh, que se corre igual en
+# local (CONTRIBUTING.md). Aquí sólo se declara cuándo y sobre qué.
+on:
+    schedule:
+        # Cada noche, a una hora sin redondear para no caer con el resto de
+        # los cron de GitHub.
+        - cron: '37 4 * * *'
+    workflow_dispatch:
+        inputs:
+            setup_constraint:
+                description: 'Qué innoboxrr/laravel-setup probar (restricción de Composer; vacío = la del script)'
+                required: false
+                default: ''
+    # La puerta de release.yml: antes de etiquetar una versión nueva, la prueba
+    # con lo publicado. Es lo que habría parado la 9.0.
+    workflow_call:
+        inputs:
+            setup_constraint:
+                type: string
+                required: false
+                default: ''
+    pull_request:
+        # VERSION, porque el incidente fue un cambio de versión: el PR que la
+        # sube ve aquí si la laravel-setup publicada la admite. Los cambios de
+        # src/ no lo disparan (son 45 minutos por interfaz): los cubren la
+        # noche y la puerta de release.yml, que corre esto antes de publicar.
+        paths:
+            - .github/workflows/ecosystem.yml
+            - .github/scripts/ecosystem-e2e.sh
+            - .github/scripts/ecosystem-e2e-checks.php
+            - .github/scripts/ecosystem-e2e.laraimport.json
+            - ecosystem.json
+            - composer.json
+            - VERSION
+
+permissions:
+    contents: read
+
+jobs:
+    ecosystem:
+        name: Ecosistema (${{ matrix.ui }})
+        runs-on: ubuntu-latest
+        timeout-minutes: 45
+
+        strategy:
+            # Que una interfaz falle no dice nada de la otra.
+            fail-fast: false
+            matrix:
+                ui: [vue, react]
+
+        steps:
+            - uses: actions/checkout@v5
+
+            - uses: shivammathur/setup-php@v2
+              with:
+                  php-version: '8.4'
+                  # Las que pide la aplicación base: phpoffice/phpspreadsheet
+                  # (por maatwebsite/excel) exige gd, zip y fileinfo, y la base
+                  # de la prueba es SQLite.
+                  extensions: mbstring, intl, pdo_sqlite, sqlite3, gd, zip, fileinfo
+                  coverage: none
+                  tools: composer:v2
+
+            - uses: actions/setup-node@v5
+              with:
+                  node-version: '22'
+
+            - name: Punta a punta
+              run: bash .github/scripts/ecosystem-e2e.sh ${{ matrix.ui }}
+              env:
+                  ECOSYSTEM_WORK: ${{ runner.temp }}/ecosystem
+                  # Vacía (la noche, un PR) deja la del script: ^7.2.1.
+                  SETUP_CONSTRAINT: ${{ inputs.setup_constraint }}
+                  # Sin token, Composer se queda en el límite anónimo de la API
+                  # de GitHub al bajar decenas de dist. No va como COMPOSER_AUTH:
+                  # el script lo saca del entorno y sólo se lo pasa a Composer,
+                  # para que no lo vean npm install ni los tests.
+                  ECOSYSTEM_COMPOSER_AUTH: '{"github-oauth": {"github.com": "${{ github.token }}"}}'
+
+            - name: Registros
+              if: failure()
+              uses: actions/upload-artifact@v4
+              with:
+                  name: ecosystem-${{ matrix.ui }}
+                  path: |
+                      ${{ runner.temp }}/ecosystem/logs
+                      ${{ runner.temp }}/ecosystem/junit.xml
+                      ${{ runner.temp }}/ecosystem/app/storage/logs
+                  if-no-files-found: ignore
+                  retention-days: 7

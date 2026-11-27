@@ -10,12 +10,56 @@ on:
     workflow_dispatch:
 
 jobs:
-    release:
+    # ¿La version de VERSION esta sin publicar? Solo entonces hace falta la
+    # prueba del ecosistema: con el tag ya puesto, el reutilizable no publica
+    # nada, y correrla en cada push a master serian 45 minutos por interfaz
+    # para no cambiar nada.
+    version:
+        name: Version sin publicar
         # `types: [completed]` dispara tambien cuando Tests fallo o se cancelo.
         # La puerta vive aqui y no solo en el reutilizable de innoboxrr/.github:
         # que un push con un test roto no publique es una garantia de este
         # repositorio, y tiene que poder leerse en el. A mano siempre se puede.
         if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+        runs-on: ubuntu-latest
+        permissions:
+            contents: read
+        outputs:
+            unpublished: ${{ steps.tag.outputs.unpublished }}
+
+        steps:
+            - uses: actions/checkout@v5
+
+            - id: tag
+              # --exit-code sale con 2 si el tag no existe. Cualquier otro
+              # fallo (la red) tambien cuenta como sin publicar: se prueba de
+              # mas, nunca de menos.
+              run: |
+                  version="$(tr -d '[:space:]' < VERSION)"
+                  if git ls-remote --exit-code --tags origin "refs/tags/$version" > /dev/null; then
+                      echo "unpublished=false" >> "$GITHUB_OUTPUT"
+                      echo "$version ya tiene tag: no hay nada que publicar."
+                  else
+                      echo "unpublished=true" >> "$GITHUB_OUTPUT"
+                      echo "$version sin tag: antes de publicarla, el ecosistema."
+                  fi
+
+    # La 9.0 se publico cuando la laravel-setup publicada no la admitia, y lo
+    # descubrio un cliente. Una version nueva no se etiqueta sin pasar la
+    # prueba del ecosistema con lo publicado, Vue y React.
+    ecosystem:
+        name: Ecosistema
+        needs: version
+        if: needs.version.outputs.unpublished == 'true'
+        permissions:
+            contents: read
+        uses: ./.github/workflows/ecosystem.yml
+
+    release:
+        needs: [version, ecosystem]
+        # Sin always(), un `ecosystem` saltado (version ya publicada) saltaria
+        # tambien esto. Con el, hay que exigir a mano lo que needs exigia.
+        if: always() && needs.version.result == 'success' && (needs.ecosystem.result == 'success' || needs.ecosystem.result == 'skipped')
 
         # Explicito y no heredado: el reutilizable necesita `contents: write`
         # para empujar el tag, y un repositorio cuyo permiso por defecto sea de
