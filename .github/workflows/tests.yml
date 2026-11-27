@@ -19,7 +19,9 @@ jobs:
     # Claude Code ejecuta los hooks con Git Bash en Windows, y CLAUDE_PROJECT_DIR
     # llega como ruta de Windows. Ninguna prueba de PHPUnit pasa por ahí: este
     # job instala la guardia con larapack:skill --hooks y lanza el comando real
-    # del hook, con las dos formas de ruta.
+    # del hook, con las dos formas de ruta. Desde 9.3 también los de los otros
+    # agentes (--agents=all) y el hook de git, que git para Windows ejecuta con
+    # su propia shell.
     windows-guard:
         name: Guardia en Windows (Git Bash)
         runs-on: windows-latest
@@ -42,7 +44,7 @@ jobs:
 
             - name: Pruebas de la guardia y de los hooks
               shell: bash
-              run: vendor/bin/phpunit --no-progress --filter 'GuardTest|GuardHandRolledTest|AgentHooksTest|SkillTest'
+              run: vendor/bin/phpunit --no-progress --filter 'GuardTest|GuardHandRolledTest|AgentHooksTest|SkillTest|AgentAdaptersTest|GitBypassTest|GitHooksTest|GuardDoctorTest'
 
             - name: El hook real, como lo lanza Claude Code
               shell: bash

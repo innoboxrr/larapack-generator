@@ -1,5 +1,82 @@
 # Changelog
 
+## 9.3.0 (sin publicar)
+
+### La guardia deja de ser sólo de Claude Code
+
+Hasta la 9.2 la guardia en vivo (`larapack:guard` en `.claude/settings.json`)
+sólo la ejecutaba Claude Code. Con Cursor, Codex, Gemini CLI, Copilot o
+Windsurf, lo único que frenaba un controlador con lógica era la CI. Ahora va
+por capas, y todas llaman al mismo `larapack:guard`:
+
+- **El hook de git, para cualquiera** (`GitHooks`). `larapack:skill --hooks`
+  escribe además `.githooks/pre-commit` y `.githooks/pre-push` y pone
+  `core.hooksPath`. Corren `larapack:guard --git=pre-commit|pre-push` sobre lo
+  que se va a comitear o a empujar —sólo esos archivos, y sin correr el
+  Verifier si ninguno es arquitectura— y frenan lo que `verify --strict`
+  rechazaría: errores de esos archivos y una excepción `#[HandRolled]` sin
+  aprobar. Un archivo vigilado preparado a medias no se da por bueno (la
+  guardia lee el disco). Un cambio en `.larapack/hand-rolled.lock` lo confirma
+  una persona escribiendo «apruebo» en `/dev/tty`; sin terminal —como corre un
+  agente— no entra. El `pre-push` mira los commits que ningún remoto tiene
+  todavía: frena lo que se comiteó con `--no-verify`. No pisa nada: un
+  `core.hooksPath` ya puesto, hooks propios en `.git/hooks` o un
+  `.githooks/pre-commit` ajeno se respetan y se dice qué línea añadir.
+  `larapack:new` deja los scripts en un paquete que tendrá su propio
+  repositorio, y dice cómo activarlos tras `git init`.
+- **Los hooks de cada agente que los tiene de verdad** (`AgentAdapters`,
+  `AgentIntegrations`). `larapack:skill --agents=cursor,codex,gemini,copilot,windsurf`
+  (o `all`) escribe sus hooks y sus reglas: `.cursor/hooks.json` y
+  `.cursor/rules/larapack.mdc`; `.codex/hooks.json` (y `AGENTS.md`);
+  `.gemini/settings.json` y `GEMINI.md`; `.github/hooks/larapack.json` y
+  `.github/copilot-instructions.md`; `.windsurf/hooks.json` y
+  `.windsurf/rules/larapack.md`. `larapack:guard --agent=<agente>` traduce la
+  entrada de cada uno a la de Claude Code y contesta en su idioma: negación
+  antes de la herramienta (`permission: deny`, `permissionDecision: deny`,
+  código 2), el motivo después de editar por el canal que llega al modelo
+  (`additional_context`, `additionalContext`, `decision: block`) y otra vuelta
+  al terminar (`followup_message`, `decision: block`, código 2). Codex edita
+  con parches: sus rutas (`*** Update File:`) cuentan como archivos editados,
+  también dentro de una orden de shell, y el parche deja de leerse como orden.
+  Sin `--agent`, el agente se deduce de la entrada.
+- **Saltarse el hook de git se frena** en todos los hooks de antes de la
+  herramienta (`Guard::gitBypass`): `git commit --no-verify` (abreviado, o `-n`
+  en un grupo como `-anm`), `git push`/`merge --no-verify`, y cambiar
+  `core.hooksPath` con `git config` o `git -c`. Leerlo no cuenta, ni un mensaje
+  que diga `-n`. El filtro de la shell deja pasar a PHP esas órdenes, y el
+  PreToolUse de Claude Code que escribió la 9.2 —que no las habría visto— se
+  pone al día al reinstalar con `--hooks`, sólo si es exactamente el suyo.
+- **`larapack:guard --doctor`** (`GuardDoctor`) dice qué capas tiene el
+  proyecto y cuáles faltan, con la orden de cada una (`--format=json` para un
+  script). Sale con 1 si falta el hook de git activo o un workflow con
+  `verify --strict`. Avisa de que Aider comitea con `--no-verify` salvo
+  `git-commit-verify: true`.
+- **Cursor importa los hooks de `.claude/settings.json`** con su propia
+  entrada, y el de antes de la herramienta no veía la orden: dejaba pasar todo.
+  Ahora la reconoce, y calla si el proyecto tiene además los de Cursor.
+
+Pruebas: `AgentAdaptersTest` (la entrada de cada agente, en proceso),
+`AgentIntegrationsTest` (instalar sin pisar, y el comando escrito ejecutado con
+bash con las variables de cada agente), `GitHooksTest` (repositorios de verdad:
+commit, push, candado sin terminal con `setsid` y con terminal con `script`),
+`GitBypassTest` y `GuardDoctorTest`. `guard-smoke.sh` y el job de Windows
+lanzan además los comandos de los cinco agentes y el hook de git desde Git
+Bash. `infection.json5` corre también `GitBypassTest` y `AgentAdaptersTest`:
+son las que matan los mutantes de lo nuevo de `Guard`, que mantiene su suelo
+del 95 %.
+
+Lo que queda abierto, y está en el README («Otros agentes, y el hook de git
+que no depende de ninguno»): `core.hooksPath` es configuración de cada clon; un
+hook de git se salta con `--no-verify` donde no hay hook de agente que lo
+impida; la confirmación del candado no prueba identidad (la barrera sigue
+siendo CODEOWNERS en la rama protegida); los hooks de los otros agentes son
+POSIX sh y en Windows necesitan que el agente los ejecute con Git Bash (sin
+variante `powershell` para Copilot); Codex y Gemini piden aceptar los hooks de
+proyecto y `--doctor` no lo ve; y los adaptadores de Cursor y Windsurf siguen
+la documentación de terceros, porque sus páginas oficiales no fueron accesibles
+desde donde se escribió. Ninguna prueba corre los agentes de verdad: simulan su
+entrada.
+
 ## 9.2.0
 
 ### PHPStan en nivel 8, y lo que escondía

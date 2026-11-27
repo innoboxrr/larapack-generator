@@ -26,7 +26,9 @@ php vendor/bin/builder larapack:<comando>    # en un paquete
 ```
 
 Si el proyecto tiene los hooks de LaraPack (`larapack:skill --hooks`), una
-edición que rompe el contrato vuelve con el motivo: corrígela, no la rodees.
+edición que rompe el contrato vuelve con el motivo, y el hook de git frena el
+commit: corrígela, no la rodees. No uses `--no-verify` ni cambies
+`core.hooksPath`; la CI comprueba lo mismo.
 
 Este bloque lo reescribe `larapack:skill`. Las reglas propias del proyecto van
 fuera de los marcadores.
