@@ -310,6 +310,62 @@ final class MigrationHistoryTest extends TestCase
      * DESPUÉS de hoy —una fecha escrita a mano, o un reloj atrasado—: la
      * alteración va después de ella, no con la hora del reloj.
      */
+    /**
+     * `migrate` ordena por el nombre entero: dos migraciones del mismo segundo
+     * se ordenan por lo que sigue a la fecha, y `create_categories` corre
+     * antes que `create_posts`. Comparar sólo la fecha las daba por iguales y
+     * la llave iba dentro de una creación que corre antes que su tabla.
+     */
+    public function test_la_llave_hacia_una_tabla_del_mismo_segundo_que_corre_despues_se_difiere(): void
+    {
+        $moment = gmdate('Y_m_d_His', time() + 3600);
+        $posts = $this->migrations().'/'.$moment.'_create_posts_table.php';
+        file_put_contents($posts, <<<'PHP'
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::create('posts', function (Blueprint $table) {
+            $table->id();
+            $table->string('title');
+            $table->timestamps();
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::dropIfExists('posts');
+    }
+};
+PHP);
+        (new Manifest($this->project->path))->record('Post', self::NAMESPACE, $posts, 'Migration/MigrationTemplate.txt');
+
+        // La creación nueva cae en el mismo segundo que la de `posts`.
+        (new \ReflectionProperty(MigrationTimestamp::class, 'last'))->setValue(null, (int) gmmktime(...array_map('intval', [
+            substr($moment, 11, 2), substr($moment, 13, 2), substr($moment, 15, 2), substr($moment, 5, 2), substr($moment, 8, 2), substr($moment, 0, 4),
+        ])) - 1);
+
+        $this->import(['models' => [
+            ['name' => 'Post', 'props' => [['name' => 'title', 'type' => 'string']]],
+            ['name' => 'Category', 'props' => [
+                ['name' => 'name', 'type' => 'string'],
+                ['name' => 'post_id', 'type' => 'foreignId', 'constraint' => 'posts'],
+            ]],
+        ]]);
+
+        $categories = glob($this->migrations().'/*_create_categories_table.php') ?: [];
+        $this->assertCount(1, $categories);
+        $this->assertStringStartsWith($moment, basename($categories[0]), 'La prueba no consiguió el mismo segundo.');
+        $this->assertStringNotContainsString("constrained('posts')", (string) file_get_contents($categories[0]));
+        $this->assertNotSame([], glob($this->migrations().'/*_add_foreign_keys_to_categories_table.php') ?: []);
+    }
+
     public function test_la_llave_va_despues_de_la_tabla_aunque_esta_este_fechada_despues_de_hoy(): void
     {
         $this->install('expediente/2026_09_16_064547_create_practitioners_table.php', 'Practitioner');

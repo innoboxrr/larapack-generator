@@ -68,6 +68,28 @@ final class ModelRegionsTest extends TestCase
         $this->assertSame(['fillable' => ["'kind'", "'amount'"]], $result['added']);
     }
 
+    public function test_una_lista_con_tipo_tambien_se_encuentra(): void
+    {
+        $code = <<<'PHP'
+<?php
+
+class Post
+{
+    protected array $fillable = ['title'];
+
+    protected ?array $creatable = ['title'];
+}
+PHP;
+
+        $result = ModelRegions::sync($code, self::expected([
+            'fillable' => ['title', 'body'],
+            'creatable' => ['title', 'body'],
+        ]), 'm.php');
+
+        $this->assertSame(['fillable' => ["'body'"], 'creatable' => ["'body'"]], $result['added']);
+        $this->assertStringContainsString("protected array \$fillable = ['title', 'body'];", $result['code']);
+    }
+
     public function test_una_lista_en_una_linea_sin_coma_final_y_otra_una_por_linea(): void
     {
         $code = <<<'PHP'

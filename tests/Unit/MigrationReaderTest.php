@@ -178,6 +178,52 @@ final class MigrationReaderTest extends TestCase
         $this->assertSame([], $profiles->opaque);
     }
 
+    public function test_una_tabla_en_otra_conexion_no_se_suma_a_la_de_la_aplicacion(): void
+    {
+        $this->directory = sys_get_temp_dir().'/larapack-reader-'.bin2hex(random_bytes(6));
+        mkdir($this->directory);
+        file_put_contents($this->directory.'/2026_01_01_000000_create_posts_table.php', <<<'PHP'
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::create('posts', function (Blueprint $table) {
+            $table->id();
+            $table->string('title');
+        });
+    }
+};
+PHP);
+        file_put_contents($this->directory.'/2026_01_02_000000_tenant_posts.php', <<<'PHP'
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::connection('tenant')->table('posts', function (Blueprint $table) {
+            $table->string('slug');
+        });
+    }
+};
+PHP);
+
+        $posts = (new SchemaHistory($this->directory))->table('posts');
+
+        $this->assertArrayNotHasKey('slug', $posts->columns);
+        $this->assertStringContainsString('2026_01_02_000000_tenant_posts.php', implode(' ', $posts->opaque));
+    }
+
     private function history(string ...$fixtures): SchemaHistory
     {
         $this->directory = sys_get_temp_dir().'/larapack-reader-'.bin2hex(random_bytes(6));

@@ -52,6 +52,9 @@ final class MigrationReader
      */
     private array $pairs = [];
 
+    /** Si el último método leído iba detrás de `connection(...)->`. */
+    private bool $throughConnection = false;
+
     /**
      * @var list<array{0: int, 1: int}> los cuerpos de down(), que no cuentan
      */
@@ -176,6 +179,13 @@ final class MigrationReader
         }
 
         $base = ['table' => $name, 'conditional' => $context === 'conditional', 'statements' => [], 'opaque' => null, 'sql' => null];
+
+        // `Schema::connection('otra')->table('posts', …)` puede ser otra base:
+        // sus columnas no se suman a la tabla de la conexión por omisión, y
+        // tampoco se adivina que no lo es. La tabla queda sin leer.
+        if ($this->throughConnection) {
+            return array_merge($base, ['kind' => 'table', 'opaque' => "Schema::connection()->{$method}()".($name !== null ? " de '{$name}'" : '').' en una conexión que puede no ser la de la aplicación']);
+        }
 
         if ($name === null || $context === 'loop') {
             $why = $name === null
@@ -317,6 +327,16 @@ final class MigrationReader
      */
     private function methodAfter(int $i): array
     {
+        $this->throughConnection = false;
+
+        return $this->methodAfterConnection($i);
+    }
+
+    /**
+     * @return array{0: string|null, 1: int|null}
+     */
+    private function methodAfterConnection(int $i): array
+    {
         if (($this->tokens[$i][0] ?? null) !== T_STRING) {
             return [null, null];
         }
@@ -335,7 +355,9 @@ final class MigrationReader
                 return [null, null];
             }
 
-            return $this->methodAfter($close + 2);
+            $this->throughConnection = true;
+
+            return $this->methodAfterConnection($close + 2);
         }
 
         return [$method, $open];

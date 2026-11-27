@@ -45,6 +45,9 @@ final class ModelRegions
 
     private const MODIFIERS = [T_PUBLIC, T_PROTECTED, T_PRIVATE, T_STATIC, T_VAR, T_READONLY];
 
+    /** Lo que puede ir entre el modificador y el nombre de una propiedad con tipo. */
+    private const TYPE_TOKENS = [T_ARRAY, T_STRING, T_NAME_QUALIFIED, T_NAME_FULLY_QUALIFIED, '?', '|'];
+
     /**
      * @param  Expected  $expected
      * @param  string  $file  la ruta, sólo para la orden manual
@@ -324,6 +327,12 @@ final class ModelRegions
             }
 
             $previous = self::previous($tokens, $index);
+
+            // Una propiedad con tipo (`protected array $fillable`, `?array`,
+            // `array|null`) lleva el tipo entre el modificador y el nombre.
+            while ($previous !== null && $tokens[$previous]->is(self::TYPE_TOKENS)) {
+                $previous = self::previous($tokens, $previous);
+            }
 
             if ($previous === null || ! $tokens[$previous]->is(self::MODIFIERS)) {
                 continue;

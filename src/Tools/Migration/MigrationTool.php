@@ -531,7 +531,7 @@ class MigrationTool extends Tool implements ModelArtifact
     private function deferForeignKeys(string $migrationFile, SchemaHistory $history): void
     {
         $model = self::declaredEntry('models', $this->ModelName);
-        $moment = substr(basename($migrationFile), 0, 17);
+        $name = basename($migrationFile);
 
         foreach ($model['props'] as $prop) {
             if ($prop['type'] !== 'foreignId' || ! is_string($prop['constraint'] ?? null)) {
@@ -541,9 +541,11 @@ class MigrationTool extends Tool implements ModelArtifact
             $table = TablePrefix::constraint($prop['constraint']);
             $creator = $history->table($table)->creator;
 
-            // También si la tabla existe pero se crea en una migración fechada
-            // después de ésta.
-            $later = $creator !== null && substr(basename($creator), 0, 17) > $moment;
+            // También si la tabla existe pero se crea en una migración que
+            // corre después de ésta. `migrate` ordena por el nombre entero, no
+            // por la fecha: dos migraciones del mismo segundo se ordenan por
+            // lo que sigue, y compararlas sólo por la fecha las daba por iguales.
+            $later = $creator !== null && strcmp(basename($creator), $name) > 0;
 
             if (! $later && $this->available($table, $history)) {
                 continue;

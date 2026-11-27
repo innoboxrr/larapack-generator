@@ -408,6 +408,17 @@ los que el generador cede a un archivo que ya existe.
 
 **Al actualizar.** Nada: los avisos desaparecen solos.
 
+### Lo que encontró la revisión antes de publicar
+
+- **Una llave hacia una tabla del mismo segundo.** Para decidir si la llave de una creación nueva podía ir dentro,
+  se comparaba sólo la fecha de las dos migraciones. `migrate` ordena por el nombre entero: con la misma fecha,
+  `create_categories` corre antes que `create_posts`, y la llave iba dentro de una creación que corre antes que su
+  tabla (MySQL: «Failed to open the referenced table»). Ahora se compara el nombre, como `migrate`.
+- **Las listas con tipo.** `protected array $fillable = [...]` no se encontraba, y el modelo conservado no recibía
+  sus columnas nuevas aunque la lista existía. Ahora se salta el tipo (`array`, `?array`, `array|null`).
+- **Otra conexión.** `Schema::connection('otra')->table('posts', …)` se sumaba a la tabla `posts` de la conexión
+  de la aplicación. Ahora esa tabla queda sin leer, con el archivo nombrado, y no se escribe nada sobre ella.
+
 ## 9.3.0
 
 ### La rama protegida: guiada hasta el final, y comprobada en cada corrida
