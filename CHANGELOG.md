@@ -1,5 +1,120 @@
 # Changelog
 
+## 9.3.1 (sin publicar)
+
+### `verify` sin `--root` ya no mide el propio generador
+
+**Qué pasaba.** Sin `--root`, la raíz se descubría subiendo desde donde está
+instalado el generador hasta un `vendor/autoload.php`. Con el `builder` de un
+clon —o con un `vendor/bin/builder` que lleva a un clon por un repositorio
+`path` con enlace simbólico— ese directorio es el propio generador, que tiene
+su vendor. `larapack:verify` corrido así desde el proyecto medía el generador y
+devolvía `ok: true` con un solo aviso, `empty-manifest`: un falso verde. Lo
+mismo valía para cualquier comando con `--root`, también para los generadores.
+
+**A quién afectaba.** A quien corre el `builder` de un clon del generador, o
+tiene el generador enlazado por un repositorio `path`, sin pasar `--root`. En
+school-management el análisis de viabilidad lo encontró así.
+
+**Cómo se corrige.** La raíz sale del directorio de trabajo: subiendo desde él,
+el primer directorio con un `laraimport.json`, un `.larapack/manifest.json` o
+un `composer.json` que requiere `innoboxrr/larapack-generator` (en `require` o
+`require-dev`). Si no hay ninguno, la de siempre. Y todo comando con `--root`
+(los de `TargetsProject`: los generadores, `import`, `validate`, `verify`,
+`fix`, `ci`, `hand-rolled`, `skill`, `remove-full-model`) falla si la raíz
+—indicada o descubierta— es el propio generador sin manifiesto ni laraimport,
+diciendo qué buscó y que se le pase `--root`. Un `.larapack/` sin manifiesto
+no cuenta como marca: uno así, con sólo un candado de `#[HandRolled]`, puede
+quedar en `/` por un comando lanzado desde ahí y volvería «el proyecto» a todo
+lo que cuelga de él.
+
+**Al actualizar.** Nada que hacer si ya pasabas `--root` o corrías el comando
+desde el proyecto con el generador instalado por Composer. Si un script corría
+el `builder` desde un directorio que no es un proyecto y se fiaba de que
+«saliera bien», ahora falla: pásale `--root=<proyecto>`. Desde un subdirectorio
+del proyecto, o desde el de un paquete local, ahora se mide ese proyecto o ese
+paquete.
+
+### `verify` en la raíz lee los manifiestos de los paquetes locales
+
+**Qué pasaba.** Un proyecto con paquetes locales tiene un manifiesto en la raíz
+y otro en cada paquete (`packages/<p>/.larapack/manifest.json`). `verify` en la
+raíz recorría el código de todos —controller-shape mira `packages/*`— pero sólo
+leía el manifiesto de la raíz: un archivo generado que faltaba en un paquete,
+o una request sin acción declarada, no salía.
+
+**A quién afectaba.** A los proyectos con paquetes locales generados con
+LaraPack. En school-management hubo que correr `verify` 81 veces, una por
+paquete con su `--root`, y así salieron dos `missing-file` y tres
+`route-not-declared` que la raíz no veía.
+
+**Cómo se corrige.** Desde la raíz, además de lo de siempre, se corren las
+comprobaciones del manifiesto (`missing-file`, `customised`,
+`inconsistent-entity`, `route-prefix`, `route-not-declared`,
+`endpoint-missing`, `immutable-write`, `secret-exposed`,
+`endpoint-tests-outdated`) contra el manifiesto de cada paquete local que lo
+tenga: los repositorios `path` del `composer.json` y `packages/*`, sólo los que
+están dentro de la raíz (un `path` que apunta fuera es una dependencia). Las
+del código no se repiten. En el JSON, cada hallazgo lleva `package` —su nombre
+de Composer, o `null` si es del núcleo— y la ruta relativa a la raíz del
+proyecto (`packages/billing/src/...`); el informe trae `summary`, una fila por
+raíz (`package`, `path`, `manifest`, `errors`, `warnings`, `info`), cuyos
+totales suman los de arriba. La salida de texto antepone `[paquete]` a cada
+hallazgo de un paquete y termina con una línea por paquete. `--package`
+(repetible) acota a uno —por su directorio, su ruta o su nombre de Composer— o
+a `app`, el núcleo; uno que no existe falla diciendo los que hay.
+`--no-packages` no lee sus manifiestos, como antes. Una raíz sin laraimport que
+sólo agrupa paquetes no avisa de `empty-manifest` si se midió alguno. El
+formato es compatible: sólo se añaden `package` y `summary`.
+
+**Al actualizar.** `verify` en la raíz puede salir en rojo donde antes salía en
+verde: son errores que ya estaban en los paquetes. Para la CI que corre
+`verify --strict` en la raíz, o se arreglan, o se mide como antes con
+`--no-packages` mientras tanto (y se dice por qué). Si la CI de cada paquete ya
+corre su propio `verify`, sigue igual.
+
+### Un paquete sin modelos es un laraimport válido
+
+**Qué pasaba.** El esquema de 9.x exigía al menos un modelo (`minItems: 1`).
+Un paquete que sólo integra —una pasarela de pago, un PAC, una terminal— nace
+con `"models": []`, y `validate` lo rechazaba con «Array should have at least
+1 items, 0 found»; `import` tampoco corría.
+
+**A quién afectaba.** A los paquetes de integración. En school-management, a
+doce: `school-pac-*` (4), `school-pay-*` (6) y `school-tpv-*` (2).
+
+**Cómo se corrige.** `models` sigue siendo obligatoria, pero puede ir vacía.
+`validate` acepta el archivo, `import` no genera nada de modelos y sale con 0,
+y `verify` no avisa de `empty-manifest` cuando el laraimport de la raíz no
+declara ni modelos, ni pivotes, ni `controllers` (si los declara y no hay
+nada registrado, sigue avisando). Con sus proveedores registrados, se siguen
+comprobando como antes.
+
+**Al actualizar.** Nada. Si quitaste el laraimport de un paquete así para que
+la CI pasara, puedes volver a ponerlo.
+
+### `inconsistent-entity` ya no señala el `User` de Laravel
+
+**Qué pasaba.** El `User` de una aplicación usa la migración de `users` y la
+`UserFactory` que trae Laravel, y el generador, a propósito, no las toca (la
+migración la salta con «no la generó LaraPack», la factory porque ya existe).
+El modelo quedaba en el manifiesto sin `Migration` ni `Factory`, y
+`inconsistent-entity` avisaba de que «no tiene componente Migration y todas las
+demás entidades sí». Un falso positivo que había que aprender a ignorar.
+
+**A quién afectaba.** A toda aplicación con un `User` en el laraimport. En
+school-management eran los dos únicos avisos de esa comprobación.
+
+**Cómo se corrige.** Un componente que falta en el manifiesto pero existe donde
+el generador lo habría escrito cuenta como presente: la factory en
+`database/factories/<Modelo>Factory.php` y la migración de creación en
+`database/migrations/*_create_<tabla>_table.php`, con la tabla del `$table` del
+modelo si lo declara (`table_prefix`). No es una lista de nombres: se mira el
+archivo, y si desaparece el aviso vuelve. Sólo esos dos componentes, que son
+los que el generador cede a un archivo que ya existe.
+
+**Al actualizar.** Nada: los avisos desaparecen solos.
+
 ## 9.3.0
 
 ### La rama protegida: guiada hasta el final, y comprobada en cada corrida

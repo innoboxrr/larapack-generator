@@ -108,10 +108,15 @@ En Artisan no se registran porque `make:model`, `make:policy`, `make:factory` y
 Casi todos aceptan `--root=<ruta>` para decir sobre qué proyecto se trabaja; no
 lo tienen `larapack:new` (recibe el directorio como argumento),
 `larapack:schema` ni `larapack:audit` (recibe la ruta como argumento). Sin esa
-opción la raíz se descubre subiendo directorios desde el paquete hasta dar con
-un `vendor/autoload.php`: dentro de una aplicación o de un paquete que lo tenga
-instalado eso da la raíz correcta; con el binario sobre un clon del propio
-generador, da el generador. Los generadores aceptan además `--force` y
+opción la raíz sale del directorio de trabajo: subiendo desde él, el primer
+directorio con un `laraimport.json`, un `.larapack/manifest.json` o un
+`composer.json` que requiere `innoboxrr/larapack-generator`; si no hay ninguno,
+el de siempre, subiendo desde el paquete hasta un `vendor/autoload.php`. Si lo
+que queda es el propio generador sin manifiesto —el `builder` de un clon, o un
+`vendor/bin/builder` que lleva a uno por un repositorio `path` con enlace
+simbólico, ejecutados fuera de un proyecto—, el comando falla y lo dice, con o
+sin `--root`: antes `verify` medía el generador y salía en verde (9.3.1). Los
+generadores aceptan además `--force` y
 `--dry-run`. `--format=json` lo aceptan todos salvo `larapack:schema` (que ya
 emite JSON), `larapack:skill`, `larapack:guard` (que es un hook) y
 `larapack:remove-full-model`.
@@ -520,7 +525,9 @@ que un archivo incompleto no deja el proyecto a medio generar.
 
 Sólo `models[].name`, `props[].name` y `props[].type` son obligatorios. Todo lo
 demás tiene un valor por defecto que el esquema declara, así que el archivo sólo
-dice lo que se decide de verdad:
+dice lo que se decide de verdad. `models` puede ir vacía —`"models": []`—: un
+paquete que sólo integra (una pasarela, un PAC) no declara ninguno; `validate`
+lo acepta, `import` no genera nada y `verify` no avisa (9.3.1):
 
 ```json
 {
@@ -1282,7 +1289,7 @@ Contra el manifiesto:
 | --- | --- | --- |
 | `missing-file` | error | Algo que se generó y ya no está. |
 | `customised` | info | Editado a mano; no se podrá regenerar sin perderlo. |
-| `inconsistent-entity` | aviso | Una entidad sin un componente que tienen todas las que declararon su misma forma. |
+| `inconsistent-entity` | aviso | Una entidad sin un componente que tienen todas las que declararon su misma forma. Una migración de creación o una factory que el proyecto ya tenía donde el generador las habría escrito —la de `users` y la `UserFactory` de Laravel, que el generador no toca— cuentan como presentes. |
 | `route-prefix` | error | El `API_ROUTE_PREFIX` del módulo JS —el de un modelo o el de un `controllers[]`— dejó de cuadrar con el `->as()` del RouteServiceProvider. |
 | `route-not-declared` | error | Una ruta (con o sin nombre), un método del controlador, un request o una vista de una acción o un endpoint que el modelo no declara. Distingue lo escrito a mano de lo que generó LaraPack para algo que ya no está en el laraimport. |
 | `endpoint-missing` | error | A un endpoint declarado le falta una pieza: su método, su ruta, su request, su habilidad, su operación o, con interfaz, su función en el contrato JS. El mensaje dice qué escribir. |
@@ -1455,6 +1462,26 @@ y la publicación») y, para los agentes, la guardia.
 `--check=<nombre>` se repite para correr varias; un nombre que no existe falla
 en vez de dar un verde falso.
 
+**Con paquetes locales** (los repositorios `path` del `composer.json` y
+`packages/*`), `verify` en la raíz lee además el manifiesto de cada uno que lo
+tenga (`packages/<p>/.larapack/manifest.json`) y le pasa las comprobaciones
+del manifiesto, contra su propia raíz; las del código ya cubren todo el
+proyecto. Cada hallazgo lleva `package` —el nombre de Composer del paquete, o
+`null` si es del núcleo— y la ruta relativa a la raíz del proyecto. Un
+repositorio `path` que apunta fuera de la raíz (`../contracts`) es una
+dependencia: su manifiesto no se lee.
+
+```
+php artisan larapack:verify --package=school-library        # sólo ese (directorio, ruta o nombre de Composer)
+php artisan larapack:verify --package=app                   # sólo el núcleo
+php artisan larapack:verify --no-packages                   # sin los manifiestos de los paquetes, como antes de 9.3.1
+```
+
+La salida de texto termina con una línea por paquete; la JSON trae `summary`,
+una fila por raíz medida (`package`, `path`, `manifest`, `errors`, `warnings`,
+`info`), y sus totales suman los del informe. Con `--root=packages/<p>` se mide
+ese paquete solo, con las rutas relativas a él.
+
 Devuelve un código distinto de cero si hay errores, así que sirve como puerta en
 la CI. La salida en JSON está pensada para que un agente lea qué corregir:
 
@@ -1469,8 +1496,12 @@ la CI. La salida en JSON está pensada para que un agente lea qué corregir:
       "check": "missing-file",
       "model": "Post",
       "file": "src/Policies/PostPolicy.php",
-      "message": "Se generó pero ya no existe. Regenéralo con --force o retíralo del manifiesto."
+      "message": "Se generó pero ya no existe. Regenéralo con --force o retíralo del manifiesto.",
+      "package": null
     }
+  ],
+  "summary": [
+    { "package": null, "path": ".", "manifest": true, "errors": 1, "warnings": 0, "info": 0 }
   ]
 }
 ```

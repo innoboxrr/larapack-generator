@@ -152,7 +152,7 @@ final class ProjectVerification
         $prefix = $this->pathOf($package).'/';
 
         return array_map(
-            fn (array $finding): array => ['file' => $finding['file'] === null ? null : $prefix.$finding['file']] + $finding,
+            fn (array $finding): array => array_merge($finding, ['file' => $finding['file'] === null ? null : $prefix.$finding['file']]),
             ProjectRoot::using($package, fn (): array => (new Verifier(new Manifest($package)))->run($checks))
         );
     }
