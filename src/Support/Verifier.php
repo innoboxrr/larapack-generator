@@ -53,9 +53,10 @@ final class Verifier
 
     /**
      * Las comprobaciones que dependen del manifiesto. Sin modelos registrados
-     * no tienen nada que mirar.
+     * no tienen nada que mirar. Son las que se corren, además, contra el
+     * manifiesto de cada paquete local (ProjectVerification).
      */
-    private const MANIFEST_CHECKS = [
+    public const MANIFEST_CHECKS = [
         'empty-manifest', 'missing-file', 'customised', 'inconsistent-entity', 'route-prefix',
         'route-not-declared', 'endpoint-missing', 'immutable-write', 'secret-exposed',
         'endpoint-tests-outdated',
