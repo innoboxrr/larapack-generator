@@ -1,0 +1,119 @@
+{
+    "table_prefix": "finance_",
+    "models": [
+        {
+            "name": "ChargeLine",
+            "display": "description",
+            "immutable": true,
+            "routes": {
+                "only": [
+                    "policies",
+                    "index",
+                    "show"
+                ]
+            },
+            "props": [
+                {
+                    "name": "charge_id",
+                    "type": "foreignId",
+                    "constraint": "finance_charges",
+                    "fillable": false,
+                    "creatable": false,
+                    "updatable": false,
+                    "datatable": true,
+                    "form": false
+                },
+                {
+                    "name": "kind",
+                    "type": "string",
+                    "default": "BASE",
+                    "enum": {
+                        "BASE": "Importe",
+                        "DISCOUNT": "Descuento",
+                        "SCHOLARSHIP": "Beca",
+                        "LATE_FEE": "Recargo",
+                        "ADJUSTMENT": "Ajuste"
+                    },
+                    "fillable": false,
+                    "creatable": false,
+                    "updatable": false,
+                    "datatable": true,
+                    "form": false
+                },
+                {
+                    "name": "amount",
+                    "type": "decimal",
+                    "cast": "decimal:2",
+                    "fillable": false,
+                    "creatable": false,
+                    "updatable": false,
+                    "datatable": true,
+                    "form": false
+                },
+                {
+                    "name": "description",
+                    "type": "string",
+                    "fillable": false,
+                    "creatable": false,
+                    "updatable": false,
+                    "datatable": true,
+                    "form": false
+                },
+                {
+                    "name": "period_key",
+                    "type": "string",
+                    "nullable": true,
+                    "fillable": false,
+                    "creatable": false,
+                    "updatable": false,
+                    "datatable": false,
+                    "form": false
+                },
+                {
+                    "name": "discount_id",
+                    "type": "foreignId",
+                    "constraint": "finance_discounts",
+                    "nullable": true,
+                    "fillable": false,
+                    "creatable": false,
+                    "updatable": false,
+                    "datatable": false,
+                    "form": false
+                },
+                {
+                    "name": "scholarship_award_id",
+                    "type": "foreignId",
+                    "constraint": "finance_scholarship_awards",
+                    "nullable": true,
+                    "fillable": false,
+                    "creatable": false,
+                    "updatable": false,
+                    "datatable": false,
+                    "form": false
+                },
+                {
+                    "name": "late_fee_rule_id",
+                    "type": "foreignId",
+                    "constraint": "finance_late_fee_rules",
+                    "nullable": true,
+                    "fillable": false,
+                    "creatable": false,
+                    "updatable": false,
+                    "datatable": false,
+                    "form": false
+                },
+                {
+                    "name": "created_by_user_id",
+                    "type": "foreignId",
+                    "constraint": "users",
+                    "nullable": true,
+                    "fillable": false,
+                    "creatable": false,
+                    "updatable": false,
+                    "datatable": false,
+                    "form": false
+                }
+            ]
+        }
+    ]
+}

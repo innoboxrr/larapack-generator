@@ -500,6 +500,12 @@ generado con su hash. Detecta:
 - **`endpoint-tests-outdated`** (aviso): un `<Modelo>EndpointsTest` de antes de
   9.1, sin las pruebas que cierran la autorización. No se regenera solo:
   guarda lo que le añadiste, bórralo, `larapack:import` y vuelve a pegarlo.
+- **`model-lists-outdated`** (aviso): las listas del modelo (`$fillable`,
+  `$export_cols`, `casts()`…) no llevan lo que declara el `laraimport.json` de
+  la raíz. Pasa con un modelo editado a mano al añadir una columna.
+  `larapack:import --force` las completa sin tocar el resto del modelo; si una
+  región no la reconoce, el informe da la orden manual exacta. No edites las
+  listas a mano: cambia el laraimport.
 
 Y en **todos** los controladores, generados o no, con o sin manifiesto:
 

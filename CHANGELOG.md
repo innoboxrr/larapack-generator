@@ -2,6 +2,48 @@
 
 ## 9.3.1 (sin publicar)
 
+### Un modelo editado a mano recibe las columnas nuevas en sus listas
+
+**Qué pasaba.** Con `--force`, un modelo editado a mano se conservaba entero
+(«conservado … (editado a mano)»), y con él sus listas: al añadir una columna al
+laraimport, `$fillable`, `$creatable`, `$updatable`, `$export_cols` y `casts()`
+se quedaban sin ella, sin aviso. `verify` tampoco lo veía: no lee el laraimport.
+
+**A quién afectaba.** A todo proyecto que edita sus modelos (traits propios,
+`booted()`, un `$table`): en school-management, 30 modelos desfasados —en
+`app/Models/ExternalIdentity.php` la columna `shared` no se convertía a booleano
+y no se exportaba; `ChargeLine::$export_cols` sin `discount_id`,
+`scholarship_award_id` ni `late_fee_rule_id`—; expediente lo documentaba como
+una trampa y lo resolvía a mano en cinco sitios por columna.
+
+**Cómo se corrige.** Las listas salen de un solo sitio,
+[`ModelLists`](src/Support/ModelLists.php), que usan el generador, la
+corrección y `verify`. Con `larapack:import --force`, un modelo conservado
+pasa por [`ModelRegions`](src/Support/ModelRegions.php): sobre tokens localiza
+cada región —la propiedad declarada una sola vez con `= [ … ];`, o `casts()`
+cuyo cuerpo es sólo `return [ … ];` (o `$casts`)— y **añade** lo que falta al
+final, con la forma que ya tiene la lista (en la misma línea, una por línea, o
+en una línea propia si está vacía). Nada más del archivo cambia, byte a byte.
+Nunca quita una entrada ni cambia un cast que existe con otro valor (pudo
+decidirlo una persona). Lo que no reconoce con certeza —la región no existe,
+está dos veces, lleva una constante, un spread o `array()`— no lo toca y lo
+devuelve con la orden manual exacta. El informe lo dice: el motivo del
+`conservado` nombra las regiones completadas; en JSON, `regions: [{file,
+added, skipped: [{region, reason, manual}], dryRun}]`; con `--dry-run`, lo que
+se completaría. `verify` gana `model-lists-outdated` (aviso), que compara el
+modelo con el `laraimport.json` de la raíz **sin regenerar**: lo que falta, con
+la orden; lo que sobra o un cast distinto, como info.
+
+Las reglas de las Requests (`rules()` de Create y Update) **no** se tocan: el
+generador las escribe una vez desde `requests[]` y no les deja marca de región,
+y el contrato de esos proyectos las trata como un hueco del proyecto.
+
+**Al actualizar.** `verify` puede empezar a avisar `model-lists-outdated` en
+modelos que llevaban tiempo desfasados (y con `--strict` falla): corre
+`larapack:import --force` (o `--dry-run` antes) y revisa los `skipped`. Un
+`larapack:full-model` suelto sigue sin leer el laraimport —regenera el modelo
+con las listas vacías—; ahora `verify` lo dice.
+
 ### Lo generado se formatea aunque el proyecto no tenga Pint, y se dice con cuál
 
 **Qué pasaba.** El `Formatter` sólo buscaba la Pint del proyecto

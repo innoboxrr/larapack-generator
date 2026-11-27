@@ -82,6 +82,9 @@ trait ReportsGeneration
                     'stub' => $entry['stub'],
                     'reason' => $entry['reason'],
                 ], $entries),
+                // Las listas completadas en modelos conservados, y las que no
+                // se pudieron completar con la orden para hacerlo a mano.
+                'regions' => array_map(fn (array $region): array => ['file' => $this->relative($region['file'])] + $region, Generation::regionsLog()),
             ] + $extra);
 
             return;
@@ -107,6 +110,12 @@ trait ReportsGeneration
             $summary['skipped'],
             $summary['preserved']
         ));
+
+        foreach (Generation::regionsLog() as $region) {
+            foreach ($region['skipped'] as $skip) {
+                $output->writeln('  <comment>sin completar</comment> '.$this->relative($region['file']).': '.$skip['reason'].'. '.$skip['manual']);
+            }
+        }
 
         if ($summary['preserved'] > 0) {
             $output->writeln('  <comment>Los conservados se editaron a mano; --force no los sobrescribe.</comment>');

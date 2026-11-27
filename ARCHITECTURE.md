@@ -404,7 +404,11 @@ hallazgo es `{level, check, model, file, message}`, con nivel `error`,
 **Contra el manifiesto** (`Verifier::MANIFEST_CHECKS`): `missing-file`,
 `customised`, `inconsistent-entity`, `route-prefix`, `route-not-declared`,
 `endpoint-missing`, `immutable-write`, `secret-exposed`,
-`endpoint-tests-outdated`. Se lee el manifiesto
+`endpoint-tests-outdated` y, contra el `laraimport.json` de la raíz si existe,
+`model-lists-outdated`
+([`ContractDrift`](src/Support/ContractDrift.php), con las listas que calcula
+[`ModelLists`](src/Support/ModelLists.php), lo mismo que usa el generador).
+Se lee el manifiesto
 una sola vez (`Manifest::snapshot`): releerlo en cada consulta hacía que un
 proyecto grande tardara minutos. `inconsistent-entity` compara sólo contra el
 consenso **unánime** de las entidades con la misma forma declarada; otra regla

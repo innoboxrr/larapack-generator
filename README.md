@@ -1289,6 +1289,7 @@ Contra el manifiesto:
 | `immutable-write` | error | Un camino de escritura en un modelo `immutable`, o su modelo sin la guarda que rechaza modificaciones. |
 | `secret-exposed` | error | Una columna `secret` fuera de `$hidden`, en la exportación, en el Resource o en la tabla. |
 | `endpoint-tests-outdated` | aviso | Un `<Modelo>EndpointsTest` sin alguna de las pruebas que cierran la autorización (`test_…_cada_accion_requiere_sesion`, `…_cada_accion_pregunta_a_la_politica` y, si hay listado, `…_index_pasa_por_su_managed_filter`): se generó antes de 9.1. Ese test no se regenera ni está en el manifiesto, así que no se reescribe: el mensaje dice cómo traerlas. |
+| `model-lists-outdated` | aviso (info si sólo sobra o difiere) | Contra el `laraimport.json` de la raíz, sin regenerar: a `$fillable`, `$hidden`, `$creatable`, `$updatable`, `$export_cols`, `$loadable_relations`, `$loadable_counts` o `casts()` del modelo le falta lo que el contrato declara —típico de un modelo editado a mano tras añadir una columna—. `larapack:import --force` lo completa sin tocar el resto del modelo. Lo que sobra o un cast con otro valor sale como info y no se cambia solo. |
 
 Sobre todo el código, lo haya generado LaraPack o no, en la raíz y en los
 paquetes locales (repositorios `path` y `packages/*`), y aunque no haya
