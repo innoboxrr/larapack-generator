@@ -17,5 +17,5 @@
     "mutators": {
         "@default": true
     },
-    "testFrameworkOptions": "--filter='GuardTest|GuardHandRolledTest|GuardInputsTest|VerifyTest|VerifyDeclaredEndpointsTest|VerifyControllerShapeTest|VerifyDeclaredShapeTest|VerifyLegacySecurityTest|VerifierTest|HandRolledLockTest|HandRolledLockFormatTest|PhpOutlineTest|PhpOutlineEdgeCasesTest|ProjectSourcesTest|ControllerShapeTest|LegacySecurityTest|LegacyFixTest|FixReviewTest|FixLegacySecurityTest|CiCommandTest|CiGateTest|GitBypassTest|AgentAdaptersTest'"
+    "testFrameworkOptions": "--filter='GuardTest|GuardHandRolledTest|GuardInputsTest|VerifyTest|VerifyDeclaredEndpointsTest|VerifyControllerShapeTest|VerifyDeclaredShapeTest|VerifyLegacySecurityTest|VerifierTest|HandRolledLockTest|HandRolledLockFormatTest|PhpOutlineTest|PhpOutlineEdgeCasesTest|ProjectSourcesTest|ControllerShapeTest|LegacySecurityTest|LegacyFixTest|FixReviewTest|FixLegacySecurityTest|FixSpaFallbackTest|SpaFallbackTest|CiCommandTest|CiGateTest|GitBypassTest|AgentAdaptersTest'"
 }

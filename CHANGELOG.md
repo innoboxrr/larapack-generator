@@ -193,6 +193,60 @@ la documentación de terceros, porque sus páginas oficiales no fueron accesible
 desde donde se escribió. Ninguna prueba corre los agentes de verdad: simulan su
 entrada.
 
+### `larapack:fix route-closure`: el fallback de la SPA de laravel-setup <= 7.2.0
+
+Las aplicaciones creadas con laravel-setup hasta la 7.2.0 traen en
+`routes/web.php` el fallback de la SPA en un closure con lógica
+(`abort_if(request()->is('api/*') || request()->expectsJson(), 404); return
+view('app');`). `verify` lo marca como `route-closure`, y con `--strict` —la
+puerta que instala `larapack:ci`— nunca pasaban. laravel-setup 7.2.1 lo resolvió
+para las nuevas; las existentes tenían que copiar dos archivos a mano.
+
+Ahora `larapack:fix route-closure` lo corrige de forma determinista e
+idempotente, como las demás correcciones (`--dry-run`, `--format=json`,
+`fixed`/`skipped`/`unchanged`, `--path`, `--package`, devolución si Pint deja
+algo sin parsear):
+
+- Crea `App\Http\Controllers\SpaController` y `App\Http\Requests\SpaRequest`
+  con el contenido de laravel-setup 7.2.1 si no existen. Si existen y no son
+  esos (sin contar el espacio en blanco), no se sobrescriben y no se toca nada:
+  `skipped` con la razón.
+- Reescribe el fallback a `Route::fallback(SpaController::class)` con su `use`
+  (en orden alfabético), y la raíz `Route::get('/', fn () => view('app'))->name('app')`
+  a `Route::view('/', 'app')->name('app')`. El resto del archivo no se toca.
+- Reconoce sólo ese closure, token a token (`SpaFallback`): pueden variar el
+  espacio en blanco, las comillas y el orden de los dos operandos del `||`;
+  cualquier otra lógica —un parámetro, otra vista, otro código, un comentario
+  dentro, `static`— se salta. Sólo en el `routes/web.php` de la raíz.
+- Cualquier otro closure de las rutas se salta con el mensaje de `verify`, y el
+  comando sale con código distinto de cero: llevarlo a un controlador es lógica
+  del proyecto.
+- Los tres archivos se escriben juntos: si uno no parsea tras Pint, se devuelve
+  el `routes/web.php` y se borran los creados.
+
+`verify` usa el mismo reconocedor: cuando el aviso `route-closure` es ese
+fallback, el mensaje dice «larapack:fix lo corrige» en lugar de pedir un
+controlador. `ControllerShape` expone `routeClosures()`, `flaggedClosures()` y
+`routeClosureMessage()` para eso, sin cambiar qué marca.
+
+Probado con la forma de laravel-setup 7.2.0 tal cual (tras el arreglo,
+`verify --strict` limpio en una aplicación con un modelo generado), con la de
+expediente (la raíz en un controlador y otros closures: se corrige el fallback y
+se saltan los demás) y con la de school-management (un fallback que recibe un
+servicio: no se toca). Las pruebas nuevas (`FixSpaFallbackTest`,
+`SpaFallbackTest`) entran en el filtro de Infection; con ellas, medido en local
+sobre cada archivo, `LegacyFix` queda en 91 % (suelo 89) y `ControllerShape` en
+96,6 % (suelo 95).
+
+**Lo que no cierra.** El comentario de cabecera de `routes/web.php` se queda el
+de 7.2.0: no se reescriben comentarios. Un fallback que no es exactamente el de
+laravel-setup, y los closures propios de cada proyecto, siguen siendo trabajo
+de una persona: el comando los lista con su razón y no los toca. Las líneas que
+dan esos mensajes son las del archivo antes de corregirlo. `SpaFallback.php`
+no entra en el alcance de Infection ni tiene suelo: medido aparte da 93 %, y
+los mutantes que sobreviven son equivalentes o comprobaciones defensivas; meterlo
+ahora movería el umbral global, que ya va justo.
+
 ## 9.2.0
 
 ### PHPStan en nivel 8, y lo que escondía

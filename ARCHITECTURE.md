@@ -513,6 +513,16 @@ actual. El trabajo lo hace [`LegacyFix`](src/Support/LegacyFix.php):
    para `--dry-run`; `LegacyFix::apply` escribe, formatea y rehace el hash de
    lo que el manifiesto conocía sin editar.
 
+`route-closure` sigue otro camino, porque no es deuda de lo generado sino de
+lo que escribía laravel-setup <= 7.2.0: `LegacyFix` recorre
+`ControllerShape::routeClosures` (lo mismo que marca `verify`) y sólo corrige el
+closure que [`SpaFallback`](src/Support/SpaFallback.php) reconoce token a token
+en el `routes/web.php` de la raíz. `SpaFallback::rewrite` reescribe la ruta y
+SpaController y SpaRequest se crean con `SpaFallback::CONTROLLER_CODE` y
+`SpaFallback::REQUEST_CODE`; los tres van en un grupo que se escribe o se
+devuelve entero. El mismo `SpaFallback::fallback` decide en `verify` si el
+mensaje ofrece el arreglo, así que los dos no pueden discrepar.
+
 Además **informa, sin arreglar**, de dos cosas que necesitan a una persona:
 [`ManagedFilterAudit`](src/Support/ManagedFilterAudit.php) (un `canView()` sin
 camino para el administrador) y [`AppendableProposals`](src/Support/AppendableProposals.php)

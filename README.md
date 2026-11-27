@@ -1302,7 +1302,7 @@ manifiesto:
 | `hand-rolled` | aviso / info | Una acción marcada `#[HandRolled('razón')]`: aviso sin candado; info si el dueño la aprobó en `.larapack/hand-rolled.lock`. Sin razón, error. |
 | `hand-rolled-unapproved` | error | Con candado: una excepción que no está aprobada, o cuya razón o cuyo código (la huella) cambió desde que se aprobó. |
 | `hand-rolled-stale` | aviso | Con candado: una aprobación de algo que ya no lleva `#[HandRolled]`. |
-| `route-closure` | aviso | Un closure con cuerpo como acción de una ruta. |
+| `route-closure` | aviso | Un closure con cuerpo como acción de una ruta. Si es el fallback de la SPA de laravel-setup <= 7.2.0, el mensaje dice que `larapack:fix` lo corrige. |
 | `index-managed` | aviso | Una request que usa el `Builder` de SearchSurge sin forzar `managed`: el listado se salta `ManagedFilter::canView()`. |
 | `resource-appends` | aviso | Un `setAppends()` que recibe lo que manda el cliente sin una lista blanca. |
 
@@ -1334,6 +1334,42 @@ comprobación.
 el bloque `setAppends()` cuando tienen la forma generada; si no, `skipped`. La
 lógica propia que haya alrededor —otros métodos, sentencias propias en
 `prepareForValidation()`, el resto de `toArray()`— no se pierde.
+
+**El fallback de la SPA de laravel-setup <= 7.2.0** (`route-closure`). Las
+aplicaciones creadas con laravel-setup hasta la 7.2.0 traen en `routes/web.php`
+un `Route::fallback(function () { abort_if(...); return view('app'); })`, y
+con `--strict` —la puerta de `larapack:ci`— nunca pasan. La 7.2.1 ya lo escribe
+bien para las nuevas; las que existen se corrigen así:
+
+```
+php artisan larapack:fix route-closure --dry-run
+php artisan larapack:fix route-closure
+php artisan larapack:verify --strict
+```
+
+Crea `app/Http/Controllers/SpaController.php` y `app/Http/Requests/SpaRequest.php`
+con el contenido de laravel-setup 7.2.1 (la decisión del 404 para `api/*` y JSON
+pasa a `SpaRequest::handle()`; el comportamiento no cambia), cambia el fallback
+por `Route::fallback(SpaController::class)` con su `use`, y la raíz
+`Route::get('/', fn () => view('app'))->name('app')` por
+`Route::view('/', 'app')->name('app')`. Lo demás del archivo —otras rutas,
+comentarios, el orden— no se toca.
+
+Reconoce **ese closure y nada más**, comparando token a token: sólo pueden
+variar el espacio en blanco, las comillas y el orden de los dos operandos del
+`||`. Un comentario dentro, un parámetro, otra vista, otro código de estado,
+`static` o un `->name()` encadenado ya son lógica del proyecto (el fallback de
+school-management, que recibe `HostLandings`, es uno). Y sólo en el
+`routes/web.php` de la raíz: en un paquete, SpaController no sería suyo. Si
+SpaController o SpaRequest ya existen y no son los de 7.2.1 (sin contar el
+espacio en blanco), no se sobrescriben y no se toca nada: `skipped` con la
+razón. Tampoco sin `App\` en el `autoload.psr-4` de la aplicación ni sin
+`App\Http\Controllers\Controller`. Los tres archivos van juntos: si Pint deja
+uno sin parsear, se devuelven los tres. **Cualquier otro closure de las rutas
+se salta** con el mensaje de `verify`, porque llevarlo a un controlador es
+decidir dónde va su lógica; por eso en un proyecto como expediente, con más
+closures propios, el comando corrige el fallback y sale con código distinto de
+cero. Las líneas de esos mensajes son las del archivo antes de corregirlo.
 
 `--path` acota a un subdirectorio de la raíz y `--package` (repetible) a un
 paquete local, por el nombre de su directorio en `packages/` o su nombre de
@@ -2674,7 +2710,7 @@ larapack:import                  Genera varios modelos desde un laraimport.
 larapack:validate                Valida un laraimport sin generar nada.
 larapack:schema                  Emite el esquema del laraimport.
 larapack:verify                  Busca desviaciones respecto al manifiesto y en los controladores.
-larapack:fix                     Corrige index-managed y resource-appends en lo generado antes de 9.0.
+larapack:fix                     Corrige index-managed y resource-appends, y el fallback de la SPA de laravel-setup <= 7.2.0.
 larapack:audit                   Comprueba la línea base del ecosistema.
 larapack:skill                   Instala las instrucciones para un agente; con --hooks, la guardia.
 larapack:guard                   Hook para agentes: comprueba el archivo recién editado.

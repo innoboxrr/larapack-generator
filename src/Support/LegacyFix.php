@@ -26,6 +26,14 @@ use RuntimeException;
  *    pidió el cliente>); }` se sustituye por el bloque de la plantilla —sólo
  *    lo que está en `$appendable`, sumado a getAppends()— y se declara
  *    `protected array $appendable = [];` si la clase no la tiene.
+ *  - route-closure: sólo el fallback de la SPA que escribía laravel-setup
+ *    <= 7.2.0 en routes/web.php (SpaFallback). Se crean SpaController y
+ *    SpaRequest como los escribe laravel-setup 7.2.1 si no existen —si
+ *    existen y son otros, `skipped`—, el fallback pasa a
+ *    `Route::fallback(SpaController::class)` y la raíz de laravel-setup a
+ *    Route::view(). Cualquier otro closure de las rutas es lógica del
+ *    proyecto: `skipped`, con el mensaje de `verify`. Los tres archivos van
+ *    juntos: si uno no se puede escribir, no se escribe ninguno.
  *
  * Se trabaja sobre tokens, no con expresiones regulares sobre el archivo: se
  * localiza la clase, el método y la sentencia exactos, y se reemplaza ese
@@ -62,6 +70,12 @@ use RuntimeException;
  */
 final class LegacyFix
 {
+    /**
+     * Lo que sabe corregir: lo de LegacySecurity y el `route-closure` de
+     * ControllerShape, en el caso que reconoce SpaFallback.
+     */
+    public const CHECKS = [...LegacySecurity::CHECKS, ControllerShape::ROUTE_CLOSURE];
+
     private const JSON_RESOURCE = 'illuminate\http\resources\json\jsonresource';
 
     /**
@@ -131,11 +145,20 @@ final class LegacyFix
     private const TRIVIA = [T_WHITESPACE, T_COMMENT, T_DOC_COMMENT];
 
     /**
-     * Ruta => código original, de lo que se va a escribir.
+     * Ruta => código original, de lo que se va a escribir; null si el archivo
+     * se crea.
      *
-     * @var array<string, string>
+     * @var array<string, string|null>
      */
     private array $originals = [];
+
+    /**
+     * Ruta => los archivos que se escriben con ella o no se escribe ninguno
+     * (el routes/web.php y los dos que crea route-closure).
+     *
+     * @var array<string, list<string>>
+     */
+    private array $groups = [];
 
     /**
      * Ruta => código arreglado.
@@ -242,7 +265,112 @@ final class LegacyFix
 
         $this->review($inspection['clean']);
 
+        if (isset($this->report[ControllerShape::ROUTE_CLOSURE])) {
+            $this->planRouteClosures();
+        }
+
         return $this->report;
+    }
+
+    // ROUTE-CLOSURE
+
+    /**
+     * Cada routes/*.php en alcance: el fallback de la SPA de laravel-setup se
+     * corrige y cualquier otro closure se salta con el mensaje de `verify`.
+     */
+    private function planRouteClosures(): void
+    {
+        $check = ControllerShape::ROUTE_CLOSURE;
+        $project = $this->security->project();
+
+        foreach ((new ControllerShape($this->root))->routeClosures() as $file => $closures) {
+            if (! $this->inScope($file)) {
+                continue;
+            }
+
+            if ($closures === []) {
+                $this->report[$check]['unchanged']++;
+
+                continue;
+            }
+
+            foreach ($closures as ['closure' => $closure, 'spa' => $spa]) {
+                if (! $spa) {
+                    $this->skip($check, $file, ControllerShape::routeClosureMessage($closure, false));
+
+                    continue;
+                }
+
+                try {
+                    $files = $this->planSpaFallback($file, count($closures));
+                } catch (RuntimeException $e) {
+                    $this->skip($check, $file, "Línea {$closure['line']}, el fallback de la SPA de laravel-setup 7.2.0: {$e->getMessage()}");
+
+                    continue;
+                }
+
+                foreach ($files as $path => [$original, $code]) {
+                    $this->originals[$path] = $original;
+                    $this->fixes[$path] = $code;
+                    $this->checkOf[$path] = $check;
+                    $this->groups[$path] = array_keys($files);
+                    $this->report[$check]['fixed'][] = ['file' => $project->relative($path)];
+                }
+            }
+        }
+    }
+
+    /**
+     * routes/web.php corregido y, si no existen, SpaController y SpaRequest:
+     * ruta => [original o null si se crea, código]. Antes de devolverlo se
+     * comprueba que parsea y que `route-closure` marca exactamente un closure
+     * menos, el fallback.
+     *
+     * @return array<string, array{0: string|null, 1: string}>
+     */
+    private function planSpaFallback(string $file, int $flagged): array
+    {
+        $project = $this->security->project();
+        // Como lo lee Composer: una ruta o una lista de rutas; vale la primera.
+        $psr4 = ProjectSources::composer($project->root())['autoload']['psr-4']['App\\'] ?? null;
+        $app = is_array($psr4) ? ($psr4[0] ?? null) : $psr4;
+
+        if (! is_string($app) || trim($app, '/\\') === '') {
+            throw new RuntimeException('el composer.json de la aplicación no mapea App\\ a un directorio en autoload.psr-4: no se sabe dónde crear SpaController y SpaRequest.');
+        }
+
+        $app = $project->root().'/'.trim(str_replace('\\', '/', $app), '/');
+
+        if ($project->locate(SpaFallback::BASE_CONTROLLER) === null) {
+            throw new RuntimeException('no existe '.SpaFallback::BASE_CONTROLLER.', de la que extiende SpaController.');
+        }
+
+        $files = [];
+
+        foreach ([SpaFallback::CONTROLLER => SpaFallback::CONTROLLER_CODE, SpaFallback::REQUEST => SpaFallback::REQUEST_CODE] as $class => $stub) {
+            $target = $app.'/'.str_replace('\\', '/', substr($class, strlen('App\\'))).'.php';
+            $existing = $project->locate($class) ?? (is_file($target) ? $target : null);
+
+            if ($existing === null) {
+                $files[$target] = [null, $stub];
+
+                continue;
+            }
+
+            if (! SpaFallback::same(Files::read($existing), $stub)) {
+                throw new RuntimeException("ya existe {$project->relative($existing)} y no es el de laravel-setup 7.2.1: no se sobrescribe. Compáralo con el suyo, o lleva el fallback a tu controlador a mano.");
+            }
+        }
+
+        $original = Files::read($file);
+        $code = SpaFallback::rewrite($original);
+        self::assertParses($code);
+
+        if (SpaFallback::fallback($code) !== null || count(ControllerShape::flaggedClosures($code)) !== $flagged - 1) {
+            throw new RuntimeException('después de corregirlo verify seguiría marcando lo mismo: la forma no es la que se esperaba.');
+        }
+
+        return [$file => [$original, $code], ...$files];
     }
 
     /**
@@ -291,7 +419,7 @@ final class LegacyFix
 
         foreach ($this->fixes as $file => $code) {
             $relative = $this->security->project()->relative($file);
-            $diffs[$relative] = UnifiedDiff::of($this->originals[$file], $code, $relative);
+            $diffs[$relative] = UnifiedDiff::of($this->originals[$file] ?? '', $code, $relative);
         }
 
         foreach ($report as $check => $entry) {
@@ -331,6 +459,10 @@ final class LegacyFix
         }
 
         foreach ($this->fixes as $file => $code) {
+            if (! is_dir(dirname($file))) {
+                mkdir(dirname($file), 0777, true);
+            }
+
             file_put_contents($file, $code);
         }
 
@@ -340,16 +472,30 @@ final class LegacyFix
             $formatted = Formatter::format(array_keys($this->fixes), new Manifest($this->root)) !== null;
 
             // Pint no rompe un archivo, pero lo escrito tiene que seguir
-            // parseando pase lo que pase: si no, se devuelve el original.
-            foreach ($this->fixes as $file => $code) {
+            // parseando pase lo que pase: si no, se devuelve el original, y
+            // con él los que se escribieron a la vez (uno creado se borra).
+            $broken = [];
+
+            foreach (array_keys($this->fixes) as $file) {
                 try {
                     self::assertParses(Files::read($file));
                 } catch (RuntimeException) {
-                    file_put_contents($file, $this->originals[$file]);
-                    $this->revert($file, 'Después de formatearlo no parseaba, y se devolvió el original.');
+                    $broken[$file] = 'Después de formatearlo no parseaba, y se devolvió el original.';
                 } catch (MakerException) {
-                    file_put_contents($file, $this->originals[$file]);
-                    $this->revert($file, 'Después de formatearlo no se podía leer, y se devolvió el original.');
+                    $broken[$file] = 'Después de formatearlo no se podía leer, y se devolvió el original.';
+                }
+            }
+
+            foreach ($broken as $file => $reason) {
+                foreach ($this->groups[$file] ?? [$file] as $member) {
+                    // Otro archivo roto del mismo grupo ya lo devolvió.
+                    if (! isset($this->fixes[$member])) {
+                        continue;
+                    }
+
+                    $original = $this->originals[$member] ?? null;
+                    $original === null ? unlink($member) : file_put_contents($member, $original);
+                    $this->revert($member, $reason);
                 }
             }
         }
