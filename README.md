@@ -1813,9 +1813,11 @@ precio es que GitHub no deja aprobar un PR propio: los PR del agente salen de
 una cuenta que no sea la del único dueño de código. `--no-enforce-admins` deja
 `false`, con aviso.
 
-`larapack:audit` avisa con `verify-job` si la CI de un paquete que usa
-LaraPack no corre `larapack:verify --strict`; uno en `packages/` de un
-repositorio cuya raíz ya lo corre no avisa.
+`larapack:audit` avisa con `verify-job` si la CI de un paquete que genera con
+LaraPack (tiene `.larapack/manifest.json` o `laraimport.json`) no corre
+`larapack:verify --strict`; uno en `packages/` de un repositorio cuya raíz ya
+lo corre no avisa, y uno que sólo lo tiene en `require-dev` para auditar,
+tampoco.
 
 ---
 

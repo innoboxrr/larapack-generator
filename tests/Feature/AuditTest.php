@@ -436,9 +436,9 @@ final class AuditTest extends TestCase
     }
 
     /**
-     * Un paquete que usa LaraPack y cuya CI no corre `verify --strict`: el
-     * contrato depende de que alguien se acuerde. A uno que no usa LaraPack
-     * no se le pide, y un comentario que lo nombra no cuenta.
+     * Un paquete que genera con LaraPack y cuya CI no corre `verify --strict`:
+     * el contrato depende de que alguien se acuerde. A uno que no genera con
+     * LaraPack no se le pide, y un comentario que lo nombra no cuenta.
      */
     public function test_avisa_si_la_ci_no_corre_verify_strict(): void
     {
@@ -451,6 +451,7 @@ final class AuditTest extends TestCase
             'require-dev' => ['innoboxrr/larapack-generator' => '^9.0'],
         ];
         $package = $this->package('sin-puerta', $composer);
+        file_put_contents("{$package}/laraimport.json", '{"models": []}');
 
         $this->withTests($package);
         $this->withWorkflows($package, ['tests.yml', 'release.yml']);
@@ -484,6 +485,40 @@ final class AuditTest extends TestCase
     }
 
     /**
+     * LaraPack en require-dev sólo para `larapack:audit`, sin manifiesto ni
+     * laraimport: no genera nada, y `verify --strict` fallaría con
+     * `empty-manifest`. Pedirle el job era pedirle una puerta siempre en rojo;
+     * así recibían el aviso 24 paquetes del ecosistema.
+     */
+    public function test_no_pide_verify_a_un_paquete_que_no_genera_con_larapack(): void
+    {
+        $package = $this->package('solo-audita', [
+            'name' => 'innoboxrr/solo-audita',
+            'description' => 'x',
+            'license' => 'MIT',
+            'autoload' => ['psr-4' => ['X\\' => 'src/']],
+            'require' => ['php' => '^8.3'],
+            'require-dev' => ['innoboxrr/larapack-generator' => '^9.0'],
+        ]);
+        $this->withTests($package);
+        $this->withWorkflows($package, ['tests.yml', 'release.yml']);
+
+        $this->assertNotHasCheck('verify-job', $this->audit($package));
+
+        // Lo que verify comprobaría de verdad: lo que se generó o lo que se
+        // declara para generar. Con cualquiera de los dos, sí.
+        file_put_contents("{$package}/laraimport.json", '{"models": []}');
+
+        $this->assertHasCheck('verify-job', $this->audit($package));
+
+        unlink("{$package}/laraimport.json");
+        mkdir("{$package}/.larapack");
+        file_put_contents("{$package}/.larapack/manifest.json", '{}');
+
+        $this->assertHasCheck('verify-job', $this->audit($package));
+    }
+
+    /**
      * Un paquete en `packages/` de un monorepo no tiene CI propia que valga:
      * si la raíz corre verify --strict (que recorre packages/*), no se avisa;
      * si no, el remedio es el job en la raíz, no uno por paquete.
@@ -502,6 +537,7 @@ final class AuditTest extends TestCase
         mkdir("{$app}/.git", 0777, true);
         mkdir("{$app}/packages", 0777, true);
         $package = $this->package('escuela/packages/finanzas', $composer);
+        file_put_contents("{$package}/laraimport.json", '{"models": []}');
         $this->withTests($package);
 
         $warning = array_values(array_filter($this->audit($package)['findings'], fn (array $f): bool => $f['check'] === 'verify-job'));

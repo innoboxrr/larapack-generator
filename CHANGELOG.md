@@ -60,6 +60,15 @@ garantiza; anotarlo línea a línea sería callarlo.
 clases que sólo existen en tiempo de ejecución —lo que el generador escribe en
 un proyecto temporal y luego se carga—, que habría que callar una a una.
 
+### `larapack:audit` ya no pide `verify --strict` a quien no genera
+
+El aviso `verify-job` se daba a todo paquete que tuviera LaraPack en
+`composer.json`, y muchos lo tienen en `require-dev` sólo para correr
+`larapack:audit`: no generan nada, y su `verify --strict` fallaría con
+`empty-manifest`. Les pedía una puerta que estaría siempre en rojo (24 paquetes
+del ecosistema). Ahora sólo se pide a quien genera con LaraPack: tiene
+`.larapack/manifest.json` o `laraimport.json`. Está en `AuditTest`.
+
 ### Al actualizar
 
 - **Un proyecto sin `autoload.psr-4` hacia `src/` (o `app/`), o con un
@@ -74,6 +83,8 @@ un proyecto temporal y luego se carga—, que habría que callar una a una.
   `EventsTool`, `RequestsTool` y `TestTool` devuelve `bool`, como las demás, y
   una subclase que lo declare sin tipo tampoco. Hay que añadir los mismos tipos
   a las firmas que sobrescribes.
+- Si la CI de un paquete corre `larapack:audit --strict` y tenía el job de
+  verify sólo por el aviso, sin generar nada, ese job puede irse.
 
 ## 9.1.0
 

@@ -182,18 +182,22 @@ final class Ecosystem
             ...$findings,
             ...$this->auditTests($directory, $name),
             ...$this->auditWorkflows($directory, $name, 'composer'),
-            ...$this->auditVerifyJob($directory, $name, array_key_exists('innoboxrr/larapack-generator', $all)),
+            ...$this->auditVerifyJob($directory, $name),
         ];
     }
 
     /**
-     * Un paquete que usa LaraPack y cuya CI no corre `larapack:verify
+     * Un paquete que genera con LaraPack y cuya CI no corre `larapack:verify
      * --strict`: el contrato depende de que alguien se acuerde de correrlo.
      *
-     * Usa LaraPack si lo pide en composer.json o tiene manifiesto; a uno que
-     * no lo usa no se le exige. Se buscan las líneas de los workflows, sin
-     * comentarios, que llamen a verify con --strict; el nombre del job no se
-     * mira, porque cualquier job que lo corra hace de puerta.
+     * Genera con LaraPack si tiene manifiesto (`.larapack/manifest.json`) o
+     * laraimport (`laraimport.json`). Pedirlo en composer.json no basta: muchos
+     * paquetes del ecosistema lo tienen en require-dev sólo para correr
+     * `larapack:audit`, no generan nada, y su `verify --strict` fallaría con
+     * `empty-manifest`; pedirles el job era pedirles una puerta siempre en
+     * rojo. Se buscan las líneas de los workflows, sin comentarios, que llamen
+     * a verify con --strict; el nombre del job no se mira, porque cualquier job
+     * que lo corra hace de puerta.
      *
      * Un paquete dentro de `packages/` de un repositorio (un monorepo como
      * school-management) no tiene CI propia que valga: GitHub sólo lee los
@@ -204,9 +208,9 @@ final class Ecosystem
      *
      * @return list<AuditFinding>
      */
-    private function auditVerifyJob(string $directory, string $name, bool $requiresLarapack): array
+    private function auditVerifyJob(string $directory, string $name): array
     {
-        if (! $requiresLarapack && ! is_file("{$directory}/.larapack/manifest.json")) {
+        if (! is_file("{$directory}/.larapack/manifest.json") && ! is_file("{$directory}/laraimport.json")) {
             return [];
         }
 
