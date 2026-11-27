@@ -2,6 +2,7 @@
 
 namespace Innoboxrr\LarapackGenerator\Tests;
 
+use Innoboxrr\LarapackGenerator\Support\BranchProtection;
 use Innoboxrr\LarapackGenerator\Support\Declaration;
 use Innoboxrr\LarapackGenerator\Support\Generation;
 use Innoboxrr\LarapackGenerator\Support\MigrationTimestamp;
@@ -19,6 +20,7 @@ abstract class TestCase extends BaseTestCase
     protected function tearDown(): void
     {
         ProjectRoot::set(null);
+        BranchProtection::reset();
         Generation::reset();
         Declaration::reset();
         MigrationTimestamp::reset();

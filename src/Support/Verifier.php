@@ -250,10 +250,8 @@ final class Verifier
      */
     private function checkComponentConsistency(array $models): array
     {
-        if (count($models) < 2) {
-            return [];
-        }
-
+        // Con un solo modelo no hay con quién comparar: ningún componente lo
+        // tienen «todas las demás», y no sale nada.
         $components = [];
 
         foreach ($models as $model) {
@@ -261,7 +259,7 @@ final class Verifier
             // no es una decisión, no deriva. Contarlas avisaba en cada paquete
             // con un solo modelo con metas. Con los endpoints pasa lo mismo:
             // cada modelo declara los suyos, y uno sin ninguno no está roto.
-            $components[$model] = array_values(array_diff($this->componentsOf($model), ['ModelMetas', 'MigrationMetas', 'Endpoint']));
+            $components[$model] = array_diff($this->componentsOf($model), ['ModelMetas', 'MigrationMetas', 'Endpoint']);
         }
 
         $findings = [];
@@ -423,10 +421,10 @@ final class Verifier
         $findings = [];
 
         $controller = $this->fileFromStub($model, 'Controller/ControllerTemplate.txt');
-        $controllerContent = $controller === null ? '' : (string) $this->contentsOf($controller);
+        $controllerContent = $controller === null ? '' : ($this->contentsOf($controller) ?? '');
 
         $routes = $this->fileFromStub($model, 'Route/RouteTemplate.txt');
-        $routesContent = $routes === null ? '' : (string) $this->contentsOf($routes);
+        $routesContent = $routes === null ? '' : ($this->contentsOf($routes) ?? '');
 
         $policy = $this->fileFromStub($model, 'Policy/PolicyTemplate.txt');
         $policyContent = $policy === null ? null : $this->contentsOf($policy);
@@ -542,7 +540,7 @@ final class Verifier
         if ($routes !== null && ($content = $this->contentsOf($routes)) !== null) {
             $known = [...array_map(fn (string $action): string => Actions::routeName($action), Actions::ALL), ...array_column($endpoints, 'route')];
 
-            preg_match_all("/->name\\(\\s*['\"]([^'\"]+)['\"]\\s*\\)/", $content, $matches);
+            $named = preg_match_all("/->name\\(\\s*['\"]([^'\"]+)['\"]\\s*\\)/", $content, $matches);
 
             foreach (array_diff($matches[1], $known) as $route) {
                 $findings[] = $this->finding(self::ERROR, 'route-not-declared', $model, $routes,
@@ -553,7 +551,7 @@ final class Verifier
             // arriba: se cuentan las que hay contra las que tienen nombre.
             $registered = preg_match_all('/\bRoute::(?:get|post|put|patch|delete|options|any|match)\s*\(/', $content);
 
-            if ($registered > count($matches[1])) {
+            if ($registered > $named) {
                 $findings[] = $this->finding(self::ERROR, 'route-not-declared', $model, $routes,
                     'Hay rutas sin nombre. Las generadas lo llevan todas; ésa la escribió alguien a mano: declara el endpoint en el laraimport (endpoints, o controllers si no tiene modelo) y regenera.');
             }
@@ -673,14 +671,16 @@ final class Verifier
                 continue;
             }
 
-            $content = (string) file_get_contents($file);
+            $content = Files::read($file);
             $missing = [];
 
-            foreach (self::ENDPOINT_TESTS as $suffix => $action) {
-                if ($action !== null && ! in_array($action, $declaration['actions'], true)) {
-                    continue;
-                }
+            // Los de siempre, y los de cada acción sólo si se declara.
+            $expected = array_keys(array_filter(
+                self::ENDPOINT_TESTS,
+                fn (?string $action): bool => $action === null || in_array($action, $declaration['actions'], true)
+            ));
 
+            foreach ($expected as $suffix) {
                 if (! preg_match('/function\s+test_\w*'.$suffix.'\s*\(/', $content)) {
                     $missing[] = 'test_…_'.$suffix;
                 }
@@ -747,7 +747,7 @@ final class Verifier
                 }
 
                 foreach ($this->filesFromStub($model, 'ModelView/model.js') as $contract) {
-                    if (preg_match("/id:\\s*['\"]{$quoted}['\"]/", (string) $this->contentsOf($contract))) {
+                    if (preg_match("/id:\\s*['\"]{$quoted}['\"]/", $this->contentsOf($contract) ?? '')) {
                         $findings[] = $this->finding(self::ERROR, 'secret-exposed', $model, $contract,
                             "'{$name}' es secreta y es columna de la tabla.");
                     }
@@ -770,10 +770,10 @@ final class Verifier
         $traces = [];
 
         $routes = $this->fileFromStub($model, 'Route/RouteTemplate.txt');
-        $routesContent = $routes === null ? '' : (string) $this->contentsOf($routes);
+        $routesContent = $routes === null ? '' : ($this->contentsOf($routes) ?? '');
 
         $controller = $this->fileFromStub($model, 'Controller/ControllerTemplate.txt');
-        $controllerContent = $controller === null ? '' : (string) $this->contentsOf($controller);
+        $controllerContent = $controller === null ? '' : ($this->contentsOf($controller) ?? '');
 
         $app = $this->appDirectory($model);
 
@@ -863,7 +863,7 @@ final class Verifier
     {
         $absolute = $this->manifest->absolute($relative);
 
-        return is_file($absolute) ? (string) file_get_contents($absolute) : null;
+        return is_file($absolute) ? Files::read($absolute) : null;
     }
 
     /**
@@ -889,7 +889,7 @@ final class Verifier
             return false;
         }
 
-        return (bool) preg_match("/['\"]".preg_quote($value, '/')."['\"]/", $matches[1]);
+        return preg_match("/['\"]".preg_quote($value, '/')."['\"]/", $matches[1]) === 1;
     }
 
     /**

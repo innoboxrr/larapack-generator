@@ -151,7 +151,7 @@ final class ControllerShape
         $findings = [];
         $requests = [];
         $this->declared = [];
-        $lockReadable = $this->loadLock($findings);
+        $this->loadLock($findings);
         $files = $this->project->files('/Http/Controllers/');
 
         // Qué controladores usa cada trait: decide si un trait de
@@ -226,9 +226,8 @@ final class ControllerShape
 
         $this->checkRouteClosures($findings);
 
-        if ($lockReadable) {
-            $this->checkStale($findings);
-        }
+        // Con un candado ilegible no hay nada aprobado, y nada que sobre.
+        $this->checkStale($findings);
 
         return $findings;
     }
@@ -238,20 +237,15 @@ final class ControllerShape
      * al comportamiento sin candado sería aprobar por un archivo roto.
      *
      * @param  list<Finding>  $findings
-     * @return bool si se pudo leer (o no existe)
      */
-    private function loadLock(array &$findings): bool
+    private function loadLock(array &$findings): void
     {
         try {
             $this->approved = HandRolledLock::read($this->root);
-
-            return true;
         } catch (RuntimeException $e) {
             $this->approved = [];
             $findings[] = $this->finding(Verifier::ERROR, self::HAND_ROLLED_UNAPPROVED, HandRolledLock::PATH,
                 self::sanitise($e->getMessage()).' Mientras no se corrija, ninguna excepción #[HandRolled] cuenta como aprobada. Lo mantiene el dueño del proyecto con larapack:hand-rolled.');
-
-            return false;
         }
     }
 
@@ -338,7 +332,7 @@ final class ControllerShape
             && $statement[0][1] === '$this'
             && $statement[1][0] === T_OBJECT_OPERATOR
             && $statement[2][0] === T_STRING
-            && $statement[3][0] === '='
+            && PhpOutline::is($statement[3], '=')
         ) {
             return ! $this->callsSomething(array_slice($statement, 4));
         }
@@ -348,7 +342,7 @@ final class ControllerShape
             && strtolower($statement[0][1]) === 'parent'
             && $statement[1][0] === T_DOUBLE_COLON
             && strtolower($statement[2][1]) === '__construct'
-            && $statement[3][0] === '('
+            && PhpOutline::is($statement[3], '(')
         ) {
             return $this->onlyCalls(array_slice($statement, 3), []);
         }
@@ -358,7 +352,7 @@ final class ControllerShape
             && $statement[0][1] === '$this'
             && $statement[1][0] === T_OBJECT_OPERATOR
             && strtolower($statement[2][1]) === 'middleware'
-            && $statement[3][0] === '('
+            && PhpOutline::is($statement[3], '(')
         ) {
             return $this->onlyCalls(array_slice($statement, 3), ['only', 'except']);
         }
@@ -381,14 +375,14 @@ final class ControllerShape
         for ($index = 0; $index < $count; $index++) {
             $token = $tokens[$index];
 
-            if (in_array($token[0], ['(', '[', '{'], true)) {
+            if (PhpOutline::is($token, '(', '[', '{')) {
                 $depth++;
-            } elseif (in_array($token[0], [')', ']', '}'], true)) {
+            } elseif (PhpOutline::is($token, ')', ']', '}')) {
                 $depth--;
             } elseif ($depth === 0) {
                 if ($token[0] !== T_OBJECT_OPERATOR
                     || ! in_array(strtolower($tokens[$index + 1][1] ?? ''), $chain, true)
-                    || ($tokens[$index + 2][0] ?? null) !== '('
+                    || ! PhpOutline::is($tokens[$index + 2] ?? null, '(')
                 ) {
                     return false;
                 }
@@ -409,7 +403,7 @@ final class ControllerShape
     private function callsSomething(array $tokens): bool
     {
         foreach ($tokens as $index => $token) {
-            if ($token[0] !== '(' || $index === 0) {
+            if (! PhpOutline::is($token, '(') || $index === 0) {
                 continue;
             }
 
@@ -434,37 +428,92 @@ final class ControllerShape
      * aviso y no error porque es el patrón de la documentación de Laravel y
      * aparece en proyectos que nunca lo usaron como atajo; con --strict falla.
      *
-     * No se cuenta el que sólo pinta una vista —`return view('welcome');`, el
-     * routes/web.php con el que nace toda aplicación—: equivale a
-     * Route::view() y no tiene dónde esconder lógica. Tampoco los closures de
-     * group(), que agrupan rutas y no son una acción.
+     * Cuando es el fallback de la SPA que escribía laravel-setup <= 7.2.0
+     * (SpaFallback), el mensaje dice que `larapack:fix` lo corrige.
      *
      * @param  list<Finding>  $findings
      */
     private function checkRouteClosures(array &$findings): void
     {
-        foreach ($this->routeFiles() as $file) {
-            foreach (PhpOutline::ofFile($file)->closuresPassedTo(self::ROUTE_METHODS) as $closure) {
-                if ($this->onlyRendersAView($closure)) {
-                    continue;
-                }
-
-                $findings[] = $this->finding(Verifier::WARNING, self::ROUTE_CLOSURE, $this->project->relative($file),
-                    "La ruta de la línea {$closure['line']} lleva su acción en un closure ({$closure['call']}()): es una acción sin controlador, y nada de lo que verify comprueba en los controladores la alcanza. "
-                    .'Llévala a un controlador cuya acción sea `return $request->handle();` con un FormRequest propio (o usa Route::view() si sólo pinta una vista).');
+        foreach ($this->routeClosures() as $file => $closures) {
+            foreach ($closures as ['closure' => $closure, 'spa' => $spa]) {
+                $findings[] = $this->finding(Verifier::WARNING, self::ROUTE_CLOSURE, $this->project->relative($file), self::routeClosureMessage($closure, $spa));
             }
         }
     }
 
     /**
+     * Los closures que `route-closure` marca en cada routes/*.php del proyecto
+     * y de sus paquetes locales, por archivo; también los archivos sin
+     * ninguno, con la lista vacía. `spa` dice si es el fallback de la SPA de
+     * laravel-setup <= 7.2.0, que sólo se reconoce en el routes/web.php de la
+     * raíz: es donde lo escribía, y donde SpaController es de la aplicación.
+     *
+     * @return array<string, list<array{closure: ClosureOutline, spa: bool}>>
+     */
+    public function routeClosures(): array
+    {
+        $result = [];
+        $web = $this->project->root().'/routes/web.php';
+
+        foreach ($this->routeFiles() as $file) {
+            $code = (string) file_get_contents($file);
+            $spa = $file === $web ? SpaFallback::fallback($code) : null;
+            $result[$file] = array_map(
+                fn (array $closure): array => [
+                    'closure' => $closure,
+                    'spa' => $spa !== null && $closure['call'] === 'fallback' && $closure['line'] === $spa['line'],
+                ],
+                self::flaggedClosures($code)
+            );
+        }
+
+        return $result;
+    }
+
+    /**
+     * Los closures con cuerpo que se pasan a una ruta en este código. No se
+     * cuenta el que sólo pinta una vista —`return view('welcome');`, el
+     * routes/web.php con el que nace toda aplicación—: equivale a
+     * Route::view() y no tiene dónde esconder lógica. Tampoco los closures de
+     * group(), que agrupan rutas y no son una acción.
+     *
+     * @return list<ClosureOutline>
+     */
+    public static function flaggedClosures(string $code): array
+    {
+        return array_values(array_filter(
+            PhpOutline::ofCode($code)->closuresPassedTo(self::ROUTE_METHODS),
+            fn (array $closure): bool => ! self::onlyRendersAView($closure)
+        ));
+    }
+
+    /**
+     * El mensaje de `route-closure`, que `larapack:fix route-closure` repite
+     * como razón de lo que no corrige.
+     *
      * @param  ClosureOutline  $closure
      */
-    private function onlyRendersAView(array $closure): bool
+    public static function routeClosureMessage(array $closure, bool $spa): string
+    {
+        $message = "La ruta de la línea {$closure['line']} lleva su acción en un closure ({$closure['call']}()): es una acción sin controlador, y nada de lo que verify comprueba en los controladores la alcanza. ";
+
+        if ($spa) {
+            return $message.'Es el fallback de la SPA que escribía laravel-setup hasta la 7.2.0: larapack:fix lo corrige (`larapack:fix route-closure` lo lleva a SpaController y SpaRequest, como laravel-setup 7.2.1).';
+        }
+
+        return $message.'Llévala a un controlador cuya acción sea `return $request->handle();` con un FormRequest propio (o usa Route::view() si sólo pinta una vista).';
+    }
+
+    /**
+     * @param  ClosureOutline  $closure
+     */
+    private static function onlyRendersAView(array $closure): bool
     {
         $body = $closure['body'];
 
         if (! $closure['arrow']) {
-            if (($body[0][0] ?? null) !== T_RETURN || ($body[count($body) - 1][0] ?? null) !== ';') {
+            if (($body[0][0] ?? null) !== T_RETURN || ! PhpOutline::is($body[count($body) - 1] ?? null, ';')) {
                 return false;
             }
 
@@ -474,9 +523,9 @@ final class ControllerShape
         return $closure['params'] === []
             && count($body) === 4
             && $body[0][0] === T_STRING && strtolower($body[0][1]) === 'view'
-            && $body[1][0] === '('
+            && PhpOutline::is($body[1], '(')
             && $body[2][0] === T_CONSTANT_ENCAPSED_STRING
-            && $body[3][0] === ')';
+            && PhpOutline::is($body[3], ')');
     }
 
     /**
@@ -486,13 +535,11 @@ final class ControllerShape
     {
         $files = [];
 
+        // Un directorio que no existe no tiene archivos.
         foreach ($this->project->roots() as $root) {
-            if (is_dir($root.'/routes')) {
-                $files = [...$files, ...$this->project->phpFiles($root.'/routes')];
-            }
+            $files = [...$files, ...$this->project->phpFiles($root.'/routes')];
         }
 
-        $files = array_values($files);
         sort($files);
 
         return $files;
@@ -578,16 +625,16 @@ final class ControllerShape
             || $body[1][0] !== T_VARIABLE
             || $body[2][0] !== T_OBJECT_OPERATOR
             || strtolower($body[3][1]) !== 'handle'
-            || $body[4][0] !== '('
-            || $body[$count - 2][0] !== ')'
-            || $body[$count - 1][0] !== ';'
+            || ! PhpOutline::is($body[4], '(')
+            || ! PhpOutline::is($body[$count - 2], ')')
+            || ! PhpOutline::is($body[$count - 1], ';')
             || $body[1][1] === '$this'
         ) {
             return null;
         }
 
         foreach (PhpOutline::splitTopLevel(array_slice($body, 5, $count - 7)) as $argument) {
-            $named = count($argument) === 3 && $argument[0][0] === T_STRING && $argument[1][0] === ':';
+            $named = count($argument) === 3 && $argument[0][0] === T_STRING && PhpOutline::is($argument[1], ':');
             $value = $named ? [$argument[2]] : $argument;
 
             if (count($value) !== 1 || $value[0][0] !== T_VARIABLE) {
@@ -616,12 +663,12 @@ final class ControllerShape
 
         $body = $method['body'] ?? [];
 
-        if (($body[0][0] ?? null) === T_RETURN && strtolower($body[3][1] ?? '') === 'handle' && ($body[4][0] ?? null) === '(') {
+        if (($body[0][0] ?? null) === T_RETURN && strtolower($body[3][1] ?? '') === 'handle' && PhpOutline::is($body[4] ?? null, '(')) {
             $reasons[] = 'pasa a handle() algo que no es una variable: esa expresión es trabajo hecho en el controlador';
         }
 
         foreach ($body as $index => $token) {
-            if ($token[0] === T_STRING && strtolower($token[1]) === 'validate' && ($body[$index + 1][0] ?? null) === '(') {
+            if ($token[0] === T_STRING && strtolower($token[1]) === 'validate' && PhpOutline::is($body[$index + 1] ?? null, '(')) {
                 $reasons[] = 'valida en el controlador con validate()';
 
                 break;

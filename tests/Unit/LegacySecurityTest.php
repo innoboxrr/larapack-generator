@@ -174,6 +174,28 @@ final class LegacySecurityTest extends TestCase
         $this->assertSame([LegacySecurity::INDEX_MANAGED], $this->checksOf($file));
     }
 
+    public function test_un_managed_sin_valor_al_final_del_archivo_no_fuerza(): void
+    {
+        $file = $this->put('Http/Requests/Post/IndexRequest.php', "<?php\n\nnamespace App\\Http\\Requests\\Post;\n\nuse Innoboxrr\\SearchSurge\\Search\\Builder;\n\n"
+            ."class IndexRequest extends FormRequest\n{\n    public function handle() { return new Builder(); }\n\n"
+            ."    protected function prepareForValidation()\n    {\n        \$this->merge(['managed' =>");
+
+        $this->assertSame([LegacySecurity::INDEX_MANAGED], $this->checksOf($file));
+    }
+
+    public function test_una_herencia_en_circulo_no_se_recorre_sin_fin(): void
+    {
+        // No carga en PHP, pero se lee: la vuelta no dice nada del padre,
+        // y recorrerla otra vez no acabaría nunca.
+        $this->put('Http/Requests/LoopRequest.php', "<?php\n\nnamespace App\\Http\\Requests;\n\n"
+            ."class LoopRequest extends \\App\\Http\\Requests\\Post\\IndexRequest\n{\n}\n");
+        $file = $this->request(null, '\\App\\Http\\Requests\\LoopRequest');
+
+        $this->assertSame([], $this->checksOf($file));
+        // Como lo heredado de fuera: no se sabe, y no se marca.
+        $this->assertSame([$file], $this->inspect()['clean'][LegacySecurity::INDEX_MANAGED]);
+    }
+
     public function test_heredar_el_prepare_de_una_request_base(): void
     {
         $this->put('Http/Requests/BaseRequest.php', "<?php\n\nnamespace App\\Http\\Requests;\n\n"

@@ -217,6 +217,17 @@ final class PhpOutlineEdgeCasesTest extends TestCase
         $this->assertSame('a\nb', PhpOutline::stringArgument($args("'a\\nb'"), 0, 'reason'));
         $this->assertSame("a\tb", PhpOutline::stringArgument($args('"a\\tb"'), 0, 'reason'));
         $this->assertNull(PhpOutline::stringArgument(null, 0, 'reason'));
+        // Lo que no es una cadena unida con `.` no es literal, aunque sus
+        // piezas lo sean; y un hueco entre comas no es una cadena vacía.
+        $this->assertNull(PhpOutline::stringArgument($args("'a' + 'b'"), 0, 'reason'));
+        $this->assertNull(PhpOutline::stringArgument($args("'a', , 'b'"), 1, 'reason'));
+    }
+
+    public function test_namespace_relativo_en_un_tipo(): void
+    {
+        $class = $this->only("<?php\n\nnamespace App\\Http;\n\nclass C\n{\n    public function f(namespace\\Req \$r, namespace\\Sub\\Other \$o) {}\n}\n");
+
+        $this->assertSame(['App\\Http\\Req', 'App\\Http\\Sub\\Other'], array_values($this->types($class['methods'][0])));
     }
 
     // CLOSURES
@@ -238,6 +249,13 @@ final class PhpOutlineEdgeCasesTest extends TestCase
         $this->assertSame(['[', '$request', '->', 'all', '(', ')', ']'], array_column($closures[0]['body'], 1));
         $this->assertSame([], $closures[1]['params']);
         $this->assertSame(['int', '$id'], array_column($closures[2]['params'], 1));
+    }
+
+    public function test_la_linea_de_un_closure_es_la_de_su_palabra_clave(): void
+    {
+        $closures = PhpOutline::ofCode("<?php\n\nRoute::get('/e', function\n    () { return 1; });\nRoute::get('/f', fn\n    () => 1);\n")->closuresPassedTo(['get']);
+
+        $this->assertSame([3, 5], array_column($closures, 'line'));
     }
 
     public function test_un_closure_cortado_sigue_siendo_un_closure(): void

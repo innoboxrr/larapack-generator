@@ -24,7 +24,7 @@
 #    8. php artisan test: todos los tests generados, incluidos los de
 #       autorización de 9.1, ninguno saltado
 #    9. larapack:verify --strict --format=json
-#   10. larapack:ci --dry-run
+#   10. larapack:ci --dry-run y --check
 #   11. la guardia de los hooks, con el artisan y el vendor/ de la aplicación
 #
 # Si un paso falla, el script termina con un mensaje que nombra el paquete
@@ -408,6 +408,16 @@ step "larapack:verify --strict --format=json" \
 ci_dry_run() {
     (cd "$APP" && php artisan --no-interaction larapack:ci --dry-run)
     [ ! -e "$APP/.github/workflows/larapack.yml" ] || { echo "--dry-run escribió .github/workflows/larapack.yml"; return 1; }
+    [ ! -e "$APP/.github/rulesets/larapack-verify.json" ] || { echo "--dry-run escribió .github/rulesets/larapack-verify.json"; return 1; }
+
+    # --check bajo Artisan: sólo lee, y sale con 0, 1 o 2 según lo que sepa
+    # (aquí, sin remoto, lo normal es 2: «no se pudo saber»). Otro código es
+    # que reventó.
+    local code=0
+    (cd "$APP" && php artisan --no-interaction larapack:ci --check --format=json) || code=$?
+    [ "$code" -le 2 ] || { echo "larapack:ci --check salió con $code"; return 1; }
+    [ ! -e "$APP/.github/workflows/larapack.yml" ] && [ ! -e "$APP/.github/rulesets/larapack-verify.json" ] \
+        || { echo "larapack:ci --check escribió en .github/"; return 1; }
 }
 step "larapack:ci --dry-run" "innoboxrr/larapack-generator (larapack:ci)" ci_dry_run
 

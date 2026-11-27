@@ -427,6 +427,38 @@ JS);
         $this->assertSame(self::index('Post'), $this->project->read('app/Http/Requests/Post/IndexRequest.php'));
     }
 
+    public function test_lo_que_se_revisa_tambien_se_acota_al_paquete(): void
+    {
+        $this->libraryPackage();
+        $this->write('app/Http/Requests/Post/IndexRequest.php', self::index('Post'));
+        $this->write('packages/library/src/Http/Requests/Book/IndexRequest.php', self::index('Book', 'Acme\Library'));
+        $this->write('app/Http/Resources/Models/PostResource.php', self::resource('Post'));
+        $this->write('packages/library/src/Http/Resources/Models/BookResource.php', self::resource('Book', 'Acme\Library'));
+        $this->write('app/Models/Post.php', self::model('Post'));
+        $this->write('packages/library/src/Models/Book.php', self::model('Book', '', 'Acme\Library'));
+        // El front que pide appends puede estar en la aplicación aunque el
+        // Resource sea del paquete: se lee también la raíz.
+        $this->write('resources/js/app.js', "get(route('api.library.book.index'), { params: { appends: ['title_case'] } })\n");
+
+        // Lo de la aplicación ya arreglado: limpio, y fuera de lo que se pide.
+        $this->fix(['index-managed', 'resource-appends'], ['--package' => ['app']]);
+
+        [, $report] = $this->fix(['index-managed', 'resource-appends'], ['--package' => ['library'], '--dry-run' => true]);
+
+        // Sólo el IndexRequest del paquete: ni el limpio de la aplicación ni
+        // el Resource que se arregla en la misma corrida.
+        $this->assertSame(
+            ['packages/library/src/Http/Requests/Book/IndexRequest.php'],
+            array_column($report['checks']['index-managed']['managed_filter_unresolved'], 'file')
+        );
+        $this->assertSame([], $report['checks']['index-managed']['admin_path_missing']);
+        $this->assertSame([[
+            'file' => 'packages/library/src/Http/Resources/Models/BookResource.php',
+            'model' => 'Acme\Library\Models\Book',
+            'accessors' => [['name' => 'title_case', 'exists' => false, 'sources' => ['resources/js/app.js:1']]],
+        ]], $report['checks']['resource-appends']['appendable_proposals']['resources']);
+    }
+
     public function test_un_paquete_que_no_existe_falla_con_un_error_claro(): void
     {
         $this->libraryPackage();

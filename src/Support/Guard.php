@@ -225,6 +225,201 @@ final class Guard
     }
 
     /**
+     * Las órdenes de git de la orden de Bash que se saltan los hooks de git:
+     * `commit` o `merge` con `--no-verify` (o `-n` en `commit`), `push
+     * --no-verify`, y lo que cambia `core.hooksPath` —`git config` o
+     * `git -c core.hooksPath=…`—, que los desactiva todos de una vez.
+     *
+     * El hook de git es la capa que no depende del agente (GitHooks), y la
+     * única forma de quitarla sin tocar un archivo es una de éstas. Se leen
+     * como la aprobación de una excepción: por la shell, sin ejecutar nada, y
+     * también dentro de `bash -c`, `eval` o un heredoc que recibe una shell.
+     * Leer la configuración (`git config --get core.hooksPath`) no la cambia
+     * y no cuenta.
+     *
+     * @param  array<string, mixed>  $payload
+     * @return list<string> cada orden que se salta los hooks, en corto
+     */
+    public static function bypassesGitHooks(array $payload): array
+    {
+        $command = self::bashCommand($payload);
+
+        if ($command === null) {
+            return [];
+        }
+
+        $locks = [];
+        $bypasses = [];
+        self::shellScan($command, 0, $locks, $bypasses);
+
+        return array_values(array_unique($bypasses));
+    }
+
+    /**
+     * Si una orden de git se salta los hooks de git, cómo se dice en corto;
+     * null si no.
+     *
+     * Git admite abreviar una opción larga mientras no sea ambigua:
+     * `--no-veri` es `--no-verify` (`--no-ve` no, que también puede ser
+     * `--no-verbose`). En `commit`, `-n` puede ir en un grupo de opciones
+     * cortas (`-anm "…"`), salvo que vaya detrás de una que toma valor
+     * (`-mn` es el mensaje «n»). Los subcomandos de git distinguen
+     * mayúsculas (`git COMMIT` no existe); el programa, no en Windows ni en
+     * macOS (`GIT.EXE`).
+     *
+     * @param  list<string>  $words
+     */
+    private static function gitBypass(array $words): ?string
+    {
+        $index = 0;
+        $environment = [];
+
+        while (isset($words[$index]) && (preg_match('/^[A-Za-z_][A-Za-z0-9_]*=/', $words[$index]) === 1 || in_array($words[$index], self::WRAPPERS, true))) {
+            if (str_contains($words[$index], '=')) {
+                $environment[] = $words[$index];
+            }
+
+            $index++;
+        }
+
+        if (! in_array(strtolower(basename(str_replace('\\', '/', $words[$index] ?? ''))), ['git', 'git.exe'], true)) {
+            return null;
+        }
+
+        // Git también lee configuración del entorno: `GIT_CONFIG_KEY_0=
+        // core.hooksPath` o `GIT_CONFIG_PARAMETERS="'core.hooksPath=…'"`
+        // valen lo mismo que `-c core.hooksPath=…`.
+        foreach ($environment as $assignment) {
+            [$variable, $value] = explode('=', $assignment, 2);
+
+            if ((preg_match('/^GIT_CONFIG_KEY_\d+$/', $variable) === 1 && self::namesHooksPath(trim($value, '\'"')))
+                || ($variable === 'GIT_CONFIG_PARAMETERS' && stripos($value, 'core.hookspath') !== false)
+            ) {
+                return 'GIT_CONFIG_* core.hooksPath';
+            }
+        }
+
+        // Las opciones globales van antes del subcomando, y algunas llevan su
+        // valor en la palabra siguiente.
+        $subcommand = null;
+        $arguments = [];
+        $pending = null;
+
+        foreach (array_slice($words, $index + 1) as $word) {
+            if ($subcommand !== null) {
+                $arguments[] = $word;
+            } elseif ($pending === 'config' && self::namesHooksPath($word)) {
+                return 'git -c core.hooksPath';
+            } elseif ($pending === 'config' && preg_match('/^alias\./i', $word) === 1) {
+                // Un alias definido en la misma orden puede ser cualquier
+                // cosa, `commit --no-verify` incluido: no se puede leer.
+                return 'git -c alias.*';
+            } elseif ($pending !== null) {
+                $pending = null;
+            } elseif (in_array($word, ['-c', '--config-env'], true)) {
+                $pending = 'config';
+            } elseif (str_starts_with($word, '--config-env=') && self::namesHooksPath(substr($word, 13))) {
+                return 'git -c core.hooksPath';
+            } elseif (in_array($word, ['-C', '--git-dir', '--work-tree', '--namespace', '--exec-path', '--super-prefix', '--list-cmds', '--attr-source'], true)) {
+                $pending = 'value';
+            } elseif (! str_starts_with($word, '-')) {
+                $subcommand = $word;
+            }
+        }
+
+        // Tras `--` vienen rutas, no opciones.
+        $separator = array_search('--', $arguments, true);
+        $options = $separator === false ? $arguments : array_slice($arguments, 0, $separator);
+        $noVerify = array_filter($options, fn (string $option): bool => strlen($option) >= 9 && str_starts_with('--no-verify', explode('=', $option)[0]));
+
+        return match ($subcommand) {
+            'commit' => $noVerify !== [] || self::shortNoVerify($options) ? 'git commit --no-verify' : null,
+            'merge' => $noVerify !== [] ? 'git merge --no-verify' : null,
+            'push' => $noVerify !== [] ? 'git push --no-verify' : null,
+            // La fontanería que crea un commit sin pasar por ningún hook.
+            'commit-tree' => 'git commit-tree',
+            'config' => self::setsHooksPath($arguments) ? 'git config core.hooksPath' : null,
+            default => null,
+        };
+    }
+
+    /**
+     * Si `git commit` lleva `-n` en alguna de sus opciones cortas.
+     *
+     * Un grupo de opciones cortas son banderas hasta la primera que toma
+     * valor: `m`, `F`, `C`, `c` y `t` lo toman pegado o, al final del grupo,
+     * en la palabra siguiente; `u` y `S`, sólo pegado. Lo que sigue a ésa es
+     * su valor, y una `n` ahí no es `--no-verify`.
+     *
+     * @param  list<string>  $options
+     */
+    private static function shortNoVerify(array $options): bool
+    {
+        $value = false;
+
+        foreach ($options as $option) {
+            if ($value) {
+                $value = false;
+
+                continue;
+            }
+
+            if (preg_match('/^-([^-mFCctuS]*)([mFCct]?)(.*)/', $option, $parts) !== 1) {
+                continue;
+            }
+
+            if (str_contains($parts[1], 'n')) {
+                return true;
+            }
+
+            $value = $parts[2] !== '' && $parts[3] === '';
+        }
+
+        return false;
+    }
+
+    /**
+     * Si los argumentos de `git config` cambian `core.hooksPath`: lo nombran
+     * y no es una lectura.
+     *
+     * @param  list<string>  $arguments
+     */
+    private static function setsHooksPath(array $arguments): bool
+    {
+        if (array_filter($arguments, self::namesHooksPath(...)) === []) {
+            return false;
+        }
+
+        $reads = ['--get', '--get-all', '--get-regexp', '--get-urlmatch', '-l', '--list', 'get', 'list', '--show-origin', '--show-scope'];
+
+        return array_intersect($arguments, $reads) === [];
+    }
+
+    private static function namesHooksPath(string $word): bool
+    {
+        return preg_match('/^core\.hookspath(=|$)/i', $word) === 1;
+    }
+
+    /**
+     * El mensaje de bloqueo por saltarse los hooks de git.
+     *
+     * @param  list<string>  $bypasses
+     */
+    public static function bypassMessage(array $bypasses): string
+    {
+        $lines = [];
+
+        foreach ($bypasses as $bypass) {
+            $lines[] = 'LaraPack: `'.self::inline($bypass).'` se salta el hook de git que comprueba el contrato antes de cada commit.';
+        }
+
+        $lines[] = 'Comitea sin saltártelo: si el hook te frena, corrige lo que dice (o, si es una excepción, déjasela al dueño del proyecto). '
+            .'Tú no desactivas los hooks de git ni cambias core.hooksPath. La CI comprueba lo mismo, así que saltárselo sólo retrasa el rechazo.';
+
+        return implode("\n", $lines);
+    }
+
+    /**
      * @param  array<string, mixed>  $payload
      */
     private static function bashCommand(array $payload): ?string
@@ -248,9 +443,13 @@ final class Guard
      * lo que esto bloquea de más son cuatro shells anidadas que además nombran
      * una de esas palabras.
      *
+     * Las órdenes de git que se saltan sus hooks van a `$bypasses`
+     * (gitBypass()).
+     *
      * @param  list<string>  $locks
+     * @param  list<string>  $bypasses
      */
-    private static function shellScan(string $command, int $depth, array &$locks): bool
+    private static function shellScan(string $command, int $depth, array &$locks, array &$bypasses = []): bool
     {
         $scripts = [];
         $redirects = [];
@@ -265,11 +464,17 @@ final class Guard
 
         // Un heredoc que se le pasa a una shell (`bash <<EOF`) sí son órdenes.
         foreach ($scripts as $script) {
-            $approves = self::nestedScan($script, $depth, $locks) || $approves;
+            $approves = self::nestedScan($script, $depth, $locks, $bypasses) || $approves;
         }
 
         foreach ($commands as $words) {
             $locks = [...$locks, ...self::lockWrites($words)];
+            $bypass = self::gitBypass($words);
+
+            if ($bypass !== null) {
+                $bypasses[] = $bypass;
+            }
+
             $invoked = false;
             $eval = ($words[0] ?? null) === 'eval';
 
@@ -281,10 +486,10 @@ final class Guard
                 $invoked = $invoked || self::namesHandRolled($word);
                 // `-c` puede ir en cualquier punto del grupo de opciones:
                 // `bash -ce '…'` ejecuta el texto igual que `bash -ec '…'`.
-                $nested = $eval || preg_match('/^-[a-z]*c[a-z]*$/i', $words[$index - 1] ?? '') === 1;
+                $nested = $eval || preg_match('/^-[a-z]*c/i', $words[$index - 1] ?? '') === 1;
 
                 if ($nested) {
-                    $approves = self::nestedScan($word, $depth, $locks) || $approves;
+                    $approves = self::nestedScan($word, $depth, $locks, $bypasses) || $approves;
                 }
             }
         }
@@ -298,11 +503,12 @@ final class Guard
      * ejecuta nada.
      *
      * @param  list<string>  $locks
+     * @param  list<string>  $bypasses
      */
-    private static function nestedScan(string $script, int $depth, array &$locks): bool
+    private static function nestedScan(string $script, int $depth, array &$locks, array &$bypasses = []): bool
     {
         if ($depth < self::MAX_SHELL_DEPTH) {
-            return self::shellScan($script, $depth + 1, $locks);
+            return self::shellScan($script, $depth + 1, $locks, $bypasses);
         }
 
         return trim($script) !== '';
@@ -323,7 +529,7 @@ final class Guard
             $index++;
         }
 
-        $program = strtolower((string) preg_replace('/\.exe$/i', '', basename(str_replace('\\', '/', $words[$index] ?? ''))));
+        $program = preg_replace('/\.exe$/', '', strtolower(basename(str_replace('\\', '/', $words[$index] ?? '')))) ?? '';
         $arguments = array_slice($words, $index + 1);
         $named = array_values(array_filter($arguments, self::isLockName(...)));
 
@@ -643,10 +849,10 @@ final class Guard
         $cwd = $payload['cwd'] ?? null;
 
         if (is_string($cwd) && $cwd !== '' && is_dir($cwd)) {
-            return self::normalise((string) realpath($cwd));
+            return self::normalise(realpath($cwd) ?: $cwd);
         }
 
-        return self::normalise((string) getcwd());
+        return self::normalise(getcwd() ?: '');
     }
 
     /**
@@ -663,7 +869,7 @@ final class Guard
 
         while (true) {
             if (is_file($directory.'/composer.json') || is_file($directory.'/.larapack/manifest.json')) {
-                return self::normalise((string) (realpath($directory) ?: $directory));
+                return self::normalise(realpath($directory) ?: $directory);
             }
 
             $parent = dirname($directory);
@@ -869,9 +1075,9 @@ final class Guard
         foreach (array_slice($errors, 0, $limit) as $error) {
             $lines[] = sprintf(
                 '  - [%s] %s%s',
-                self::inline((string) ($error['check'] ?? 'error')),
+                self::inline(is_string($error['check'] ?? null) ? $error['check'] : 'error'),
                 isset($error['file']) && is_string($error['file']) ? self::inline($error['file']).': ' : '',
-                self::inline((string) ($error['message'] ?? ''))
+                self::inline(is_string($error['message'] ?? null) ? $error['message'] : '')
             );
         }
 
@@ -900,11 +1106,11 @@ final class Guard
      */
     public static function inline(string $text): string
     {
-        return (string) preg_replace_callback(
+        return preg_replace_callback(
             '/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u',
             fn (array $match): string => sprintf('\u{%04X}', mb_ord($match[0], 'UTF-8')),
             mb_scrub($text, 'UTF-8')
-        );
+        ) ?? '';
     }
 
     /**
@@ -1153,31 +1359,24 @@ final class Guard
      */
     private static function gitChanges(string $root): ?array
     {
-        $top = self::git($root, ['rev-parse', '--show-toplevel']);
-
-        if ($top === null || trim($top) === '') {
-            return null;
-        }
+        // Fuera de un repositorio no hay raíz, y sin ella no se pregunta.
+        $top = self::git($root, ['rev-parse', '--show-toplevel']) ?? '';
 
         // Con -z las rutas van tal cual, sin comillas, y siempre relativas a
         // la raíz del repositorio; `-- .` las limita al proyecto.
-        $status = self::git($root, ['status', '--porcelain=v1', '-z', '--untracked-files=all', '--', '.']);
+        $status = $top === '' ? null : self::git($root, ['status', '--porcelain=v1', '-z', '--untracked-files=all', '--', '.']);
 
         if ($status === null) {
             return null;
         }
 
         $top = rtrim(self::normalise(trim($top)), '/');
-        $entries = explode("\0", $status);
+        // Cada entrada acaba en \0: la última vacía no es un archivo.
+        $entries = preg_split('/\0/', $status, -1, PREG_SPLIT_NO_EMPTY) ?: [];
         $files = [];
 
         for ($i = 0; $i < count($entries); $i++) {
             $entry = $entries[$i];
-
-            if (strlen($entry) < 4) {
-                continue;
-            }
-
             $files[] = $top.'/'.substr($entry, 3);
 
             // Un renombrado o una copia traen detrás la ruta de origen, que
@@ -1239,7 +1438,7 @@ final class Guard
      */
     private static function lexical(string $path): string
     {
-        preg_match('#^(//(?!/)|[A-Za-z]:/+|/+)?#', $path, $match);
+        preg_match('#^(?://(?!/)|[A-Za-z]:/+|/+)?#', $path, $match);
         $prefix = $match[0] ?? '';
         $parts = [];
 
@@ -1259,7 +1458,11 @@ final class Guard
             }
         }
 
-        $prefix = str_starts_with($prefix, '//') ? '//' : (preg_match('#^[A-Za-z]:#', $prefix) === 1 ? substr($prefix, 0, 2).'/' : ($prefix === '' ? '' : '/'));
+        $prefix = match (true) {
+            str_starts_with($prefix, '//') => '//',
+            str_contains($prefix, ':') => substr($prefix, 0, 2).'/',
+            default => $prefix === '' ? '' : '/',
+        };
 
         return $prefix.implode('/', $parts);
     }

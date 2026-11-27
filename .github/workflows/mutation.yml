@@ -16,6 +16,7 @@ on:
             - 'composer.json'
             - 'infection.json5'
             - '.github/mutation-floors.json'
+            - '.github/mutation-survivors.json'
             - '.github/scripts/mutation-floors.php'
             - '.github/workflows/mutation.yml'
     workflow_dispatch:
@@ -66,16 +67,32 @@ jobs:
             # muta y cuenta en contra. Sin él Infection no lo muta, y borrar el
             # test que cubría un mutante difícil SUBÍA el MSI. Por eso hay dos
             # umbrales: --min-msi (todo) y --min-covered-msi (lo recorrido).
-            # Los dos son lo logrado, redondeado hacia abajo: bajarlos para
-            # pasar no es una salida (CONTRIBUTING, «Las pruebas de mutación»).
+            # Los dos son lo logrado, redondeado hacia abajo a la décima, menos
+            # un punto (la política, en docs/mutacion.md): bajarlos para pasar
+            # no es una salida (CONTRIBUTING, «Las pruebas de mutación»).
             - name: Pruebas de mutación
               run: >-
                   "$RUNNER_TEMP/infection/vendor/bin/infection"
                   --threads=max --only-covering-test-cases --no-progress --with-uncovered
-                  --min-msi=93 --min-covered-msi=93
+                  --min-msi=95.6 --min-covered-msi=95.8
 
             # El umbral de arriba es de las ocho piezas juntas: una podría
-            # bajar mientras las demás la compensan. Cada una, contra su suelo.
+            # bajar mientras las demás la compensan. Cada una, contra su suelo;
+            # y con el catálogo de los supervivientes conocidos, qué mutantes
+            # nuevos escaparon, con su archivo:línea. Corre aunque el paso de
+            # arriba falle: es el que dice por qué.
             - name: El suelo de cada pieza
               if: ${{ !cancelled() }}
-              run: php -d memory_limit=2G .github/scripts/mutation-floors.php .infection/infection.json .github/mutation-floors.json
+              run: php -d memory_limit=2G .github/scripts/mutation-floors.php .infection/infection.json .github/mutation-floors.json .github/mutation-survivors.json
+
+            # El diff de cada superviviente, para leerlo sin repetir la corrida.
+            # Sin infection.json: pesa cientos de megas.
+            - name: El informe de Infection
+              if: ${{ failure() }}
+              uses: actions/upload-artifact@v4
+              with:
+                  name: mutacion
+                  path: |
+                      .infection/infection.log
+                      .infection/summary.log
+                      .infection/per-mutator.md

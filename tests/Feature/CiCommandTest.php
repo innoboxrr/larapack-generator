@@ -2,6 +2,7 @@
 
 namespace Innoboxrr\LarapackGenerator\Tests\Feature;
 
+use Innoboxrr\LarapackGenerator\Support\BranchProtection;
 use Innoboxrr\LarapackGenerator\Support\CiGate;
 use Innoboxrr\LarapackGenerator\Tests\Support\FakeProject;
 use Innoboxrr\LarapackGenerator\Tests\TestCase;
@@ -97,6 +98,7 @@ final class CiCommandTest extends TestCase
         $this->assertSame([
             'composer update --prefer-dist --no-interaction --no-progress',
             'php vendor/bin/builder larapack:verify --strict --format=json',
+            'php vendor/bin/builder larapack:ci --check --format=github',
         ], $this->runs($job));
 
         // composer.json no declara php: la línea base.
@@ -136,6 +138,7 @@ final class CiCommandTest extends TestCase
             'test -f .env || cp .env.example .env',
             'composer install --prefer-dist --no-interaction --no-progress',
             'php artisan larapack:verify --strict --format=json',
+            'php artisan larapack:ci --check --format=github',
         ], $this->runs($job));
 
         // config.platform.php manda: es contra lo que resolvió Composer.
@@ -308,7 +311,17 @@ final class CiCommandTest extends TestCase
         $this->assertStringContainsString('un orquestador que sube el SHA ya verificado', $this->lastOutput);
         $this->assertStringContainsString('GitHub no deja aprobar un PR propio', $this->lastOutput);
 
-        $this->assertSame(Command::SUCCESS, $this->ci(['--no-enforce-admins' => true]), $this->lastOutput);
+        // El ruleset cambia con ello (el papel de administrador pasa a
+        // bypass_actors): sobre uno ya escrito, sin --force no se pisa.
+        $this->assertSame(Command::FAILURE, $this->ci(['--no-enforce-admins' => true]), $this->lastOutput);
+        $this->assertSame([], BranchProtection::ruleset()['bypass_actors']);
+        $this->assertSame(BranchProtection::rulesetJson(), $this->project->read(BranchProtection::RULESET_FILE));
+
+        $this->assertSame(Command::SUCCESS, $this->ci(['--no-enforce-admins' => true, '--force' => true]), $this->lastOutput);
+        $this->assertSame(
+            [['actor_id' => 5, 'actor_type' => 'RepositoryRole', 'bypass_mode' => 'always']],
+            json_decode($this->project->read(BranchProtection::RULESET_FILE), true)['bypass_actors']
+        );
 
         $this->assertStringContainsString("-F 'enforce_admins=false'", $this->lastOutput);
         $this->assertStringContainsString('Ojo: enforce_admins=false', $this->lastOutput);
@@ -406,6 +419,59 @@ final class CiCommandTest extends TestCase
         $this->assertSame(Command::SUCCESS, $this->ci(['--owner' => ['@acme/arquitectura'], '--force' => true]), $this->lastOutput);
 
         $this->assertTrue($this->project->has('.github/CODEOWNERS'));
+    }
+
+    /**
+     * La rama la protege el dueño, pero a un paso: el ruleset listo para
+     * importar desde la web o mandar con gh, y las tres vías impresas.
+     */
+    public function test_deja_el_ruleset_para_importar_y_la_guia(): void
+    {
+        $this->git('init', '--quiet');
+        $this->git('remote', 'add', 'origin', 'https://github.com/acme/notes.git');
+        $this->git('symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/main');
+
+        $this->assertSame(Command::SUCCESS, $this->ci(), $this->lastOutput);
+
+        $this->assertSame(BranchProtection::rulesetJson(), $this->project->read(BranchProtection::RULESET_FILE));
+        $this->assertStringContainsString('creado      .github/rulesets/larapack-verify.json', $this->lastOutput);
+        $this->assertStringContainsString('https://github.com/acme/notes/settings/rules -> New ruleset -> Import a ruleset', $this->lastOutput);
+        $this->assertStringContainsString("gh api --method POST 'repos/acme/notes/rulesets' --input '.github/rulesets/larapack-verify.json'", $this->lastOutput);
+        $this->assertStringContainsString("gh api --method PUT 'repos/acme/notes/rulesets/ID' --input '.github/rulesets/larapack-verify.json'", $this->lastOutput);
+        $this->assertStringContainsString("gh api --method PUT 'repos/acme/notes/branches/main/protection'", $this->lastOutput);
+        $this->assertStringContainsString('php vendor/bin/builder larapack:ci --check', $this->lastOutput);
+        $this->assertStringContainsString('cuenta Free, GitHub no aplica ni rulesets ni protección de ramas', $this->lastOutput);
+
+        // Reejecutarlo no cambia nada.
+        $this->assertSame(Command::SUCCESS, $this->ci(), $this->lastOutput);
+        $this->assertStringContainsString('sin cambios  .github/rulesets/larapack-verify.json', $this->lastOutput);
+    }
+
+    /**
+     * El workflow y el ruleset van juntos: si uno difiere, no se escribe
+     * ninguno —tampoco el que faltaba— ni CODEOWNERS.
+     */
+    public function test_si_el_ruleset_difiere_no_escribe_nada(): void
+    {
+        mkdir($this->project->path.'/.github/rulesets', 0777, true);
+        file_put_contents($this->project->path.'/'.BranchProtection::RULESET_FILE, "{}\n");
+
+        $this->assertSame(Command::FAILURE, $this->ci(['--owner' => ['@acme/arquitectura']]), $this->lastOutput);
+
+        $this->assertFalse($this->project->has(CiGate::WORKFLOW));
+        $this->assertFalse($this->project->has('.github/CODEOWNERS'));
+        $this->assertSame("{}\n", $this->project->read(BranchProtection::RULESET_FILE));
+        $this->assertStringContainsString('difiere     .github/rulesets/larapack-verify.json', $this->lastOutput);
+        $this->assertStringContainsString('no se crea  .github/workflows/larapack.yml', $this->lastOutput);
+
+        // --dry-run tampoco escribe el que faltaba.
+        $this->assertSame(Command::SUCCESS, $this->ci(['--force' => true, '--dry-run' => true]), $this->lastOutput);
+        $this->assertFalse($this->project->has(CiGate::WORKFLOW));
+        $this->assertStringContainsString('reescribiría     .github/rulesets/larapack-verify.json', $this->lastOutput);
+
+        $this->assertSame(Command::SUCCESS, $this->ci(['--force' => true]), $this->lastOutput);
+        $this->assertTrue($this->project->has(CiGate::WORKFLOW));
+        $this->assertSame(BranchProtection::rulesetJson(), $this->project->read(BranchProtection::RULESET_FILE));
     }
 
     /**

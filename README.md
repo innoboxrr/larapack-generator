@@ -255,7 +255,9 @@ se instalan en el proyecto:
 
 ```
 php vendor/bin/builder larapack:skill                  # skill + bloque en AGENTS.md
-php vendor/bin/builder larapack:skill --hooks          # además, la guardia en .claude/settings.json
+php vendor/bin/builder larapack:skill --hooks          # además, la guardia: Claude Code y el hook de git
+php vendor/bin/builder larapack:skill --agents=all     # y la de Cursor, Codex, Gemini CLI, Copilot y Windsurf
+php vendor/bin/builder larapack:guard --doctor         # qué capas tiene el proyecto y cuáles faltan
 php vendor/bin/builder larapack:skill --no-agents      # sólo la skill
 php vendor/bin/builder larapack:skill --print          # por salida estándar
 ```
@@ -301,10 +303,14 @@ demás:
   Bash (`>`, `tee`, `cp`, `mv`, `sed -i`, `dd`, `php -r`…) o correr
   `larapack:hand-rolled approve` o `revoke` (también por alias, abreviatura
   —`:h` incluida—, con la palabra partida por comillas o por una continuación
-  de línea, o dentro de `bash -c`). Lee la orden como la shell, sin ejecutarla,
-  y la shell sólo arranca PHP si la entrada contiene `approve`, `revoke` o
-  `hand-rolled`, también sin comillas ni barras. No es infranqueable: la
-  barrera real es la revisión del dueño en la rama protegida.
+  de línea, o dentro de `bash -c`). Impide también saltarse el hook de git:
+  `git commit --no-verify` (o `-n`, también en un grupo como `-anm`), `git push`
+  o `git merge --no-verify`, y cambiar `core.hooksPath` (`git config`,
+  `git -c`). Lee la orden como la shell, sin ejecutarla, y la shell sólo arranca
+  PHP si la entrada contiene `approve`, `revoke`, `hand-rolled`, `no-veri`,
+  `commit` o `hooksPath`, también sin comillas ni barras. Un hook PreToolUse
+  escrito por la 9.2 se pone al día al reinstalar con `--hooks`. No es
+  infranqueable: la barrera real es la revisión del dueño en la rama protegida.
 
 La guardia nunca se bloquea a sí misma: una entrada vacía o rota, un archivo de
 `vendor/` o fuera de un proyecto salen con 0, y mientras no exista `vendor/` el
@@ -322,6 +328,87 @@ que expanda variables (en Windows, Git Bash).
 **Actívala con `verify` limpio.** En un proyecto con errores previos, cada
 edición de esos archivos retendría al agente por algo que no causó. Primero
 `larapack:verify` en verde, después `--hooks`.
+
+### Otros agentes, y el hook de git que no depende de ninguno
+
+Los hooks de Claude Code sólo los ejecuta Claude Code. Para que la guardia no
+dependa de con qué agente se trabaja, va por capas, y cada una llama al mismo
+`larapack:guard`:
+
+1. **El hook de git**, para todos. `larapack:skill --hooks` escribe
+   `.githooks/pre-commit` y `.githooks/pre-push` (versionados) y pone
+   `git config core.hooksPath .githooks`. Git los ejecuta sea quien sea quien
+   comitea, con su shell (en Windows, la de Git for Windows), y corren
+   `larapack:guard --git=pre-commit|pre-push` sobre **lo que se va a comitear o a
+   empujar**: de esos archivos, lo que es arquitectura, con las comprobaciones de
+   `verify`. Frenan un controlador con lógica, lo generado que se desvía y una
+   excepción `#[HandRolled]` sin aprobar (lo que `verify --strict` rechazaría). Si
+   no hay nada que mirar ni siquiera corre el Verifier. Un archivo vigilado
+   preparado a medias (`git add -p`) no se da por bueno: la guardia lee el
+   disco y no podría comprobar lo que se comitea. Un cambio en
+   `.larapack/hand-rolled.lock` lo tiene que confirmar una persona escribiendo
+   «apruebo» en su terminal; un agente no tiene terminal en la que hacerlo, y el
+   commit no entra. El `pre-push` mira los commits que todavía no tiene ningún
+   remoto: frena lo que se comiteó saltándose el hook.
+2. **Los hooks de cada agente**, donde el agente los tiene de verdad.
+   `larapack:skill --agents=cursor,codex,gemini,copilot,windsurf` (o `all`)
+   escribe sus hooks y sus reglas, fusionando sin pisar lo del proyecto. La
+   misma decisión en el idioma de cada uno (`larapack:guard --agent=…`): antes
+   de la herramienta impide aprobar una excepción y saltarse el hook de git
+   (`--no-verify`, `-n`, `core.hooksPath`); después de editar devuelve el motivo
+   por el canal que llega al modelo; al terminar el turno, donde se puede, lo
+   hace seguir.
+3. **La CI y la rama protegida** (`larapack:ci`), lo único que no depende de la
+   máquina de nadie. Es la barrera: lo demás llega antes, pero se puede quitar.
+
+| Agente | Hook en vivo | Reglas que lee | Qué lo frena |
+|---|---|---|---|
+| Claude Code | `.claude/settings.json`: PreToolUse, PostToolUse, Stop | `.claude/skills/larapack/SKILL.md`, `AGENTS.md` | hook en vivo + git + CI |
+| Cursor | `.cursor/hooks.json`: preToolUse (niega), postToolUse (`additional_context`), stop (`followup_message`) | `.cursor/rules/larapack.mdc` | hook en vivo + git + CI |
+| Codex CLI | `.codex/hooks.json`: PreToolUse, PostToolUse (también los parches de `apply_patch`), Stop | `AGENTS.md` | hook en vivo + git + CI |
+| Gemini CLI | `.gemini/settings.json`: BeforeTool, AfterTool, AfterAgent | `GEMINI.md` | hook en vivo + git + CI |
+| GitHub Copilot (CLI y agente en la nube) | `.github/hooks/larapack.json`: preToolUse (`permissionDecision`), postToolUse (`additionalContext`), agentStop (`decision: block`) | `.github/copilot-instructions.md` | hook en vivo + git + CI |
+| Windsurf | `.windsurf/hooks.json`: pre_write_code y pre_run_command (bloquean), post_write_code (sólo avisa a la persona) | `.windsurf/rules/larapack.md` | antes de escribir y de cada orden + git + CI; lo que ya escribió, sólo git y CI |
+| Aider | no tiene | `AGENTS.md` si se lo pasas | git **sólo con `git-commit-verify: true`** en `.aider.conf.yml` (por defecto comitea con `--no-verify`) + CI |
+| Cualquier otro | — | `AGENTS.md` | git + CI |
+
+`larapack:guard --doctor` dice, para el proyecto, qué capas están y cuáles
+faltan, con la orden de cada una; con `--format=json`, lo mismo para un script.
+Sale con 1 si falta una de las dos que no dependen del agente: el hook de git
+activo o un workflow que corra `verify --strict`. La protección de la rama no
+se ve desde el disco: lo dice, y `larapack:ci` imprime la orden.
+
+Lo que no cierra, dicho claro:
+
+- **`core.hooksPath` es de cada clon.** Los scripts viajan con el repositorio;
+  activarlos no. Un clon nuevo corre `git config core.hooksPath .githooks` (o
+  `larapack:skill --hooks`), y `--doctor` lo detecta si falta. Si el proyecto ya
+  usa otro `core.hooksPath` (husky) o tiene hooks propios en `.git/hooks`, no se
+  cambia nada: se dice qué línea añadir para encadenar.
+- **Un hook de git se salta con `--no-verify`.** Los hooks de los agentes que
+  los tienen lo impiden, y el `pre-push` frena lo que se comiteó así, pero un
+  agente sin hooks o una persona pueden hacerlo. Por eso la CI.
+- **La confirmación del candado es un control, no una prueba de identidad.** Un
+  agente con una terminal interactiva podría escribir «apruebo». La barrera es
+  la revisión del dueño (CODEOWNERS) en la rama protegida.
+- **Los hooks de los otros agentes son POSIX sh**, como los de Claude Code. En
+  Windows funcionan si el agente los ejecuta con Git Bash; con PowerShell o cmd,
+  no (Copilot no tiene escrita su variante `powershell`). El hook de git sí
+  funciona en Windows: lo ejecuta la shell de Git for Windows.
+- **Hay que aceptarlos en el agente.** Codex sólo carga los hooks de un proyecto
+  de confianza y pide revisarlos en `/hooks`; Gemini CLI avisa antes de ejecutar
+  un hook de proyecto nuevo o cambiado. `--doctor` ve que están escritos, no que
+  el agente los haya aceptado.
+- **Cursor y Windsurf se implementaron por la documentación de terceros.** Las
+  de Codex (sus esquemas), Gemini CLI y Copilot se leyeron de sus repositorios
+  oficiales; las páginas de Cursor y de Windsurf no fueron accesibles al
+  escribir esto, y sus adaptadores siguen los campos que documentan paquetes y
+  guías que integran esos hooks. Las pruebas simulan la entrada de cada agente
+  y ejecutan el comando escrito con bash; no corren los agentes de verdad.
+- **Cursor ejecuta también los hooks de `.claude/settings.json`**, con su
+  entrada. La guardia la reconoce (antes, el de antes de la herramienta no veía
+  la orden y dejaba pasar todo) y, si el proyecto tiene además los de Cursor,
+  calla para no repetir.
 
 ### El ciclo que sigue el agente
 
@@ -1215,7 +1302,7 @@ manifiesto:
 | `hand-rolled` | aviso / info | Una acción marcada `#[HandRolled('razón')]`: aviso sin candado; info si el dueño la aprobó en `.larapack/hand-rolled.lock`. Sin razón, error. |
 | `hand-rolled-unapproved` | error | Con candado: una excepción que no está aprobada, o cuya razón o cuyo código (la huella) cambió desde que se aprobó. |
 | `hand-rolled-stale` | aviso | Con candado: una aprobación de algo que ya no lleva `#[HandRolled]`. |
-| `route-closure` | aviso | Un closure con cuerpo como acción de una ruta. |
+| `route-closure` | aviso | Un closure con cuerpo como acción de una ruta. Si es el fallback de la SPA de laravel-setup <= 7.2.0, el mensaje dice que `larapack:fix` lo corrige. |
 | `index-managed` | aviso | Una request que usa el `Builder` de SearchSurge sin forzar `managed`: el listado se salta `ManagedFilter::canView()`. |
 | `resource-appends` | aviso | Un `setAppends()` que recibe lo que manda el cliente sin una lista blanca. |
 
@@ -1247,6 +1334,42 @@ comprobación.
 el bloque `setAppends()` cuando tienen la forma generada; si no, `skipped`. La
 lógica propia que haya alrededor —otros métodos, sentencias propias en
 `prepareForValidation()`, el resto de `toArray()`— no se pierde.
+
+**El fallback de la SPA de laravel-setup <= 7.2.0** (`route-closure`). Las
+aplicaciones creadas con laravel-setup hasta la 7.2.0 traen en `routes/web.php`
+un `Route::fallback(function () { abort_if(...); return view('app'); })`, y
+con `--strict` —la puerta de `larapack:ci`— nunca pasan. La 7.2.1 ya lo escribe
+bien para las nuevas; las que existen se corrigen así:
+
+```
+php artisan larapack:fix route-closure --dry-run
+php artisan larapack:fix route-closure
+php artisan larapack:verify --strict
+```
+
+Crea `app/Http/Controllers/SpaController.php` y `app/Http/Requests/SpaRequest.php`
+con el contenido de laravel-setup 7.2.1 (la decisión del 404 para `api/*` y JSON
+pasa a `SpaRequest::handle()`; el comportamiento no cambia), cambia el fallback
+por `Route::fallback(SpaController::class)` con su `use`, y la raíz
+`Route::get('/', fn () => view('app'))->name('app')` por
+`Route::view('/', 'app')->name('app')`. Lo demás del archivo —otras rutas,
+comentarios, el orden— no se toca.
+
+Reconoce **ese closure y nada más**, comparando token a token: sólo pueden
+variar el espacio en blanco, las comillas y el orden de los dos operandos del
+`||`. Un comentario dentro, un parámetro, otra vista, otro código de estado,
+`static` o un `->name()` encadenado ya son lógica del proyecto (el fallback de
+school-management, que recibe `HostLandings`, es uno). Y sólo en el
+`routes/web.php` de la raíz: en un paquete, SpaController no sería suyo. Si
+SpaController o SpaRequest ya existen y no son los de 7.2.1 (sin contar el
+espacio en blanco), no se sobrescriben y no se toca nada: `skipped` con la
+razón. Tampoco sin `App\` en el `autoload.psr-4` de la aplicación ni sin
+`App\Http\Controllers\Controller`. Los tres archivos van juntos: si Pint deja
+uno sin parsear, se devuelven los tres. **Cualquier otro closure de las rutas
+se salta** con el mensaje de `verify`, porque llevarlo a un controlador es
+decidir dónde va su lógica; por eso en un proyecto como expediente, con más
+closures propios, el comando corrige el fallback y sale con código distinto de
+cero. Las líneas de esos mensajes son las del archivo antes de corregirlo.
 
 `--path` acota a un subdirectorio de la raíz y `--package` (repetible) a un
 paquete local, por el nombre de su directorio en `packages/` o su nombre de
@@ -1790,9 +1913,12 @@ php artisan larapack:ci --owner=@organizacion/arquitectura
 - Crea `.github/workflows/larapack.yml` con el job «LaraPack verify» (Artisan
   en una aplicación, el builder en un paquete; el PHP de `config.platform.php`
   o el mínimo con el que se instala `composer.lock`; las `ext-*` de
-  `composer.json`; `pull_request` y `push` a la rama por defecto de `origin`).
-  No edita otros workflows, y si el suyo difiere no lo pisa sin `--force` ni
-  escribe nada más.
+  `composer.json`; `pull_request` y `push` a la rama por defecto de `origin`;
+  `permissions: contents: read`). Su último paso comprueba que la rama exija el
+  check (abajo).
+- Crea `.github/rulesets/larapack-verify.json`, el ruleset para importar en
+  GitHub. El workflow y el ruleset van juntos: si uno de los dos difiere, no
+  pisa ninguno sin `--force` ni escribe nada más. No edita otros workflows.
 - `--runs-on` (repetible, o una lista JSON) pone el job en tus runners; sin él,
   `ubuntu-latest`, y si otros workflows corren en otro sitio te lo propone. En un
   monorepo donde `verify` tarda minutos, el runner alojado los cobra en cada PR,
@@ -1801,18 +1927,95 @@ php artisan larapack:ci --owner=@organizacion/arquitectura
   fusiona en el CODEOWNERS que GitHub ya lee `/.larapack/hand-rolled.lock`, el
   workflow y el propio CODEOWNERS, sin duplicar ni tocar líneas ajenas. Sin
   `--owner` no inventa un dueño.
-- Imprime lo que no puede hacer: proteger la rama con
-  `gh api --method PUT 'repos/{dueño}/{repo}/branches/{rama}/protection'` y los
-  campos exactos. Nunca la ejecuta. PUT sustituye la protección entera: si ya
-  exige otros checks, se añaden a la orden.
+- Imprime, paso a paso, lo que no puede hacer: proteger la rama. Nunca lo
+  ejecuta —cambia quién puede fusionar, y eso lo decide el dueño—.
 
-**La puerta sólo vale si nadie entra por fuera de ella.** La orden pide
-`enforce_admins=true`: con `false`, un push directo a la rama con una cuenta de
-administrador —un orquestador que sube a `master` el SHA ya verificado con la
-cuenta del dueño— se salta `verify --strict` y la revisión del candado. El
-precio es que GitHub no deja aprobar un PR propio: los PR del agente salen de
-una cuenta que no sea la del único dueño de código. `--no-enforce-admins` deja
-`false`, con aviso.
+**Proteger la rama: lo hace el dueño, una vez.** Sin esto, el workflow corre,
+sale en rojo y el PR se fusiona igual. Una de tres vías:
+
+1. **En la web, importando el ruleset** (la recomendada):
+   `https://github.com/{dueño}/{repo}/settings/rules` → *New ruleset* →
+   *Import a ruleset* → `.github/rulesets/larapack-verify.json` → revisar →
+   *Create*. El ruleset se aplica a `~DEFAULT_BRANCH` (sigue a la rama por
+   defecto aunque se renombre) y exige:
+   - el check «LaraPack verify» **fijado a GitHub Actions** (`integration_id`
+     15368): un estado con ese nombre publicado con cualquier token con
+     `statuses: write` no cuenta;
+   - un PR con la revisión de los dueños de código, que se descarta si después
+     se empuja otra cosa (`dismiss_stale_reviews_on_push`): no se aprueba el
+     candado y luego se cambia;
+   - que nadie borre ni reescriba la rama (`deletion`, `non_fast_forward`);
+   - sin `bypass_actors`: en un ruleset, ni un administrador se lo salta.
+2. **Con la CLI de GitHub**, el mismo archivo:
+   ```
+   gh api --method POST 'repos/{dueño}/{repo}/rulesets' --input '.github/rulesets/larapack-verify.json'
+   ```
+   Si ya lo importaste y cambió, `--method PUT 'repos/{dueño}/{repo}/rulesets/ID'`
+   con el mismo `--input` (el ID lo da `--check`).
+3. **Con la protección clásica de ramas**: `larapack:ci` imprime la orden
+   `gh api --method PUT 'repos/{dueño}/{repo}/branches/{rama}/protection'` con
+   los campos exactos. PUT sustituye la protección entera: si ya exige otros
+   checks, se añaden a la orden. No fija de qué app llega el check: por eso el
+   ruleset va primero.
+
+En un repositorio privado de una cuenta Free, GitHub no aplica ni rulesets ni
+protección de ramas: hace falta Pro, Team o Enterprise. En GitHub Enterprise
+Server el id de la app de Actions es otro: cambia o quita `integration_id`
+antes de importar, o el check exigido no se cumple nunca.
+
+**Comprobar que quedó: `larapack:ci --check`.** Sólo lee —ni el proyecto ni
+GitHub— y dice una de cuatro cosas:
+
+```
+php artisan larapack:ci --check                    # o --format=json
+php artisan larapack:ci --check --repo=acme/notes --branch=main
+```
+
+| Dice | Sale con |
+|---|---|
+| Exige «LaraPack verify» (con lo que quede abierto: un check sin fijar a Actions, alguien con bypass, nadie que revise el candado) | 0 |
+| Protegida, pero no exige el check | 1 |
+| Sin protección ni reglas | 1 |
+| No se pudo saber (sin token, sin red, sin permiso) — **nunca** se da por protegida | 2 |
+
+Pregunta con `GH_TOKEN` o `GITHUB_TOKEN` (y `GITHUB_API_URL`, `HTTPS_PROXY`) si
+están en el entorno, y si no, con `gh` y su sesión. El repositorio sale de
+`--repo`, del remoto `origin` o de `GITHUB_REPOSITORY`; la rama, de `--branch`
+o de la rama por defecto que dice GitHub. Lee las reglas de los rulesets
+(`GET repos/{o}/{r}/rules/branches/{rama}`, que basta con leer el repositorio:
+también las de la organización) y la protección clásica
+(`GET repos/{o}/{r}/branches/{rama}`). Lo que sólo ve un administrador —quién
+tiene bypass, si la clásica exige la revisión de los dueños— lo dice como «sin
+comprobar», no como hueco ni como cerrado. Los rulesets en modo *evaluate* no
+aplican, y GitHub no los devuelve.
+
+**El workflow lo comprueba en cada corrida.** El último paso de «LaraPack
+verify» corre `larapack:ci --check --format=github` con el `GITHUB_TOKEN` del
+job: mientras la rama no exija el check, deja un `::warning` en la corrida y en
+el PR, y en el resumen del job los pasos con el ruleset entero. No falla el job
+(`continue-on-error`): el check exigido es éste, y que su verde dependiera de la
+protección sería circular. Los paquetes nuevos (`larapack:new`) traen el mismo
+paso. Si tu `larapack.yml` es de 9.2 o anterior, `larapack:ci --force` lo
+regenera con él (revisa el diff: es tuyo si lo editaste).
+
+**`larapack:verify` no lo mira, a propósito.** `verify` es la puerta y corre sin
+red: en la CI, en el hook y en local. Si dependiera de lo que responde GitHub,
+un corte de red o un token sin permisos la pondrían en rojo, y `--strict` sobre
+una rama todavía sin proteger fallaría siempre —también el PR que la protege—.
+Lo que tiene que estar en GitHub lo dice `--check`, y lo repite cada corrida.
+
+**La puerta sólo vale si nadie entra por fuera de ella.** El ruleset va sin
+`bypass_actors`, y la orden clásica pide `enforce_admins=true`: si no, un push
+directo a la rama con una cuenta de administrador —un orquestador que sube a
+`master` el SHA ya verificado con la cuenta del dueño— se salta
+`verify --strict` y la revisión del candado. El precio es que GitHub no deja
+aprobar un PR propio: los PR del agente salen de una cuenta que no sea la del
+único dueño de código. `--no-enforce-admins` pone el papel de administrador en
+`bypass_actors` y deja `enforce_admins=false`, con aviso.
+
+**Lo que esto no cierra.** El paso del workflow avisa, no bloquea: un dueño que
+ignora el aviso tiene una puerta abierta. Y la guardia en vivo es de Claude
+Code; con otros agentes, la puerta es la rama protegida.
 
 `larapack:audit` avisa con `verify-job` si la CI de un paquete que genera con
 LaraPack (su `.larapack/manifest.json` registra modelos o archivos del paquete,
@@ -2507,12 +2710,13 @@ larapack:import                  Genera varios modelos desde un laraimport.
 larapack:validate                Valida un laraimport sin generar nada.
 larapack:schema                  Emite el esquema del laraimport.
 larapack:verify                  Busca desviaciones respecto al manifiesto y en los controladores.
-larapack:fix                     Corrige index-managed y resource-appends en lo generado antes de 9.0.
+larapack:fix                     Corrige index-managed y resource-appends, y el fallback de la SPA de laravel-setup <= 7.2.0.
 larapack:audit                   Comprueba la línea base del ecosistema.
 larapack:skill                   Instala las instrucciones para un agente; con --hooks, la guardia.
 larapack:guard                   Hook para agentes: comprueba el archivo recién editado.
 larapack:hand-rolled             Lista, aprueba o retira las excepciones #[HandRolled] (el dueño).
-larapack:ci                      Crea el workflow «LaraPack verify» y, con --owner, CODEOWNERS.
+larapack:ci                      Crea el workflow «LaraPack verify», el ruleset para la rama y, con --owner, CODEOWNERS;
+                                 con --check, dice si la rama exige el check.
 
 larapack:full-model              Crea un entorno completo de modelo.
 larapack:remove-full-model       Elimina todas las entidades de un modelo.

@@ -1,5 +1,266 @@
 # Changelog
 
+## 9.3.0
+
+### La rama protegida: guiada hasta el final, y comprobada en cada corrida
+
+La puerta de `larapack:ci` sólo vale si la rama **exige** el check «LaraPack
+verify». Sin eso, el workflow corre, sale en rojo y el PR se fusiona igual. La
+9.2 imprimía una orden de `gh` y ahí se quedaba: nada decía si el dueño la
+había corrido. Proteger la rama sigue siendo del dueño —cambia quién puede
+fusionar, y eso no lo decide un comando ni un agente—, pero ahora queda a un
+paso y se comprueba.
+
+- **`larapack:ci` escribe `.github/rulesets/larapack-verify.json`**, un ruleset
+  de GitHub en el formato de exportación (el mismo que acepta
+  `POST repos/{o}/{r}/rulesets`), para *Settings → Rules → Rulesets → New
+  ruleset → Import a ruleset*. Va contra `~DEFAULT_BRANCH` y exige el check
+  **fijado a GitHub Actions** (`integration_id` 15368: un estado con ese nombre
+  publicado con otro token no cuenta, cosa que la orden clásica no impedía),
+  un PR con la revisión de los dueños de código que se descarta si después se
+  empuja otra cosa, y que nadie borre ni reescriba la rama. Sin
+  `bypass_actors`; con `--no-enforce-admins`, el papel de administrador va ahí.
+  El workflow y el ruleset se escriben juntos o ninguno: si uno difiere y no
+  hay `--force`, no se toca nada.
+- **La guía, paso a paso**: en la web con el ruleset (la recomendada), con
+  `gh api --method POST … --input` (y `PUT …/rulesets/ID` para actualizarlo),
+  o con la protección clásica de antes; lo que cuesta cada una, que en un
+  repositorio privado de una cuenta Free GitHub no aplica ninguna, y cómo
+  comprobarlo.
+- **`larapack:ci --check`** pregunta a GitHub si la rama por defecto exige el
+  check, sin escribir nada: exige (0), protegida sin exigirlo (1), sin
+  protección (1) o **no se pudo saber (2), que nunca se da por protegida**.
+  Lee las reglas de los rulesets (`GET repos/{o}/{r}/rules/branches/{rama}`,
+  que basta con leer el repositorio, y trae también los de la organización) y
+  la protección clásica, y enumera lo que deja abierta una rama que sí lo
+  exige: un check sin fijar a una app, alguien con bypass, la cuenta que
+  pregunta pudiendo saltárselo, la clásica sin los administradores, nadie que
+  revise el candado. Lo que sólo ve un administrador queda «sin comprobar».
+  Pregunta con `GH_TOKEN`/`GITHUB_TOKEN` (`GITHUB_API_URL`, `HTTPS_PROXY`) o, si
+  no hay, con `gh`; el repositorio, de `--repo`, `origin` o
+  `GITHUB_REPOSITORY`. `--format=txt|json|github`. Sin dependencias nuevas:
+  `file_get_contents` con un contexto de flujo, o `gh api --include`.
+- **El workflow lo comprueba en cada corrida.** `larapack.yml` y el job
+  `verify` de los paquetes nuevos llevan `permissions: contents: read` y un
+  último paso, `larapack:ci --check --format=github` con el token del job:
+  mientras la rama no exija el check deja un `::warning` y, en el resumen del
+  job, los pasos con el ruleset entero (un paquete nuevo no lo tiene escrito).
+  No falla el job —`continue-on-error`: el check exigido es éste, y sería
+  circular— y corre aunque `verify` falle.
+- **`larapack:verify` no lo mira, a propósito.** Es la puerta y corre sin red;
+  si dependiera de GitHub, un corte o un token sin permisos la pondrían en
+  rojo, y con `--strict` una rama aún sin proteger fallaría siempre, incluido
+  el PR que la protege.
+
+**Al actualizar:** el `larapack.yml` generado cambia (los permisos y el último
+paso). `larapack:ci` lo enseña como «difiere»; `larapack:ci --force` lo
+regenera y crea el ruleset. Si lo editaste a mano, revisa el diff antes.
+
+**Lo que queda, dicho:** el paso del workflow avisa, no bloquea; un dueño que
+ignora el aviso tiene la puerta abierta, y eso no lo arregla ningún paquete.
+En GitHub Enterprise Server el id de la app de Actions no es 15368: hay que
+cambiar o quitar `integration_id` antes de importar. `BranchProtection` y los
+clientes de la API no están todavía en el conjunto que mide Infection.
+
+### Mutación: del 93,4 % al 96,6 %, con margen explícito y un informe accionable
+
+El trabajo «Mutación» dejaba poco margen: las ocho piezas juntas en 93,38 %
+frente a un mínimo de 93, y `Verifier` en 93,31 % con un suelo de 93, a un
+mutante. Medido otra vez sobre la 9.2.0 con la configuración de la CI: 4361
+mutantes, 289 sin detectar. Ahora: 4234, 144 sin detectar, **96,60 %**
+(96,85 % de lo recorrido), y cada pieza a dos puntos o más de su suelo
+anterior. Las cifras por pieza, en [docs/mutacion.md](docs/mutacion.md).
+
+- **Pruebas de lo que se ve**, no de detalles internos: nombres que no son
+  identificadores en un manifiesto editado a mano (con un `(` en el nombre de
+  un endpoint o de un secreto, `verify` dejaba un aviso de `preg_match()`, y
+  bajo Artisan un aviso es una excepción), un modelo sin `$hidden`, `showcase`
+  frente a `show`, un espacio de nombres con «Ñ» en el prefijo de rutas, un
+  contrato que falta delante de otro, `cat <<` al final de una orden, el
+  directorio de trabajo de la guardia por un enlace, `#[HandRolled]` detrás
+  de otro atributo y en un trait entero, un padre con
+  `prepareForValidation()` privado, `{$appends` pegado a la llave, la sangría
+  mezclada de tabuladores y espacios, lo que `fix` revisa acotado al paquete,
+  una herencia en círculo, `'managed' =>` al final del archivo, un tipo
+  `namespace\Tipo`, la línea de un closure partido en dos.
+- **Equivalentes que eran una idea repetida, escrita una vez.**
+  `PhpOutline::is()` concentra la comparación del tipo de un token, que
+  estaba en 59 sitios donde `$token[0]` y `$token[1]` daban lo mismo; las
+  lecturas de archivos pasan por `Files::read()`; y salen guardas que no
+  guardaban nada (la lista, en docs/mutacion.md).
+- **Cambios de comportamiento, cada uno con su prueba:**
+  - Un archivo que existe y no se puede leer ya no se toma por vacío:
+    `verify`, `ci` y `fix` fallan diciendo cuál. Después de Pint, uno que ya
+    no se puede leer se devuelve como estaba («Después de formatearlo no se
+    podía leer, y se devolvió el original.»).
+  - La guardia lee como `-c` cualquier opción que empiece por `-…c` (`-c1`
+    incluido). Un falso positivo posible; nunca uno negativo.
+  - En el mensaje de la guardia, un `check` o un `message` que no es texto
+    sale como `error` y vacío, no como «Array».
+- **Los suelos tienen margen, y está escrito:** lo logrado, redondeado hacia
+  abajo a la décima, menos un punto; también `--min-msi=95.6` y
+  `--min-covered-msi=95.8`. Lo que ese punto vale en mutantes (de uno en
+  `HandRolledLock` a ocho en `Guard`) lo imprime la comprobación. **No
+  cubre** quitar una prueba que mate menos mutantes que esa holgura: en una
+  pieza grande, eso pasa por debajo del suelo. Se ve igual, en el informe.
+- **Un PR rojo dice qué hacer.** `mutation-floors.php` imprime la holgura de
+  cada pieza y, con el catálogo de supervivientes conocidos
+  (`.github/mutation-survivors.json`, regenerable con `--write-catalog`),
+  cada mutante que escapó y no estaba, con `archivo:línea`, el mutador y la
+  línea que quita y la que pone; también en verde. El informe de Infection
+  queda como artefacto de la corrida.
+- **Lo que no se cerró:** 144 supervivientes, casi todos equivalentes,
+  apuntados por familias. Los que no lo son —el orden y los duplicados de lo
+  que `fix` pasa a la auditoría, código que no es PHP en `LegacyFix`, un
+  closure en el valor de una propiedad en `PhpOutline`— están en la lista de
+  docs/mutacion.md, como tests que faltan. Y el MSI depende algo de la
+  máquina: lo que agota los 30 s cuenta como detectado, y en dos corridas del
+  mismo código `LegacySecurity` pasó de 98,08 % a 96,43 %. Los suelos salen
+  de la más baja.
+
+### La guardia deja de ser sólo de Claude Code
+
+Hasta la 9.2 la guardia en vivo (`larapack:guard` en `.claude/settings.json`)
+sólo la ejecutaba Claude Code. Con Cursor, Codex, Gemini CLI, Copilot o
+Windsurf, lo único que frenaba un controlador con lógica era la CI. Ahora va
+por capas, y todas llaman al mismo `larapack:guard`:
+
+- **El hook de git, para cualquiera** (`GitHooks`). `larapack:skill --hooks`
+  escribe además `.githooks/pre-commit` y `.githooks/pre-push` y pone
+  `core.hooksPath`. Corren `larapack:guard --git=pre-commit|pre-push` sobre lo
+  que se va a comitear o a empujar —sólo esos archivos, y sin correr el
+  Verifier si ninguno es arquitectura— y frenan lo que `verify --strict`
+  rechazaría: errores de esos archivos y una excepción `#[HandRolled]` sin
+  aprobar. Un archivo vigilado preparado a medias no se da por bueno (la
+  guardia lee el disco). Un cambio en `.larapack/hand-rolled.lock` lo confirma
+  una persona escribiendo «apruebo» en `/dev/tty`; sin terminal —como corre un
+  agente— no entra. El `pre-push` mira los commits que ningún remoto tiene
+  todavía: frena lo que se comiteó con `--no-verify`. No pisa nada: un
+  `core.hooksPath` ya puesto, hooks propios en `.git/hooks` o un
+  `.githooks/pre-commit` ajeno se respetan y se dice qué línea añadir.
+  `larapack:new` deja los scripts en un paquete que tendrá su propio
+  repositorio, y dice cómo activarlos tras `git init`.
+- **Los hooks de cada agente que los tiene de verdad** (`AgentAdapters`,
+  `AgentIntegrations`). `larapack:skill --agents=cursor,codex,gemini,copilot,windsurf`
+  (o `all`) escribe sus hooks y sus reglas: `.cursor/hooks.json` y
+  `.cursor/rules/larapack.mdc`; `.codex/hooks.json` (y `AGENTS.md`);
+  `.gemini/settings.json` y `GEMINI.md`; `.github/hooks/larapack.json` y
+  `.github/copilot-instructions.md`; `.windsurf/hooks.json` y
+  `.windsurf/rules/larapack.md`. `larapack:guard --agent=<agente>` traduce la
+  entrada de cada uno a la de Claude Code y contesta en su idioma: negación
+  antes de la herramienta (`permission: deny`, `permissionDecision: deny`,
+  código 2), el motivo después de editar por el canal que llega al modelo
+  (`additional_context`, `additionalContext`, `decision: block`) y otra vuelta
+  al terminar (`followup_message`, `decision: block`, código 2). Codex edita
+  con parches: sus rutas (`*** Update File:`) cuentan como archivos editados,
+  también dentro de una orden de shell, y el parche deja de leerse como orden.
+  Sin `--agent`, el agente se deduce de la entrada.
+- **Saltarse el hook de git se frena** en todos los hooks de antes de la
+  herramienta (`Guard::gitBypass`): `git commit --no-verify` (abreviado, o `-n`
+  en un grupo como `-anm`), `git push`/`merge --no-verify`, y cambiar
+  `core.hooksPath` con `git config` o `git -c`. Leerlo no cuenta, ni un mensaje
+  que diga `-n`. El filtro de la shell deja pasar a PHP esas órdenes, y el
+  PreToolUse de Claude Code que escribió la 9.2 —que no las habría visto— se
+  pone al día al reinstalar con `--hooks`, sólo si es exactamente el suyo.
+- **`larapack:guard --doctor`** (`GuardDoctor`) dice qué capas tiene el
+  proyecto y cuáles faltan, con la orden de cada una (`--format=json` para un
+  script). Sale con 1 si falta el hook de git activo o un workflow con
+  `verify --strict`. Avisa de que Aider comitea con `--no-verify` salvo
+  `git-commit-verify: true`.
+- **Cursor importa los hooks de `.claude/settings.json`** con su propia
+  entrada, y el de antes de la herramienta no veía la orden: dejaba pasar todo.
+  Ahora la reconoce, y calla si el proyecto tiene además los de Cursor.
+
+Pruebas: `AgentAdaptersTest` (la entrada de cada agente, en proceso),
+`AgentIntegrationsTest` (instalar sin pisar, y el comando escrito ejecutado con
+bash con las variables de cada agente), `GitHooksTest` (repositorios de verdad:
+commit, push, candado sin terminal con `setsid` y con terminal con `script`),
+`GitBypassTest` y `GuardDoctorTest`. `guard-smoke.sh` y el job de Windows
+lanzan además los comandos de los cinco agentes y el hook de git desde Git
+Bash. `infection.json5` corre también `GitBypassTest` y `AgentAdaptersTest`:
+son las que matan los mutantes de lo nuevo de `Guard`, que mantiene su suelo
+del 95 %.
+
+Lo que queda abierto, y está en el README («Otros agentes, y el hook de git
+que no depende de ninguno»): `core.hooksPath` es configuración de cada clon; un
+hook de git se salta con `--no-verify` donde no hay hook de agente que lo
+impida; la confirmación del candado no prueba identidad (la barrera sigue
+siendo CODEOWNERS en la rama protegida); los hooks de los otros agentes son
+POSIX sh y en Windows necesitan que el agente los ejecute con Git Bash (sin
+variante `powershell` para Copilot); Codex y Gemini piden aceptar los hooks de
+proyecto y `--doctor` no lo ve; y los adaptadores de Cursor y Windsurf siguen
+la documentación de terceros, porque sus páginas oficiales no fueron accesibles
+desde donde se escribió. Ninguna prueba corre los agentes de verdad: simulan su
+entrada.
+
+### `larapack:fix route-closure`: el fallback de la SPA de laravel-setup <= 7.2.0
+
+Las aplicaciones creadas con laravel-setup hasta la 7.2.0 traen en
+`routes/web.php` el fallback de la SPA en un closure con lógica
+(`abort_if(request()->is('api/*') || request()->expectsJson(), 404); return
+view('app');`). `verify` lo marca como `route-closure`, y con `--strict` —la
+puerta que instala `larapack:ci`— nunca pasaban. laravel-setup 7.2.1 lo resolvió
+para las nuevas; las existentes tenían que copiar dos archivos a mano.
+
+Ahora `larapack:fix route-closure` lo corrige de forma determinista e
+idempotente, como las demás correcciones (`--dry-run`, `--format=json`,
+`fixed`/`skipped`/`unchanged`, `--path`, `--package`, devolución si Pint deja
+algo sin parsear):
+
+- Crea `App\Http\Controllers\SpaController` y `App\Http\Requests\SpaRequest`
+  con el contenido de laravel-setup 7.2.1 si no existen. Si existen y no son
+  esos (sin contar el espacio en blanco), no se sobrescriben y no se toca nada:
+  `skipped` con la razón.
+- Reescribe el fallback a `Route::fallback(SpaController::class)` con su `use`
+  (en orden alfabético), y la raíz `Route::get('/', fn () => view('app'))->name('app')`
+  a `Route::view('/', 'app')->name('app')`. El resto del archivo no se toca.
+- Reconoce sólo ese closure, token a token (`SpaFallback`): pueden variar el
+  espacio en blanco, las comillas y el orden de los dos operandos del `||`;
+  cualquier otra lógica —un parámetro, otra vista, otro código, un comentario
+  dentro, `static`— se salta. Sólo en el `routes/web.php` de la raíz.
+- Cualquier otro closure de las rutas se salta con el mensaje de `verify`, y el
+  comando sale con código distinto de cero: llevarlo a un controlador es lógica
+  del proyecto.
+- Los tres archivos se escriben juntos: si uno no parsea tras Pint, se devuelve
+  el `routes/web.php` y se borran los creados.
+
+`verify` usa el mismo reconocedor: cuando el aviso `route-closure` es ese
+fallback, el mensaje dice «larapack:fix lo corrige» en lugar de pedir un
+controlador. `ControllerShape` expone `routeClosures()`, `flaggedClosures()` y
+`routeClosureMessage()` para eso, sin cambiar qué marca.
+
+Probado con la forma de laravel-setup 7.2.0 tal cual (tras el arreglo,
+`verify --strict` limpio en una aplicación con un modelo generado), con la de
+expediente (la raíz en un controlador y otros closures: se corrige el fallback y
+se saltan los demás) y con la de school-management (un fallback que recibe un
+servicio: no se toca). Las pruebas nuevas (`FixSpaFallbackTest`,
+`SpaFallbackTest`) entran en el filtro de Infection; con ellas, medido en local
+sobre cada archivo, `LegacyFix` queda en 91 % (suelo 89) y `ControllerShape` en
+96,6 % (suelo 95).
+
+**Lo que no cierra.** El comentario de cabecera de `routes/web.php` se queda el
+de 7.2.0: no se reescriben comentarios. Un fallback que no es exactamente el de
+laravel-setup, y los closures propios de cada proyecto, siguen siendo trabajo
+de una persona: el comando los lista con su razón y no los toca. Las líneas que
+dan esos mensajes son las del archivo antes de corregirlo. `SpaFallback.php`
+no entra en el alcance de Infection ni tiene suelo: medido aparte da 93 %, y
+los mutantes que sobreviven son equivalentes o comprobaciones defensivas; meterlo
+ahora movería el umbral global, que ya va justo.
+
+### Lo que encontró la revisión antes de publicar
+
+- **`larapack:fix route-closure` y `declare(strict_types=1)`.** En un `routes/web.php` sin ningún `use` y con
+  `declare` al principio, el `use` de SpaController quedaba delante del `declare`. El archivo parsea, pero PHP lo
+  rechaza al compilar y la aplicación deja de cargar. Ahora va detrás del `declare`; un `declare` que comparte línea
+  con más código se salta con su razón. La prueba compila el resultado con `php -l`.
+- **La guardia frena tres formas más de saltarse los hooks de git:** `core.hooksPath` dado por el entorno
+  (`GIT_CONFIG_KEY_<n>` y `GIT_CONFIG_PARAMETERS`), `git commit-tree`, que crea un commit sin pasar por ningún hook,
+  y un alias definido en la misma orden (`git -c alias.x=…`), cuyo contenido no se puede leer.
+  **Límite, dicho:** un alias de la configuración de git (`git ci --no-verify`) o una orden armada con variables de
+  la shell (`k=core.hooks; git config ${k}Path …`) no se leen; ahí la barrera es la CI.
+- **`larapack:guard --doctor`** ya no da por encadenado un hook del proyecto que sólo menciona la carpeta
+  `.githooks/` (un comentario, un `run-parts`): tiene que llamar a `.githooks/larapack-<hook>`.
+
 ## 9.2.0
 
 ### PHPStan en nivel 8, y lo que escondía

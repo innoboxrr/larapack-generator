@@ -466,7 +466,27 @@ es la misma regla, ejecutada.
   (`Guard::remember`, `Guard::sessionFiles`).
 - [`Guard`](src/Support/Guard.php) **no reimplementa ningún check**: filtra los
   hallazgos del Verifier por archivo (`Guard::findings`, `Guard::errorsFor`).
-  Un check nuevo de `verify` llega a la guardia sin tocarla.
+  Un check nuevo de `verify` llega a la guardia sin tocarla. Antes de la
+  herramienta, además del candado, frena lo que se salta el hook de git
+  (`Guard::gitBypass`: `--no-verify`, `core.hooksPath`).
+- [`AgentAdapters`](src/Support/AgentAdapters.php) hace que la misma decisión
+  hable el idioma de cada agente: `AgentAdapters::normalise` lleva la entrada de
+  Cursor, Codex, Gemini CLI, Copilot o Windsurf a la forma de la de Claude Code,
+  y `AgentAdapters::reply` convierte el veredicto (pasa, bloquea, recuerda,
+  avisa) en el código y el JSON que ese agente respeta. Sin `--agent`, lo
+  deduce de la entrada (`AgentAdapters::detect`). `GuardCommand` decide;
+  aquí sólo se traduce.
+- [`AgentIntegrations`](src/Support/AgentIntegrations.php) escribe los hooks y
+  las reglas de esos agentes (`larapack:skill --agents=…`), fusionando como
+  `AgentHooks`; el comando de antes de la herramienta reutiliza el filtro de
+  la shell de Claude Code (`AgentHooks::preCommand`).
+- [`GitHooks`](src/Support/GitHooks.php) es la capa que no depende del agente:
+  los scripts de `pre-commit` y `pre-push` que corren
+  `larapack:guard --git=…` (`GitHooks::check`) sobre lo que se va a comitear o
+  a empujar, y su instalación con `core.hooksPath` (`GitHooks::install`).
+- [`GuardDoctor`](src/Support/GuardDoctor.php) (`larapack:guard --doctor`) dice
+  qué capas tiene el proyecto —hooks de cada agente, git, CI— y la orden para
+  las que faltan (`GuardDoctor::diagnose`).
 
 Todo lo que no es motivo para bloquear —una entrada vacía o rota, un archivo
 que no es arquitectura, `vendor/`— sale con 0 y en silencio. Un hook que estorba
@@ -492,6 +512,16 @@ actual. El trabajo lo hace [`LegacyFix`](src/Support/LegacyFix.php):
 4. `LegacyFix::withDiffs` da el diff ([`UnifiedDiff`](src/Support/UnifiedDiff.php))
    para `--dry-run`; `LegacyFix::apply` escribe, formatea y rehace el hash de
    lo que el manifiesto conocía sin editar.
+
+`route-closure` sigue otro camino, porque no es deuda de lo generado sino de
+lo que escribía laravel-setup <= 7.2.0: `LegacyFix` recorre
+`ControllerShape::routeClosures` (lo mismo que marca `verify`) y sólo corrige el
+closure que [`SpaFallback`](src/Support/SpaFallback.php) reconoce token a token
+en el `routes/web.php` de la raíz. `SpaFallback::rewrite` reescribe la ruta y
+SpaController y SpaRequest se crean con `SpaFallback::CONTROLLER_CODE` y
+`SpaFallback::REQUEST_CODE`; los tres van en un grupo que se escribe o se
+devuelve entero. El mismo `SpaFallback::fallback` decide en `verify` si el
+mensaje ofrece el arreglo, así que los dos no pueden discrepar.
 
 Además **informa, sin arreglar**, de dos cosas que necesitan a una persona:
 [`ManagedFilterAudit`](src/Support/ManagedFilterAudit.php) (un `canView()` sin
@@ -714,7 +744,8 @@ cambia algo que ve quien usa el generador.
 8. Si vive en una de las piezas de `infection.json5`, corre su mutación
    ([CONTRIBUTING](CONTRIBUTING.md#las-pruebas-de-mutación)): el trabajo
    «Mutación» de la CI no deja bajar el MSI de las ocho juntas ni el de cada
-   una por debajo de su suelo (`.github/mutation-floors.json`).
+   una por debajo de su suelo (`.github/mutation-floors.json`), y lista los
+   mutantes que escapan y no están en `.github/mutation-survivors.json`.
 
 ### Una opción o un comando
 

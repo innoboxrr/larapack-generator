@@ -1,0 +1,1024 @@
+{
+    "CiGate": [
+        {
+            "line": 306,
+            "mutator": "CastString",
+            "kind": "escaped",
+            "removed": "if (preg_match('/^ext-([a-z0-9_]+)$/i', (string) $package, $match) === 1) {",
+            "added": "if (preg_match('/^ext-([a-z0-9_]+)$/i', $package, $match) === 1) {"
+        },
+        {
+            "line": 325,
+            "mutator": "CastString",
+            "kind": "escaped",
+            "removed": "return $top === null || $top === '' ? null : str_replace('\\\\', '/', (string) (realpath($top) ?: $top));",
+            "added": "return $top === null || $top === '' ? null : str_replace('\\\\', '/', realpath($top) ?: $top);"
+        },
+        {
+            "line": 325,
+            "mutator": "Ternary",
+            "kind": "escaped",
+            "removed": "return $top === null || $top === '' ? null : str_replace('\\\\', '/', (string) (realpath($top) ?: $top));",
+            "added": "return $top === null || $top === '' ? null : str_replace('\\\\', '/', (string) (realpath($top) ? $top : realpath($top)));"
+        },
+        {
+            "line": 325,
+            "mutator": "UnwrapStrReplace",
+            "kind": "escaped",
+            "removed": "return $top === null || $top === '' ? null : str_replace('\\\\', '/', (string) (realpath($top) ?: $top));",
+            "added": "return $top === null || $top === '' ? null : (string) (realpath($top) ?: $top);"
+        },
+        {
+            "line": 568,
+            "mutator": "UnwrapRtrim",
+            "kind": "escaped",
+            "removed": "return rtrim(str_replace('\\\\', '/', $root), '/') . '/' . $relative;",
+            "added": "return str_replace('\\\\', '/', $root) . '/' . $relative;"
+        },
+        {
+            "line": 568,
+            "mutator": "UnwrapStrReplace",
+            "kind": "escaped",
+            "removed": "return rtrim(str_replace('\\\\', '/', $root), '/') . '/' . $relative;",
+            "added": "return rtrim($root, '/') . '/' . $relative;"
+        },
+        {
+            "line": 583,
+            "mutator": "ReturnRemoval",
+            "kind": "uncovered",
+            "removed": "return null;",
+            "added": ""
+        },
+        {
+            "line": 591,
+            "mutator": "LogicalAnd",
+            "kind": "escaped",
+            "removed": "return proc_close($process) === 0 && is_string($output) ? trim($output) : null;",
+            "added": "return proc_close($process) === 0 || is_string($output) ? trim($output) : null;"
+        }
+    ],
+    "ControllerShape": [
+        {
+            "line": 267,
+            "mutator": "CastString",
+            "kind": "escaped",
+            "removed": "$findings[] = $this->finding(Verifier::WARNING, self::HAND_ROLLED_STALE, HandRolledLock::PATH, 'Aprueba ' . self::sanitise((string) $target) . ', que ya no lleva #[HandRolled] en ningún controlador. El dueño del proyecto la retira con larapack:hand-rolled revoke.');",
+            "added": "$findings[] = $this->finding(Verifier::WARNING, self::HAND_ROLLED_STALE, HandRolledLock::PATH, 'Aprueba ' . self::sanitise($target) . ', que ya no lleva #[HandRolled] en ningún controlador. El dueño del proyecto la retira con larapack:hand-rolled revoke.');"
+        },
+        {
+            "line": 310,
+            "mutator": "ReturnRemoval",
+            "kind": "escaped",
+            "removed": "return null;",
+            "added": ""
+        },
+        {
+            "line": 331,
+            "mutator": "GreaterThan",
+            "kind": "escaped",
+            "removed": "if (count($statement) > 4 && $statement[0][1] === '$this' && $statement[1][0] === T_OBJECT_OPERATOR && $statement[2][0] === T_STRING && PhpOutline::is($statement[3], '=')) {",
+            "added": "if (count($statement) >= 4 && $statement[0][1] === '$this' && $statement[1][0] === T_OBJECT_OPERATOR && $statement[2][0] === T_STRING && PhpOutline::is($statement[3], '=')) {"
+        },
+        {
+            "line": 337,
+            "mutator": "DecrementInteger",
+            "kind": "escaped",
+            "removed": "return !$this->callsSomething(array_slice($statement, 4));",
+            "added": "return !$this->callsSomething(array_slice($statement, 3));"
+        },
+        {
+            "line": 337,
+            "mutator": "UnwrapArraySlice",
+            "kind": "escaped",
+            "removed": "return !$this->callsSomething(array_slice($statement, 4));",
+            "added": "return !$this->callsSomething($statement);"
+        },
+        {
+            "line": 341,
+            "mutator": "GreaterThan",
+            "kind": "escaped",
+            "removed": "if (count($statement) > 3 && strtolower($statement[0][1]) === 'parent' && $statement[1][0] === T_DOUBLE_COLON && strtolower($statement[2][1]) === '__construct' && PhpOutline::is($statement[3], '(')) {",
+            "added": "if (count($statement) >= 3 && strtolower($statement[0][1]) === 'parent' && $statement[1][0] === T_DOUBLE_COLON && strtolower($statement[2][1]) === '__construct' && PhpOutline::is($statement[3], '(')) {"
+        },
+        {
+            "line": 351,
+            "mutator": "GreaterThan",
+            "kind": "escaped",
+            "removed": "if (count($statement) > 3 && $statement[0][1] === '$this' && $statement[1][0] === T_OBJECT_OPERATOR && strtolower($statement[2][1]) === 'middleware' && PhpOutline::is($statement[3], '(')) {",
+            "added": "if (count($statement) >= 3 && $statement[0][1] === '$this' && $statement[1][0] === T_OBJECT_OPERATOR && strtolower($statement[2][1]) === 'middleware' && PhpOutline::is($statement[3], '(')) {"
+        },
+        {
+            "line": 735,
+            "mutator": "ReturnRemoval",
+            "kind": "escaped",
+            "removed": "return $this->handles[$key];",
+            "added": ""
+        },
+        {
+            "line": 738,
+            "mutator": "TrueValue",
+            "kind": "escaped",
+            "removed": "$visited[$key] = true;",
+            "added": "$visited[$key] = false;"
+        },
+        {
+            "line": 883,
+            "mutator": "CastString",
+            "kind": "escaped",
+            "removed": "return trim((string) $clean);",
+            "added": "return trim($clean);"
+        },
+        {
+            "line": 891,
+            "mutator": "AssignCoalesce",
+            "kind": "escaped",
+            "removed": "return $this->outlines[$file] ??= PhpOutline::ofFile($file)->classes();",
+            "added": "return $this->outlines[$file] = PhpOutline::ofFile($file)->classes();"
+        }
+    ],
+    "Guard": [
+        {
+            "line": 327,
+            "mutator": "DecrementInteger",
+            "kind": "escaped",
+            "removed": "$arguments = array_slice($words, $index + 1);",
+            "added": "$arguments = array_slice($words, $index + 0);"
+        },
+        {
+            "line": 328,
+            "mutator": "UnwrapArrayValues",
+            "kind": "escaped",
+            "removed": "$named = array_values(array_filter($arguments, self::isLockName(...)));",
+            "added": "$named = array_filter($arguments, self::isLockName(...));"
+        },
+        {
+            "line": 335,
+            "mutator": "UnwrapArrayValues",
+            "kind": "escaped",
+            "removed": "return array_values(array_filter(array_map(fn(string $argument): string => str_starts_with($argument, 'of=') ? substr($argument, 3) : '', $arguments), self::isLockName(...)));",
+            "added": "return array_filter(array_map(fn(string $argument): string => str_starts_with($argument, 'of=') ? substr($argument, 3) : '', $arguments), self::isLockName(...));"
+        },
+        {
+            "line": 489,
+            "mutator": "DecrementInteger",
+            "kind": "escaped",
+            "removed": "$i += 2;",
+            "added": "$i += 1;"
+        },
+        {
+            "line": 498,
+            "mutator": "DecrementInteger",
+            "kind": "escaped",
+            "removed": "$i = self::skipHeredocs($line, $i + 1, $heredocs, $scripts) - 1;",
+            "added": "$i = self::skipHeredocs($line, $i + 0, $heredocs, $scripts) - 1;"
+        },
+        {
+            "line": 498,
+            "mutator": "DecrementInteger",
+            "kind": "escaped",
+            "removed": "$i = self::skipHeredocs($line, $i + 1, $heredocs, $scripts) - 1;",
+            "added": "$i = self::skipHeredocs($line, $i + 1, $heredocs, $scripts) - 0;"
+        },
+        {
+            "line": 498,
+            "mutator": "IncrementInteger",
+            "kind": "escaped",
+            "removed": "$i = self::skipHeredocs($line, $i + 1, $heredocs, $scripts) - 1;",
+            "added": "$i = self::skipHeredocs($line, $i + 1, $heredocs, $scripts) - 2;"
+        },
+        {
+            "line": 588,
+            "mutator": "LessThanOrEqualTo",
+            "kind": "escaped",
+            "removed": "while ($position <= $length) {",
+            "added": "while ($position < $length) {"
+        },
+        {
+            "line": 999,
+            "mutator": "UnwrapArrayUnique",
+            "kind": "escaped",
+            "removed": "return array_values(array_unique($files));",
+            "added": "return array_values($files);"
+        },
+        {
+            "line": 999,
+            "mutator": "UnwrapArrayValues",
+            "kind": "escaped",
+            "removed": "return array_values(array_unique($files));",
+            "added": "return array_unique($files);"
+        },
+        {
+            "line": 1055,
+            "mutator": "UnwrapArrayFilter",
+            "kind": "escaped",
+            "removed": "return array_values(array_filter(explode(\"\\n\", $contents), fn(string $line): bool => $line !== ''));",
+            "added": "return array_values(explode(\"\\n\", $contents));"
+        },
+        {
+            "line": 1055,
+            "mutator": "UnwrapArrayValues",
+            "kind": "escaped",
+            "removed": "return array_values(array_filter(explode(\"\\n\", $contents), fn(string $line): bool => $line !== ''));",
+            "added": "return array_filter(explode(\"\\n\", $contents), fn(string $line): bool => $line !== '');"
+        },
+        {
+            "line": 1093,
+            "mutator": "Identical",
+            "kind": "escaped",
+            "removed": "return self::stateDirectoryIn(self::$temporaryDirectory ?? sys_get_temp_dir(), function_exists('posix_geteuid') ? posix_geteuid() : null, PHP_OS_FAMILY === 'Windows');",
+            "added": "return self::stateDirectoryIn(self::$temporaryDirectory ?? sys_get_temp_dir(), function_exists('posix_geteuid') ? posix_geteuid() : null, PHP_OS_FAMILY !== 'Windows');"
+        },
+        {
+            "line": 1132,
+            "mutator": "LogicalAnd",
+            "kind": "escaped",
+            "removed": "if (!is_link($directory) && !is_dir($directory) && !@mkdir($directory, 0700, true) && !is_dir($directory)) {",
+            "added": "if (!is_link($directory) && !is_dir($directory) && !@mkdir($directory, 0700, true) || !is_dir($directory)) {"
+        },
+        {
+            "line": 1132,
+            "mutator": "LogicalAnd",
+            "kind": "escaped",
+            "removed": "if (!is_link($directory) && !is_dir($directory) && !@mkdir($directory, 0700, true) && !is_dir($directory)) {",
+            "added": "if ((!is_link($directory) || !is_dir($directory)) && !@mkdir($directory, 0700, true) && !is_dir($directory)) {"
+        },
+        {
+            "line": 1167,
+            "mutator": "UnwrapRtrim",
+            "kind": "escaped",
+            "removed": "$top = rtrim(self::normalise(trim($top)), '/');",
+            "added": "$top = self::normalise(trim($top));"
+        },
+        {
+            "line": 1198,
+            "mutator": "ReturnRemoval",
+            "kind": "uncovered",
+            "removed": "return null;",
+            "added": ""
+        },
+        {
+            "line": 1206,
+            "mutator": "LogicalAnd",
+            "kind": "escaped",
+            "removed": "return proc_close($process) === 0 && is_string($output) ? $output : null;",
+            "added": "return proc_close($process) === 0 || is_string($output) ? $output : null;"
+        },
+        {
+            "line": 1235,
+            "mutator": "PregMatchRemoveCaret",
+            "kind": "escaped",
+            "removed": "preg_match('#^(?://(?!/)|[A-Za-z]:/+|/+)?#', $path, $match);",
+            "added": "preg_match('#(?://(?!/)|[A-Za-z]:/+|/+)?#', $path, $match);"
+        }
+    ],
+    "LegacyFix": [
+        {
+            "line": 226,
+            "mutator": "Foreach_",
+            "kind": "escaped",
+            "removed": "foreach ((new LegacySecurity($this->root, $this->fixes))->inspect()['debt'] as $debt) {",
+            "added": "foreach ([] as $debt) {"
+        },
+        {
+            "line": 227,
+            "mutator": "TrueValue",
+            "kind": "escaped",
+            "removed": "$still[$debt['file']] = true;",
+            "added": "$still[$debt['file']] = false;"
+        },
+        {
+            "line": 234,
+            "mutator": "MethodCallRemoval",
+            "kind": "uncovered",
+            "removed": "$this->skip($check, $file, 'Después del arreglo verify lo seguiría marcando: la forma no es la que se esperaba.');",
+            "added": ""
+        },
+        {
+            "line": 237,
+            "mutator": "Continue_",
+            "kind": "uncovered",
+            "removed": "continue;",
+            "added": "break;"
+        },
+        {
+            "line": 262,
+            "mutator": "UnwrapArrayUnique",
+            "kind": "escaped",
+            "removed": "$requests = array_values(array_unique([...array_filter($clean[LegacySecurity::INDEX_MANAGED] ?? [], fn(string $file): bool => $this->inScope($file)), ...array_keys(array_filter($this->checkOf, fn(string $check, string $file): bool => $check === LegacySecurity::INDEX_MANAGED && isset($this->fixes[$file]), ARRAY_FILTER_USE_BOTH))]));",
+            "added": "$requests = array_values([...array_filter($clean[LegacySecurity::INDEX_MANAGED] ?? [], fn(string $file): bool => $this->inScope($file)), ...array_keys(array_filter($this->checkOf, fn(string $check, string $file): bool => $check === LegacySecurity::INDEX_MANAGED && isset($this->fixes[$file]), ARRAY_FILTER_USE_BOTH))]);"
+        },
+        {
+            "line": 262,
+            "mutator": "UnwrapArrayValues",
+            "kind": "escaped",
+            "removed": "$requests = array_values(array_unique([...array_filter($clean[LegacySecurity::INDEX_MANAGED] ?? [], fn(string $file): bool => $this->inScope($file)), ...array_keys(array_filter($this->checkOf, fn(string $check, string $file): bool => $check === LegacySecurity::INDEX_MANAGED && isset($this->fixes[$file]), ARRAY_FILTER_USE_BOTH))]));",
+            "added": "$requests = array_unique([...array_filter($clean[LegacySecurity::INDEX_MANAGED] ?? [], fn(string $file): bool => $this->inScope($file)), ...array_keys(array_filter($this->checkOf, fn(string $check, string $file): bool => $check === LegacySecurity::INDEX_MANAGED && isset($this->fixes[$file]), ARRAY_FILTER_USE_BOTH))]);"
+        },
+        {
+            "line": 264,
+            "mutator": "LogicalAnd",
+            "kind": "escaped",
+            "removed": "$requests = array_values(array_unique([...array_filter($clean[LegacySecurity::INDEX_MANAGED] ?? [], fn(string $file): bool => $this->inScope($file)), ...array_keys(array_filter($this->checkOf, fn(string $check, string $file): bool => $check === LegacySecurity::INDEX_MANAGED && isset($this->fixes[$file]), ARRAY_FILTER_USE_BOTH))]));",
+            "added": "$requests = array_values(array_unique([...array_filter($clean[LegacySecurity::INDEX_MANAGED] ?? [], fn(string $file): bool => $this->inScope($file)), ...array_keys(array_filter($this->checkOf, fn(string $check, string $file): bool => $check === LegacySecurity::INDEX_MANAGED || isset($this->fixes[$file]), ARRAY_FILTER_USE_BOTH))]));"
+        },
+        {
+            "line": 264,
+            "mutator": "UnwrapArrayFilter",
+            "kind": "escaped",
+            "removed": "$requests = array_values(array_unique([...array_filter($clean[LegacySecurity::INDEX_MANAGED] ?? [], fn(string $file): bool => $this->inScope($file)), ...array_keys(array_filter($this->checkOf, fn(string $check, string $file): bool => $check === LegacySecurity::INDEX_MANAGED && isset($this->fixes[$file]), ARRAY_FILTER_USE_BOTH))]));",
+            "added": "$requests = array_values(array_unique([...array_filter($clean[LegacySecurity::INDEX_MANAGED] ?? [], fn(string $file): bool => $this->inScope($file)), ...array_keys($this->checkOf)]));"
+        },
+        {
+            "line": 266,
+            "mutator": "FunctionCallRemoval",
+            "kind": "escaped",
+            "removed": "sort($requests);",
+            "added": ""
+        },
+        {
+            "line": 273,
+            "mutator": "UnwrapArrayFilter",
+            "kind": "escaped",
+            "removed": "$resources = array_values(array_filter($project->files('/Http/Resources/'), fn(string $file): bool => $this->inScope($file)));",
+            "added": "$resources = array_values($project->files('/Http/Resources/'));"
+        },
+        {
+            "line": 273,
+            "mutator": "UnwrapArrayValues",
+            "kind": "escaped",
+            "removed": "$resources = array_values(array_filter($project->files('/Http/Resources/'), fn(string $file): bool => $this->inScope($file)));",
+            "added": "$resources = array_filter($project->files('/Http/Resources/'), fn(string $file): bool => $this->inScope($file));"
+        },
+        {
+            "line": 276,
+            "mutator": "SpreadOneItem",
+            "kind": "escaped",
+            "removed": "$frontRoots = $this->packages === [] ? $project->roots() : array_values(array_unique([$project->root(), ...$this->packages]));",
+            "added": "$frontRoots = $this->packages === [] ? $project->roots() : array_values(array_unique([$project->root(), [...$this->packages][0]]));"
+        },
+        {
+            "line": 276,
+            "mutator": "UnwrapArrayUnique",
+            "kind": "escaped",
+            "removed": "$frontRoots = $this->packages === [] ? $project->roots() : array_values(array_unique([$project->root(), ...$this->packages]));",
+            "added": "$frontRoots = $this->packages === [] ? $project->roots() : array_values([$project->root(), ...$this->packages]);"
+        },
+        {
+            "line": 276,
+            "mutator": "UnwrapArrayValues",
+            "kind": "escaped",
+            "removed": "$frontRoots = $this->packages === [] ? $project->roots() : array_values(array_unique([$project->root(), ...$this->packages]));",
+            "added": "$frontRoots = $this->packages === [] ? $project->roots() : array_unique([$project->root(), ...$this->packages]);"
+        },
+        {
+            "line": 326,
+            "mutator": "AssignCoalesce",
+            "kind": "escaped",
+            "removed": "$manifests[$owner] ??= new Manifest($owner);",
+            "added": "$manifests[$owner] = new Manifest($owner);"
+        },
+        {
+            "line": 358,
+            "mutator": "UnwrapArrayFilter",
+            "kind": "escaped",
+            "removed": "$manifests[$owner]->rehash(array_values(array_filter($files, fn(string $file): bool => isset($this->fixes[$file]))));",
+            "added": "$manifests[$owner]->rehash(array_values($files));"
+        },
+        {
+            "line": 358,
+            "mutator": "UnwrapArrayValues",
+            "kind": "escaped",
+            "removed": "$manifests[$owner]->rehash(array_values(array_filter($files, fn(string $file): bool => isset($this->fixes[$file]))));",
+            "added": "$manifests[$owner]->rehash(array_filter($files, fn(string $file): bool => isset($this->fixes[$file])));"
+        },
+        {
+            "line": 470,
+            "mutator": "DecrementInteger",
+            "kind": "escaped",
+            "removed": "for ($i = $method['open'] + 1; $i < $method['close']; $i++) {",
+            "added": "for ($i = $method['open'] + 0; $i < $method['close']; $i++) {"
+        },
+        {
+            "line": 470,
+            "mutator": "IncrementInteger",
+            "kind": "escaped",
+            "removed": "for ($i = $method['open'] + 1; $i < $method['close']; $i++) {",
+            "added": "for ($i = $method['open'] + 2; $i < $method['close']; $i++) {"
+        },
+        {
+            "line": 470,
+            "mutator": "LessThan",
+            "kind": "escaped",
+            "removed": "for ($i = $method['open'] + 1; $i < $method['close']; $i++) {",
+            "added": "for ($i = $method['open'] + 1; $i <= $method['close']; $i++) {"
+        },
+        {
+            "line": 470,
+            "mutator": "Plus",
+            "kind": "escaped",
+            "removed": "for ($i = $method['open'] + 1; $i < $method['close']; $i++) {",
+            "added": "for ($i = $method['open'] - 1; $i < $method['close']; $i++) {"
+        },
+        {
+            "line": 484,
+            "mutator": "DecrementInteger",
+            "kind": "escaped",
+            "removed": "for ($i = $method['open'] + 1; $i < $method['close']; $i++) {",
+            "added": "for ($i = $method['open'] + 0; $i < $method['close']; $i++) {"
+        },
+        {
+            "line": 484,
+            "mutator": "LessThan",
+            "kind": "escaped",
+            "removed": "for ($i = $method['open'] + 1; $i < $method['close']; $i++) {",
+            "added": "for ($i = $method['open'] + 1; $i <= $method['close']; $i++) {"
+        },
+        {
+            "line": 484,
+            "mutator": "Plus",
+            "kind": "escaped",
+            "removed": "for ($i = $method['open'] + 1; $i < $method['close']; $i++) {",
+            "added": "for ($i = $method['open'] - 1; $i < $method['close']; $i++) {"
+        },
+        {
+            "line": 485,
+            "mutator": "GreaterThan",
+            "kind": "escaped",
+            "removed": "if (($i < $start || $i > $end) && $tokens[$i]->id === T_VARIABLE && in_array($tokens[$i]->text, ['$appends', '$requested'], true)) {",
+            "added": "if (($i < $start || $i >= $end) && $tokens[$i]->id === T_VARIABLE && in_array($tokens[$i]->text, ['$appends', '$requested'], true)) {"
+        },
+        {
+            "line": 485,
+            "mutator": "LessThan",
+            "kind": "escaped",
+            "removed": "if (($i < $start || $i > $end) && $tokens[$i]->id === T_VARIABLE && in_array($tokens[$i]->text, ['$appends', '$requested'], true)) {",
+            "added": "if (($i <= $start || $i > $end) && $tokens[$i]->id === T_VARIABLE && in_array($tokens[$i]->text, ['$appends', '$requested'], true)) {"
+        },
+        {
+            "line": 485,
+            "mutator": "LogicalAnd",
+            "kind": "escaped",
+            "removed": "if (($i < $start || $i > $end) && $tokens[$i]->id === T_VARIABLE && in_array($tokens[$i]->text, ['$appends', '$requested'], true)) {",
+            "added": "if (($i < $start || $i > $end || $tokens[$i]->id === T_VARIABLE) && in_array($tokens[$i]->text, ['$appends', '$requested'], true)) {"
+        },
+        {
+            "line": 485,
+            "mutator": "LogicalOrAllSubExprNegation",
+            "kind": "escaped",
+            "removed": "if (($i < $start || $i > $end) && $tokens[$i]->id === T_VARIABLE && in_array($tokens[$i]->text, ['$appends', '$requested'], true)) {",
+            "added": "if ((!($i < $start) || !($i > $end)) && $tokens[$i]->id === T_VARIABLE && in_array($tokens[$i]->text, ['$appends', '$requested'], true)) {"
+        },
+        {
+            "line": 528,
+            "mutator": "NullSafePropertyCall",
+            "kind": "escaped",
+            "removed": "if ($i === null || $chain[0]?->id !== T_OBJECT_OPERATOR || $chain[1]?->id !== T_STRING || $chain[1]->text !== 'resource' || $chain[2]?->id !== T_OBJECT_OPERATOR || $chain[3]?->id !== T_VARIABLE || $chain[3]->text !== '$this') {",
+            "added": "if ($i === null || $chain[0]->id !== T_OBJECT_OPERATOR || $chain[1]?->id !== T_STRING || $chain[1]->text !== 'resource' || $chain[2]?->id !== T_OBJECT_OPERATOR || $chain[3]?->id !== T_VARIABLE || $chain[3]->text !== '$this') {"
+        },
+        {
+            "line": 529,
+            "mutator": "NullSafePropertyCall",
+            "kind": "escaped",
+            "removed": "if ($i === null || $chain[0]?->id !== T_OBJECT_OPERATOR || $chain[1]?->id !== T_STRING || $chain[1]->text !== 'resource' || $chain[2]?->id !== T_OBJECT_OPERATOR || $chain[3]?->id !== T_VARIABLE || $chain[3]->text !== '$this') {",
+            "added": "if ($i === null || $chain[0]?->id !== T_OBJECT_OPERATOR || $chain[1]->id !== T_STRING || $chain[1]->text !== 'resource' || $chain[2]?->id !== T_OBJECT_OPERATOR || $chain[3]?->id !== T_VARIABLE || $chain[3]->text !== '$this') {"
+        },
+        {
+            "line": 530,
+            "mutator": "NullSafePropertyCall",
+            "kind": "escaped",
+            "removed": "if ($i === null || $chain[0]?->id !== T_OBJECT_OPERATOR || $chain[1]?->id !== T_STRING || $chain[1]->text !== 'resource' || $chain[2]?->id !== T_OBJECT_OPERATOR || $chain[3]?->id !== T_VARIABLE || $chain[3]->text !== '$this') {",
+            "added": "if ($i === null || $chain[0]?->id !== T_OBJECT_OPERATOR || $chain[1]?->id !== T_STRING || $chain[1]->text !== 'resource' || $chain[2]->id !== T_OBJECT_OPERATOR || $chain[3]?->id !== T_VARIABLE || $chain[3]->text !== '$this') {"
+        },
+        {
+            "line": 531,
+            "mutator": "NullSafePropertyCall",
+            "kind": "escaped",
+            "removed": "if ($i === null || $chain[0]?->id !== T_OBJECT_OPERATOR || $chain[1]?->id !== T_STRING || $chain[1]->text !== 'resource' || $chain[2]?->id !== T_OBJECT_OPERATOR || $chain[3]?->id !== T_VARIABLE || $chain[3]->text !== '$this') {",
+            "added": "if ($i === null || $chain[0]?->id !== T_OBJECT_OPERATOR || $chain[1]?->id !== T_STRING || $chain[1]->text !== 'resource' || $chain[2]?->id !== T_OBJECT_OPERATOR || $chain[3]->id !== T_VARIABLE || $chain[3]->text !== '$this') {"
+        },
+        {
+            "line": 539,
+            "mutator": "LogicalOr",
+            "kind": "escaped",
+            "removed": "if ($parenthesis === null || $tokens[$parenthesis]->text !== '(') {",
+            "added": "if ($parenthesis === null && $tokens[$parenthesis]->text !== '(') {"
+        },
+        {
+            "line": 540,
+            "mutator": "Throw_",
+            "kind": "uncovered",
+            "removed": "throw new RuntimeException('setAppends sin argumentos.');",
+            "added": "new RuntimeException('setAppends sin argumentos.');"
+        },
+        {
+            "line": 554,
+            "mutator": "Throw_",
+            "kind": "uncovered",
+            "removed": "throw new RuntimeException('setAppends() fuera de un método.');",
+            "added": "new RuntimeException('setAppends() fuera de un método.');"
+        },
+        {
+            "line": 586,
+            "mutator": "DecrementInteger",
+            "kind": "escaped",
+            "removed": "$this->assertConditionReadsAppends($this->significant($tokens, $conditionOpen + 1, $conditionClose), $method['params']);",
+            "added": "$this->assertConditionReadsAppends($this->significant($tokens, $conditionOpen + 0, $conditionClose), $method['params']);"
+        },
+        {
+            "line": 604,
+            "mutator": "GreaterThanOrEqualTo",
+            "kind": "escaped",
+            "removed": "if (count($texts) >= 5 && $argument[0]->id === T_VARIABLE && in_array($texts[0], $params, true) && $texts[1] === '->' && in_array(strtolower($texts[2]), ['get', 'input'], true) && $texts[3] === '(' && $tail(array_slice($texts, 4))) {",
+            "added": "if (count($texts) > 5 && $argument[0]->id === T_VARIABLE && in_array($texts[0], $params, true) && $texts[1] === '->' && in_array(strtolower($texts[2]), ['get', 'input'], true) && $texts[3] === '(' && $tail(array_slice($texts, 4))) {"
+        },
+        {
+            "line": 611,
+            "mutator": "GreaterThanOrEqualTo",
+            "kind": "escaped",
+            "removed": "if (count($texts) >= 3 && strtolower($texts[0]) === 'request' && $texts[1] === '(' && $tail(array_slice($texts, 2))) {",
+            "added": "if (count($texts) > 3 && strtolower($texts[0]) === 'request' && $texts[1] === '(' && $tail(array_slice($texts, 2))) {"
+        },
+        {
+            "line": 615,
+            "mutator": "GreaterThanOrEqualTo",
+            "kind": "escaped",
+            "removed": "if (count($texts) >= 7 && strtolower($texts[0]) === 'request' && $texts[1] === '(' && $texts[2] === ')' && $texts[3] === '->' && in_array(strtolower($texts[4]), ['get', 'input'], true) && $texts[5] === '(' && $tail(array_slice($texts, 6))) {",
+            "added": "if (count($texts) > 7 && strtolower($texts[0]) === 'request' && $texts[1] === '(' && $texts[2] === ')' && $texts[3] === '->' && in_array(strtolower($texts[4]), ['get', 'input'], true) && $texts[5] === '(' && $tail(array_slice($texts, 6))) {"
+        },
+        {
+            "line": 661,
+            "mutator": "IncrementInteger",
+            "kind": "escaped",
+            "removed": "for ($i = $open + 1; $i < $close; $i++) {",
+            "added": "for ($i = $open + 2; $i < $close; $i++) {"
+        },
+        {
+            "line": 661,
+            "mutator": "LessThan",
+            "kind": "escaped",
+            "removed": "for ($i = $open + 1; $i < $close; $i++) {",
+            "added": "for ($i = $open + 1; $i <= $close; $i++) {"
+        },
+        {
+            "line": 694,
+            "mutator": "UnwrapArrayValues",
+            "kind": "escaped",
+            "removed": "return array_values(PhpToken::tokenize($code));",
+            "added": "return PhpToken::tokenize($code);"
+        },
+        {
+            "line": 717,
+            "mutator": "LogicalOr",
+            "kind": "escaped",
+            "removed": "if ($after === null || $tokens[$after]->id !== T_STRING || strcasecmp($tokens[$after]->text, $name) !== 0) {",
+            "added": "if ($after === null && $tokens[$after]->id !== T_STRING || strcasecmp($tokens[$after]->text, $name) !== 0) {"
+        },
+        {
+            "line": 735,
+            "mutator": "Throw_",
+            "kind": "uncovered",
+            "removed": "throw new RuntimeException(\"La clase {$name} no tiene cuerpo.\");",
+            "added": "new RuntimeException(\"La clase {$name} no tiene cuerpo.\");"
+        },
+        {
+            "line": 754,
+            "mutator": "IncrementInteger",
+            "kind": "escaped",
+            "removed": "for ($i = $open + 1; $i < $close; $i++) {",
+            "added": "for ($i = $open + 2; $i < $close; $i++) {"
+        },
+        {
+            "line": 754,
+            "mutator": "LessThan",
+            "kind": "escaped",
+            "removed": "for ($i = $open + 1; $i < $close; $i++) {",
+            "added": "for ($i = $open + 1; $i <= $close; $i++) {"
+        },
+        {
+            "line": 791,
+            "mutator": "LogicalOr",
+            "kind": "escaped",
+            "removed": "if ($name === null || $parenthesis === null || $tokens[$parenthesis]->text !== '(') {",
+            "added": "if ($name === null && $parenthesis === null || $tokens[$parenthesis]->text !== '(') {"
+        },
+        {
+            "line": 798,
+            "mutator": "DecrementInteger",
+            "kind": "escaped",
+            "removed": "for ($j = $parenthesis + 1; $j < $paramsClose; $j++) {",
+            "added": "for ($j = $parenthesis + 0; $j < $paramsClose; $j++) {"
+        },
+        {
+            "line": 798,
+            "mutator": "LessThan",
+            "kind": "escaped",
+            "removed": "for ($j = $parenthesis + 1; $j < $paramsClose; $j++) {",
+            "added": "for ($j = $parenthesis + 1; $j <= $paramsClose; $j++) {"
+        },
+        {
+            "line": 798,
+            "mutator": "Plus",
+            "kind": "escaped",
+            "removed": "for ($j = $parenthesis + 1; $j < $paramsClose; $j++) {",
+            "added": "for ($j = $parenthesis - 1; $j < $paramsClose; $j++) {"
+        },
+        {
+            "line": 804,
+            "mutator": "DecrementInteger",
+            "kind": "escaped",
+            "removed": "$j = $paramsClose + 1;",
+            "added": "$j = $paramsClose + 0;"
+        },
+        {
+            "line": 804,
+            "mutator": "Plus",
+            "kind": "escaped",
+            "removed": "$j = $paramsClose + 1;",
+            "added": "$j = $paramsClose - 1;"
+        },
+        {
+            "line": 806,
+            "mutator": "LessThan",
+            "kind": "escaped",
+            "removed": "while ($j < $close && !in_array($tokens[$j]->text, ['{', ';'], true)) {",
+            "added": "while ($j <= $close && !in_array($tokens[$j]->text, ['{', ';'], true)) {"
+        },
+        {
+            "line": 815,
+            "mutator": "LogicalOr",
+            "kind": "escaped",
+            "removed": "$methods[strtolower($tokens[$name]->text)] ??= $bodyOpen === null || $bodyClose === null ? ['start' => $start, 'open' => null, 'close' => null, 'params' => $params] : ['start' => $start, 'open' => $bodyOpen, 'close' => $bodyClose, 'params' => $params];",
+            "added": "$methods[strtolower($tokens[$name]->text)] ??= $bodyOpen === null && $bodyClose === null ? ['start' => $start, 'open' => null, 'close' => null, 'params' => $params] : ['start' => $start, 'open' => $bodyOpen, 'close' => $bodyClose, 'params' => $params];"
+        },
+        {
+            "line": 816,
+            "mutator": "ArrayItemRemoval",
+            "kind": "escaped",
+            "removed": "$methods[strtolower($tokens[$name]->text)] ??= $bodyOpen === null || $bodyClose === null ? ['start' => $start, 'open' => null, 'close' => null, 'params' => $params] : ['start' => $start, 'open' => $bodyOpen, 'close' => $bodyClose, 'params' => $params];",
+            "added": "$methods[strtolower($tokens[$name]->text)] ??= $bodyOpen === null || $bodyClose === null ? ['open' => null, 'close' => null, 'params' => $params] : ['start' => $start, 'open' => $bodyOpen, 'close' => $bodyClose, 'params' => $params];"
+        },
+        {
+            "line": 837,
+            "mutator": "Throw_",
+            "kind": "uncovered",
+            "removed": "throw new RuntimeException('La clase no tiene métodos delante de los que insertar.');",
+            "added": "new RuntimeException('La clase no tiene métodos delante de los que insertar.');"
+        },
+        {
+            "line": 853,
+            "mutator": "LessThan",
+            "kind": "escaped",
+            "removed": "for ($i = $open; $i < $index; $i++) {",
+            "added": "for ($i = $open; $i <= $index; $i++) {"
+        },
+        {
+            "line": 873,
+            "mutator": "Throw_",
+            "kind": "uncovered",
+            "removed": "throw new RuntimeException('Se esperaba un paréntesis o una llave.');",
+            "added": "new RuntimeException('Se esperaba un paréntesis o una llave.');"
+        },
+        {
+            "line": 885,
+            "mutator": "Throw_",
+            "kind": "uncovered",
+            "removed": "throw new RuntimeException('Paréntesis o llaves sin equilibrar.');",
+            "added": "new RuntimeException('Paréntesis o llaves sin equilibrar.');"
+        },
+        {
+            "line": 904,
+            "mutator": "GreaterThanOrEqualTo",
+            "kind": "escaped",
+            "removed": "for ($i = $close; $i >= 0; $i--) {",
+            "added": "for ($i = $close; $i > 0; $i--) {"
+        },
+        {
+            "line": 914,
+            "mutator": "Throw_",
+            "kind": "uncovered",
+            "removed": "throw new RuntimeException('Paréntesis sin abrir.');",
+            "added": "new RuntimeException('Paréntesis sin abrir.');"
+        },
+        {
+            "line": 939,
+            "mutator": "GreaterThanOrEqualTo",
+            "kind": "escaped",
+            "removed": "for ($i = $index - 1; $i >= 0; $i--) {",
+            "added": "for ($i = $index - 1; $i > 0; $i--) {"
+        },
+        {
+            "line": 953,
+            "mutator": "LessThan",
+            "kind": "escaped",
+            "removed": "for ($i = $index + 1, $count = count($tokens); $i < $count; $i++) {",
+            "added": "for ($i = $index + 1, $count = count($tokens); $i <= $count; $i++) {"
+        },
+        {
+            "line": 968,
+            "mutator": "DecrementInteger",
+            "kind": "escaped",
+            "removed": "return $newline === false ? 0 : $newline + 1;",
+            "added": "return $newline === false ? -1 : $newline + 1;"
+        },
+        {
+            "line": 968,
+            "mutator": "IncrementInteger",
+            "kind": "escaped",
+            "removed": "return $newline === false ? 0 : $newline + 1;",
+            "added": "return $newline === false ? 1 : $newline + 1;"
+        }
+    ],
+    "LegacySecurity": [
+        {
+            "line": 171,
+            "mutator": "UnwrapArrayValues",
+            "kind": "escaped",
+            "removed": "return ['debt' => $debt, 'clean' => array_map(fn(array $files): array => array_values(array_unique($files)), $clean)];",
+            "added": "return ['debt' => $debt, 'clean' => array_map(fn(array $files): array => array_unique($files), $clean)];"
+        },
+        {
+            "line": 196,
+            "mutator": "TrueValue",
+            "kind": "escaped",
+            "removed": "$visited[$parent] = true;",
+            "added": "$visited[$parent] = false;"
+        },
+        {
+            "line": 271,
+            "mutator": "UnwrapStrToLower",
+            "kind": "escaped",
+            "removed": "$key = strtolower($class['fqcn']);",
+            "added": "$key = $class['fqcn'];"
+        },
+        {
+            "line": 277,
+            "mutator": "TrueValue",
+            "kind": "escaped",
+            "removed": "$visited[$key] = true;",
+            "added": "$visited[$key] = false;"
+        },
+        {
+            "line": 329,
+            "mutator": "DecrementInteger",
+            "kind": "escaped",
+            "removed": "for ($j = $index + 1, $count = count($body); $j < $count; $j++) {",
+            "added": "for ($j = $index + 0, $count = count($body); $j < $count; $j++) {"
+        },
+        {
+            "line": 329,
+            "mutator": "Plus",
+            "kind": "escaped",
+            "removed": "for ($j = $index + 1, $count = count($body); $j < $count; $j++) {",
+            "added": "for ($j = $index - 1, $count = count($body); $j < $count; $j++) {"
+        },
+        {
+            "line": 401,
+            "mutator": "ReturnRemoval",
+            "kind": "escaped",
+            "removed": "return null;",
+            "added": ""
+        },
+        {
+            "line": 419,
+            "mutator": "GreaterThan",
+            "kind": "escaped",
+            "removed": "if (count($statement) > 2 && $statement[0][0] === T_VARIABLE && PhpOutline::is($statement[1], '=')) {",
+            "added": "if (count($statement) >= 2 && $statement[0][0] === T_VARIABLE && PhpOutline::is($statement[1], '=')) {"
+        },
+        {
+            "line": 419,
+            "mutator": "LogicalAnd",
+            "kind": "escaped",
+            "removed": "if (count($statement) > 2 && $statement[0][0] === T_VARIABLE && PhpOutline::is($statement[1], '=')) {",
+            "added": "if ((count($statement) > 2 || $statement[0][0] === T_VARIABLE) && PhpOutline::is($statement[1], '=')) {"
+        },
+        {
+            "line": 420,
+            "mutator": "DecrementInteger",
+            "kind": "escaped",
+            "removed": "$tainted[$statement[0][1]] = $this->carriesInput(array_slice($statement, 2), $tainted);",
+            "added": "$tainted[$statement[0][1]] = $this->carriesInput(array_slice($statement, 1), $tainted);"
+        },
+        {
+            "line": 428,
+            "mutator": "DecrementInteger",
+            "kind": "escaped",
+            "removed": "if ($this->carriesInput($this->arguments($statement, $index + 1), $tainted)) {",
+            "added": "if ($this->carriesInput($this->arguments($statement, $index + 0), $tainted)) {"
+        },
+        {
+            "line": 428,
+            "mutator": "Plus",
+            "kind": "escaped",
+            "removed": "if ($this->carriesInput($this->arguments($statement, $index + 1), $tainted)) {",
+            "added": "if ($this->carriesInput($this->arguments($statement, $index - 1), $tainted)) {"
+        },
+        {
+            "line": 482,
+            "mutator": "DecrementInteger",
+            "kind": "escaped",
+            "removed": "if (PhpOutline::is($tokens[$i], '(', '[', '{') && $depth++ === 0) {",
+            "added": "if (PhpOutline::is($tokens[$i], '(', '[', '{') && $depth++ === -1) {"
+        }
+    ],
+    "PhpOutline": [
+        {
+            "line": 68,
+            "mutator": "IncrementInteger",
+            "kind": "escaped",
+            "removed": "$line = 1;",
+            "added": "$line = 2;"
+        },
+        {
+            "line": 150,
+            "mutator": "GreaterThan",
+            "kind": "escaped",
+            "removed": "$named = count($argument) > 2 && self::is($argument[1], ':') && $argument[0][0] === T_STRING;",
+            "added": "$named = count($argument) >= 2 && self::is($argument[1], ':') && $argument[0][0] === T_STRING;"
+        },
+        {
+            "line": 216,
+            "mutator": "IncrementInteger",
+            "kind": "escaped",
+            "removed": "for ($index = 1; $index < $count - 1; $index++) {",
+            "added": "for ($index = 1; $index < $count - 2; $index++) {"
+        },
+        {
+            "line": 216,
+            "mutator": "IncrementInteger",
+            "kind": "escaped",
+            "removed": "for ($index = 1; $index < $count - 1; $index++) {",
+            "added": "for ($index = 2; $index < $count - 1; $index++) {"
+        },
+        {
+            "line": 230,
+            "mutator": "GreaterThan",
+            "kind": "escaped",
+            "removed": "if (count($argument) > 2 && $argument[0][0] === T_STRING && self::is($argument[1], ':')) {",
+            "added": "if (count($argument) >= 2 && $argument[0][0] === T_STRING && self::is($argument[1], ':')) {"
+        },
+        {
+            "line": 333,
+            "mutator": "ReturnRemoval",
+            "kind": "escaped",
+            "removed": "return null;",
+            "added": ""
+        },
+        {
+            "line": 386,
+            "mutator": "LogicalOrAllSubExprNegation",
+            "kind": "escaped",
+            "removed": "case $token[0] === T_NAMESPACE && ($this->isNameAt($this->i + 1) || self::is($this->tokens[$this->i + 1] ?? null, '{')):",
+            "added": "case $token[0] === T_NAMESPACE && (!$this->isNameAt($this->i + 1) || !self::is($this->tokens[$this->i + 1] ?? null, '{')):"
+        },
+        {
+            "line": 387,
+            "mutator": "UnwrapLtrim",
+            "kind": "escaped",
+            "removed": "$this->namespace = $this->isNameAt($this->i + 1) ? ltrim($this->tokens[++$this->i][1], '\\\\') : '';",
+            "added": "$this->namespace = $this->isNameAt($this->i + 1) ? $this->tokens[++$this->i][1] : '';"
+        },
+        {
+            "line": 460,
+            "mutator": "Increment",
+            "kind": "escaped",
+            "removed": "$this->i++;",
+            "added": "$this->i--;"
+        },
+        {
+            "line": 474,
+            "mutator": "LogicalAnd",
+            "kind": "escaped",
+            "removed": "if (($this->tokens[$this->i][0] ?? null) === T_NS_SEPARATOR && self::is($this->tokens[$this->i + 1] ?? null, '{')) {",
+            "added": "if (($this->tokens[$this->i][0] ?? null) === T_NS_SEPARATOR || self::is($this->tokens[$this->i + 1] ?? null, '{')) {"
+        },
+        {
+            "line": 475,
+            "mutator": "DecrementInteger",
+            "kind": "escaped",
+            "removed": "$this->i += 2;",
+            "added": "$this->i += 1;"
+        },
+        {
+            "line": 478,
+            "mutator": "Continue_",
+            "kind": "escaped",
+            "removed": "continue;",
+            "added": "break;"
+        },
+        {
+            "line": 534,
+            "mutator": "Increment",
+            "kind": "escaped",
+            "removed": "$this->i++;",
+            "added": "$this->i--;"
+        },
+        {
+            "line": 572,
+            "mutator": "DecrementInteger",
+            "kind": "escaped",
+            "removed": "$this->i += 2;",
+            "added": "$this->i += 1;"
+        },
+        {
+            "line": 615,
+            "mutator": "Increment",
+            "kind": "escaped",
+            "removed": "$this->i++;",
+            "added": "$this->i--;"
+        },
+        {
+            "line": 702,
+            "mutator": "ReturnRemoval",
+            "kind": "escaped",
+            "removed": "return null;",
+            "added": ""
+        },
+        {
+            "line": 726,
+            "mutator": "Increment",
+            "kind": "escaped",
+            "removed": "$this->i++;",
+            "added": "$this->i--;"
+        },
+        {
+            "line": 768,
+            "mutator": "Break_",
+            "kind": "escaped",
+            "removed": "break;",
+            "added": "continue;"
+        }
+    ],
+    "Verifier": [
+        {
+            "line": 95,
+            "mutator": "LogicalOrAllSubExprNegation",
+            "kind": "escaped",
+            "removed": "$wants = fn(array $checks): bool => $only === [] || array_intersect($only, $checks) !== [];",
+            "added": "$wants = fn(array $checks): bool => !($only === []) || !(array_intersect($only, $checks) !== []);"
+        },
+        {
+            "line": 95,
+            "mutator": "UnwrapArrayIntersect",
+            "kind": "escaped",
+            "removed": "$wants = fn(array $checks): bool => $only === [] || array_intersect($only, $checks) !== [];",
+            "added": "$wants = fn(array $checks): bool => $only === [] || $checks !== [];"
+        },
+        {
+            "line": 95,
+            "mutator": "UnwrapArrayIntersect",
+            "kind": "escaped",
+            "removed": "$wants = fn(array $checks): bool => $only === [] || array_intersect($only, $checks) !== [];",
+            "added": "$wants = fn(array $checks): bool => $only === [] || $only !== [];"
+        },
+        {
+            "line": 418,
+            "mutator": "ReturnRemoval",
+            "kind": "escaped",
+            "removed": "return [];",
+            "added": ""
+        },
+        {
+            "line": 484,
+            "mutator": "CastString",
+            "kind": "escaped",
+            "removed": "$ability = (string) $endpoint['ability'];",
+            "added": "$ability = $endpoint['ability'];"
+        },
+        {
+            "line": 492,
+            "mutator": "CastString",
+            "kind": "escaped",
+            "removed": "if ($operationsContent === null || !preg_match('/function\\s+' . preg_quote((string) $endpoint['operation'], '/') . '\\s*\\(/', $operationsContent)) {",
+            "added": "if ($operationsContent === null || !preg_match('/function\\s+' . preg_quote($endpoint['operation'], '/') . '\\s*\\(/', $operationsContent)) {"
+        },
+        {
+            "line": 597,
+            "mutator": "UnwrapArrayValues",
+            "kind": "escaped",
+            "removed": "return array_values(array_unique($names));",
+            "added": "return array_unique($names);"
+        },
+        {
+            "line": 874,
+            "mutator": "Coalesce",
+            "kind": "escaped",
+            "removed": "$modelFile = $this->fileFromStub($model, 'Model/ModelTemplate.txt') ?? $this->fileFromStub($model, 'Controller/ControllerTemplate.txt');",
+            "added": "$modelFile = $this->fileFromStub($model, 'Controller/ControllerTemplate.txt') ?? $this->fileFromStub($model, 'Model/ModelTemplate.txt');"
+        },
+        {
+            "line": 892,
+            "mutator": "DecrementInteger",
+            "kind": "escaped",
+            "removed": "return preg_match(\"/['\\\"]\" . preg_quote($value, '/') . \"['\\\"]/\", $matches[1]) === 1;",
+            "added": "return preg_match(\"/['\\\"]\" . preg_quote($value, '/') . \"['\\\"]/\", $matches[0]) === 1;"
+        },
+        {
+            "line": 925,
+            "mutator": "UnwrapArrayValues",
+            "kind": "escaped",
+            "removed": "return array_values(array_unique($components));",
+            "added": "return array_unique($components);"
+        }
+    ]
+}

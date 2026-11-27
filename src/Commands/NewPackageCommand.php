@@ -5,6 +5,7 @@ namespace Innoboxrr\LarapackGenerator\Commands;
 use Innoboxrr\LarapackGenerator\Commands\Concerns\ReportsGeneration;
 use Innoboxrr\LarapackGenerator\Support\AgentHooks;
 use Innoboxrr\LarapackGenerator\Support\Generation;
+use Innoboxrr\LarapackGenerator\Support\GitHooks;
 use Innoboxrr\LarapackGenerator\Support\ProjectRoot;
 use Innoboxrr\LarapackGenerator\Support\Skill;
 use Innoboxrr\LarapackGenerator\Tools\Config\ConfigTool;
@@ -110,6 +111,11 @@ class NewPackageCommand extends Command
             $output->writeln('  <info>Siguiente:</info>');
             $output->writeln("    cd {$directory}");
             $output->writeln('    composer install');
+
+            if (is_file($target.'/'.GitHooks::DIRECTORY.'/pre-commit')) {
+                $output->writeln('    git init && git config core.hooksPath '.GitHooks::DIRECTORY.'   (el hook de git de LaraPack)');
+            }
+
             $output->writeln('    escribe laraimport.json            (php vendor/bin/builder larapack:schema)');
             $output->writeln('    php vendor/bin/builder larapack:import --vue');
         }
@@ -149,6 +155,17 @@ class NewPackageCommand extends Command
         $hooks = AgentHooks::installSettings(root_path());
 
         Generation::record('create', $hooks['target'], 'settings.json');
+
+        // Y el hook de git, que frena a cualquier agente. Sólo en un paquete
+        // que tendrá su propio repositorio: dentro de uno ya existente (un
+        // monorepo) lo pone `larapack:skill --hooks` en su raíz, y crear un
+        // paquete no cambia la configuración de git de nadie. Aquí tampoco:
+        // sin repositorio todavía, core.hooksPath se activa tras `git init`.
+        if (GitHooks::top(root_path()) === null) {
+            foreach (GitHooks::install(root_path())['written'] as $file) {
+                Generation::record('create', $file, 'githooks');
+            }
+        }
 
         // Las herramientas reescriben composer.json con json_encode y sin salto
         // final; se deja como lo dejaría Composer para que el primer diff no sea

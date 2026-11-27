@@ -87,6 +87,10 @@ final class CiGate
             '    verify:',
             '        name: '.self::JOB,
             '        runs-on: '.self::runsOnYaml($runsOn),
+            '        # Sólo lectura: verify no escribe nada, y el último paso sólo lee',
+            '        # las reglas de la rama.',
+            '        permissions:',
+            '            contents: read',
             '',
             '        steps:',
             '            - uses: actions/checkout@v5',
@@ -115,7 +119,39 @@ final class CiGate
             '',
             '            - name: Contrato de LaraPack',
             "              run: {$binary} larapack:verify --strict --format=json",
+            '',
+            ...self::protectionStep($binary),
         ])."\n";
+    }
+
+    /**
+     * El último paso del job: si la rama por defecto exige este check.
+     *
+     * La puerta sólo vale si la rama la exige, y eso lo decide el dueño en
+     * GitHub. Aquí se comprueba en cada corrida con el token del job —leer
+     * las reglas de la rama no pide más que `contents: read`— y, mientras no
+     * la exija, se avisa con un `::warning` y los pasos en el resumen.
+     *
+     * No falla el job (`continue-on-error`): el check que se exige es éste, y
+     * que su verde dependiera de la protección sería circular. Corre también
+     * si verify falló (`!cancelled()`): es cuando más importa saberlo.
+     *
+     * @return list<string>
+     */
+    private static function protectionStep(string $binary): array
+    {
+        return [
+            '            # La puerta sólo vale si la rama exige este check, y eso lo decide el',
+            '            # dueño en GitHub (larapack:ci imprime cómo). Aquí se comprueba en cada',
+            '            # corrida y, si no lo exige, se avisa con los pasos en el resumen. No',
+            '            # falla el job: el check exigido es éste, y sería circular.',
+            '            - name: La rama exige este check',
+            '              if: ${{ !cancelled() }}',
+            '              continue-on-error: true',
+            '              env:',
+            '                  GH_TOKEN: ${{ github.token }}',
+            "              run: {$binary} larapack:ci --check --format=github",
+        ];
     }
 
     /**
@@ -200,7 +236,7 @@ final class CiGate
             $lines = file($file, FILE_IGNORE_NEW_LINES) ?: [];
 
             foreach ($lines as $index => $line) {
-                if (preg_match('/^(\s*)runs-on:\s*(.*)$/', (string) preg_replace('/(^|\s)#.*$/', '', $line), $match) !== 1) {
+                if (preg_match('/^(\s*)runs-on:\s*(.*)/', self::withoutComment($line), $match) !== 1) {
                     continue;
                 }
 
@@ -210,7 +246,7 @@ final class CiGate
                 if ($value === '') {
                     $items = [];
 
-                    for ($next = $index + 1; isset($lines[$next]) && preg_match('/^\s*-\s*(\S.*?)\s*$/', (string) preg_replace('/(^|\s)#.*$/', '', $lines[$next]), $item) === 1; $next++) {
+                    for ($next = $index + 1; isset($lines[$next]) && preg_match('/^\s*-\s*(\S.*?)\s*$/', self::withoutComment($lines[$next]), $item) === 1; $next++) {
                         $items[] = trim($item[1], '\'"');
                     }
 
@@ -309,7 +345,7 @@ final class CiGate
             }
         }
 
-        $extensions = array_values(array_unique($extensions));
+        $extensions = array_unique($extensions);
         sort($extensions, SORT_STRING);
 
         return $extensions;
@@ -406,11 +442,13 @@ final class CiGate
         $existing = [];
 
         foreach (preg_split('/\R/', $current) ?: [] as $line) {
-            $code = trim((string) preg_replace('/(^|\s)#.*$/', '', $line));
+            $code = trim(self::withoutComment($line));
             $tokens = $code === '' ? [] : (preg_split('/\s+/', $code) ?: []);
 
             if ($tokens !== []) {
-                $existing[ltrim($tokens[0], '/')][] = ['line' => trim($line), 'owners' => array_slice($tokens, 1)];
+                // El patrón, y detrás sus dueños.
+                $pattern = array_shift($tokens);
+                $existing[ltrim($pattern, '/')][] = ['line' => trim($line), 'owners' => $tokens];
             }
         }
 
@@ -514,7 +552,9 @@ final class CiGate
 
     private static function lowerBound(mixed $constraint): ?string
     {
-        if (! is_string($constraint) || trim($constraint) === '') {
+        // Vacía o en blanco no es una restricción: VersionParser la rechaza
+        // como cualquier otra que no entiende.
+        if (! is_string($constraint)) {
             return null;
         }
 
@@ -545,9 +585,18 @@ final class CiGate
      */
     private static function readJson(string $file): ?array
     {
-        $decoded = is_file($file) ? json_decode((string) file_get_contents($file), true) : null;
+        $decoded = is_file($file) ? json_decode(Files::read($file), true) : null;
 
         return is_array($decoded) ? $decoded : null;
+    }
+
+    /**
+     * Una línea de YAML o de CODEOWNERS sin su comentario: `#` al principio
+     * o detrás de un espacio.
+     */
+    private static function withoutComment(string $line): string
+    {
+        return preg_replace('/(^|\s)#.*$/', '', $line) ?? $line;
     }
 
     private static function join(string $root, string $relative): string
