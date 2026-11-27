@@ -41,6 +41,13 @@ class JsonImporterCommand extends Command
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
+        // El manifiesto se anota en memoria y se escribe una vez al terminar,
+        // también si algo falla a mitad (Manifest::batch).
+        return Manifest::batch(fn (): int => $this->import($input, $output));
+    }
+
+    private function import(InputInterface $input, OutputInterface $output): int
+    {
         $this->applyGenerationOptions($input);
 
         $jsonPath = $input->getArgument('jsonPath') ?? root_path().'/laraimport.json';

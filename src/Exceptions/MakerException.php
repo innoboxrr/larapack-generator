@@ -45,6 +45,17 @@ class MakerException extends Exception
         return new self("No se pudo leer {$file}.");
     }
 
+    /**
+     * El manifiesto no se pudo escribir ni reintentándolo. Si hay temporal, es
+     * lo registrado en la corrida: moverlo encima del manifiesto lo recupera.
+     */
+    public static function manifestNotWritten(string $manifest, string $reason, ?string $pending): self
+    {
+        return new self($pending === null
+            ? "No se pudo escribir {$manifest} ({$reason})."
+            : "No se pudo escribir {$manifest} ({$reason}), ni reintentándolo: otro proceso lo tiene bloqueado. Lo registrado en esta corrida está en {$pending}; cuando se libere, muévelo encima de {$manifest}. Sin eso, lo que se generó queda sin registrar y --force lo tomará por editado a mano.");
+    }
+
     public static function invalidComposerJson(string $file, string $reason): self
     {
         return new self("{$file} no es un objeto JSON válido ({$reason}): no se modifica un composer.json que no se entiende.");

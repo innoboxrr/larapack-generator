@@ -1,5 +1,35 @@
 # Changelog
 
+## 9.3.1 (sin publicar)
+
+### El manifiesto se escribe una vez por corrida, de forma atómica
+
+**Qué pasaba.** `Manifest::record()` releía y reescribía `.larapack/manifest.json`
+entero tras cada archivo generado: un `larapack:import` de tres modelos lo
+escribía 103 veces. Era cuadrático y, en Windows, chocaba con el bloqueo de
+archivos (`file_put_contents(.../.larapack/manifest.json): Failed to open stream:
+Permission denied`) en un modelo distinto en cada corrida, sin converger.
+
+**A quién afectaba.** A cualquier proyecto grande, y sobre todo en Windows: en
+expediente (1 MB, 71 modelos, 3 969 archivos) el import ya no terminaba y el
+proyecto pasó a escribir a mano lo que el generador habría tocado.
+
+**Cómo se corrige.** `Manifest::batch()` abre una corrida: todas las instancias
+leen y anotan sobre una copia en memoria (por ruta), y se escribe una sola vez
+al salir —en un `finally`, así que un fallo a mitad conserva lo registrado
+hasta entonces; si además falla la escritura, el error original queda como
+`getPrevious()`—. `larapack:import` y `larapack:full-model` corren dentro de una.
+La escritura es atómica (temporal junto al manifiesto y `rename()` encima) y
+reintenta un bloqueo pasajero seis veces con espera creciente (~0,8 s en total).
+Si no cede, el manifiesto anterior queda intacto, el temporal **no se borra** y
+el error dice dónde está para moverlo a mano. `Manifest::diskWrites()` cuenta las
+escrituras del proceso, para diagnosticar.
+
+**Al actualizar.** Nada que hacer. Si un import anterior murió con «Permission
+denied», el manifiesto puede no conocer archivos que sí se generaron: `verify`
+los da por `customised`; regenerar con `--force` esos archivos (o borrarlos y
+volver a importar) los vuelve a registrar.
+
 ## 9.3.0
 
 ### La rama protegida: guiada hasta el final, y comprobada en cada corrida
