@@ -2,6 +2,33 @@
 
 ## 9.3.1 (sin publicar)
 
+### Una relación añadida al contrato después se detecta, y se añade al trait
+
+**Qué pasaba.** El trait de relaciones (`Models/Traits/Relations/<Modelo>Relations.php`)
+se escribe una sola vez: es un hueco del proyecto. Una relación añadida después
+a `load_relations` no aparecía nunca —ni con `--force`—, y nada lo decía.
+
+**A quién afectaba.** A cualquier proyecto que amplía su contrato. Expediente lo
+documenta como una trampa («borra el trait para que se regenere», lo que rompe
+el autoload si se borran varios) y acabó escribiéndolas a mano, como
+`Location::practitioner_locations()`.
+
+**Cómo se corrige.** El trait sigue sin sobrescribirse. `verify` gana
+`relation-missing` (aviso): contra el `laraimport.json` de la raíz, una relación
+que ni el modelo ni sus traits (`Models/Traits/*/<Modelo>*.php`) definen, con el
+método y el `use` exactos en el mensaje. Y `larapack:fix relation-missing` los
+añade al final del trait ([`RelationFix`](src/Support/RelationFix.php)) cuando
+es seguro de forma determinista: un único trait en el archivo, nadie define ya
+ese nombre y el nombre corto del modelo relacionado no está importado para otra
+clase. Si no, `skipped` con la razón. Con `--dry-run`, el diff.
+
+**Al actualizar.** `verify` puede empezar a avisar `relation-missing` en
+relaciones que llevaban tiempo declaradas y sin escribir; `larapack:fix
+relation-missing --dry-run` enseña qué añadiría. Una relación que el proyecto
+escribió en otro sitio —un trait que no sigue el nombre `<Modelo>*.php`, un
+trait de otro paquete— sale como que falta: muévela al modelo o a sus traits, o
+retírala del contrato si ya no la quieres declarar.
+
 ### Un modelo editado a mano recibe las columnas nuevas en sus listas
 
 **Qué pasaba.** Con `--force`, un modelo editado a mano se conservaba entero

@@ -405,7 +405,7 @@ hallazgo es `{level, check, model, file, message}`, con nivel `error`,
 `customised`, `inconsistent-entity`, `route-prefix`, `route-not-declared`,
 `endpoint-missing`, `immutable-write`, `secret-exposed`,
 `endpoint-tests-outdated` y, contra el `laraimport.json` de la raíz si existe,
-`model-lists-outdated`
+`model-lists-outdated` y `relation-missing`
 ([`ContractDrift`](src/Support/ContractDrift.php), con las listas que calcula
 [`ModelLists`](src/Support/ModelLists.php), lo mismo que usa el generador).
 Se lee el manifiesto

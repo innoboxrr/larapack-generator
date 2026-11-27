@@ -506,6 +506,11 @@ generado con su hash. Detecta:
   `larapack:import --force` las completa sin tocar el resto del modelo; si una
   región no la reconoce, el informe da la orden manual exacta. No edites las
   listas a mano: cambia el laraimport.
+- **`relation-missing`** (aviso): una relación de `load_relations` que el modelo
+  no define, porque el trait de relaciones se escribe una vez y no se regenera
+  (no lo borres para que se regenere). El mensaje trae el método y el `use`;
+  `larapack:fix relation-missing` los añade al trait si es seguro, y si lo
+  salta, la razón dice por qué: entonces escríbelo tú en el trait.
 
 Y en **todos** los controladores, generados o no, con o sin manifiesto:
 

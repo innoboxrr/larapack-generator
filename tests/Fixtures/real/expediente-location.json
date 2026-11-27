@@ -1,0 +1,123 @@
+{
+    "models": [
+        {
+            "name": "Location",
+            "display": "name",
+            "props": [
+                {
+                    "name": "clinic_id",
+                    "type": "foreignId",
+                    "constraint": "clinics",
+                    "datatable": true,
+                    "form": true,
+                    "form_component": "ModelSearchInputComponent",
+                    "form_submit": true
+                },
+                {
+                    "name": "name",
+                    "type": "string",
+                    "datatable": true,
+                    "form": true,
+                    "form_component": "TextInputComponent",
+                    "form_submit": true
+                },
+                {
+                    "name": "address",
+                    "type": "text",
+                    "nullable": true,
+                    "form": true,
+                    "form_component": "TextareaInputComponent",
+                    "form_submit": true
+                },
+                {
+                    "name": "city",
+                    "type": "string",
+                    "nullable": true,
+                    "datatable": true,
+                    "form": true,
+                    "form_component": "TextInputComponent",
+                    "form_submit": true
+                },
+                {
+                    "name": "state",
+                    "type": "string",
+                    "nullable": true,
+                    "form": true,
+                    "form_component": "TextInputComponent",
+                    "form_submit": true
+                },
+                {
+                    "name": "postal_code",
+                    "type": "string",
+                    "nullable": true,
+                    "form": true,
+                    "form_component": "TextInputComponent",
+                    "form_submit": true
+                },
+                {
+                    "name": "clues",
+                    "type": "string",
+                    "nullable": true,
+                    "datatable": true
+                },
+                {
+                    "name": "clues_catalog_release_id",
+                    "type": "unsignedBigInteger",
+                    "nullable": true
+                },
+                {
+                    "name": "establishment_type",
+                    "type": "string",
+                    "nullable": true,
+                    "datatable": true
+                },
+                {
+                    "name": "institution",
+                    "type": "string",
+                    "nullable": true
+                },
+                {
+                    "name": "timezone",
+                    "type": "string",
+                    "default": "America/Mexico_City",
+                    "form": true,
+                    "form_component": "TimezoneSelectInputComponent",
+                    "form_submit": true
+                },
+                {
+                    "name": "phone",
+                    "type": "string",
+                    "nullable": true,
+                    "form": true,
+                    "form_component": "TextInputComponent",
+                    "form_submit": true
+                },
+                {
+                    "name": "is_telehealth",
+                    "type": "boolean",
+                    "default": false,
+                    "form": true,
+                    "form_component": "SwitchComponent",
+                    "form_submit": true
+                }
+            ],
+            "load_relations": [
+                {
+                    "type": "belongsTo",
+                    "related": "Clinic",
+                    "name": "clinic"
+                },
+                {
+                    "type": "hasMany",
+                    "related": "PractitionerLocation",
+                    "name": "practitioner_locations"
+                },
+                {
+                    "type": "hasMany",
+                    "related": "Schedule",
+                    "name": "schedules"
+                }
+            ]
+        }
+    ]
+}

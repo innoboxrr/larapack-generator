@@ -33,6 +33,10 @@ use Symfony\Component\Console\Output\OutputInterface;
  * SpaRequest como en laravel-setup 7.2.1 (SpaFallback). Cualquier otro
  * closure de las rutas se salta con el mensaje de `verify`.
  *
+ * `relation-missing` añade al trait de relaciones las relaciones que el
+ * laraimport de la raíz declara y nadie define (RelationFix), sólo si es
+ * seguro; si no, `skipped` con la razón.
+ *
  * --package (repetible) acota a un paquete local —por su directorio en
  * packages/ o su nombre de Composer— o a `app`, el núcleo: lo que no cuelga de
  * ningún paquete. Se combina con --path.
@@ -58,7 +62,7 @@ class FixCommand extends Command
         $this->addRootOption();
 
         $this->setName('larapack:fix')
-            ->setDescription('Corrige de forma determinista la deuda que verify marca en lo generado con versiones anteriores (y el fallback de la SPA de laravel-setup <= 7.2.0)')
+            ->setDescription('Corrige de forma determinista la deuda que verify marca en lo generado con versiones anteriores (el fallback de la SPA de laravel-setup <= 7.2.0 y las relaciones del laraimport que faltan en el trait)')
             ->addArgument('checks', InputArgument::IS_ARRAY | InputArgument::REQUIRED, 'Qué corregir: '.implode(', ', LegacyFix::CHECKS))
             ->addOption('dry-run', null, InputOption::VALUE_NONE, 'Muestra el diff de cada archivo sin escribir nada')
             ->addOption('format', null, InputOption::VALUE_REQUIRED, 'Formato de salida: txt o json', 'txt')
