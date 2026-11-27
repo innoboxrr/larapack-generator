@@ -1,0 +1,74 @@
+name: Ecosistema
+
+# Punta a punta con lo PUBLICADO: Laravel 13 recién creado, la última
+# laravel-setup de Packagist y LaraPack desde este checkout. El choque entre
+# laravel-setup y larapack 9 lo descubrió un cliente porque ninguna CI
+# instalaba los dos juntos; esto lo hace cada noche.
+#
+# Los pasos viven en .github/scripts/ecosystem-e2e.sh, que se corre igual en
+# local (CONTRIBUTING.md). Aquí sólo se declara cuándo y sobre qué.
+on:
+    schedule:
+        # Cada noche, a una hora sin redondear para no caer con el resto de
+        # los cron de GitHub.
+        - cron: '37 4 * * *'
+    workflow_dispatch:
+    pull_request:
+        paths:
+            - .github/workflows/ecosystem.yml
+            - .github/scripts/ecosystem-e2e.sh
+            - .github/scripts/ecosystem-e2e.laraimport.json
+            - ecosystem.json
+            - composer.json
+
+permissions:
+    contents: read
+
+jobs:
+    ecosystem:
+        name: Ecosistema (${{ matrix.ui }})
+        runs-on: ubuntu-latest
+        timeout-minutes: 45
+
+        strategy:
+            # Que una interfaz falle no dice nada de la otra.
+            fail-fast: false
+            matrix:
+                ui: [vue, react]
+
+        steps:
+            - uses: actions/checkout@v5
+
+            - uses: shivammathur/setup-php@v2
+              with:
+                  php-version: '8.4'
+                  # Las que pide la aplicación base: phpoffice/phpspreadsheet
+                  # (por maatwebsite/excel) exige gd, zip y fileinfo, y la base
+                  # de la prueba es SQLite.
+                  extensions: mbstring, intl, pdo_sqlite, sqlite3, gd, zip, fileinfo
+                  coverage: none
+                  tools: composer:v2
+
+            - uses: actions/setup-node@v5
+              with:
+                  node-version: '22'
+
+            - name: Punta a punta
+              run: bash .github/scripts/ecosystem-e2e.sh ${{ matrix.ui }}
+              env:
+                  ECOSYSTEM_WORK: ${{ runner.temp }}/ecosystem
+                  # Sin token, Composer se queda en el límite anónimo de la API
+                  # de GitHub al bajar decenas de dist.
+                  COMPOSER_AUTH: '{"github-oauth": {"github.com": "${{ github.token }}"}}'
+
+            - name: Registros
+              if: failure()
+              uses: actions/upload-artifact@v4
+              with:
+                  name: ecosystem-${{ matrix.ui }}
+                  path: |
+                      ${{ runner.temp }}/ecosystem/logs
+                      ${{ runner.temp }}/ecosystem/junit.xml
+                      ${{ runner.temp }}/ecosystem/app/storage/logs
+                  if-no-files-found: ignore
+                  retention-days: 7

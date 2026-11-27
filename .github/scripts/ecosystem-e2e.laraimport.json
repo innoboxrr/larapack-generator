@@ -1,0 +1,39 @@
+{
+    "$comment": "Lo que .github/scripts/ecosystem-e2e.sh añade al laraimport.json que deja laravel-setup (su User). Sale de tests/EndToEnd/Fixtures/laraimport.json: dos modelos con relación en los dos sentidos, un endpoint de registro, uno público con throttle y un controllers[] con uno que pasa por la autorización y otro abierto a quien tenga sesión. El script copia sólo models y controllers.",
+    "models": [
+        {
+            "name": "Category",
+            "props": [
+                { "name": "name", "type": "string", "datatable": true }
+            ],
+            "load_relations": [
+                { "type": "hasMany", "related": "Product", "name": "products" }
+            ]
+        },
+        {
+            "name": "Product",
+            "props": [
+                { "name": "title", "type": "string", "datatable": true },
+                { "name": "price", "type": "decimal" },
+                { "name": "active", "type": "boolean" },
+                { "name": "category_id", "type": "foreignId", "constraint": "categories" }
+            ],
+            "load_relations": [
+                { "type": "belongsTo", "related": "Category", "name": "category" }
+            ],
+            "endpoints": [
+                { "name": "publish", "method": "post" },
+                { "name": "preview", "method": "get", "public": true, "middleware": ["throttle:30,1"] }
+            ]
+        }
+    ],
+    "controllers": [
+        {
+            "name": "Desk",
+            "endpoints": [
+                { "name": "overview", "method": "get" },
+                { "name": "mine", "method": "get", "authorize": "authenticated" }
+            ]
+        }
+    ]
+}

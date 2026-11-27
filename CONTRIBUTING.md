@@ -128,6 +128,63 @@ La primera compilación instala Vite y sus plugins en un directorio del temporal
 del sistema (`larapack-ui-toolchain-*`, y `larapack-esbuild` para el JSX) y lo
 reutiliza en las siguientes: hace falta red una vez.
 
+### La del ecosistema publicado
+
+Las de arriba usan el `vendor/` de este repositorio y una aplicación a medida.
+Ninguna instala LaraPack como lo instala un cliente, junto a lo publicado, y
+por eso el choque entre laravel-setup y la 9.0 lo descubrió un cliente:
+`innoboxrr/laravel-setup` pedía `^7.10 || ^8.0` y Composer no dejaba instalar
+la 9.
+
+[`.github/scripts/ecosystem-e2e.sh`](.github/scripts/ecosystem-e2e.sh) hace lo
+que haría quien empieza una aplicación, con la última laravel-setup publicada
+y LaraPack **desde este checkout**:
+
+1. `composer create-project laravel/laravel` (Laravel 13).
+2. LaraPack como repositorio `path` hecho con `git archive` —como la dist de
+   Packagist: lo que no está comiteado no entra— y con la versión de `VERSION`;
+   laravel-setup fijada a su última versión estable, para que Composer no baje
+   en silencio a una más vieja que sí lo admita.
+3. `app:setup` (con `--react` según la interfaz) y `app:install --without-build`.
+4. [`ecosystem-e2e.laraimport.json`](.github/scripts/ecosystem-e2e.laraimport.json)
+   añadido al laraimport de laravel-setup: dos modelos con relación, un endpoint
+   de registro, uno público y un `controllers[]`. `validate --strict` e `import`.
+5. `migrate` en SQLite, `route:json`, `npm install` y `npm run build`.
+6. `php artisan test`, contando por archivo que cada test generado se ejecutó
+   (incluidos los de autorización de la 9.1) y que ninguno se salta.
+7. `verify --strict --format=json`, `larapack:ci --dry-run` y la guardia de los
+   hooks con el `artisan` de la aplicación. Estas tres se corren todas aunque
+   falle una.
+
+Si un paso falla, el script dice qué paquete y por qué: el choque que cita
+Composer, los paquetes de `vendor/innoboxrr/` que aparecen en la traza, el
+paquete npm que no resuelve, o, para cada hallazgo de `verify`, si el archivo
+lo puso laravel-setup (está entre sus stubs) o LaraPack.
+
+Corre en [`.github/workflows/ecosystem.yml`](.github/workflows/ecosystem.yml)
+cada noche, a mano desde Actions y en un *pull request* que toque el workflow,
+el script, su laraimport, `ecosystem.json` o `composer.json`; con Vue y con
+React, PHP 8.4 y Node 22. Si falla, los registros de cada paso quedan como
+artefacto del run.
+
+En local, desde la raíz, con el cambio comiteado:
+
+```
+bash .github/scripts/ecosystem-e2e.sh vue      # o react
+```
+
+Tarda unos minutos y necesita red. Deja la aplicación en un directorio
+temporal que se borra si todo pasa; `ECOSYSTEM_WORK=<dir>` lo fija y
+`ECOSYSTEM_KEEP=1` lo conserva siempre. Otras variables, en la cabecera del
+script: `ECOSYSTEM_LARAPACK_REF` (el commit que se instala),
+`ECOSYSTEM_LARAPACK_VERSION` y `ECOSYSTEM_LARAVEL_SETUP` (para probar contra
+otra versión).
+
+Sin acceso a las dist de GitHub (un contenedor detrás de un proxy), Composer
+puede bajar todo por git: se le da un `COMPOSER_HOME` propio cuyo
+`config.json` diga `{"config": {"preferred-install": "source"}}`. El script no
+cambia: lo que cambia cómo descarga Composer va en el entorno, no en él.
+
 ## Formato y análisis estático
 
 ```

@@ -1,5 +1,44 @@
 # Changelog
 
+## 9.2.0 (sin publicar)
+
+### La CI prueba el ecosistema publicado, cada noche
+
+El choque entre `innoboxrr/laravel-setup` y la 9.0 —laravel-setup pedía
+`^7.10 || ^8.0` y Composer no dejaba instalar la 9— lo descubrió un cliente: las
+pruebas de punta a punta usan el `vendor/` de este repositorio y nunca instalan
+LaraPack junto a lo publicado.
+
+`.github/workflows/ecosystem.yml` corre cada noche, a mano y en los *pull
+request* que tocan el workflow, su script, su laraimport, `ecosystem.json` o
+`composer.json`, con Vue y con React. Los pasos están en
+`.github/scripts/ecosystem-e2e.sh`, que se corre igual en local: Laravel 13
+recién creado con `create-project`, la última laravel-setup publicada fijada a
+su versión exacta, LaraPack desde este checkout como dist (`git archive`, con la
+versión de `VERSION`), `app:setup` y `app:install`, un laraimport de ejemplo
+(dos modelos con relación, endpoints de modelo y un `controllers[]`),
+`validate --strict` e `import`, `migrate` en SQLite, `npm run build`,
+`php artisan test` contando por archivo que cada test generado se ejecute
+—incluidos los de autorización de la 9.1— y ninguno se salte,
+`verify --strict --format=json`, `larapack:ci --dry-run` y la guardia de los
+hooks con el `artisan` de la aplicación.
+
+Si un paso falla, el mensaje dice qué paquete y por qué: el choque que cita
+Composer, los paquetes de `vendor/innoboxrr/` de la traza, el paquete npm que
+no resuelve o, para cada hallazgo de `verify`, si el archivo es de los stubs de
+laravel-setup o lo generó LaraPack.
+
+**Lo primero que encontró:** una aplicación recién hecha con laravel-setup 7.2.0
+no pasa `larapack:verify --strict`, la puerta que pone `larapack:ci` desde la
+9.1. El `Route::fallback()` de la SPA en `routes/web.php` (de los stubs de
+laravel-setup) lleva lógica en un closure, y `verify` lo avisa como
+`route-closure`; con `--strict`, el aviso es un fallo. El arreglo es de
+laravel-setup, así que el workflow sale en rojo en ese paso hasta que se publique;
+lo demás pasa con Vue y con React.
+
+Cómo correrlo en local, también sin acceso a las dist de GitHub, en
+CONTRIBUTING.md.
+
 ## 9.1.0
 
 Una menor: la CI pasa a ser la barrera de la arquitectura y las excepciones
