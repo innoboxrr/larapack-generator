@@ -172,18 +172,39 @@ echo '{"config":{"allow-plugins":{"infection/extension-installer":false}}}' > ..
 composer require --working-dir=../infection infection/infection:0.31.9
 
 php -m | grep -E -i 'pcov|xdebug'      # hace falta un driver de cobertura; pcov es el rápido
-../infection/vendor/bin/infection --threads=max --only-covering-test-cases
-../infection/vendor/bin/infection --threads=max --only-covering-test-cases --filter=src/Support/Guard.php --show-mutations
+../infection/vendor/bin/infection --threads=max --only-covering-test-cases --with-uncovered
+../infection/vendor/bin/infection --threads=max --only-covering-test-cases --with-uncovered --filter=src/Support/Guard.php --show-mutations
+php -d memory_limit=2G .github/scripts/mutation-floors.php .infection/infection.json .github/mutation-floors.json
 ```
 
 La primera orden mide todo (unos veinte minutos con cuatro núcleos); la segunda,
-una pieza, con cada mutante superviviente en pantalla. El detalle queda en
-`.infection/` (fuera de git): `infection.log` con el diff de cada superviviente
-y `infection.json` para leerlo con un script.
+una pieza, con cada mutante superviviente en pantalla; la tercera compara cada
+pieza con su suelo. El detalle queda en `.infection/` (fuera de git):
+`infection.log` con el diff de cada superviviente y `infection.json` para
+leerlo con un script.
 
-El trabajo «Mutación» de la CI corre lo mismo con `--min-msi` y
-`--min-covered-msi`: lo que se baje de ahí no entra. Con un mutante que
-sobrevive hay tres salidas, y sólo tres:
+`--with-uncovered` no es un detalle. Sin él, Infection sólo muta las líneas
+que algún test recorre: lo que ningún test toca no produce mutantes y no cuenta
+en contra, y borrar el test que cubría un mutante difícil *subía* el MSI. Con
+él, esas líneas se mutan y cuentan como no detectadas, y `--min-msi` (todo) y
+`--min-covered-msi` (sólo lo recorrido) dejan de ser el mismo número.
+
+El trabajo «Mutación» de la CI ([`.github/workflows/mutation.yml`](.github/workflows/mutation.yml))
+corre lo mismo con PHP 8.3, PHPUnit 12.5 e Infection 0.31.9 —la configuración
+con la que se midió—, en cada pull request que toca `src/`, `tests/` o la
+propia configuración, y a mano desde Actions. Tiene dos barreras:
+
+- `--min-msi` y `--min-covered-msi`, de las ocho piezas juntas.
+- El suelo de cada pieza, en [`.github/mutation-floors.json`](.github/mutation-floors.json),
+  que comprueba [`.github/scripts/mutation-floors.php`](.github/scripts/mutation-floors.php)
+  (`MutationFloorsTest`). Sin él, una pieza podía bajar mientras las otras la
+  compensaban. Falla también si una pieza con suelo deja de tener mutantes o si
+  se muta un archivo sin suelo: una pieza nueva en `infection.json5` entra con
+  el suyo.
+
+Los umbrales y los suelos son lo logrado, redondeado hacia abajo. Si una pieza
+sube, su suelo sube en el mismo cambio; lo que se baje de ahí no entra. Con un
+mutante que sobrevive hay tres salidas, y sólo tres:
 
 1. **Falta un test.** Se escribe el que comprueba el comportamiento que el
    mutante cambia —el mensaje entero, el segundo de dos hallazgos, el caso con

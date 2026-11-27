@@ -8,25 +8,45 @@ en [CONTRIBUTING](../CONTRIBUTING.md#las-pruebas-de-mutación).
 
 Las ocho piezas de las que depende lo que LaraPack promete, cada una con los
 tests que la ejercitan (el `--filter` de `infection.json5`). El MSI es la parte
-de los mutantes que algún test detecta; aquí todos los mutantes caen en código
-que la suite recorre, así que el MSI y el «covered MSI» coinciden.
+de los mutantes que algún test detecta (los muertos, los que agotan el tiempo y
+los que dan error).
 
-| Pieza | Mutantes | MSI antes | MSI después |
-|---|---:|---:|---:|
-| `HandRolledLock` | 131 | 53,7 % | 97,7 % |
-| `CiGate` | 442 | 79,7 % | 96,2 % |
-| `Guard` | 812 | 75,0 % | 95,8 % |
-| `ControllerShape` | 674 | 77,4 % | 95,6 % |
-| `Verifier` | 475 | 82,7 % | 93,9 % |
-| `LegacySecurity` | 371 | 74,5 % | 93,8 % |
-| `PhpOutline` | 635 | 83,8 % | 91,2 % |
-| `LegacyFix` | 747 | 72,5 % | 89,2 % |
-| **Las ocho** | **4287** | **77,0 %** | **93,6 %** |
+**Con `--with-uncovered`.** Infection 0.31, por defecto, sólo muta las líneas
+que algún test recorre: las demás no producen mutantes y no cuentan. Así se
+midió primero, y por eso el MSI y el «covered MSI» salían iguales: no porque
+todo estuviera cubierto, sino porque lo no cubierto no existía para la
+medición. `LegacyFix` tenía entonces 33 de sus 371 líneas sin recorrer (hoy,
+18), y borrar el test que cubría un mutante difícil *subía* el MSI. Ahora la CI muta
+también lo que nadie recorre y lo cuenta como no detectado: el MSI cuenta todo
+y el «covered MSI» sólo lo recorrido.
 
-«Antes» es la suite de la 9.1.0 con la misma configuración (el número de
-mutantes cambió un poco porque el código también: la guardia ganó la lectura
-de `<<<`). «Después», la corrida entera tal como la hace la CI, que exige
-`--min-msi=93 --min-covered-msi=93`: lo logrado, redondeado hacia abajo.
+| Pieza | Antes: mutantes | Antes: MSI | Mutantes | Sin recorrer | MSI | MSI recorrido | Suelo |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| `HandRolledLock` | 121 | 53,7 % | 140 | 0 | 97,9 % | 97,9 % | 97 % |
+| `CiGate` | 439 | 79,7 % | 443 | 1 | 95,9 % | 96,2 % | 95 % |
+| `Guard` | 776 | 75,0 % | 809 | 2 | 95,7 % | 95,9 % | 95 % |
+| `ControllerShape` | 667 | 77,4 % | 676 | 2 | 95,3 % | 95,5 % | 95 % |
+| `Verifier` | 457 | 82,7 % | 478 | 3 | 93,3 % | 93,9 % | 93 % |
+| `LegacySecurity` | 372 | 74,5 % | 375 | 3 | 92,8 % | 93,5 % | 92 % |
+| `PhpOutline` | 637 | 83,8 % | 642 | 5 | 90,3 % | 91,1 % | 90 % |
+| `LegacyFix` | 724 | 72,5 % | 772 | 10 | 89,9 % | 91,1 % | 89 % |
+| **Las ocho** | **4193** | **77,0 %** | **4335** | **26** | **93,4 %** | **93,9 %** | **93 %** |
+
+«Antes» es la suite de la 9.1.0 con la configuración de entonces: sin
+`--with-uncovered`, así que sólo cuenta lo que esa suite recorría y no se
+compara uno a uno con lo de ahora. Por eso cambia el número de mutantes de
+piezas cuyo código no cambió (`Verifier`, `ControllerShape`, `CiGate`,
+`LegacyFix`): los tests nuevos recorren líneas que antes no
+recorría nadie, y esas líneas ahora producen mutantes. En `Guard`,
+`PhpOutline`, `HandRolledLock` y `LegacySecurity` cambió además el código (la
+lectura de `<<<` y la profundidad de las shells, el `&` de un método y su
+huella, las variables con mayúsculas). «Después» es la corrida entera tal como la hace la CI.
+
+La CI exige `--min-msi=93 --min-covered-msi=93` de las ocho juntas y, a cada
+pieza, su suelo de
+[`.github/mutation-floors.json`](../.github/mutation-floors.json): lo logrado,
+redondeado hacia abajo. El umbral conjunto solo dejaba que una pieza bajara
+mientras las demás la compensaban.
 
 La mitad de lo que se ganó son pruebas que fijan el texto entero de un
 mensaje, el segundo de dos hallazgos o el caso en otra caja. La otra mitad
@@ -95,35 +115,84 @@ Lo que se ordena con `sort()`, se expande con `...` o sólo se recorre con
   escapar.
 - `mb_strtolower()` frente a `strtolower()` sobre un espacio de nombres, que es
   ASCII.
+- En `LegacyFix::receiver()`, `count($texts) >= 5` (o `3`, o `7`) frente a
+  `>`: la lectura que se reconoce acaba siempre en dos o cinco tokens
+  (`'appends' )` o `'appends' , [ ] )`), así que la longitud mínima nunca es
+  la exacta.
+- El `?->` de la cadena `$this->resource->setAppends`: dentro de un método
+  siempre hay cuatro tokens delante, y ninguno es `null`.
+- En `LegacyFix::classBody()`, descartar un `class` precedido de `::` o `new`:
+  lo que lo sigue nunca es el nombre de la clase, y eso ya lo descarta la
+  comprobación siguiente.
 
 ### Lo que sólo se ve en otra máquina, o en una carrera
 
 - `str_replace('\\', '/')` y `rtrim('/')` sobre rutas que en Linux no tienen
   barras invertidas ni barra final (`CiGate`, `Guard`); el `PHP_OS_FAMILY` de
-  `Guard::stateDirectory()` cuando hay `ext-posix`. La CI de Windows los
-  ejercita fuera de Infection.
+  `Guard::stateDirectory()` cuando hay `ext-posix`. Sólo en parte los ejercita
+  algo: el trabajo `windows-guard` de la CI corre `GuardTest`,
+  `GuardHandRolledTest`, `AgentHooksTest` y `SkillTest` y lanza el hook real
+  con la ruta de Windows (`guard-smoke.sh`), así que pasa por las barras de
+  `Guard` en el camino del hook. **`CiGate` no corre en Windows en ninguna CI**,
+  y `GuardInputsTest` tampoco: sus casos de rutas de Windows son cadenas y
+  corren en Linux, pero lo que depende del sistema (`posix_geteuid()`, los
+  permisos, los enlaces) no está escrito para Windows. Llevarlos a ese trabajo
+  es un pendiente, no algo que hoy se compruebe.
 - Un `mkdir()` que falla porque otro proceso acaba de crear el directorio
   (`HandRolledLock::write()`, `Guard::stateDirectoryIn()`).
 - Lo que `git` escribiría en la salida estándar al fallar, que es nada.
 
 ### Defensas que el resto del arreglo ya garantiza
 
-`LegacyFix` comprueba que su resultado parsea y que `LegacySecurity`, leyéndolo,
-ya no lo marca. Con las formas que reconoce, ninguna de las dos cosas puede
-fallar: quitar la comprobación no cambia el resultado de ninguna prueba. Se
-quedan, porque son lo que impide escribir un archivo roto el día que alguien
-amplíe las formas reconocidas.
+`LegacyFix` comprueba, después de arreglar, que `LegacySecurity` ya no marca lo
+escrito; y antes de leer los argumentos de un `setAppends`, que lo siga un
+`(`. Con lo que `LegacySecurity` señala, ninguna de las dos puede fallar: sólo
+señala un `setAppends` seguido de `(`, y el bloque que escribe el arreglo es
+el que reconoce como limpio. Quitarlas no cambia ninguna prueba. Se quedan,
+porque son lo que impide escribir algo a medias el día que alguien amplíe las
+formas reconocidas.
+
+Las otras dos comprobaciones de después —que lo arreglado parsea, y que sigue
+parseando después de Pint— sí se pueden ver fallar, y tienen su prueba en
+`LegacyFixTest`: un archivo que ya no parseaba antes, y un Pint de mentira
+(`LARAPACK_PINT`) que rompe lo que toca.
 
 ## Los que no son equivalentes y siguen vivos
 
-Pocos, y apuntados para que no se confundan con los de arriba:
+Apuntados para que no se confundan con los de arriba. Cada uno es un test que
+falta, o una forma de código que nadie escribe; ninguno es equivalente.
 
 - `Guard`: el `$` del grupo de opciones de `bash -c` (`-c1` contaría). No hay
   opción de bash así.
 - `Verifier`: la ruta `show` frente a `showcase` en las trazas de una acción no
   declarada (el `')` del final del nombre).
-- `LegacyFix`: `review()` —qué IndexRequests y qué Resources pasan a
+- `LegacyFix::review()` —qué IndexRequests y qué Resources pasan a
   `ManagedFilterAudit` y `AppendableProposals`— se prueba en `FixReviewTest`
   por lo que reporta, no por el orden ni los duplicados de lo que les pasa.
+- `LegacyFix::revert()`: el `array_values()` que reindexa la lista de
+  arreglados después de quitar uno. Con un solo archivo arreglado, que es lo
+  que prueba `LegacyFixTest` con el Pint de mentira, da lo mismo; con dos, y
+  devolviendo el primero, la lista saldría con un hueco. Falta ese test.
+- `LegacyFix`, código sin espacio tras la llave del método
+  (`{$appends = 1; …`): empezar a recorrer el cuerpo un token más allá
+  saltaría ese `$appends` y no se vería que el bloque de la plantilla lo pisa.
+  Con cualquier espacio o salto de línea detrás de la llave, que es lo que
+  escribe todo el mundo, es equivalente.
+- `LegacyFix`, sangría mezclada: la sangría de un miembro se calcula como la de
+  la clase más un nivel, y escribir el nivel delante o detrás sólo da lo mismo
+  si los dos son del mismo carácter. Con la clase sangrada con tabuladores y
+  el miembro con espacios, no.
+- `LegacyFix`, código que no es PHP: una declaración `function nombre` al final
+  del archivo, sin paréntesis, o un `class` como último token. Las guardas de
+  `null` de `methods()` y `classBody()` cambiadas por `&&` dejarían un aviso de
+  PHP en vez del mensaje; ningún test escribe un archivo así.
+
+Los que estaban aquí y ya no: las guardas de `fixAppends()` y
+`appendsStatement()` (un `?->` o un `::` sobre `$this->resource`, un `if` sin
+llaves, un método repetido y abstracto), las de `receiver()` (una variable
+invocada como el helper, `$request('appends')`), la de `methods()` ante un
+closure en una propiedad (PHP 8.5) y las comprobaciones de después del arreglo
+(un archivo que no parseaba, lo que deja Pint) tienen su test en
+`LegacyFixTest`, con el mensaje entero.
 
 Si aparece uno que no es de ninguna familia, es un test que falta.

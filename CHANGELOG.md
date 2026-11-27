@@ -8,18 +8,40 @@ Que la suite pase por una línea no dice que compruebe lo que hace. Ahora se
 mide: [`infection.json5`](infection.json5) muta las ocho piezas de las que
 depende lo que LaraPack promete —`Verifier`, `ControllerShape`,
 `LegacySecurity`, `PhpOutline`, `HandRolledLock`, `Guard`, `LegacyFix` y
-`CiGate`— y el trabajo «Mutación» de la CI falla si el MSI baja de lo logrado.
-Cómo correrlo en local, en CONTRIBUTING («Las pruebas de mutación»); el MSI de
-cada pieza antes y después, y los mutantes equivalentes con su razón, en
+`CiGate`— y el trabajo «Mutación» de la CI
+([`mutation.yml`](.github/workflows/mutation.yml)) falla si el MSI de las ocho
+juntas, o el de cualquiera, baja de lo logrado. Cómo correrlo en local, en
+CONTRIBUTING («Las pruebas de mutación»); el MSI de cada pieza antes y después,
+y los mutantes que sobreviven con su razón, en
 [`docs/mutacion.md`](docs/mutacion.md).
 
-MSI antes → después: `HandRolledLock` 53,7 → 97,7 %, `CiGate` 79,7 → 96,2 %,
-`Guard` 75,0 → 95,8 %, `ControllerShape` 77,4 → 95,6 %, `Verifier` 82,7 →
-93,9 %, `LegacySecurity` 74,5 → 93,8 %, `PhpOutline` 83,8 → 91,2 %,
-`LegacyFix` 72,5 → 89,2 %; las ocho juntas, 77,0 → 93,6 % (4287 mutantes, todos
-en código que la suite recorre). La CI exige 93. Las pruebas nuevas comparan
-mensajes enteros y casos límite, y convierten los avisos de PHP en excepciones
-como Laravel: un mutante que sólo deja un aviso también cuenta.
+MSI antes → después: `HandRolledLock` 53,7 → 97,9 %, `CiGate` 79,7 → 95,9 %,
+`Guard` 75,0 → 95,7 %, `ControllerShape` 77,4 → 95,3 %, `Verifier` 82,7 →
+93,3 %, `LegacySecurity` 74,5 → 92,8 %, `PhpOutline` 83,8 → 90,3 %,
+`LegacyFix` 72,5 → 89,9 %; las ocho juntas, 77,0 → 93,4 %
+(4335 mutantes; 93,9 % de los que algún test recorre). «Antes» se
+midió sin `--with-uncovered`, sólo con lo que la suite de la 9.1.0 recorría;
+«después», con él: lo que ningún test recorre también se muta y cuenta en
+contra. Sin eso, Infection no muta lo no cubierto, y borrar el test que cubría
+un mutante difícil subía el MSI. La CI exige `--min-msi=93` y
+`--min-covered-msi=93`, y a cada pieza su suelo de
+[`.github/mutation-floors.json`](.github/mutation-floors.json), que comprueba
+`.github/scripts/mutation-floors.php` (con su test). Corre con PHP 8.3,
+PHPUnit 12.5 e Infection 0.31.9, la configuración con la que se midió, sólo en
+los pull requests que tocan `src/`, `tests/` o su configuración (y a mano), con
+un límite de una hora y cancelando la corrida anterior de la misma rama. Hasta
+que corra en un pull request, no se ha visto pasar en GitHub: lo de aquí está
+medido en local con esa misma configuración.
+
+Las pruebas nuevas comparan mensajes enteros y casos límite, y convierten los
+avisos de PHP en excepciones como Laravel: un mutante que sólo deja un aviso
+también cuenta.
+
+Queda pendiente, y apuntado en `docs/mutacion.md`: los mutantes de las barras
+invertidas de `CiGate` sólo los mataría una CI en Windows, y el trabajo
+`windows-guard` no corre `CiGateTest` ni `GuardInputsTest` (lo que en ellos
+depende del sistema —`posix_geteuid()`, permisos, enlaces— no está escrito para
+Windows). Una primera versión de ese documento decía lo contrario.
 
 Los mutantes que sobrevivían destaparon fallos, y se arreglan con su prueba:
 
