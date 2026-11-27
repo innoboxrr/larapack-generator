@@ -147,6 +147,9 @@ final class LegacyFixTest extends TestCase
             'el helper con otra clave' => ["request('other')", null],
             'el helper con otro método' => ["request()->all('appends')", null],
             'el helper sin paréntesis vacíos' => ["request(1)->get('appends')", null],
+            // Una variable no es el helper aunque se invoque igual.
+            'la petición invocada' => ["\$request('appends')", null],
+            'la petición invocada y encadenada' => ["\$request()->input('appends')", null],
         ];
     }
 
@@ -217,6 +220,8 @@ final class LegacyFixTest extends TestCase
         return [
             'sobre otro objeto' => ["\$resource->setAppends(\$request->get('appends'));", 'setAppends() no se llama sobre $this->resource.'],
             'sobre otra propiedad' => ["\$this->model->setAppends(\$request->get('appends'));", 'setAppends() no se llama sobre $this->resource.'],
+            'con ?->' => ["\$this->resource?->setAppends(\$request->get('appends'));", 'setAppends() no se llama sobre $this->resource.'],
+            'estática' => ["\$this->resource::setAppends(\$request->get('appends'));", 'setAppends() no se llama sobre $this->resource.'],
             'sobre otra cosa que $this' => ["\$that->resource->setAppends(\$request->get('appends'));", 'setAppends() no se llama sobre $this->resource.'],
             'usando el resultado' => ["\$this->resource->setAppends(\$request->get('appends'))->refresh();", 'El resultado de setAppends() se usa en otra expresión.'],
             'dentro de un foreach' => ["foreach ([1] as \$i) {\n            {$call}\n        }", 'setAppends() está dentro de un bloque que no es un `if` del primer nivel del método.'],
@@ -225,6 +230,7 @@ final class LegacyFixTest extends TestCase
             'un if dentro de otro' => ["if (true) {\n            if (\$request->has('appends')) {\n                {$call}\n            }\n        }", 'setAppends() está dentro de un bloque que no es un `if` del primer nivel del método.'],
             'un if con else' => ["if (\$request->has('appends')) {\n            {$call}\n        } else {\n            \$x = 1;\n        }", 'El `if` del setAppends() tiene else: quitarlo cambiaría lo que hace.'],
             'un if con elseif' => ["if (\$request->has('appends')) {\n            {$call}\n        } elseif (true) {\n            \$x = 1;\n        }", 'El `if` del setAppends() tiene else: quitarlo cambiaría lo que hace.'],
+            'un if sin llaves dentro de otro' => ["if (true) {\n            if (\$request->has('appends')) {$call}\n        }", 'setAppends() está dentro de un bloque que no es el `if` de la plantilla.'],
             'un while' => ["while (\$request->has('appends')) {\n            {$call}\n        }", 'setAppends() está dentro de un bloque que no es un `if` del primer nivel del método.'],
             'dos veces' => ["{$call}\n        {$call}", 'PostResource::toArray() llama 2 veces a setAppends(): sólo se arregla la forma de la plantilla, con una.'],
             'ya usa $appends' => ["\$appends = 1;\n        {$call}", 'PostResource::toArray() ya usa $appends: el bloque de la plantilla la pisaría.'],
@@ -463,5 +469,163 @@ final class LegacyFixTest extends TestCase
         $report = (new LegacyFix($this->root, $checks, '/'))->plan();
         $this->assertSame([['file' => self::RESOURCE]], $report[LegacySecurity::RESOURCE_APPENDS]['fixed']);
         $this->assertSame(1, $report[LegacySecurity::INDEX_MANAGED]['unchanged']);
+    }
+
+    // LO QUE NO SE PUEDE ARREGLAR SIN ROMPERLO
+
+    /**
+     * Un archivo que ya no parseaba sigue sin parsear arreglado: no se
+     * escribe, y se dice por qué. El arreglo no lo empeora, pero tampoco
+     * puede comprobar que lo escrito es PHP.
+     */
+    public function test_un_archivo_que_no_parseaba_no_se_escribe(): void
+    {
+        $this->resource("\$this->resource->setAppends(\$request->get('appends'));", 'Request $request', 'JsonResource', "    public function broken()\n    {\n        return 1\n    }\n\n");
+        $before = (string) file_get_contents($this->root.'/'.self::RESOURCE);
+
+        [$skipped, $code] = $this->fix(self::RESOURCE);
+
+        $this->assertSame('El resultado no parsea (syntax error, unexpected token "}", expecting ";", línea 26).', $skipped);
+        $this->assertSame($before, $code);
+    }
+
+    /**
+     * Si Pint deja algo que no parsea, se devuelve el original y el archivo
+     * pasa de arreglado a saltado. Con un Pint de mentira (LARAPACK_PINT) que
+     * rompe lo que toca.
+     */
+    public function test_lo_que_pint_deja_sin_parsear_se_devuelve(): void
+    {
+        $this->resource("\$this->resource->setAppends(\$request->get('appends'));");
+        $this->index("    protected function prepareForValidation()\n    {\n        //\n    }\n");
+        $before = (string) file_get_contents($this->root.'/'.self::RESOURCE);
+        // Rompe el Resource y deja el IndexRequest como está.
+        $pint = $this->root.'/pint.php';
+        file_put_contents($pint, "<?php\nforeach (array_slice(\$argv, 1) as \$file) {\n    if (str_ends_with(\$file, 'PostResource.php')) {\n        file_put_contents(\$file, \"<?php\\nclass {\\n\");\n    }\n}\n");
+
+        $fix = new LegacyFix($this->root, [LegacySecurity::RESOURCE_APPENDS, LegacySecurity::INDEX_MANAGED]);
+        $fix->plan();
+        putenv('LARAPACK_PINT='.$pint);
+
+        try {
+            $result = ProjectRoot::using($this->root, fn (): array => $fix->apply());
+        } finally {
+            putenv('LARAPACK_PINT');
+        }
+
+        $this->assertTrue($result['formatted']);
+        $this->assertSame([], $result['report'][LegacySecurity::RESOURCE_APPENDS]['fixed']);
+        $this->assertSame(
+            [['file' => self::RESOURCE, 'reason' => 'Después de formatearlo no parseaba, y se devolvió el original.']],
+            $result['report'][LegacySecurity::RESOURCE_APPENDS]['skipped']
+        );
+        $this->assertSame($before, file_get_contents($this->root.'/'.self::RESOURCE));
+        $this->assertSame([['file' => self::INDEX]], $result['report'][LegacySecurity::INDEX_MANAGED]['fixed']);
+        $this->assertStringContainsString("'managed' => true", (string) file_get_contents($this->root.'/'.self::INDEX));
+    }
+
+    /**
+     * Dos métodos con el mismo nombre no compilan, pero se leen: el primero
+     * es el que cuenta, como en LegacySecurity, y si es abstracto no hay
+     * cuerpo que arreglar.
+     */
+    public function test_un_metodo_repetido_y_abstracto_no_tiene_cuerpo(): void
+    {
+        $this->resource("\$this->resource->setAppends(\$request->get('appends'));", 'Request $request', 'JsonResource', "    abstract public function TOARRAY(\$request);\n\n");
+
+        $this->assertSame('No se encontró el cuerpo de PostResource::toArray().', $this->fix(self::RESOURCE)[0]);
+    }
+
+    /**
+     * PHP 8.5 admite un closure estático como valor por defecto de una
+     * propiedad. No es un método, y el arreglo no lo sabe leer: no toca la
+     * clase.
+     */
+    public function test_un_closure_en_una_propiedad_no_se_toma_por_un_metodo(): void
+    {
+        $this->resource("\$this->resource->setAppends(\$request->get('appends'));", 'Request $request', 'JsonResource', "    public \$format = static function (\$x) { return \$x; };\n\n");
+
+        $this->assertSame('Una declaración de método que no se reconoce.', $this->fix(self::RESOURCE)[0]);
+    }
+
+    /**
+     * El Resource de un paquete se vuelve a anotar en su manifiesto aunque
+     * la raíz, que va antes, no tenga.
+     */
+    public function test_se_reanota_el_manifiesto_de_un_paquete_aunque_la_raiz_no_tenga(): void
+    {
+        $this->resource("\$this->resource->setAppends(\$request->get('appends'));");
+        $package = 'packages/blog/src/Http/Resources/PostResource.php';
+        $this->put('packages/blog/composer.json', (string) json_encode(['autoload' => ['psr-4' => ['Acme\\Blog\\' => 'src/']]]));
+        $this->put($package, str_replace('namespace App\\Http\\Resources;', 'namespace Acme\\Blog\\Http\\Resources;', (string) file_get_contents($this->root.'/'.self::RESOURCE)));
+        $this->put('packages/blog/.larapack/manifest.json', (string) json_encode(['version' => 1, 'package' => ['namespace' => 'Acme\\Blog\\', 'files' => []], 'models' => [
+            'Post' => ['namespace' => 'Acme\\Blog\\', 'files' => [
+                'src/Http/Resources/PostResource.php' => ['stub' => 'Resource/ResourceTemplate.txt', 'hash' => hash('sha256', (string) file_get_contents($this->root.'/'.$package))],
+            ]],
+        ]]));
+
+        $this->fix(self::RESOURCE);
+
+        $manifest = json_decode((string) file_get_contents($this->root.'/packages/blog/.larapack/manifest.json'), true);
+        $this->assertStringContainsString('$appendable', (string) file_get_contents($this->root.'/'.$package));
+        $this->assertSame(hash('sha256', (string) file_get_contents($this->root.'/'.$package)), $manifest['models']['Post']['files']['src/Http/Resources/PostResource.php']['hash']);
+    }
+
+    public function test_la_clase_esta_una_sola_vez_y_es_una_clase(): void
+    {
+        // Dos espacios de nombres en un archivo, cada uno con su PostResource.
+        $class = "class PostResource extends \\Illuminate\\Http\\Resources\\Json\\JsonResource\n{\n    public function toArray(\$request): array\n    {\n        \$this->resource->setAppends(\$request->get('appends'));\n\n        return [];\n    }\n}\n";
+        $this->put(self::RESOURCE, "<?php\n\nnamespace App\\Http\\Resources {\n{$class}}\n\nnamespace App\\Http\\Resources\\Old {\n{$class}}\n");
+
+        $this->assertSame('La clase PostResource aparece más de una vez.', $this->fix(self::RESOURCE)[0]);
+
+        // Un trait también se lee, pero no es una clase que se pueda arreglar.
+        $trait = 'app/Http/Resources/Concerns/AppendsRequested.php';
+        unlink($this->root.'/'.self::RESOURCE);
+        $this->put($trait, "<?php\n\nnamespace App\\Http\\Resources\\Concerns;\n\ntrait AppendsRequested\n{\n    public function toArray(\$request): array\n    {\n        \$this->resource->setAppends(\$request->get('appends'));\n\n        return [];\n    }\n}\n");
+
+        $this->assertSame('No se encontró la clase AppendsRequested.', $this->fix($trait)[0]);
+    }
+
+    public function test_un_archivo_sin_cerrar_no_se_toca(): void
+    {
+        $this->resource("\$this->resource->setAppends(\$request->get('appends'));");
+        $this->put(self::RESOURCE, rtrim((string) file_get_contents($this->root.'/'.self::RESOURCE), "}\n")."\n");
+
+        $this->assertSame('Paréntesis o llaves sin cerrar.', $this->fix(self::RESOURCE)[0]);
+    }
+
+    public function test_sin_sangria_no_se_sabe_cuanto_meter(): void
+    {
+        $this->put(self::INDEX, "<?php\n\nnamespace App\\Http\\Requests\\Post;\n\nuse Illuminate\\Foundation\\Http\\FormRequest;\nuse Innoboxrr\\SearchSurge\\Search\\Builder;\n\n"
+            ."class IndexRequest extends FormRequest\n{\nprotected function prepareForValidation()\n{\n//\n}\n\npublic function handle()\n{\nreturn (new Builder())->get(Post::class, \$this->all());\n}\n}\n");
+
+        $this->assertSame('No se pudo deducir la sangría de la clase.', $this->fix(self::INDEX)[0]);
+    }
+
+    /**
+     * Un archivo con algo delante de `<?php` (un shebang, una línea en
+     * blanco) parsea, pero no es lo que se espera de una clase: no se toca.
+     */
+    public function test_lo_que_no_empieza_con_la_etiqueta_de_php_no_se_toca(): void
+    {
+        $this->resource("\$this->resource->setAppends(\$request->get('appends'));");
+        $this->put(self::RESOURCE, "\n".file_get_contents($this->root.'/'.self::RESOURCE));
+
+        $this->assertSame('El resultado no empieza con <?php.', $this->fix(self::RESOURCE)[0]);
+    }
+
+    /**
+     * El bloque de un `use` de trait (`{ a as b; }`) no es el principio del
+     * método siguiente: $appendable va delante del método, no del `use`.
+     */
+    public function test_el_bloque_de_un_use_de_trait_no_es_parte_del_metodo(): void
+    {
+        $this->resource("\$this->resource->setAppends(\$request->get('appends'));", 'Request $request', 'JsonResource', "    use \\App\\Concerns\\Formats {\n        format as protected;\n    }\n\n");
+
+        [$skipped, $code] = $this->fix(self::RESOURCE);
+
+        $this->assertNull($skipped);
+        $this->assertStringContainsString("        format as protected;\n    }\n\n    /**\n     * Los accessors", $code);
     }
 }
