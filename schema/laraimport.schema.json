@@ -92,7 +92,7 @@
                 "load_counts": {
                     "type": "array",
                     "default": [],
-                    "items": { "$ref": "#/$defs/snakeCase" },
+                    "items": { "type": "string", "pattern": "^[a-z][A-Za-z0-9_]*$", "minLength": 1 },
                     "description": "Relaciones cuyo conteo puede pedirse con withCount."
                 },
                 "requests": {
@@ -279,8 +279,10 @@
                     "description": "Modelo relacionado. Si está definido en este mismo archivo, su namespace se resuelve solo. Obligatorio salvo en morphTo, que no apunta a un modelo: lo dicen las columnas <name>_type y <name>_id de cada fila."
                 },
                 "name": {
-                    "$ref": "#/$defs/snakeCase",
-                    "description": "Nombre del método de relación."
+                    "type": "string",
+                    "pattern": "^[a-z][A-Za-z0-9_]*$",
+                    "minLength": 1,
+                    "description": "Nombre del método de relación, en snake_case o camelCase (practitionerLocations): es el nombre del método en PHP, y uno que ya existe se conserva tal cual."
                 },
                 "namespace": {
                     "type": "string",

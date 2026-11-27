@@ -46,6 +46,9 @@ final class RealignOperationsTest extends TestCase
     public function test_una_accion_sin_implementacion_lo_dice(): void
     {
         Operations::register('adopt', null);
+        // Desde 9.4.0 `infer` tiene implementación: se fuerza la pendiente
+        // para probar el contrato con una acción que no la tenga.
+        Operations::register('infer', fn (): RealignOperation => new PendingOperation('infer'));
 
         $this->assertInstanceOf(PendingOperation::class, Operations::for('infer'));
         $this->assertFalse(Operations::available('infer'));

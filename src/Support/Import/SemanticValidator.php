@@ -183,7 +183,11 @@ final class SemanticValidator
 
             $routes[$route] = true;
 
-            if (in_array($uri, Endpoints::crudUris(), true)) {
+            // Sólo tapa una ruta CRUD que exista: un controllers[] no tiene
+            // ninguna, y un modelo sólo las de sus acciones. Hasta 9.4.0 se
+            // rechazaba siempre, y una ruta escrita a mano `.../create` de un
+            // controlador sin modelo no se podía adoptar conservando su URI.
+            if ($actions !== null && in_array($uri, array_map(fn (string $action): string => Endpoints::kebab($action), $actions), true)) {
                 $findings[] = self::error("{$at}/uri", "La URI '{$uri}' es la de una acción CRUD: la ruta CRUD se registra antes y taparía este endpoint.");
             }
 

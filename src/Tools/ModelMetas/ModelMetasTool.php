@@ -2,7 +2,9 @@
 
 namespace Innoboxrr\LarapackGenerator\Tools\ModelMetas;
 
+use Innoboxrr\LarapackGenerator\Support\Generation;
 use Innoboxrr\LarapackGenerator\Support\MigrationTimestamp;
+use Innoboxrr\LarapackGenerator\Tools\Migration\Schema\SchemaHistory;
 use Innoboxrr\LarapackGenerator\Tools\ModelArtifact;
 use Innoboxrr\LarapackGenerator\Tools\Tool;
 
@@ -78,6 +80,16 @@ class ModelMetasTool extends Tool implements ModelArtifact
         // La migración de metas tiene que correr después de la del modelo,
         // que ya se pidió antes: el contador lo garantiza sin sumar segundos.
         $migrationMetasFile = $this->migrationFile($this->migrationMetasPath, 'create_'.$this->metasTableName().'_table');
+
+        // La tabla de metas ya la crea otra migración (un modelo adoptado con
+        // `realign infer`, 9.4.0): una segunda creación fallaría.
+        $state = (new SchemaHistory($this->migrationMetasPath))->table($this->metasTableName());
+
+        if (! is_file($migrationMetasFile) && $state->exists && $state->creator !== null) {
+            Generation::record('skipped', $state->creator, $this->migrationMetasTemplatePath.'/MigrationTemplate.txt', 'la tabla '.$this->metasTableName().' ya la crea esta migración, que no generó LaraPack: el esquema lo decide ella');
+
+            return false;
+        }
 
         return $this->generate($this->migrationMetasTemplatePath.'/MigrationTemplate.txt', $migrationMetasFile);
     }

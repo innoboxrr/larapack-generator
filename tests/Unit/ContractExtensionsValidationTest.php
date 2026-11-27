@@ -72,6 +72,40 @@ final class ContractExtensionsValidationTest extends TestCase
         $this->assertNull($belongs, 'Un belongsTo sin related no puede generarse.');
     }
 
+    /**
+     * Una URI CRUD sólo tapa la ruta CRUD que existe: un controllers[] no
+     * tiene ninguna, y un modelo sin la acción tampoco. Es lo que deja
+     * adoptar `…/create` escrito a mano conservando su URI.
+     */
+    public function test_una_uri_crud_solo_choca_con_la_accion_que_existe(): void
+    {
+        $controller = ['models' => [['name' => 'Item', 'props' => [['name' => 'name', 'type' => 'string']]]], 'controllers' => [['name' => 'Desk', 'endpoints' => [
+            ['name' => 'store', 'method' => 'post', 'uri' => 'create', 'authorize' => 'authenticated'],
+        ]]]];
+        $this->assertNotNull(ImportDocument::fromArray($controller)['document']);
+
+        $withoutCreate = ['models' => [['name' => 'Item', 'props' => [['name' => 'name', 'type' => 'string']], 'routes' => ['except' => ['create']],
+            'endpoints' => [['name' => 'store', 'method' => 'post', 'uri' => 'create', 'target' => 'collection']]]]];
+        $this->assertNotNull(ImportDocument::fromArray($withoutCreate)['document']);
+
+        unset($withoutCreate['models'][0]['routes']);
+        ['document' => $document, 'errors' => $errors] = ImportDocument::fromArray($withoutCreate);
+        $this->assertNull($document);
+        $this->assertContains('/models/0/endpoints/0/uri', array_column($errors, 'path'));
+    }
+
+    public function test_una_relacion_puede_llamarse_en_camel_case_como_su_metodo(): void
+    {
+        ['document' => $document, 'errors' => $errors] = ImportDocument::fromArray(['models' => [[
+            'name' => 'Practitioner',
+            'props' => [['name' => 'name', 'type' => 'string']],
+            'load_relations' => [['type' => 'hasMany', 'related' => 'Location', 'name' => 'practitionerLocations', 'namespace' => 'App\\Models']],
+            'load_counts' => ['practitionerLocations'],
+        ]]]);
+
+        $this->assertNotNull($document, json_encode($errors) ?: '');
+    }
+
     public function test_lo_nuevo_bien_declarado_se_acepta_y_no_cambia_lo_que_no_se_declara(): void
     {
         ['document' => $document, 'errors' => $errors] = ImportDocument::fromArray(['models' => [[

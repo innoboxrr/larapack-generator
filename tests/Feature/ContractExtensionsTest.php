@@ -182,6 +182,28 @@ PHP);
     }
 
     /**
+     * Un pivote o una tabla de metas que ya crea una migración escrita a mano
+     * (lo que pasa al adoptar un proyecto con `realign infer`) no se vuelve a
+     * crear: fallaría con «table already exists».
+     */
+    public function test_no_se_crea_otra_vez_un_pivote_ni_unas_metas_que_ya_existen(): void
+    {
+        $project = $this->useProject(FakeProject::library('Acme\\Shop\\'));
+        @mkdir($project->path.'/database/migrations', 0777, true);
+        file_put_contents($project->path.'/database/migrations/2020_01_01_000000_legacy.php', "<?php\n\nuse Illuminate\\Database\\Migrations\\Migration;\nuse Illuminate\\Database\\Schema\\Blueprint;\nuse Illuminate\\Support\\Facades\\Schema;\n\nreturn new class extends Migration\n{\n    public function up(): void\n    {\n"
+            ."        Schema::create('post_tag', function (Blueprint \$table) {\n            \$table->id();\n            \$table->unsignedBigInteger('post_id');\n            \$table->unsignedBigInteger('tag_id');\n        });\n"
+            ."        Schema::create('post_metas', function (Blueprint \$table) {\n            \$table->id();\n            \$table->unsignedBigInteger('post_id');\n            \$table->string('key');\n        });\n    }\n};\n");
+
+        $this->import(['models' => [['name' => 'Post', 'metas' => true, 'props' => [['name' => 'title', 'type' => 'string']]]], 'pivots' => [['name' => 'post_tag', 'props' => [
+            ['name' => 'post_id', 'type' => 'unsignedBigInteger'], ['name' => 'tag_id', 'type' => 'unsignedBigInteger'],
+        ]]]]);
+
+        $this->assertNull($project->glob('database/migrations/*_create_post_tag_table.php'));
+        $this->assertNull($project->glob('database/migrations/*_create_post_metas_table.php'));
+        $this->assertNotNull($project->glob('database/migrations/*_create_posts_table.php'), 'La tabla que no existía sí se crea.');
+    }
+
+    /**
      * @param  array<string, mixed>  $declaration
      */
     private function import(array $declaration): void

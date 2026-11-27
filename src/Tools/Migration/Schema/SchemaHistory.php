@@ -24,7 +24,13 @@ final class SchemaHistory
      */
     private array $tables = [];
 
-    public function __construct(private readonly string $directory) {}
+    /**
+     * @param  list<string>  $others  Más directorios de migraciones que corren
+     *                                contra la misma base (9.4.0): los de los
+     *                                paquetes de un proyecto que comparten
+     *                                base. El generador sólo usa el suyo.
+     */
+    public function __construct(private readonly string $directory, private readonly array $others = []) {}
 
     /**
      * @return list<string>
@@ -32,6 +38,12 @@ final class SchemaHistory
     public function files(): array
     {
         $files = glob($this->directory.'/*.php') ?: [];
+
+        foreach ($this->others as $other) {
+            $files = [...$files, ...(glob($other.'/*.php') ?: [])];
+        }
+
+        $files = array_values(array_unique($files));
 
         usort($files, fn (string $a, string $b): int => strcmp(basename($a), basename($b)));
 
