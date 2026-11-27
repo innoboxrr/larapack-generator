@@ -82,7 +82,8 @@ final class HandRolledLock
             return null;
         }
 
-        $decoded = json_decode((string) file_get_contents($file), true);
+        $raw = file_get_contents($file);
+        $decoded = $raw === false ? null : json_decode($raw, true);
 
         if (! is_array($decoded) || ! array_is_list($decoded)) {
             throw new RuntimeException(self::PATH.' no es una lista JSON de {"target", "reason", "fingerprint"}.');
@@ -121,7 +122,13 @@ final class HandRolledLock
         $file = self::path($root);
         $directory = dirname($file);
 
-        if (! is_dir($directory) && ! mkdir($directory, 0777, true) && ! is_dir($directory)) {
+        // Otro proceso puede crearlo entre la pregunta y el mkdir(): lo que
+        // importa es que exista después, lo haya creado quien lo haya creado.
+        if (! is_dir($directory)) {
+            @mkdir($directory, 0777, true);
+        }
+
+        if (! is_dir($directory)) {
             throw new RuntimeException("No se pudo crear el directorio {$directory}.");
         }
 
@@ -260,7 +267,9 @@ final class HandRolledLock
             return 'N';
         }
 
-        $text = is_scalar($value) ? (string) $value : get_debug_type($value);
+        // Lo que llega es una cadena, un booleano, null o una lista: el tipo de
+        // otra cosa se apuntaría como texto, nunca su valor.
+        $text = is_string($value) ? $value : get_debug_type($value);
 
         return 's'.strlen($text).':'.$text;
     }

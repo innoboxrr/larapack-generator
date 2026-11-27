@@ -281,7 +281,7 @@ final class Guard
                 $invoked = $invoked || self::namesHandRolled($word);
                 // `-c` puede ir en cualquier punto del grupo de opciones:
                 // `bash -ce '…'` ejecuta el texto igual que `bash -ec '…'`.
-                $nested = $eval || preg_match('/^-[a-z]*c[a-z]*$/i', $words[$index - 1] ?? '') === 1;
+                $nested = $eval || preg_match('/^-[a-z]*c/i', $words[$index - 1] ?? '') === 1;
 
                 if ($nested) {
                     $approves = self::nestedScan($word, $depth, $locks) || $approves;
@@ -323,7 +323,7 @@ final class Guard
             $index++;
         }
 
-        $program = strtolower((string) preg_replace('/\.exe$/i', '', basename(str_replace('\\', '/', $words[$index] ?? ''))));
+        $program = preg_replace('/\.exe$/', '', strtolower(basename(str_replace('\\', '/', $words[$index] ?? '')))) ?? '';
         $arguments = array_slice($words, $index + 1);
         $named = array_values(array_filter($arguments, self::isLockName(...)));
 
@@ -643,10 +643,10 @@ final class Guard
         $cwd = $payload['cwd'] ?? null;
 
         if (is_string($cwd) && $cwd !== '' && is_dir($cwd)) {
-            return self::normalise((string) realpath($cwd));
+            return self::normalise(realpath($cwd) ?: $cwd);
         }
 
-        return self::normalise((string) getcwd());
+        return self::normalise(getcwd() ?: '');
     }
 
     /**
@@ -663,7 +663,7 @@ final class Guard
 
         while (true) {
             if (is_file($directory.'/composer.json') || is_file($directory.'/.larapack/manifest.json')) {
-                return self::normalise((string) (realpath($directory) ?: $directory));
+                return self::normalise(realpath($directory) ?: $directory);
             }
 
             $parent = dirname($directory);
@@ -869,9 +869,9 @@ final class Guard
         foreach (array_slice($errors, 0, $limit) as $error) {
             $lines[] = sprintf(
                 '  - [%s] %s%s',
-                self::inline((string) ($error['check'] ?? 'error')),
+                self::inline(is_string($error['check'] ?? null) ? $error['check'] : 'error'),
                 isset($error['file']) && is_string($error['file']) ? self::inline($error['file']).': ' : '',
-                self::inline((string) ($error['message'] ?? ''))
+                self::inline(is_string($error['message'] ?? null) ? $error['message'] : '')
             );
         }
 
@@ -900,11 +900,11 @@ final class Guard
      */
     public static function inline(string $text): string
     {
-        return (string) preg_replace_callback(
+        return preg_replace_callback(
             '/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u',
             fn (array $match): string => sprintf('\u{%04X}', mb_ord($match[0], 'UTF-8')),
             mb_scrub($text, 'UTF-8')
-        );
+        ) ?? '';
     }
 
     /**
@@ -1153,31 +1153,24 @@ final class Guard
      */
     private static function gitChanges(string $root): ?array
     {
-        $top = self::git($root, ['rev-parse', '--show-toplevel']);
-
-        if ($top === null || trim($top) === '') {
-            return null;
-        }
+        // Fuera de un repositorio no hay raíz, y sin ella no se pregunta.
+        $top = self::git($root, ['rev-parse', '--show-toplevel']) ?? '';
 
         // Con -z las rutas van tal cual, sin comillas, y siempre relativas a
         // la raíz del repositorio; `-- .` las limita al proyecto.
-        $status = self::git($root, ['status', '--porcelain=v1', '-z', '--untracked-files=all', '--', '.']);
+        $status = $top === '' ? null : self::git($root, ['status', '--porcelain=v1', '-z', '--untracked-files=all', '--', '.']);
 
         if ($status === null) {
             return null;
         }
 
         $top = rtrim(self::normalise(trim($top)), '/');
-        $entries = explode("\0", $status);
+        // Cada entrada acaba en \0: la última vacía no es un archivo.
+        $entries = preg_split('/\0/', $status, -1, PREG_SPLIT_NO_EMPTY) ?: [];
         $files = [];
 
         for ($i = 0; $i < count($entries); $i++) {
             $entry = $entries[$i];
-
-            if (strlen($entry) < 4) {
-                continue;
-            }
-
             $files[] = $top.'/'.substr($entry, 3);
 
             // Un renombrado o una copia traen detrás la ruta de origen, que
@@ -1239,7 +1232,7 @@ final class Guard
      */
     private static function lexical(string $path): string
     {
-        preg_match('#^(//(?!/)|[A-Za-z]:/+|/+)?#', $path, $match);
+        preg_match('#^(?://(?!/)|[A-Za-z]:/+|/+)?#', $path, $match);
         $prefix = $match[0] ?? '';
         $parts = [];
 
@@ -1259,7 +1252,11 @@ final class Guard
             }
         }
 
-        $prefix = str_starts_with($prefix, '//') ? '//' : (preg_match('#^[A-Za-z]:#', $prefix) === 1 ? substr($prefix, 0, 2).'/' : ($prefix === '' ? '' : '/'));
+        $prefix = match (true) {
+            str_starts_with($prefix, '//') => '//',
+            str_contains($prefix, ':') => substr($prefix, 0, 2).'/',
+            default => $prefix === '' ? '' : '/',
+        };
 
         return $prefix.implode('/', $parts);
     }

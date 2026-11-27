@@ -261,6 +261,9 @@ final class GuardInputsTest extends TestCase
             'sin <<- los tabuladores cuentan' => ["cat <<EOF\n\tEOF\nlarapack:hand-rolled approve\nEOF", false],
             'el heredoc de una shell de Windows' => ["'C:\\Git\\bin\\bash' <<EOF\nlarapack:hand-rolled approve\nEOF", true],
             'dos heredocs en una línea' => ["cat <<A <<B\nuno\nA\ndos\nB\nlarapack:hand-rolled approve", true],
+            // Sin delimitador no hay heredoc, y leer el que no hay no avisa.
+            'un << al final' => ['larapack:hand-rolled approve; cat <<', true],
+            'un << y un espacio al final' => ['larapack:hand-rolled approve; cat << ', true],
         ];
     }
 
@@ -282,6 +285,18 @@ final class GuardInputsTest extends TestCase
     }
 
     // RUTAS
+
+    public function test_el_directorio_de_trabajo(): void
+    {
+        mkdir($this->root.'/real');
+        symlink($this->root.'/real', $this->root.'/enlace');
+
+        // El del hook, resuelto: un enlace no es otro proyecto.
+        $this->assertSame($this->root.'/real', Guard::workingDirectory(['cwd' => $this->root.'/enlace']));
+        // Sin él, o si no existe, el del proceso.
+        $this->assertSame(str_replace('\\', '/', (string) getcwd()), Guard::workingDirectory(['cwd' => $this->root.'/no-existe']));
+        $this->assertSame(str_replace('\\', '/', (string) getcwd()), Guard::workingDirectory([]));
+    }
 
     public function test_el_proyecto_de_un_archivo(): void
     {
@@ -389,6 +404,9 @@ final class GuardInputsTest extends TestCase
         }
 
         $errors[0] = ['check' => "con\nsalto", 'file' => 5, 'message' => 'sin archivo'];
+        // Lo que no es texto —un JSON de verify que no es el de verify— no se
+        // convierte: «Array» no le dice nada a nadie, y avisaría.
+        $errors[2] = ['check' => ['c'], 'file' => 'f3.php', 'message' => ['m3']];
 
         $lines = explode("\n", Guard::message('Algo falla.', $errors, $this->root));
 
@@ -396,7 +414,8 @@ final class GuardInputsTest extends TestCase
             'Algo falla.',
             '  - [con\u{000A}salto] sin archivo',
             '  - [c] f2.php: m2',
-        ], array_slice($lines, 0, 3));
+            '  - [error] f3.php: ',
+        ], array_slice($lines, 0, 4));
         $this->assertSame('  - [c] f8.php: m8', $lines[8]);
         $this->assertSame('  … y 1 más.', $lines[9]);
         $this->assertSame(Guard::RULE, $lines[10]);

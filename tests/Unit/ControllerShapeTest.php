@@ -348,6 +348,13 @@ final class ControllerShapeTest extends TestCase
         $this->assertSame([['warning', 'hand-rolled']], $this->kinds());
     }
 
+    public function test_hand_rolled_detras_de_otro_atributo_tambien_cuenta(): void
+    {
+        $this->controller('PostController', "class PostController\n{\n    #[\\Deprecated]\n    #[HandRolled('firma en bruto')]\n    public function store(Request \$request) { return 1; }\n}");
+
+        $this->assertSame([['warning', 'hand-rolled']], $this->kinds());
+    }
+
     // LOS TRAITS DE HTTP/CONTROLLERS
 
     public function test_un_trait_con_logica(): void
@@ -374,6 +381,13 @@ final class ControllerShapeTest extends TestCase
             'El trait Authorizes (línea 9) vive en Http/Controllers y lleva lógica (helper(), check()), y lo usa PostController. '
             .'Lo que comparten varios controladores no es del controlador: llévalo a una request base o a un trait en Http/Requests, o a un soporte, y deja las acciones en `return $request->handle();`.',
         ], $this->messages('controller-concern'));
+    }
+
+    public function test_un_trait_excusado_entero_no_se_mira_por_dentro(): void
+    {
+        $this->controller('Concerns/Authorizes', "#[HandRolled('firma de webhooks')]\ntrait Authorizes\n{\n    protected function check() { return 1; }\n}", 'App\Http\Controllers\Concerns');
+
+        $this->assertSame([['warning', 'hand-rolled']], $this->kinds());
     }
 
     public function test_un_trait_que_no_usa_ningun_controlador(): void

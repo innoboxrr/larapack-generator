@@ -410,4 +410,83 @@ final class VerifierTest extends TestCase
             'PostEndpointsTest no tiene test_…_cada_accion_requiere_sesion, test_…_cada_accion_pregunta_a_la_politica: se generó antes de 9.1 y no prueba lo que cierra la autorización. No se regenera solo: guarda lo que le añadiste, bórralo, corre `larapack:import` (sin --force basta: crea el que falta) y vuelve a pegar lo tuyo.',
         ], $this->messages('endpoint-tests-outdated'));
     }
+
+    // LO QUE UN MANIFIESTO EDITADO A MANO PUEDE TRAER
+
+    public function test_un_nombre_que_no_es_un_identificador_se_informa_sin_reventar(): void
+    {
+        // Un manifiesto editado a mano puede traer cualquier cosa. Metido tal
+        // cual en una expresión regular, un `(` la rompe: preg_match() deja un
+        // aviso, y bajo Artisan un aviso tumba `verify` entero. Cada nombre se
+        // escapa, y lo que falta se dice como de cualquier otro.
+        $this->declare('Post', [
+            'endpoints' => [['name' => 'pub(lish', 'route' => 'pub(lish', 'request' => 'PubRequest', 'ability' => 'can(publish', 'operation' => 'do(publish', 'public' => false, 'target' => 'record']],
+            'secret' => ['pi(n'],
+        ]);
+        $this->generated('Post', 'src/Models/Post.php', 'Model/ModelTemplate.txt', "<?php\nprotected \$hidden = ['pi(n'];\nprotected \$export_cols = ['pi(n'];");
+        $this->generated('Post', 'src/Http/Controllers/PostController.php', 'Controller/ControllerTemplate.txt', "<?php class PostController {\n public function publish() {}\n}");
+        $this->generated('Post', 'src/routes/post.php', 'Route/RouteTemplate.txt', "->name('pub(lish')");
+        $this->generated('Post', 'src/Policies/PostPolicy.php', 'Policy/PolicyTemplate.txt', "<?php class PostPolicy {\n public function publish() {}\n}");
+        $this->generated('Post', 'src/Http/Resources/PostResource.php', 'Resource/ResourceTemplate.txt', "<?php ['pi(n' => 1];");
+        $this->generated('Post', 'resources/vue/post/model.js', 'ModelView/model.js', "export const publish = 1;\n{ id: 'pi(n' }");
+        $this->write('src/Models/Traits/Operations/PostOperations.php', "<?php trait PostOperations {\n public function publish() {}\n}");
+        $this->write('src/Http/Requests/Post/PubRequest.php', '<?php');
+
+        $this->assertSame([
+            'El endpoint pub(lish declarado no tiene método en el controlador. Regenera con --force: el controlador no se escribe a mano.',
+            'El endpoint pub(lish declarado no tiene función en el contrato JS: falta `export const do(publish`. Regenera con --vue o --react y --force: el contrato no se escribe a mano.',
+            "El endpoint pub(lish declarado pregunta a la política por 'can(publish' y la política no lo tiene. Añade `public function can(publish(User \$user, Post \$post): Response|bool` y decide quién puede; sin él, Laravel lo niega siempre.",
+            'El endpoint pub(lish declarado delega en Post::do(publish($request) y el trait de operaciones no lo tiene. Escríbelo ahí: es donde va la lógica del endpoint.',
+        ], $this->messages('endpoint-missing'));
+        $this->assertSame([
+            "'pi(n' es secreta y está en \$export_cols: sale en la exportación.",
+            "'pi(n' es secreta y el Resource la nombra: sale por la API aunque esté en \$hidden.",
+            "'pi(n' es secreta y es columna de la tabla.",
+        ], $this->messages('secret-exposed'));
+    }
+
+    public function test_un_modelo_sin_hidden_no_esconde_ningun_secreto(): void
+    {
+        $this->declare('User', ['secret' => ['token', 'pin']]);
+        $this->generated('User', 'src/Models/User.php', 'Model/ModelTemplate.txt', "<?php\nprotected \$fillable = ['token', 'pin'];");
+
+        $this->assertSame([
+            "'token' es secreta y no está en \$hidden: toArray() la devuelve, y con él el Resource.",
+            "'pin' es secreta y no está en \$hidden: toArray() la devuelve, y con él el Resource.",
+        ], $this->messages('secret-exposed'));
+    }
+
+    public function test_un_contrato_que_ya_no_existe_no_para_la_comprobacion_de_los_demas(): void
+    {
+        // El que falta lo dice missing-file; los de después se siguen mirando.
+        $this->generated('Post', 'resources/vue/gone/model.js', 'ModelView/model.js', null);
+        $this->generated('Post', 'resources/vue/post/model.js', 'ModelView/model.js', "export const API_ROUTE_PREFIX = 'api.otra.post.';");
+
+        $this->assertSame([
+            "API_ROUTE_PREFIX es 'api.otra.post.' y el RouteServiceProvider registra 'api.acme.school.post.'.",
+        ], $this->messages('route-prefix'));
+    }
+
+    public function test_el_prefijo_de_rutas_de_un_espacio_de_nombres_con_acentos(): void
+    {
+        // PHP admite identificadores UTF-8, y el prefijo va en minúsculas:
+        // también la Ñ, no sólo lo ASCII.
+        $this->manifest['models']['Post']['namespace'] = 'Acme\\ÑANDÚ\\';
+        $this->generated('Post', 'resources/vue/post/model.js', 'ModelView/model.js', "export const API_ROUTE_PREFIX = 'api.acme.ñandú.post.';");
+        $this->generated('Post', 'resources/vue/tag/model.js', 'ModelView/model.js', "export const API_ROUTE_PREFIX = 'api.acme.ÑANDÚ.tag.';");
+
+        $this->assertSame([
+            "API_ROUTE_PREFIX es 'api.acme.ÑANDÚ.tag.' y el RouteServiceProvider registra 'api.acme.ñandú.tag.'.",
+        ], $this->messages('route-prefix'));
+    }
+
+    public function test_una_ruta_cuyo_nombre_empieza_como_una_accion_no_es_esa_accion(): void
+    {
+        // `showcase` no es `show`: que Post no declare show no hace de la
+        // ruta del endpoint un resto de la acción.
+        $this->declare('Post', ['actions' => ['index'], 'endpoints' => [['name' => 'showcase', 'route' => 'showcase', 'request' => 'ShowcaseRequest', 'ability' => 'showcase', 'operation' => 'showcase', 'public' => false, 'target' => 'record']]]);
+        $this->generated('Post', 'src/routes/post.php', 'Route/RouteTemplate.txt', "->name('index')\n->name('showcase')");
+
+        $this->assertSame([], $this->messages('route-not-declared'));
+    }
 }

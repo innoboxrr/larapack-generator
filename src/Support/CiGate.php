@@ -200,7 +200,7 @@ final class CiGate
             $lines = file($file, FILE_IGNORE_NEW_LINES) ?: [];
 
             foreach ($lines as $index => $line) {
-                if (preg_match('/^(\s*)runs-on:\s*(.*)$/', (string) preg_replace('/(^|\s)#.*$/', '', $line), $match) !== 1) {
+                if (preg_match('/^(\s*)runs-on:\s*(.*)/', self::withoutComment($line), $match) !== 1) {
                     continue;
                 }
 
@@ -210,7 +210,7 @@ final class CiGate
                 if ($value === '') {
                     $items = [];
 
-                    for ($next = $index + 1; isset($lines[$next]) && preg_match('/^\s*-\s*(\S.*?)\s*$/', (string) preg_replace('/(^|\s)#.*$/', '', $lines[$next]), $item) === 1; $next++) {
+                    for ($next = $index + 1; isset($lines[$next]) && preg_match('/^\s*-\s*(\S.*?)\s*$/', self::withoutComment($lines[$next]), $item) === 1; $next++) {
                         $items[] = trim($item[1], '\'"');
                     }
 
@@ -309,7 +309,7 @@ final class CiGate
             }
         }
 
-        $extensions = array_values(array_unique($extensions));
+        $extensions = array_unique($extensions);
         sort($extensions, SORT_STRING);
 
         return $extensions;
@@ -406,11 +406,13 @@ final class CiGate
         $existing = [];
 
         foreach (preg_split('/\R/', $current) ?: [] as $line) {
-            $code = trim((string) preg_replace('/(^|\s)#.*$/', '', $line));
+            $code = trim(self::withoutComment($line));
             $tokens = $code === '' ? [] : (preg_split('/\s+/', $code) ?: []);
 
             if ($tokens !== []) {
-                $existing[ltrim($tokens[0], '/')][] = ['line' => trim($line), 'owners' => array_slice($tokens, 1)];
+                // El patrón, y detrás sus dueños.
+                $pattern = array_shift($tokens);
+                $existing[ltrim($pattern, '/')][] = ['line' => trim($line), 'owners' => $tokens];
             }
         }
 
@@ -514,7 +516,9 @@ final class CiGate
 
     private static function lowerBound(mixed $constraint): ?string
     {
-        if (! is_string($constraint) || trim($constraint) === '') {
+        // Vacía o en blanco no es una restricción: VersionParser la rechaza
+        // como cualquier otra que no entiende.
+        if (! is_string($constraint)) {
             return null;
         }
 
@@ -545,9 +549,18 @@ final class CiGate
      */
     private static function readJson(string $file): ?array
     {
-        $decoded = is_file($file) ? json_decode((string) file_get_contents($file), true) : null;
+        $decoded = is_file($file) ? json_decode(Files::read($file), true) : null;
 
         return is_array($decoded) ? $decoded : null;
+    }
+
+    /**
+     * Una línea de YAML o de CODEOWNERS sin su comentario: `#` al principio
+     * o detrás de un espacio.
+     */
+    private static function withoutComment(string $line): string
+    {
+        return preg_replace('/(^|\s)#.*$/', '', $line) ?? $line;
     }
 
     private static function join(string $root, string $relative): string

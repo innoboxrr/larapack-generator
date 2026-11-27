@@ -226,7 +226,7 @@ final class LegacySecurity
 
     private function read(string $file): string
     {
-        return $this->overlay[$file] ?? (string) file_get_contents($file);
+        return $this->overlay[$file] ?? Files::read($file);
     }
 
     // INDEX-MANAGED
@@ -247,8 +247,8 @@ final class LegacySecurity
                 $next = $body[$index + 1] ?? null;
 
                 if ($token[0] === T_NEW && $next !== null
-                    && in_array($next[0], [T_STRING, T_NAME_QUALIFIED, T_NAME_FULLY_QUALIFIED], true)
-                    && strcasecmp((string) preg_replace('/^.*\\\\/', '', $next[1]), 'Builder') === 0
+                    && PhpOutline::is($next, T_STRING, T_NAME_QUALIFIED, T_NAME_FULLY_QUALIFIED)
+                    && strcasecmp(preg_replace('/^.*\\\\/', '', $next[1]) ?? '', 'Builder') === 0
                 ) {
                     return true;
                 }
@@ -299,7 +299,7 @@ final class LegacySecurity
      */
     private function parentForcesManaged(array $class, array $visited): ?bool
     {
-        $parent = strtolower((string) $class['extends']);
+        $parent = strtolower($class['extends'] ?? '');
 
         if ($parent === '' || $parent === self::FORM_REQUEST) {
             return false;
@@ -319,7 +319,7 @@ final class LegacySecurity
         foreach ($body as $index => $token) {
             if ($token[0] !== T_STRING
                 || ! in_array(strtolower($token[1]), ['merge', 'replace'], true)
-                || ($body[$index + 1][0] ?? null) !== '('
+                || ! PhpOutline::is($body[$index + 1] ?? null, '(')
             ) {
                 continue;
             }
@@ -359,7 +359,7 @@ final class LegacySecurity
 
         $value = strtolower(trim($token[1], '\'"'));
 
-        return in_array($token[0], [T_STRING, T_LNUMBER, T_CONSTANT_ENCAPSED_STRING], true)
+        return PhpOutline::is($token, T_STRING, T_LNUMBER, T_CONSTANT_ENCAPSED_STRING)
             && in_array($value, ['true', '1'], true);
     }
 
@@ -416,12 +416,12 @@ final class LegacySecurity
         }
 
         foreach ($this->statements($body) as $statement) {
-            if (count($statement) > 2 && $statement[0][0] === T_VARIABLE && $statement[1][0] === '=') {
+            if (count($statement) > 2 && $statement[0][0] === T_VARIABLE && PhpOutline::is($statement[1], '=')) {
                 $tainted[$statement[0][1]] = $this->carriesInput(array_slice($statement, 2), $tainted);
             }
 
             foreach ($statement as $index => $token) {
-                if ($token[0] !== T_STRING || strcasecmp($token[1], 'setAppends') !== 0 || ($statement[$index + 1][0] ?? null) !== '(') {
+                if ($token[0] !== T_STRING || strcasecmp($token[1], 'setAppends') !== 0 || ! PhpOutline::is($statement[$index + 1] ?? null, '(')) {
                     continue;
                 }
 
@@ -449,7 +449,7 @@ final class LegacySecurity
                 return false;
             }
 
-            $call = ($tokens[$index + 1][0] ?? null) === '(' || ($tokens[$index + 1][0] ?? null) === T_DOUBLE_COLON;
+            $call = PhpOutline::is($tokens[$index + 1] ?? null, '(') || ($tokens[$index + 1][0] ?? null) === T_DOUBLE_COLON;
 
             $input = $input
                 || ($token[0] === T_VARIABLE && ($tainted[$token[1]] ?? false))
@@ -479,13 +479,11 @@ final class LegacySecurity
         $inner = [];
 
         for ($i = $open, $count = count($tokens); $i < $count; $i++) {
-            $current = $tokens[$i][0];
-
-            if (in_array($current, ['(', '[', '{'], true) && $depth++ === 0) {
+            if (PhpOutline::is($tokens[$i], '(', '[', '{') && $depth++ === 0) {
                 continue;
             }
 
-            if (in_array($current, [')', ']', '}'], true) && --$depth === 0) {
+            if (PhpOutline::is($tokens[$i], ')', ']', '}') && --$depth === 0) {
                 break;
             }
 
@@ -509,13 +507,13 @@ final class LegacySecurity
         $depth = 0;
 
         foreach ($body as $token) {
-            if (in_array($token[0], ['(', '['], true)) {
+            if (PhpOutline::is($token, '(', '[')) {
                 $depth++;
-            } elseif (in_array($token[0], [')', ']'], true)) {
+            } elseif (PhpOutline::is($token, ')', ']')) {
                 $depth--;
             }
 
-            if ($depth === 0 && in_array($token[0], [';', '{', '}'], true)) {
+            if ($depth === 0 && PhpOutline::is($token, ';', '{', '}')) {
                 if ($current !== []) {
                     $statements[] = $current;
                 }
