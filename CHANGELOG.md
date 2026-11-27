@@ -1,6 +1,6 @@
 # Changelog
 
-## 9.3.1 (sin publicar)
+## 9.3.1
 
 ### Migraciones: se leen todas antes de escribir ninguna
 
