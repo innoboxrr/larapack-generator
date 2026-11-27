@@ -265,6 +265,17 @@ final class VerifyDeclaredEndpointsTest extends TestCase
 
         [$code, $report] = $this->verify(strict: true);
 
+        // Lo único que queda es lo que full-model suelto no sabe hacer: no lee
+        // el laraimport, así que el modelo regenerado sale con las listas
+        // vacías. Desde 9.3.1 verify lo dice (model-lists-outdated) porque el
+        // proyecto tiene laraimport.json; larapack:import --force lo completa.
+        $this->assertSame(Command::FAILURE, $code);
+        $this->assertSame(['model-lists-outdated'], array_values(array_unique(array_column($report['findings'], 'check'))), json_encode($report['findings'], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+        $this->assertStringContainsString("\$fillable: 'title'", $report['findings'][0]['message']);
+
+        $this->assertSame(Command::SUCCESS, $this->runCommand('larapack:import', ['--force' => true]), $this->lastOutput);
+        [$code, $report] = $this->verify(strict: true);
+
         $this->assertSame(Command::SUCCESS, $code, json_encode($report['findings'], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
     }
 

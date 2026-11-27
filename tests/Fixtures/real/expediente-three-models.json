@@ -1,0 +1,225 @@
+{
+    "models": [
+        {
+            "name": "Clinic",
+            "display": "name",
+            "metas": true,
+            "editable_metas": [
+                "logo",
+                "primary_color",
+                "phone",
+                "website",
+                "address"
+            ],
+            "props": [
+                {
+                    "name": "name",
+                    "type": "string",
+                    "form": true,
+                    "form_component": "TextInputComponent",
+                    "form_submit": true,
+                    "datatable": true
+                },
+                {
+                    "name": "legal_name",
+                    "type": "string",
+                    "nullable": true,
+                    "form": true,
+                    "form_component": "TextInputComponent",
+                    "form_submit": true
+                },
+                {
+                    "name": "slug",
+                    "type": "string",
+                    "datatable": true,
+                    "form": true,
+                    "form_component": "TextInputComponent",
+                    "form_submit": true
+                },
+                {
+                    "name": "timezone",
+                    "type": "string",
+                    "default": "America/Mexico_City",
+                    "form": true,
+                    "form_component": "TimezoneSelectInputComponent",
+                    "form_submit": true
+                },
+                {
+                    "name": "country",
+                    "type": "string",
+                    "default": "MX",
+                    "form": true,
+                    "form_component": "CountrySelectInputComponent",
+                    "form_submit": true
+                },
+                {
+                    "name": "currency",
+                    "type": "string",
+                    "default": "MXN"
+                },
+                {
+                    "name": "tax_id",
+                    "type": "string",
+                    "nullable": true,
+                    "form": true,
+                    "form_component": "TextInputComponent",
+                    "form_submit": true
+                },
+                {
+                    "name": "status",
+                    "type": "string",
+                    "default": "active",
+                    "datatable": true,
+                    "form": true,
+                    "form_component": "SelectInputComponent",
+                    "form_submit": true,
+                    "enum": {
+                        "active": "Activo",
+                        "suspended": "Suspendido",
+                        "closed": "Cerrado"
+                    }
+                },
+                {
+                    "name": "is_test",
+                    "type": "boolean",
+                    "default": false,
+                    "cast": "boolean"
+                },
+                {
+                    "name": "onboarded_at",
+                    "type": "timestamp",
+                    "nullable": true,
+                    "cast": "datetime"
+                }
+            ],
+            "load_counts": [
+                "practitioners",
+                "patients"
+            ],
+            "requests": [
+                {
+                    "name": "Create",
+                    "rules": {
+                        "name": "required|string|max:160",
+                        "slug": "required|string|max:80|alpha_dash|unique:clinics,slug",
+                        "timezone": "required|timezone"
+                    }
+                },
+                {
+                    "name": "Update",
+                    "rules": {
+                        "clinic_id": "required|numeric",
+                        "name": "sometimes|string|max:160",
+                        "timezone": "sometimes|timezone"
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Icd11Entity",
+            "display": "title_es",
+            "props": [
+                {
+                    "name": "code",
+                    "type": "string",
+                    "datatable": true
+                },
+                {
+                    "name": "uri",
+                    "type": "string"
+                },
+                {
+                    "name": "title_es",
+                    "type": "string",
+                    "datatable": true
+                },
+                {
+                    "name": "title_en",
+                    "type": "string",
+                    "nullable": true
+                },
+                {
+                    "name": "parent_uri",
+                    "type": "string",
+                    "nullable": true
+                },
+                {
+                    "name": "chapter",
+                    "type": "string",
+                    "nullable": true,
+                    "datatable": true
+                },
+                {
+                    "name": "synonyms",
+                    "type": "json",
+                    "nullable": true,
+                    "cast": "array"
+                },
+                {
+                    "name": "is_leaf",
+                    "type": "boolean",
+                    "default": true
+                },
+                {
+                    "name": "release_version",
+                    "type": "string",
+                    "default": "2025-01",
+                    "datatable": true
+                }
+            ],
+            "routes": {
+                "only": [
+                    "policies",
+                    "policy",
+                    "index",
+                    "show"
+                ]
+            }
+        },
+        {
+            "name": "Specialty",
+            "display": "name",
+            "props": [
+                {
+                    "name": "code",
+                    "type": "string",
+                    "datatable": true,
+                    "form": true,
+                    "form_component": "TextInputComponent",
+                    "form_submit": true
+                },
+                {
+                    "name": "name",
+                    "type": "string",
+                    "datatable": true,
+                    "form": true,
+                    "form_component": "TextInputComponent",
+                    "form_submit": true
+                },
+                {
+                    "name": "parent_id",
+                    "type": "foreignId",
+                    "constraint": "specialties",
+                    "nullable": true
+                },
+                {
+                    "name": "position",
+                    "type": "unsignedInteger",
+                    "default": 0,
+                    "datatable": true,
+                    "form": true,
+                    "form_component": "TextInputComponent",
+                    "form_submit": true
+                },
+                {
+                    "name": "is_active",
+                    "type": "boolean",
+                    "default": true,
+                    "form": true,
+                    "form_component": "SwitchComponent",
+                    "form_submit": true
+                }
+            ]
+        }
+    ]
+}

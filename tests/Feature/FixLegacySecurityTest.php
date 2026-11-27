@@ -477,7 +477,7 @@ PHP);
 
             [, $report] = $this->fix(['resource-appends']);
         } finally {
-            putenv('LARAPACK_PINT');
+            putenv('LARAPACK_PINT=off'); // lo de la suite: phpunit.xml.dist
         }
 
         $this->assertTrue($report['formatted']);
@@ -508,7 +508,7 @@ PHP);
         try {
             [$code, $report] = $this->fix();
         } finally {
-            putenv('LARAPACK_PINT');
+            putenv('LARAPACK_PINT=off'); // lo de la suite: phpunit.xml.dist
         }
 
         $this->assertSame(Command::FAILURE, $code);

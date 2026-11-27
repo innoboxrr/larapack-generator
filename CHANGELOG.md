@@ -167,6 +167,134 @@ sobre ellas no se escribe nada.
 - `migrate:fresh` se comprueba en SQLite, no en MySQL: el orden de las llaves
   se comprueba por las fechas de los archivos, no por el error 1824.
 
+### Una relación añadida al contrato después se detecta, y se añade al trait
+
+**Qué pasaba.** El trait de relaciones (`Models/Traits/Relations/<Modelo>Relations.php`)
+se escribe una sola vez: es un hueco del proyecto. Una relación añadida después
+a `load_relations` no aparecía nunca —ni con `--force`—, y nada lo decía.
+
+**A quién afectaba.** A cualquier proyecto que amplía su contrato. Expediente lo
+documenta como una trampa («borra el trait para que se regenere», lo que rompe
+el autoload si se borran varios) y acabó escribiéndolas a mano, como
+`Location::practitioner_locations()`.
+
+**Cómo se corrige.** El trait sigue sin sobrescribirse. `verify` gana
+`relation-missing` (aviso): contra el `laraimport.json` de la raíz, una relación
+que ni el modelo ni sus traits (`Models/Traits/*/<Modelo>*.php`) definen, con el
+método y el `use` exactos en el mensaje. Y `larapack:fix relation-missing` los
+añade al final del trait ([`RelationFix`](src/Support/RelationFix.php)) cuando
+es seguro de forma determinista: un único trait en el archivo, nadie define ya
+ese nombre y el nombre corto del modelo relacionado no está importado para otra
+clase. Si no, `skipped` con la razón. Con `--dry-run`, el diff.
+
+**Al actualizar.** `verify` puede empezar a avisar `relation-missing` en
+relaciones que llevaban tiempo declaradas y sin escribir; `larapack:fix
+relation-missing --dry-run` enseña qué añadiría. Una relación que el proyecto
+escribió en otro sitio —un trait que no sigue el nombre `<Modelo>*.php`, un
+trait de otro paquete— sale como que falta: muévela al modelo o a sus traits, o
+retírala del contrato si ya no la quieres declarar.
+
+### Un modelo editado a mano recibe las columnas nuevas en sus listas
+
+**Qué pasaba.** Con `--force`, un modelo editado a mano se conservaba entero
+(«conservado … (editado a mano)»), y con él sus listas: al añadir una columna al
+laraimport, `$fillable`, `$creatable`, `$updatable`, `$export_cols` y `casts()`
+se quedaban sin ella, sin aviso. `verify` tampoco lo veía: no lee el laraimport.
+
+**A quién afectaba.** A todo proyecto que edita sus modelos (traits propios,
+`booted()`, un `$table`): en school-management, 30 modelos desfasados —en
+`app/Models/ExternalIdentity.php` la columna `shared` no se convertía a booleano
+y no se exportaba; `ChargeLine::$export_cols` sin `discount_id`,
+`scholarship_award_id` ni `late_fee_rule_id`—; expediente lo documentaba como
+una trampa y lo resolvía a mano en cinco sitios por columna.
+
+**Cómo se corrige.** Las listas salen de un solo sitio,
+[`ModelLists`](src/Support/ModelLists.php), que usan el generador, la
+corrección y `verify`. Con `larapack:import --force`, un modelo conservado
+pasa por [`ModelRegions`](src/Support/ModelRegions.php): sobre tokens localiza
+cada región —la propiedad declarada una sola vez con `= [ … ];`, o `casts()`
+cuyo cuerpo es sólo `return [ … ];` (o `$casts`)— y **añade** lo que falta al
+final, con la forma que ya tiene la lista (en la misma línea, una por línea, o
+en una línea propia si está vacía). Nada más del archivo cambia, byte a byte.
+Nunca quita una entrada ni cambia un cast que existe con otro valor (pudo
+decidirlo una persona). Lo que no reconoce con certeza —la región no existe,
+está dos veces, lleva una constante, un spread o `array()`— no lo toca y lo
+devuelve con la orden manual exacta. El informe lo dice: el motivo del
+`conservado` nombra las regiones completadas; en JSON, `regions: [{file,
+added, skipped: [{region, reason, manual}], dryRun}]`; con `--dry-run`, lo que
+se completaría. `verify` gana `model-lists-outdated` (aviso), que compara el
+modelo con el `laraimport.json` de la raíz **sin regenerar**: lo que falta, con
+la orden; lo que sobra o un cast distinto, como info.
+
+Las reglas de las Requests (`rules()` de Create y Update) **no** se tocan: el
+generador las escribe una vez desde `requests[]` y no les deja marca de región,
+y el contrato de esos proyectos las trata como un hueco del proyecto.
+
+**Al actualizar.** `verify` puede empezar a avisar `model-lists-outdated` en
+modelos que llevaban tiempo desfasados (y con `--strict` falla): corre
+`larapack:import --force` (o `--dry-run` antes) y revisa los `skipped`. Un
+`larapack:full-model` suelto sigue sin leer el laraimport —regenera el modelo
+con las listas vacías—; ahora `verify` lo dice.
+
+### Lo generado se formatea aunque el proyecto no tenga Pint, y se dice con cuál
+
+**Qué pasaba.** El `Formatter` sólo buscaba la Pint del proyecto
+(`vendor/laravel/pint/builds/pint`). Con `builder` usado desde fuera —el
+generador clonado aparte y el proyecto sin `vendor/`—, `import --force` escribía
+sin formatear (`"formatted": null` en el JSON, y nada más que un aviso en texto).
+
+**A quién afectaba.** A school-management y a quien corra el generador contra
+un proyecto sin dependencias instaladas: unos 5 600 archivos que sólo diferían
+de lo regenerado en el formato de Pint, y que a partir del siguiente Pint del
+proyecto el manifiesto daba por editados a mano (`customised`), así que
+`--force` ya no los regeneraba nunca.
+
+**Cómo se corrige.** `Formatter::resolve()` elige, por orden, `LARAPACK_PINT`
+(una ruta, u `off` para no formatear a propósito), la Pint del proyecto y la
+que trae el generador (su `vendor/`, o el `vendor/` que lo contiene). Siempre con
+el `pint.json` del proyecto, pasado como `--config`; sin él, el preset laravel.
+`laravel/pint` pasa de `require-dev` a `require` del generador, así que la
+tiene también quien lo instala sin dependencias de desarrollo. El informe de
+generación lo dice: en texto, una línea con qué Pint y qué configuración; con
+`--format=json`, `formatter: {source, pint, config, message}` (`source`:
+`override`, `project`, `generator`, `none` o `disabled`). Si no hay ninguna,
+`formatted` es `null`, `source` es `none` y el mensaje dice qué instalar.
+`larapack:fix` usa la misma resolución.
+
+**Al actualizar.** Si lo regenerado con 9.3.0 o antes quedó sin formatear y el
+proyecto lo pasó después por Pint, esos archivos figuran como `customised`; no se
+arregla solo —el hash del manifiesto es el de lo que se escribió—. La suite del
+generador corre con `LARAPACK_PINT=off` (en `phpunit.xml.dist`), para que sus
+instantáneas sigan comparando la salida de las plantillas.
+
+### El manifiesto se escribe una vez por corrida, de forma atómica
+
+**Qué pasaba.** `Manifest::record()` releía y reescribía `.larapack/manifest.json`
+entero tras cada archivo generado: un `larapack:import` de tres modelos lo
+escribía 103 veces. Era cuadrático y, en Windows, chocaba con el bloqueo de
+archivos (`file_put_contents(.../.larapack/manifest.json): Failed to open stream:
+Permission denied`) en un modelo distinto en cada corrida, sin converger.
+
+**A quién afectaba.** A cualquier proyecto grande, y sobre todo en Windows: en
+expediente (1 MB, 71 modelos, 3 969 archivos) el import ya no terminaba y el
+proyecto pasó a escribir a mano lo que el generador habría tocado.
+
+**Cómo se corrige.** `Manifest::batch()` abre una corrida: todas las instancias
+leen y anotan sobre una copia en memoria (por ruta), y se escribe una sola vez
+al salir —en un `finally`, así que un fallo a mitad conserva lo registrado
+hasta entonces; si además falla la escritura, el error original queda como
+`getPrevious()`—. `larapack:import` y `larapack:full-model` corren dentro de una.
+La escritura es atómica (temporal junto al manifiesto y `rename()` encima) y
+reintenta un bloqueo pasajero seis veces con espera creciente (~0,8 s en total).
+Si no cede, el manifiesto anterior queda intacto, el temporal **no se borra** y
+el error dice dónde está para moverlo a mano. `Manifest::diskWrites()` cuenta las
+escrituras del proceso, para diagnosticar.
+
+**Al actualizar.** Nada que hacer. Si un import anterior murió con «Permission
+denied», el manifiesto puede no conocer archivos que sí se generaron: `verify`
+los da por `customised`; regenerar con `--force` esos archivos (o borrarlos y
+volver a importar) los vuelve a registrar.
+
 ## 9.3.0
 
 ### La rama protegida: guiada hasta el final, y comprobada en cada corrida

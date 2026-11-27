@@ -47,6 +47,15 @@ cada pieza, su suelo de
 [`.github/mutation-floors.json`](../.github/mutation-floors.json). El umbral
 conjunto solo dejaba que una pieza bajara mientras las demás la compensaban.
 
+**9.3.1 (sin publicar).** `Verifier` y `LegacyFix` ganan código —llaman a
+`ContractDrift` y a `RelationFix`, que no se mutan— y el `--filter` de
+`infection.json5` suma las pruebas que lo recorren (`MissingRelationTest`,
+`PreservedModelListsTest`, `RelationFixTest`, `ModelRegionsTest`). Medido sólo
+sobre esas dos piezas: `Verifier` 480 mutantes, 97,92 %; `LegacyFix` 866,
+91,57 %, sin ningún superviviente nuevo frente a la 9.3.0 medida igual. Los
+suelos no cambian. `ModelRegions`, `ModelLists`, `ContractDrift`,
+`RelationFix` y `Manifest` todavía no están en el conjunto que se mide.
+
 ## Los suelos y su margen
 
 **El suelo es lo logrado, redondeado hacia abajo a la décima, menos un punto.**

@@ -2,6 +2,9 @@
 
 namespace Innoboxrr\LarapackGenerator\Tools\Model;
 
+use Innoboxrr\LarapackGenerator\Support\Generation;
+use Innoboxrr\LarapackGenerator\Support\ModelLists;
+use Innoboxrr\LarapackGenerator\Support\ModelRegions;
 use Innoboxrr\LarapackGenerator\Tools\ModelArtifact;
 use Innoboxrr\LarapackGenerator\Tools\Tool;
 
@@ -45,6 +48,41 @@ class ModelTool extends Tool implements ModelArtifact
         return (file_exists($path)) ? $this->dropFile($path) : false;
     }
 
+    /**
+     * Un modelo editado a mano se conserva, pero sus listas son del
+     * generador: se completan con lo que el laraimport declara y falta
+     * (ModelRegions), sin tocar nada más. Sólo desde el laraimport: sin él no
+     * hay contrato contra el que completar.
+     */
+    protected function preserve(string $destination): ?string
+    {
+        if (! self::isFromJsonImporter()) {
+            return null;
+        }
+
+        $relative = str_starts_with($destination, root_path().'/') ? substr($destination, strlen(root_path()) + 1) : $destination;
+        $result = ModelRegions::sync(self::contents($destination), ModelLists::expected(self::declaredEntry('models', $this->ModelName)), $relative);
+
+        if ($result['added'] === [] && $result['skipped'] === []) {
+            return null;
+        }
+
+        if ($result['added'] !== [] && ! Generation::isDryRun()) {
+            file_put_contents($destination, $result['code']);
+        }
+
+        Generation::regions($destination, $result['added'], $result['skipped']);
+
+        $regions = array_map(
+            fn (string $region): string => $region === 'casts' ? 'casts()' : '$'.$region,
+            array_keys($result['added'])
+        );
+
+        return 'editado a mano'
+            .($regions === [] ? '' : '; '.(Generation::isDryRun() ? 'se completarían ' : 'completado ').implode(', ', $regions))
+            .($result['skipped'] === [] ? '' : '; '.count($result['skipped']).' región(es) sin reconocer: complétalas a mano');
+    }
+
     protected function processFileWithJson(string $modelFile): void
     {
         // Recuperar la información del modelo
@@ -53,18 +91,19 @@ class ModelTool extends Tool implements ModelArtifact
         // Recuperar el contenido del archivo del modelo
         $fileContent = self::contents($modelFile);
 
-        // Obtener los valores para los diferentes secciones de la plantilla
-        $authenticatable = ! empty($model['authenticatable']);
+        // Las listas salen de ModelLists: es lo mismo que comprueba `verify`
+        // y que se completa en un modelo editado a mano.
+        $lists = ModelLists::expected($model);
 
-        $fillable = $this->generateListFromProps($model['props'], 'fillable');
-        $hidden = $this->generateHidden($model['props'], $authenticatable);
-        $creatable = $this->generateListFromProps($model['props'], 'creatable');
-        $updatable = $this->generateListFromProps($model['props'], 'updatable');
-        $casts = $this->generateCasts($model['props'], $authenticatable);
+        $fillable = ModelLists::render($lists['fillable']);
+        $hidden = ModelLists::render($lists['hidden']);
+        $creatable = ModelLists::render($lists['creatable']);
+        $updatable = ModelLists::render($lists['updatable']);
+        $casts = ModelLists::renderCasts($lists['casts']);
         $editableMetas = $this->generateEditableMetas($model['editable_metas']);
-        $exportCols = $this->generateExportCols($model['props']);
-        $loadableRelations = $this->generateLoadableRelations($model['load_relations']);
-        $loadableCounts = $this->generateLoadableCounts($model['load_counts']);
+        $exportCols = ModelLists::render($lists['export_cols']);
+        $loadableRelations = ModelLists::render($lists['loadable_relations']);
+        $loadableCounts = ModelLists::render($lists['loadable_counts']);
 
         // Reemplazar los marcadores en el archivo del modelo
         $updatedFileContent = str_replace('//FILLABLE//', $fillable, $fileContent);
@@ -91,69 +130,6 @@ class ModelTool extends Tool implements ModelArtifact
     }
 
     /**
-     * @param  list<array<string, mixed>>  $props
-     */
-    private function generateListFromProps(array $props, string $field): string
-    {
-        $list = [];
-
-        foreach ($props as $prop) {
-            if ($prop[$field]) {
-                $list[] = "'{$prop['name']}'";
-            }
-        }
-
-        return implode(', ', $list);
-    }
-
-    /**
-     * Las columnas que nunca salen por la API: las secretas y, en un usuario
-     * que inicia sesión, la contraseña y el token de "recordarme" aunque no se
-     * declaren.
-     *
-     * @param  list<array<string, mixed>>  $props
-     */
-    private function generateHidden(array $props, bool $authenticatable): string
-    {
-        $hidden = array_column(array_filter($props, fn (array $prop): bool => ! empty($prop['secret'])), 'name');
-
-        if ($authenticatable) {
-            $hidden = [...$hidden, 'password', 'remember_token'];
-        }
-
-        return implode(', ', array_map(fn (string $name): string => "'{$name}'", array_values(array_unique($hidden))));
-    }
-
-    /**
-     * Los casts declarados y, en un usuario que inicia sesión, los que Laravel
-     * espera: la fecha de verificación y la contraseña cifrada al asignarla.
-     *
-     * @param  list<array<string, mixed>>  $props
-     */
-    private function generateCasts(array $props, bool $authenticatable = false): string
-    {
-        $casts = [];
-
-        foreach ($props as $prop) {
-            if (! is_null($prop['cast'])) {
-                $casts[$prop['name']] = "'{$prop['name']}' => ".self::phpString((string) $prop['cast']);
-            }
-        }
-
-        if ($authenticatable) {
-            $names = array_column($props, 'name');
-
-            foreach (['email_verified_at' => 'datetime', 'password' => 'hashed'] as $name => $cast) {
-                if (in_array($name, $names, true) && ! isset($casts[$name])) {
-                    $casts[$name] = "'{$name}' => '{$cast}'";
-                }
-            }
-        }
-
-        return implode(', ', $casts);
-    }
-
-    /**
      * @param  list<string>  $editableMetas
      */
     private function generateEditableMetas(array $editableMetas): string
@@ -163,45 +139,5 @@ class ModelTool extends Tool implements ModelArtifact
         }
 
         return implode(', ', array_map(fn ($meta) => "'{$meta}'", $editableMetas));
-    }
-
-    /**
-     * @param  list<array<string, mixed>>  $props
-     */
-    private function generateExportCols(array $props): string
-    {
-        $exportCols = [];
-
-        foreach ($props as $prop) {
-            if ($prop['exports_cols']) {
-                $exportCols[] = "'{$prop['name']}'";
-            }
-        }
-
-        return implode(', ', $exportCols);
-    }
-
-    /**
-     * @param  list<array<string, mixed>>  $loadRelations
-     */
-    private function generateLoadableRelations(array $loadRelations): string
-    {
-        if (empty($loadRelations)) {
-            return '';
-        }
-
-        return implode(', ', array_map(fn ($relation) => "'{$relation['name']}'", $loadRelations));
-    }
-
-    /**
-     * @param  list<string>  $loadCounts
-     */
-    private function generateLoadableCounts(array $loadCounts): string
-    {
-        if (empty($loadCounts)) {
-            return '';
-        }
-
-        return implode(', ', array_map(fn ($count) => "'{$count}'", $loadCounts));
     }
 }

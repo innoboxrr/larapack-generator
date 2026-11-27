@@ -512,7 +512,7 @@ class Tool
         // editado a mano: eso es exactamente lo que el manifiesto permite
         // distinguir. Sin esa guarda, regenerar destruiria trabajo.
         if ($exists && $this->manifest()->wasCustomised($destination)) {
-            Generation::record('preserved', $destination, $stub, 'editado a mano');
+            Generation::record('preserved', $destination, $stub, $this->preserve($destination) ?? 'editado a mano');
 
             return false;
         }
@@ -552,6 +552,16 @@ class Tool
         Generation::record($exists ? 'overwrite' : 'create', $destination, $stub);
 
         return true;
+    }
+
+    /**
+     * Lo que el generador puede seguir manteniendo dentro de un archivo que se
+     * conserva por estar editado a mano: sus propias regiones. Devuelve el
+     * motivo con el que se informa, o null para el de siempre.
+     */
+    protected function preserve(string $destination): ?string
+    {
+        return null;
     }
 
     /**

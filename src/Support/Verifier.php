@@ -58,7 +58,7 @@ final class Verifier
     private const MANIFEST_CHECKS = [
         'empty-manifest', 'missing-file', 'customised', 'inconsistent-entity', 'route-prefix',
         'route-not-declared', 'endpoint-missing', 'immutable-write', 'secret-exposed',
-        'endpoint-tests-outdated',
+        'endpoint-tests-outdated', ...ContractDrift::CHECKS,
     ];
 
     /**
@@ -171,6 +171,8 @@ final class Verifier
             ...$this->checkImmutable($models),
             ...$this->checkSecrets($models),
             ...$this->checkEndpointTests($models),
+            // Lo que el laraimport de la raíz declara y el código no lleva.
+            ...(new ContractDrift($this->manifest))->run($models),
         ];
     }
 

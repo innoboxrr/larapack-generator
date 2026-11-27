@@ -501,6 +501,17 @@ generado con su hash. Detecta:
 - **`endpoint-tests-outdated`** (aviso): un `<Modelo>EndpointsTest` de antes de
   9.1, sin las pruebas que cierran la autorización. No se regenera solo:
   guarda lo que le añadiste, bórralo, `larapack:import` y vuelve a pegarlo.
+- **`model-lists-outdated`** (aviso): las listas del modelo (`$fillable`,
+  `$export_cols`, `casts()`…) no llevan lo que declara el `laraimport.json` de
+  la raíz. Pasa con un modelo editado a mano al añadir una columna.
+  `larapack:import --force` las completa sin tocar el resto del modelo; si una
+  región no la reconoce, el informe da la orden manual exacta. No edites las
+  listas a mano: cambia el laraimport.
+- **`relation-missing`** (aviso): una relación de `load_relations` que el modelo
+  no define, porque el trait de relaciones se escribe una vez y no se regenera
+  (no lo borres para que se regenere). El mensaje trae el método y el `use`;
+  `larapack:fix relation-missing` los añade al trait si es seguro, y si lo
+  salta, la razón dice por qué: entonces escríbelo tú en el trait.
 
 Y en **todos** los controladores, generados o no, con o sin manifiesto:
 
@@ -588,6 +599,16 @@ El generador es idempotente y **nunca destruye trabajo**:
 - Con `--force`, se regenera **salvo** que su hash no coincida con el del
   manifiesto, es decir, salvo que lo hayas editado. Entonces se conserva y se
   te dice.
+- Un **modelo** editado se conserva, pero sus listas son del generador: con
+  `--force` se le **añade** a `$fillable`, `$hidden`, `$creatable`,
+  `$updatable`, `$export_cols`, `$loadable_relations`, `$loadable_counts` y
+  `casts()` lo que el laraimport declara y le falta, sin tocar nada más. Lo que
+  no reconoce con certeza sale en el informe con la orden manual (`regions` en
+  el JSON); no quita nada ni cambia un cast que ya tenga otro valor.
+- Los **traits** (`Models/Traits/*`) son tuyos: nunca se regeneran. Una
+  relación que añadas después a `load_relations` no aparece sola: `verify` la
+  marca como `relation-missing` y `larapack:fix relation-missing` la añade.
+  No borres el trait para que se regenere.
 
 Así que ampliar el `laraimport.json` y volver a importar es seguro. Es el flujo
 normal, no una excepción.
@@ -603,7 +624,10 @@ con SQL crudo, una llave en `cascade` que el JSON no declara— es una decisión
 tuya: declara `on_delete` en el JSON o escribe la alteración a mano.
 
 Lo generado sale formateado y pasa Larastan: si `vendor/bin/pint --test` o
-`vendor/bin/phpstan analyse` fallan, lo que falla es algo escrito a mano.
+`vendor/bin/phpstan analyse` fallan, lo que falla es algo escrito a mano. Se
+formatea con la Pint del proyecto o, si no tiene, con la del generador, y el
+informe dice cuál (`formatter` en el JSON); si dice que no hubo ninguna,
+`composer require --dev laravel/pint` antes de comitear lo generado.
 
 ## Vue y React
 

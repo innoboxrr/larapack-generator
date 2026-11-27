@@ -1,0 +1,76 @@
+<?php
+
+namespace App\Models;
+
+use App\Models\Traits\Assignments\ExternalIdentityAssignment;
+use App\Models\Traits\Mutators\ExternalIdentityMutators;
+use App\Models\Traits\Operations\ExternalIdentityOperations;
+use App\Models\Traits\Relations\ExternalIdentityRelations;
+use App\Models\Traits\Storage\ExternalIdentityStorage;
+use App\Observers\ExternalIdentityObserver;
+use App\Policies\ExternalIdentityPolicy;
+use Database\Factories\ExternalIdentityFactory;
+use Illuminate\Database\Eloquent\Attributes\ObservedBy;
+use Illuminate\Database\Eloquent\Attributes\UseFactory;
+use Illuminate\Database\Eloquent\Attributes\UsePolicy;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+use Innoboxrr\Traits\MetaOperations;
+use Innoboxrr\Traits\ModelAppendsTrait;
+
+#[ObservedBy(ExternalIdentityObserver::class)]
+#[UsePolicy(ExternalIdentityPolicy::class)]
+#[UseFactory(ExternalIdentityFactory::class)]
+class ExternalIdentity extends Model
+{
+    use ExternalIdentityAssignment,
+        ExternalIdentityMutators,
+        ExternalIdentityOperations,
+        ExternalIdentityRelations,
+        ExternalIdentityStorage,
+        HasFactory,
+        MetaOperations,
+        ModelAppendsTrait;
+
+    protected $fillable = [
+
+    ];
+
+    protected $creatable = [
+
+    ];
+
+    protected $updatable = [
+
+    ];
+
+    protected $protected_metas = [];
+
+    protected $editable_metas = [
+
+    ];
+
+    public static $export_cols = [
+        'integration_connection_id', 'local_type', 'local_id', 'external_type', 'external_id', 'status', 'matched_by', 'linked_at', 'last_synced_at', 'last_synced_hash',
+    ];
+
+    public static $loadable_relations = [
+
+    ];
+
+    public static $loadable_counts = [
+
+    ];
+
+    /**
+     * Los casts de atributos del modelo.
+     *
+     * @return array<string, string>
+     */
+    protected function casts(): array
+    {
+        return [
+            'linked_at' => 'datetime', 'last_synced_at' => 'datetime',
+        ];
+    }
+}

@@ -2,6 +2,7 @@
 
 namespace Innoboxrr\LarapackGenerator\Support;
 
+use Innoboxrr\LarapackGenerator\Exceptions\MakerException;
 use Innoboxrr\LarapackGenerator\Support\Import\Actions;
 
 /**
@@ -34,7 +35,127 @@ final class Manifest
      */
     private ?array $frozen = null;
 
+    /**
+     * Cuántas veces se intenta mover el temporal sobre el manifiesto antes de
+     * rendirse, y la espera de la primera (se dobla en cada intento).
+     */
+    private const ATTEMPTS = 6;
+
+    private const FIRST_DELAY_MS = 25;
+
+    /**
+     * Ruta del manifiesto => su contenido, mientras dura una corrida.
+     *
+     * @var array<string, ManifestData>
+     */
+    private static array $buffers = [];
+
+    /**
+     * Ruta => true, de lo que se cambió en la corrida y hay que escribir.
+     *
+     * @var array<string, true>
+     */
+    private static array $dirty = [];
+
+    private static int $depth = 0;
+
+    private static int $diskWrites = 0;
+
+    /**
+     * Cómo se mueve el temporal sobre el manifiesto. Sólo lo cambian las
+     * pruebas, para simular el bloqueo de Windows.
+     *
+     * @var (\Closure(string, string): bool)|null
+     */
+    private static ?\Closure $move = null;
+
     public function __construct(private ?string $root = null) {}
+
+    /**
+     * Ejecuta una corrida de generación con el manifiesto en memoria.
+     *
+     * ────────────────────────────────────────────────────────────────────────
+     * POR QUÉ: antes cada archivo generado releía y reescribía el manifiesto
+     * entero. En expediente pesa 1 MB y registra 3 969 archivos: era cuadrático
+     * y, en Windows, el archivo recién escrito seguía abierto por el antivirus
+     * o el indexador cuando llegaba la siguiente escritura, y el import moría
+     * con «Failed to open stream: Permission denied» en un modelo distinto cada
+     * vez, sin converger.
+     * ────────────────────────────────────────────────────────────────────────
+     *
+     * Dentro de la corrida todas las instancias leen y anotan sobre la misma
+     * copia en memoria (por ruta), así que lo que una anota la siguiente lo
+     * ve. Se escribe una sola vez al salir de la corrida exterior, y en un
+     * `finally`: si algo lanza a mitad, lo que ya quedó en disco queda también
+     * registrado. Las corridas se pueden anidar: sólo escribe la de fuera. Si
+     * además falla la escritura, PHP encadena el error original como
+     * getPrevious() del de la escritura: no se pierde ninguno de los dos.
+     *
+     * @template T
+     *
+     * @param  callable(): T  $work
+     * @return T
+     */
+    public static function batch(callable $work): mixed
+    {
+        self::$depth++;
+
+        try {
+            return $work();
+        } finally {
+            self::$depth--;
+
+            if (self::$depth === 0) {
+                self::flush();
+            }
+        }
+    }
+
+    /**
+     * Cuántas veces se ha escrito un manifiesto en disco en este proceso. Es
+     * para diagnosticar —y para las pruebas—: una corrida escribe una vez.
+     */
+    public static function diskWrites(): int
+    {
+        return self::$diskWrites;
+    }
+
+    /**
+     * @internal sólo para las pruebas: simula un bloqueo del sistema de archivos.
+     *
+     * @param  (\Closure(string, string): bool)|null  $move
+     */
+    public static function moveUsing(?\Closure $move): void
+    {
+        self::$move = $move;
+    }
+
+    /**
+     * Escribe lo que cambió en la corrida. Si un manifiesto no se puede
+     * escribir se intentan los demás igualmente, y después se lanza el primer
+     * error: callarlo dejaría archivos generados que nadie registró.
+     */
+    private static function flush(): void
+    {
+        $buffers = self::$buffers;
+        $dirty = self::$dirty;
+        self::$buffers = [];
+        self::$dirty = [];
+
+        $error = null;
+
+        foreach (array_keys($dirty) as $path) {
+            try {
+                self::persist($path, $buffers[$path]);
+            } catch (MakerException $e) {
+                $error ??= $e;
+            }
+        }
+
+        if ($error !== null) {
+            throw $error;
+        }
+    }
 
     /**
      * Una copia de sólo lectura que lee el archivo una vez.
@@ -74,6 +195,18 @@ final class Manifest
             return $this->frozen;
         }
 
+        if (self::$depth > 0) {
+            return self::$buffers[$this->path()] ??= $this->readFromDisk();
+        }
+
+        return $this->readFromDisk();
+    }
+
+    /**
+     * @return ManifestData
+     */
+    private function readFromDisk(): array
+    {
         if (! is_file($this->path())) {
             return self::EMPTY;
         }
@@ -88,8 +221,9 @@ final class Manifest
     }
 
     /**
-     * Anota un archivo generado. Escribe en cada llamada a propósito: una
-     * herramienta puede abortar a mitad y el manifiesto tiene que reflejar lo
+     * Anota un archivo generado. Fuera de una corrida (batch()) escribe en
+     * cada llamada; dentro, se anota en memoria y se escribe al terminar la
+     * corrida, también si aborta a mitad: el manifiesto tiene que reflejar lo
      * que de verdad quedó en disco.
      *
      * Los proveedores, la config o el andamiaje del módulo npm no pertenecen a
@@ -178,7 +312,11 @@ final class Manifest
      */
     public function models(): array
     {
-        return array_keys($this->read()['models']);
+        // Ordenados: dentro de una corrida la copia en memoria aún no lo está.
+        $models = array_keys($this->read()['models']);
+        sort($models);
+
+        return $models;
     }
 
     /**
@@ -358,10 +496,38 @@ final class Manifest
      */
     private function write(array $manifest): void
     {
-        $directory = dirname($this->path());
+        // Una instantánea que escribe sigue viendo lo que escribió.
+        if ($this->frozen !== null) {
+            $this->frozen = $manifest;
+        }
 
-        if (! is_dir($directory)) {
-            mkdir($directory, 0777, true);
+        if (self::$depth > 0) {
+            self::$buffers[$this->path()] = $manifest;
+            self::$dirty[$this->path()] = true;
+
+            return;
+        }
+
+        self::persist($this->path(), $manifest);
+    }
+
+    /**
+     * Escribe el manifiesto de forma atómica: a un temporal junto a él y
+     * después rename() encima, así que nunca queda a medio escribir.
+     *
+     * Un bloqueo pasajero —en Windows, el antivirus o el indexador con el
+     * archivo abierto— se reintenta unas pocas veces con espera creciente. Si
+     * no cede, el temporal NO se borra: es lo registrado en la corrida, y el
+     * error dice dónde está para moverlo a mano.
+     *
+     * @param  ManifestData  $manifest
+     */
+    private static function persist(string $path, array $manifest): void
+    {
+        $directory = dirname($path);
+
+        if (! is_dir($directory) && ! @mkdir($directory, 0777, true) && ! is_dir($directory)) {
+            throw MakerException::directoryNotCreated($directory);
         }
 
         ksort($manifest['models']);
@@ -375,14 +541,36 @@ final class Manifest
 
         unset($model);
 
-        file_put_contents(
-            $this->path(),
-            json_encode($manifest, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)."\n"
-        );
+        $json = json_encode($manifest, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR)."\n";
+        $temporary = $path.'.'.getmypid().'.'.bin2hex(random_bytes(4)).'.tmp';
 
-        // Una instantánea que escribe sigue viendo lo que escribió.
-        if ($this->frozen !== null) {
-            $this->frozen = $manifest;
+        if (@file_put_contents($temporary, $json) !== strlen($json)) {
+            @unlink($temporary);
+
+            throw MakerException::manifestNotWritten($path, self::lastError(), null);
         }
+
+        $move = self::$move ?? static fn (string $from, string $to): bool => @rename($from, $to);
+        $delay = self::FIRST_DELAY_MS;
+
+        for ($attempt = 1; $attempt <= self::ATTEMPTS; $attempt++) {
+            if ($move($temporary, $path)) {
+                self::$diskWrites++;
+
+                return;
+            }
+
+            if ($attempt < self::ATTEMPTS) {
+                usleep($delay * 1000);
+                $delay *= 2;
+            }
+        }
+
+        throw MakerException::manifestNotWritten($path, self::lastError(), $temporary);
+    }
+
+    private static function lastError(): string
+    {
+        return error_get_last()['message'] ?? 'motivo desconocido';
     }
 }

@@ -1308,6 +1308,8 @@ Contra el manifiesto:
 | `immutable-write` | error | Un camino de escritura en un modelo `immutable`, o su modelo sin la guarda que rechaza modificaciones. |
 | `secret-exposed` | error | Una columna `secret` fuera de `$hidden`, en la exportación, en el Resource o en la tabla. |
 | `endpoint-tests-outdated` | aviso | Un `<Modelo>EndpointsTest` sin alguna de las pruebas que cierran la autorización (`test_…_cada_accion_requiere_sesion`, `…_cada_accion_pregunta_a_la_politica` y, si hay listado, `…_index_pasa_por_su_managed_filter`): se generó antes de 9.1. Ese test no se regenera ni está en el manifiesto, así que no se reescribe: el mensaje dice cómo traerlas. |
+| `relation-missing` | aviso | Contra el mismo `laraimport.json`: una relación de `load_relations` que ni el modelo ni sus traits (`Models/Traits/*/<Modelo>*.php`) definen. El trait de relaciones se escribe una sola vez y es del proyecto, así que no la recibe al reimportar. El mensaje trae el método y el `use` exactos; `larapack:fix relation-missing` los añade al trait si es seguro. |
+| `model-lists-outdated` | aviso (info si sólo sobra o difiere) | Contra el `laraimport.json` de la raíz, sin regenerar: a `$fillable`, `$hidden`, `$creatable`, `$updatable`, `$export_cols`, `$loadable_relations`, `$loadable_counts` o `casts()` del modelo le falta lo que el contrato declara —típico de un modelo editado a mano tras añadir una columna—. `larapack:import --force` lo completa sin tocar el resto del modelo. Lo que sobra o un cast con otro valor sale como info y no se cambia solo. |
 
 Sobre todo el código, lo haya generado LaraPack o no, en la raíz y en los
 paquetes locales (repositorios `path` y `packages/*`), y aunque no haya
@@ -1540,6 +1542,24 @@ framework de UI.
 
 Los dos paquetes de formularios exportan los mismos 37 nombres, así que el
 `form_component` del `laraimport` vale igual para los dos.
+
+
+**Las relaciones que el contrato declara y el trait no tiene** (`relation-missing`):
+
+```
+php artisan larapack:fix relation-missing --dry-run
+php artisan larapack:fix relation-missing
+```
+
+El trait de relaciones (`Models/Traits/Relations/<Modelo>Relations.php`) es un
+hueco del proyecto: se escribe una vez y no se regenera. Esto le **añade** al
+final el método que escribiría el generador —`public function <nombre>()` con
+`return $this-><tipo>(<Relacionado>::class);`— y su `use` detrás del último
+import, sin tocar nada más. Sólo si es seguro: el archivo tiene un único trait,
+nadie define ya ese nombre (ni el modelo ni ninguno de sus traits) y el nombre
+corto del modelo relacionado no está importado para otra clase; si no, `skipped`
+con la razón, y el mensaje de `verify` trae el código para hacerlo a mano. Lee
+el `laraimport.json` de la raíz de cada proyecto o paquete con manifiesto.
 
 ### Cómo se usa
 
@@ -1873,6 +1893,16 @@ corre `vendor/bin/pint --test` y `vendor/bin/phpstan analyse`. Lo que genera
 LaraPack sale formateado y pasa ese análisis, así que un fallo ahí es algo que se
 escribió a mano: `vendor/bin/pint` lo formatea. LaraPack pasa el mismo control en
 su propia CI.
+
+**Con qué Pint se formatea lo generado.** Por orden: `LARAPACK_PINT` (una ruta, u
+`off` para no formatear a propósito), la del proyecto
+(`vendor/laravel/pint/builds/pint`) y la que trae el generador —desde 9.3.1
+`laravel/pint` es dependencia de LaraPack, así que con `builder` usado desde fuera
+y el proyecto sin `vendor/` también se formatea—. Siempre con el `pint.json` del
+proyecto si lo tiene; sin él, el preset `laravel`. El informe dice cuál se usó: en
+texto, una línea; con `--format=json`, `formatter: {source, pint, config,
+message}` junto a `formatted`. Si no hay ninguna, `formatted` es `null` y
+`formatter.source` es `none`, nunca un silencio.
 
 **La compilación del front** va sobre Vite 8, la de Laravel 13: el `package.json`
 del módulo pide `vite ^8`, y `@vitejs/plugin-vue ^6` o `@vitejs/plugin-react ^6`.
@@ -2730,7 +2760,8 @@ larapack:import                  Genera varios modelos desde un laraimport.
 larapack:validate                Valida un laraimport sin generar nada.
 larapack:schema                  Emite el esquema del laraimport.
 larapack:verify                  Busca desviaciones respecto al manifiesto y en los controladores.
-larapack:fix                     Corrige index-managed y resource-appends, y el fallback de la SPA de laravel-setup <= 7.2.0.
+larapack:fix                     Corrige index-managed y resource-appends, el fallback de la SPA de laravel-setup <= 7.2.0
+                                 y las relaciones del laraimport que faltan en el trait (relation-missing).
 larapack:audit                   Comprueba la línea base del ecosistema.
 larapack:skill                   Instala las instrucciones para un agente; con --hooks, la guardia.
 larapack:guard                   Hook para agentes: comprueba el archivo recién editado.
