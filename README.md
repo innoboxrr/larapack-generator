@@ -504,7 +504,8 @@ enums cerrados; `form: true` obliga a declarar `form_component`; `foreignId`
 obliga a declarar `constraint`.
 
 **Coherencia**, mirando el documento entero: modelos o columnas repetidos, ciclos
-de claves foráneas (que no tienen orden de migración posible), claves foráneas a
+de claves foráneas (con una llave nullable se avisa y la llave va en una
+migración aparte; sin ninguna, no se podría insertar la primera fila), claves foráneas a
 sí mismo no anulables, reglas sobre campos que no son columnas, relaciones que no
 resuelven contra ningún modelo, `UpdateRequest` sin la regla del identificador
 del que dependen `authorize()` y `handle()`, `only` junto a `except`, un modelo
@@ -1251,17 +1252,35 @@ respeta igual: el generador no toca lo que no escribió él.
 
 **Cambiar las columnas de una tabla que ya existe.** Una base migrada no vuelve a
 correr la migración de creación, así que reescribirla no serviría de nada. Al
-reimportar, LaraPack compara las columnas del laraimport con lo que ya dejaron
-las migraciones de la tabla —la de creación y las alteraciones anteriores— y
-escribe `<fecha>_alter_<tabla>_table.php` con lo que se añade, se cambia
-(`->change()`) y se quita, y su `down()` para deshacerlo. La migración de
-creación no se toca. Sin cambios no se escribe nada, y con `--dry-run` sólo se
-dice.
+reimportar, LaraPack lee **todas** las migraciones del directorio que tocan la
+tabla —la de creación, sus alteraciones y las que escribió una persona, se
+llamen como se llamen— y escribe `<fecha>_alter_<tabla>_table.php` con lo que
+se añade, se cambia (`->change()`) o se quita, y su `down()` para deshacerlo.
+Sin cambios no se escribe nada, y con `--dry-run` sólo se dice. Las reglas
+(9.3.1):
 
-Dos casos se dejan a mano, y la migración o el informe lo dicen: cambiar una
-llave foránea —sería quitarla y crearla otra vez, con sus datos— y una migración
-de creación editada, porque lo escrito fuera del laraimport no se puede leer con
-seguridad y adivinar acabaría quitando una columna que existe.
+- **La migración de creación no se reescribe** si cualquier otra migración toca
+  su tabla, ni con `--force`: una base nueva correría las dos y la columna saldría
+  duplicada. El informe la da por omitida y dice por qué.
+- **Se compara lo que significa la columna**, no cómo se escribió: `foreignId()`
+  y `unsignedBigInteger()` más `foreign()` son la misma; `->default(5)` y
+  `->default('5')`, también. Lo que el laraimport no sabe expresar —una
+  longitud, un `comment()`— se conserva al cambiar la columna.
+- **Lo que el laraimport no declara no lo pide cambiar.** Una llave de 7.x en
+  cascada y un laraimport sin `on_delete` se dejan como están, y el informe
+  sugiere declararlo. Si declara otra acción, la llave se quita y se vuelve a
+  crear en la alteración.
+- **Lo que escribió una persona no se deshace.** Una columna o una llave que puso
+  una migración que LaraPack no generó no se cambia ni se quita; se avisa.
+- **Lo que no se lee con seguridad no se adivina**: una columna en un bucle, la
+  tabla en una variable, SQL crudo que cambia columnas. No se escribe nada sobre
+  eso —nunca un `dropColumn` ni un `add` a ciegas— y el informe nombra el archivo.
+- **Una llave hacia una tabla que se crea después** —o un ciclo, con alguna de sus
+  llaves nullable— no va dentro de la creación: va en una migración aparte,
+  `<fecha>_add_foreign_keys_to_<tabla>_table.php`, fechada después de las dos.
+
+Sigue dejándose a mano una migración de creación editada, porque lo escrito
+fuera del laraimport en ella no se puede leer con seguridad.
 
 El manifiesto debe versionarse con el proyecto.
 
@@ -2564,8 +2583,9 @@ No cambia el contrato ni lo que se genera en PHP.
 
 Las claves ajenas salen con `restrict` en vez de `cascade` (los pivotes siguen en
 `cascade`), y `table_prefix` es nuevo y opcional. **Las tablas que ya existen no
-se tocan**: el generador reutiliza su migración de creación y, si una clave
-ajena cambió, deja un comentario para escribir la alteración a mano. Si tu
+se tocan**: el generador reutiliza su migración de creación y, desde 9.3.1, una
+clave ajena en `cascade` que el laraimport no declara se conserva (antes dejaba
+una alteración vacía con un comentario). Si tu
 proyecto dependía de la cascada en tablas nuevas, decláralo con
 `"on_delete": "cascade"`. Ver [Las claves ajenas](#las-claves-ajenas-restrict-por-omisión).
 

@@ -258,7 +258,8 @@ siga uno de estos caminos no tendrá bloques, manifiesto ni la comprobación de
 | `TestTool::createFeatureTest` | El test de endpoints de cada modelo (`tests/Feature/Models/<Modelo>EndpointsTest.php`). | Sí, llamando a `Tool::applyBlocks`. | No. | Sólo con `--dry-run`; se formatea por `Tool::replaceData`. |
 | `ModelTraitsTool::create` | Los cinco traits de huecos. | Operations, Relations y Storage llaman a `Tool::applyBlocks`; Assignment y Mutators, no. | No: son huecos. | Sólo con `--dry-run`; se formatean por `Tool::replaceData`. |
 | `PivotMigrationTool::create` | La migración de cada pivote. | No, y tampoco `Tool::replaceTokens`: sólo sustituye `migration_name`. | No. | Sí; si existe, ni siquiera `skipped`. |
-| `MigrationTool::alter` | La migración `alter` cuando cambia una tabla que ya existe. | No. | Sí. | Sí. Si la migración de creación está editada, `preserved` y no escribe. |
+| `MigrationTool::alter` | La migración `alter` cuando cambia una tabla que ya existe. | No. | Sí. | Sí. Si la migración de creación está editada, `preserved` y no escribe; si alguna migración de la tabla no se puede leer, `skipped` con el archivo. |
+| `MigrationTool::writeDeferredForeignKeys` | `add_foreign_keys_to_<tabla>_table`: las llaves hacia una tabla que se crea después (o un ciclo), al terminar los modelos. | No. | Sí. | Sí. |
 | `MigrationTool::remove`, `PivotMigrationTool::remove` | La migración `drop` de `larapack:remove-full-model`. | No. | No. | No. |
 
 Fuera de las herramientas escriben además `Skill::install`, `CiCommand`,
@@ -274,8 +275,8 @@ hacerlo, quedarían sin formatear.
 Las piezas que comparten más de una herramienta están arriba, no copiadas:
 `Tool::phpString` (todo valor libre del laraimport sale escapado; un `default`
 con comilla ya no rompe una migración), `Tool::defaultLiteral` (el `default` de
-columna, igual en modelo y pivote; su forma es contrato, porque `alter()` compara
-las definiciones como texto), `Tool::referentialActions`,
+columna, igual en modelo y pivote; con el tipo de la columna: en una de texto
+todo va entre comillas), `Tool::referentialActions`,
 `Tool::migrationFile` (reutiliza la migración de creación que ya exista) y
 `Tool::MODEL_NAME` (el nombre de modelo es un identificador: un `..` borraba
 directorios enteros).
@@ -293,7 +294,16 @@ Casos que conviene conocer antes de tocarlos:
   laraimport con lo que dejaron las migraciones anteriores y escribe una
   `alter`. Las marcas de tiempo salen de
   [`MigrationTimestamp`](src/Support/MigrationTimestamp.php), que garantiza que
-  sean crecientes dentro de una ejecución.
+  sean crecientes dentro de una ejecución. Lo que dejaron las migraciones lo
+  calcula [`SchemaHistory`](src/Tools/Migration/Schema/SchemaHistory.php) con
+  TODAS las del directorio, leídas por
+  [`MigrationReader`](src/Tools/Migration/Schema/MigrationReader.php) con el
+  tokenizador de PHP: cada columna queda como una
+  [`ColumnDefinition`](src/Tools/Migration/Schema/ColumnDefinition.php) que se
+  compara por lo que significa, y lo que no se lee con seguridad queda marcado
+  (opaco o incierto) en la
+  [`TableState`](src/Tools/Migration/Schema/TableState.php), para no adivinarlo.
+  Las reglas están en la cabecera de `MigrationTool`.
 - [`PackageTool`](src/Tools/Package/PackageTool.php) es el andamiaje de un
   paquete nuevo (`larapack:new`): `PackageTool::FILES` es la lista de archivos y
   `PackageTool::composerJson` saca las versiones de `ecosystem.json`.
@@ -669,6 +679,9 @@ cambia algo que ve quien usa el generador.
    [`PivotMigrationTool`](src/Tools/PivotMigration/PivotMigrationTool.php)
    escriben `$table-><tipo>('<columna>')`: si el método de Blueprint se llama
    igual, no hay nada que tocar. Si recibe más argumentos, aquí.
+   [`ColumnTypes`](src/Tools/Migration/Schema/ColumnTypes.php) dice si es
+   numérico (el `default` va sin comillas) y si es otra forma de escribir un
+   tipo que ya existe: si falta, `alter()` vería un cambio donde no lo hay.
 3. [`FactoryTool`](src/Tools/Factory/FactoryTool.php): su valor de Faker. Sin
    él la columna sale `null` y una no anulable rompe el insert.
 4. Si se lee como texto (para elegir `display`), `ImportDocument::TEXT_TYPES`.

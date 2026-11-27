@@ -1,5 +1,172 @@
 # Changelog
 
+## 9.3.1 (sin publicar)
+
+### Migraciones: se leen todas antes de escribir ninguna
+
+Los cinco defectos de migraciones que encontró el análisis de viabilidad sobre
+school-management, expediente y brandai. Cada uno tiene su prueba con
+migraciones reales de esas aplicaciones, copiadas tal cual a
+`tests/Fixtures/migrations` (`tests/EndToEnd/MigrationHistoryTest.php`, que
+levanta la base con `migrate:fresh` y comprueba que el segundo
+`import --force` no escribe nada, y `tests/Unit/MigrationReaderTest.php`).
+
+El esquema actual de una tabla lo calcula ahora `SchemaHistory` con TODAS las
+migraciones del directorio, leídas con el tokenizador de PHP
+(`MigrationReader`), y cada columna se compara por lo que significa
+(`ColumnDefinition`), no por cómo se escribió. Medido en simulación sobre
+copias de las tres aplicaciones (`import --force --dry-run`, la 9.3.0 contra
+esta):
+
+| | 9.3.0 | 9.3.1 |
+|---|---|---|
+| school-management (raíz) | 91 alteraciones (89 vacías, 2 de nada) y 37 creaciones reescritas | 0 alteraciones; 5 creaciones regeneradas, sin otra migración y sin cambios |
+| school-management (paquetes) | 6 alteraciones y 499 creaciones reescritas | 0 alteraciones; 8 regeneradas como arriba |
+| expediente | 33 alteraciones vacías | 1 alteración, real: `reference_standards.version` valía `'1'` y el laraimport dice `'1.0'` (D3) |
+
+Leídas sin error 2 237 migraciones de las tres aplicaciones; en el 4,7 % de
+las tablas (61 de 1 294) alguna migración no se puede leer con seguridad, y
+sobre ellas no se escribe nada.
+
+#### D1. Reescribía la migración de creación de una tabla ya alterada
+
+- **Qué pasaba.** Cuando las alteraciones ya cubrían el laraimport, `alter()`
+  no tenía nada que escribir y `create()` caía en `generate()`, que con
+  `--force` reescribía la creación CON las columnas que habían añadido las
+  alteraciones. Una base nueva las añadía dos veces: `migrate:fresh` moría con
+  «duplicate column».
+- **A quién.** A todo proyecto que hubiera alterado una tabla y regenerara con
+  `--force`: 50 tablas en school-management (`regulatory_authorities.state_code`,
+  `official_catalog_versions`, `inbound_webhooks.headers`, `ai_chunks.embedding`…).
+  También `larapack:migration --force` y `larapack:model --force`.
+- **Cómo se corrige.** Una creación que ya existe **nunca** se reescribe si
+  cualquier otra migración toca su tabla. Si el esquema ya coincide, no se
+  escribe nada: el informe la da por `skipped` y dice cuántas migraciones la
+  tocan. Tampoco se reescribe si hay algo que se conserva (una llave en
+  `cascade`, una columna escrita a mano). Y una tabla que ya crea otra
+  migración, con otro nombre, no recibe una segunda creación.
+- **Al actualizar.** Si ya reescribiste creaciones con 9.3.0, corre
+  `php artisan migrate:fresh` en una base de prueba: lo que reviente con
+  «duplicate column» es una creación reescrita. Quita de ella las columnas que
+  añaden sus alteraciones (están en la alteración: la base de producción las
+  tiene). Lo regenerado de aquí en adelante ya no lo hace.
+
+#### D2. Sólo leía las alteraciones con nombre de LaraPack
+
+- **Qué pasaba.** El esquema actual salía de la creación y de los
+  `*_alter_<tabla>_table.php`. Una migración escrita a mano con otro nombre
+  quedaba fuera, y el generador volvía a añadir lo que ella ya añadía
+  (school-site: `site_media.php` añade `cover_file`). Y leía las columnas con
+  una expresión regular de una línea: `string('x', 500)`, una llave repartida
+  en cinco líneas o `index('x')` se leían mal o como columnas.
+- **A quién.** A quien escribe migraciones a mano junto a las generadas:
+  school-management (322 de 1 176), expediente (las `hasColumn()`), brandai.
+- **Cómo se corrige.** Se leen todas las migraciones que tocan la tabla
+  (`Schema::create/table('<tabla>')`, con prefijo), en el orden de `migrate`, y
+  sólo lo que hace `up()` y sus métodos auxiliares. Lo que no se lee con
+  seguridad no se adivina:
+  - una columna en un bucle, la tabla en una variable con un cuerpo que no se
+    lee, `Schema::rename` o SQL que crea o renombra tablas dejan la tabla
+    **opaca**: no se escribe ninguna alteración y el informe nombra el archivo;
+  - SQL crudo (`DB::statement`) que cambia columnas las deja **inciertas**: si
+    se lee, las que nombra; si se arma en el momento, todas las que el archivo
+    escribe. Un SQL que sólo añade CHECK, índices o disparadores no cuenta;
+  - un `if` con `Schema::hasColumn`/`hasTable` cuenta como hecho; cualquier
+    otro, incierto;
+  - SQL armado que pone o quita llaves deja sin comparar las llaves de las
+    tablas que nombra el archivo.
+
+  Sobre lo incierto nunca se escribe un `dropColumn` ni un `add`, y lo que una
+  persona escribió —una columna o una llave de una migración que LaraPack no
+  generó— no se cambia ni se quita: se avisa.
+- **Al actualizar.** Nada. El informe trae ahora razones nuevas en los
+  `skipped`; léelas: lo que dicen que no se hizo es una decisión tuya.
+
+#### D3. Un `default` deshecho o escrito sin comillas valía otra cosa
+
+- **Qué pasaba.** Dos caras del mismo fallo. El `down()` de una alteración
+  copiaba el texto de la migración vieja: la 9.0 escribía `->default(01)` para
+  el `'01'` del laraimport, y `01` es el octal 1, así que el `down()` de
+  school-payroll quedaba `->default(02)`, que se lee como un número sobre una
+  columna de texto. Y en el `up()`, una cadena con forma de número decimal iba
+  sin comillas en cualquier columna: el `'1.50'` de una columna de texto
+  llegaba como el número 1.5 y la base guardaba `'1.5'` (expediente:
+  `reference_standards.version`, `'1.0'` guardado como `'1'`).
+- **A quién.** A columnas de texto con un `default` numérico; a proyectos que
+  vienen de la 9.0.
+- **Cómo se corrige.** El `default` se escribe según la columna
+  (`Tool::defaultLiteral`, en modelo y pivote): en una numérica, los números
+  sin comillas, como siempre; en una de texto, todo lo que no es booleano entre
+  comillas. El `down()` ya no copia texto: escribe el valor que de verdad
+  tenía la columna, `->default('1')` en vez de `->default(01)`. Y la
+  comparación es por lo que guarda la base, así que `->default(5)` y
+  `->default('5')` son lo mismo: el primer import no escribe alteraciones por
+  la forma del literal.
+- **Al actualizar.** El primer `import` escribe la alteración que corrige las
+  columnas de texto cuyo `default` se perdía (`'1.0'` que valía `'1'`).
+  Revísala y migra. Una creación sin otras migraciones que se regenere con
+  `--force` cambia `->default(5)` por `->default('5')` en columnas de texto:
+  la base no cambia.
+
+#### D4. Alteraciones vacías por `cascade` frente a `restrict`
+
+- **Qué pasaba.** Desde 8.0 las llaves salen `restrict` por omisión y las de
+  7.x dicen `onDelete('cascade')`. `alter()` comparaba texto y escribía una
+  alteración vacía con «escribe el cambio a mano» por cada una: 89 en
+  school-management, 33 en expediente. Y cuando la llave sí cambiaba, tampoco
+  la escribía: dejaba el comentario.
+- **A quién.** A todo proyecto generado con 7.x.
+- **Cómo se corrige.** La llave se compara por lo que hace (tabla, columna y
+  acciones efectivas, `no action` = `restrict`) y da igual cómo se escribió:
+  `foreignId()->constrained()` y `unsignedBigInteger()` más
+  `foreign()->references()->on()` son la misma, en cualquier orden de
+  modificadores. Lo que el laraimport no declara no lo pide cambiar: una acción
+  que no escribe se conserva, y el informe sugiere declararla
+  (`"on_delete": "cascade"`). Si declara otra, la alteración quita la llave y la
+  vuelve a crear (`dropForeign` + `foreign()`), con su `down()`. Nunca se
+  escribe una migración vacía. Para eso el laraimport normalizado sabe qué
+  acciones se escribieron (`declared_actions`): el esquema rellena las demás
+  con `restrict`.
+- **Al actualizar.** Borra las alteraciones vacías que dejó la 9.x (sólo con
+  comentarios «escribe el cambio a mano») si no se han migrado; si ya están en
+  producción, no hacen nada y pueden quedarse. Decide la semántica de cada
+  llave: declara `on_delete`/`on_update` para conservar la cascada, o
+  `restrict` para cambiarla, y el siguiente import escribe la alteración.
+
+#### D5. La llave hacia una tabla que se crea después
+
+- **Qué pasaba.** Al añadir una llave a un modelo existente, 7.x reescribía la
+  creación con la llave dentro sin mirar el orden: `create_practitioners_table`
+  corre antes que `create_specialties_table` y una base nueva moría con «1824
+  Failed to open the referenced table» (expediente). Y un ciclo de llaves
+  (brandai: `sites` ↔ `registered_domains`) no tenía arreglo: el validador lo
+  rechazaba siempre.
+- **A quién.** A llaves nuevas entre tablas que ya existen, a tablas creadas
+  en el orden contrario y a los ciclos.
+- **Cómo se corrige.** La llave nueva va en una alteración fechada después de
+  la última migración de la tabla y de la creación de la tabla a la que apunta
+  (también si ésta está fechada en el futuro). En una creación nueva, una
+  llave hacia una tabla de este laraimport que todavía no existe se escribe sin
+  `constrained()`, y la llave va en `<fecha>_add_foreign_keys_to_<tabla>_table.php`,
+  después de todas las creaciones de la importación. Un ciclo con alguna llave
+  nullable ya no es un error: es un aviso, y se resuelve así. Sin ninguna
+  nullable sigue siendo error, ahora diciendo por qué (no se podría insertar la
+  primera fila).
+- **Al actualizar.** Nada. Si tenías un ciclo y lo partiste a mano, puedes
+  declararlo entero y quitar el apaño.
+
+#### Lo que queda, dicho
+
+- Una creación **editada a mano** sigue sin leerse para escribir su alteración
+  (`preserved`), como en 9.3.0.
+- Las columnas que añadió una versión de LaraPack **sin manifiesto** cuentan
+  como escritas a mano: no se cambian ni se quitan solas.
+- Del SQL armado en el momento se dejan fuera los nombres que escribe el
+  archivo; un nombre de columna armado a trozos (`"{$x}_key"`) no se ve. El
+  informe lo avisa cuando escribe una alteración sobre esa tabla.
+- `migrate:fresh` se comprueba en SQLite, no en MySQL: el orden de las llaves
+  se comprueba por las fechas de los archivos, no por el error 1824.
+
 ## 9.3.0
 
 ### La rama protegida: guiada hasta el final, y comprobada en cada corrida

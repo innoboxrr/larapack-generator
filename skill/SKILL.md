@@ -218,7 +218,8 @@ distintas y las dos importan:
 
 - **Forma**, contra el esquema.
 - **Coherencia**, mirando el documento entero: modelos o columnas repetidos,
-  ciclos de claves foráneas (que no tienen orden de migración posible), claves
+  ciclos de claves foráneas (con una llave nullable se resuelven con una
+  migración aparte; sin ninguna, no hay primera fila posible), claves
   foráneas a sí mismo no anulables, reglas sobre campos que no son columnas,
   relaciones que no resuelven, `UpdateRequest` sin la regla del identificador
   del que dependen su `authorize()` y su `handle()`, `only` junto a `except`,
@@ -592,11 +593,14 @@ Así que ampliar el `laraimport.json` y volver a importar es seguro. Es el flujo
 normal, no una excepción.
 
 **Cambiar columnas de una tabla que ya existe también se hace en el JSON.** Al
-reimportar, LaraPack escribe `<fecha>_alter_<tabla>_table.php` con lo que se
-añade, cambia y quita. **No edites la migración de creación para cambiar
-columnas**: una base ya migrada no la vuelve a correr, y editada, LaraPack deja
-de poder escribir las alteraciones. Una llave foránea que cambia se escribe a
-mano; la alteración lo dice.
+reimportar, LaraPack lee todas las migraciones que tocan la tabla —también las
+escritas a mano, con cualquier nombre— y escribe `<fecha>_alter_<tabla>_table.php`
+con lo que se añade, cambia y quita. **No edites la migración de creación para
+cambiar columnas**: una base ya migrada no la vuelve a correr, y editada,
+LaraPack deja de poder escribir las alteraciones. Lo que el informe dice que no
+hizo —una columna que escribió una persona, una tabla que se toca en un bucle o
+con SQL crudo, una llave en `cascade` que el JSON no declara— es una decisión
+tuya: declara `on_delete` en el JSON o escribe la alteración a mano.
 
 Lo generado sale formateado y pasa Larastan: si `vendor/bin/pint --test` o
 `vendor/bin/phpstan analyse` fallan, lo que falla es algo escrito a mano.
