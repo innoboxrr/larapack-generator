@@ -2,6 +2,7 @@
 
 namespace Innoboxrr\LarapackGenerator\Support\Realign\Operations;
 
+use Innoboxrr\LarapackGenerator\Support\Realign\Category;
 use Innoboxrr\LarapackGenerator\Support\Realign\Planner;
 use Innoboxrr\LarapackGenerator\Support\Realign\RealignState;
 use RuntimeException;
@@ -33,6 +34,8 @@ final class OperationRunner
     {
         $operation = Operations::for($action);
         $state = new RealignState($this->root);
+        // Cada corrida compara con lo que hay ahora, no con lo de otra.
+        ScopeReference::forget();
         $plan = $state->plan();
 
         if ($operation instanceof PendingOperation) {
@@ -97,7 +100,8 @@ final class OperationRunner
                 if (in_array($step['type'] ?? null, $handles, true)
                     && ($packages === [] || in_array($step['scope']['path'] ?? null, $packages, true))
                     && Planner::effectiveStatus($step, $byId) !== Planner::DONE
-                    && Planner::effectiveStatus($step, $byId) !== Planner::BLOCKED) {
+                    && Planner::effectiveStatus($step, $byId) !== Planner::BLOCKED
+                    && self::decidedFor($step, $operation->name())) {
                     $selected[] = $step;
                 }
             }
@@ -134,6 +138,31 @@ final class OperationRunner
         }
 
         return $selected;
+    }
+
+    /**
+     * Sin ids, una decisión sólo entra si se decidió una opción que ejecuta
+     * esta operación (`adopt` en `untracked-edited`, `restore` en
+     * `missing`): lo que falta decidir no se hace por omisión, y tampoco lo
+     * que se decidió hacer de otra forma. Lo que no es una decisión, siempre.
+     *
+     * @param  array<string, mixed>  $step
+     */
+    private static function decidedFor(array $step, string $action): bool
+    {
+        if (($step['category'] ?? null) !== Category::DECISION) {
+            return true;
+        }
+
+        $chosen = $step['decision']['option'] ?? null;
+
+        foreach ((array) ($step['options'] ?? []) as $option) {
+            if (is_array($option) && ($option['key'] ?? null) === $chosen && is_string($option['run'] ?? null)) {
+                return str_starts_with($option['run'], 'larapack:realign '.$action.' ');
+            }
+        }
+
+        return false;
     }
 
     /**

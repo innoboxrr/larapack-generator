@@ -68,7 +68,7 @@ final class Verifier
      * no se entra, cada acción pregunta a la política y el listado pasa por su
      * ManagedFilter.
      */
-    private const ENDPOINT_TESTS = [
+    public const ENDPOINT_TESTS = [
         'cada_accion_requiere_sesion' => null,
         'cada_accion_pregunta_a_la_politica' => null,
         'index_pasa_por_su_managed_filter' => 'index',

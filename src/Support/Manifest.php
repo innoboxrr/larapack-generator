@@ -260,7 +260,7 @@ final class Manifest
         $manifest = $this->read();
 
         $this->put($manifest, $model, $namespace, $file, [
-            'stub' => $this->stubName($stub),
+            'stub' => $this->stubKey($stub),
             'hash' => $this->hash($file),
             'generator' => GeneratorVersion::current(),
         ]);
@@ -281,23 +281,106 @@ final class Manifest
      *
      * Quién decide que es seguro adoptarlo no es el manifiesto: es el
      * diagnóstico de `larapack:realign`, que lo compara con lo regenerado.
+     *
+     * `$hashOf`, si se da, es el archivo cuyo hash se anota en vez del de
+     * `$file`: adoptar algo escrito a mano «como editado» anota el hash de lo
+     * que generaría el contrato, así `verify` lo ve personalizado y `--force`
+     * no lo toca nunca.
      */
-    public function adopt(string $model, string $namespace, string $file, string $stub): void
+    public function adopt(string $model, string $namespace, string $file, string $stub, ?string $hashOf = null): void
     {
         $manifest = $this->read();
 
-        // Quien adopta ya sabe el nombre del stub (el del diagnóstico,
-        // relativo a Stubs/); una ruta absoluta se recorta como en record().
-        $relativeStub = preg_match('#^(/|[A-Za-z]:[/\\\\])#', $stub) === 1 ? $this->stubName($stub) : str_replace('\\', '/', $stub);
-
         $this->put($manifest, $model, $namespace, $file, [
-            'stub' => $relativeStub,
-            'hash' => $this->hash($file),
+            'stub' => $this->stubKey($stub),
+            'hash' => $this->hash($hashOf ?? $file),
             'generator' => GeneratorVersion::current(),
             'state' => self::ADOPTED,
         ]);
 
         $this->write($manifest);
+    }
+
+    /**
+     * Vuelve a anotar un archivo registrado con el hash de lo que hay en
+     * disco y la versión actual del generador, conservando su stub y su
+     * estado: un archivo generado cuyo hash es de antes de pasarlo por Pint
+     * sigue siendo generado. `$generator` lo anota además; sin él, sólo el
+     * hash.
+     *
+     * @return bool si estaba registrado
+     */
+    public function refresh(string $file, bool $generator = true): bool
+    {
+        return $this->updateEntry($file, fn (array $entry): array => ['hash' => $this->hash($file)]
+            + ($generator ? ['generator' => GeneratorVersion::current()] : [])
+            + $entry);
+    }
+
+    /**
+     * Anota la versión actual del generador en un archivo registrado que no
+     * la dice (los de un manifiesto v1), sin tocar su hash: es lo que se hace
+     * con lo heredado que el diagnóstico encuentra igual que lo que generaría
+     * hoy el contrato fuera de sus huecos. Uno que ya dice su versión no se
+     * toca.
+     *
+     * @return bool si se anotó
+     */
+    public function stamp(string $file): bool
+    {
+        $stamped = false;
+
+        $this->updateEntry($file, function (array $entry) use (&$stamped): array {
+            if (isset($entry['generator'])) {
+                return $entry;
+            }
+
+            $stamped = true;
+
+            return $entry + ['generator' => GeneratorVersion::current()];
+        });
+
+        return $stamped;
+    }
+
+    /**
+     * El namespace con el que se registran los archivos de un modelo (o del
+     * paquete, con ''), o null si el manifiesto no lo conoce.
+     */
+    public function namespaceOf(string $model): ?string
+    {
+        $manifest = $this->read();
+        $namespace = $model === '' ? $manifest['package']['namespace'] : ($manifest['models'][$model]['namespace'] ?? null);
+
+        return is_string($namespace) ? $namespace : null;
+    }
+
+    /**
+     * @param  callable(FileEntry): FileEntry  $change
+     */
+    private function updateEntry(string $file, callable $change): bool
+    {
+        $manifest = $this->read();
+        $relative = $this->relative($file);
+        $found = false;
+
+        if (isset($manifest['package']['files'][$relative])) {
+            $manifest['package']['files'][$relative] = $change($manifest['package']['files'][$relative]);
+            $found = true;
+        }
+
+        foreach ($manifest['models'] as $model => $entry) {
+            if (isset($entry['files'][$relative])) {
+                $manifest['models'][$model]['files'][$relative] = $change($entry['files'][$relative]);
+                $found = true;
+            }
+        }
+
+        if ($found) {
+            $this->write($manifest);
+        }
+
+        return $found;
     }
 
     /**
@@ -649,6 +732,17 @@ final class Manifest
         $file = str_replace('\\', '/', $file);
 
         return str_starts_with($file, $root.'/') ? substr($file, strlen($root) + 1) : $file;
+    }
+
+    /**
+     * El nombre con el que se guarda un stub: una ruta absoluta se recorta
+     * a lo que cuelga de Stubs/ (stubName); un nombre ya relativo
+     * (`Model/ModelTemplate.txt`, el que da el diagnóstico de `realign`) se
+     * guarda tal cual.
+     */
+    private function stubKey(string $stub): string
+    {
+        return preg_match('#^(/|[A-Za-z]:[/\\\\])#', $stub) === 1 ? $this->stubName($stub) : str_replace('\\', '/', $stub);
     }
 
     /**

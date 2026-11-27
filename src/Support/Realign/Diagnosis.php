@@ -7,6 +7,7 @@ use Innoboxrr\LarapackGenerator\Support\GeneratorVersion;
 use Innoboxrr\LarapackGenerator\Support\Manifest;
 use Innoboxrr\LarapackGenerator\Support\ProjectSources;
 use Innoboxrr\LarapackGenerator\Support\ProjectVerification;
+use Innoboxrr\LarapackGenerator\Support\Realign\Apply\ForeignKeyPins;
 
 /**
  * `larapack:realign diagnose`: dónde está el proyecto respecto del contrato.
@@ -72,6 +73,7 @@ final class Diagnosis
             'files' => array_values(array_filter((array) ($previous['files'] ?? []), $keep)),
             'unmanaged' => array_values(array_filter((array) ($previous['unmanaged'] ?? []), $keep)),
             'findings' => array_values(array_filter((array) ($previous['findings'] ?? []), $keep)),
+            'contract' => array_values(array_filter((array) ($previous['contract'] ?? []), $keep)),
             'out_of_scope' => array_filter((array) ($previous['out_of_scope'] ?? []), fn (mixed $scope, string|int $path): bool => ! in_array((string) $path, $done, true), ARRAY_FILTER_USE_BOTH),
         ];
 
@@ -108,6 +110,17 @@ final class Diagnosis
 
             foreach ($classifier->unmanaged() as $item) {
                 $report['unmanaged'][] = $item;
+            }
+
+            foreach ($scope['contract'] ? ForeignKeyPins::find($scope['root']) : [] as $pin) {
+                $file = ($scope['path'] === '.' ? '' : $scope['path'].'/').'laraimport.json';
+
+                if ($exceptions->covers(['type' => 'pin-foreign-keys', 'scope' => $scope['path'], 'file' => $file])) {
+                    continue;
+                }
+
+                $report['contract'][] = ['scope' => $scope['path'], 'package' => $scope['package'], 'file' => $file]
+                    + array_diff_key($pin, ['path' => true]) + ['category' => Category::DETERMINISTIC, 'type' => 'pin-foreign-keys'];
             }
 
             $report['out_of_scope'][$scope['path']] = [
@@ -173,7 +186,7 @@ final class Diagnosis
 
         $categories = array_fill_keys(Category::ALL, 0);
 
-        foreach (['files', 'unmanaged', 'findings'] as $section) {
+        foreach (['files', 'unmanaged', 'findings', 'contract'] as $section) {
             foreach ((array) ($report[$section] ?? []) as $item) {
                 $category = is_array($item) ? ($item['category'] ?? null) : null;
 

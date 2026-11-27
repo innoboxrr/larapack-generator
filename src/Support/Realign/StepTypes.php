@@ -90,19 +90,21 @@ final class StepTypes
             'playbook' => 'controller-shape',
         ],
         'controller-concern' => [
-            'category' => Category::GUIDED,
-            'title' => 'Sacar los traits de Http/Controllers/Concerns',
+            'category' => Category::DETERMINISTIC,
+            'title' => 'Sacar los traits de Http/Controllers/Concerns que sólo usan requests',
             'risk' => self::LOW,
-            'why' => 'Mueve un trait de namespace y actualiza sus `use`; el comportamiento no cambia si todos los usos se actualizan.',
+            'why' => 'Mueve el trait a Http/Requests/Concerns y reescribe por tokens cada nombre que lo apunta; el comportamiento no cambia. Lo que lo nombra de una forma que no se reescribe con certeza (una cadena, un `use` agrupado) se salta y se hace a mano con el playbook. El que usa un controlador no se mueve: es controller-shape.',
             'reversible' => true,
+            'run' => 'larapack:realign apply {id}',
             'playbook' => 'controller-concern',
         ],
         'endpoint-tests' => [
-            'category' => Category::GUIDED,
+            'category' => Category::DETERMINISTIC,
             'title' => 'Completar las pruebas de endpoints de versiones anteriores',
             'risk' => self::LOW,
-            'why' => 'Añade pruebas, no cambia código de producción. Pueden fallar con razón: si una acción responde sin sesión o no pregunta a la política, la prueba lo destapa.',
+            'why' => 'Añade al test existente las pruebas que trae hoy la plantilla, sin tocar lo escrito a mano; no cambia código de producción. Pueden fallar con razón: si una acción responde sin sesión o no pregunta a la política, la prueba lo destapa.',
             'reversible' => true,
+            'run' => 'larapack:realign apply {id}',
             'playbook' => 'endpoint-tests',
         ],
         'edited-outside' => [
@@ -130,12 +132,21 @@ final class StepTypes
             'playbook' => 'security',
         ],
         'model-lists' => [
-            'category' => Category::GUIDED,
-            'title' => 'Poner el modelo al día con el contrato',
+            'category' => Category::DETERMINISTIC,
+            'title' => 'Poner las listas del modelo al día con el contrato',
             'risk' => self::MEDIUM,
-            'why' => 'Las listas del modelo (fillable, casts, export_cols) no dicen lo que el contrato: o el contrato va por delante o el modelo se editó a mano. Cambia qué se asigna y cómo se convierte una columna.',
+            'why' => 'Las listas del modelo (fillable, casts, export_cols) no dicen lo que el contrato. Se añade lo que falta, lo mismo que hace `import --force` con un modelo editado; nunca se quita ni se cambia nada. Cambia qué se asigna y cómo se convierte una columna. Lo que no se localiza con certeza se salta con la orden manual.',
             'reversible' => true,
+            'run' => 'larapack:realign apply {id}',
             'playbook' => 'model-lists',
+        ],
+        'pin-foreign-keys' => [
+            'category' => Category::DETERMINISTIC,
+            'title' => 'Fijar en el contrato lo que hacen hoy las llaves foráneas',
+            'risk' => self::LOW,
+            'why' => 'Sólo cambia laraimport.json: escribe on_delete/on_update con lo que ya hacen las migraciones (la cascada de 7.x) donde el contrato calla, para que un salto de versión no cambie lo que se borra en producción. La base no cambia. Cambiar la acción de verdad es otra decisión (declarar otra y migrar).',
+            'reversible' => true,
+            'run' => 'larapack:realign apply {id}',
         ],
         'verify-other' => [
             'category' => Category::GUIDED,
@@ -255,7 +266,7 @@ final class StepTypes
      */
     public const ORDER = [
         'relink', 'prune', 'adopt', 'regenerate', 'fix',
-        'controller-concern', 'controller-shape', 'declared-routes', 'security', 'edited-outside', 'model-lists', 'endpoint-tests', 'verify-other',
+        'controller-concern', 'controller-shape', 'declared-routes', 'security', 'edited-outside', 'model-lists', 'endpoint-tests', 'verify-other', 'pin-foreign-keys',
         'contract-invalid', 'no-contract', 'missing', 'untracked-edited', 'hand-rolled', 'route-closure', 'inconsistent-entity', 'unmanaged-http', 'unmanaged-models',
     ];
 
@@ -316,6 +327,13 @@ final class StepTypes
         // propio mensaje (SpaFallback, el mismo que decide el arreglo).
         if ($type === 'route-closure' && str_contains($finding['message'], 'larapack:fix route-closure')) {
             return 'fix';
+        }
+
+        // Un trait de Http/Controllers que usa un controlador no se arregla
+        // moviéndolo: su lógica va a la request (ControllerShape lo dice en
+        // el mensaje; el aviso, cuando sólo lo usan requests, sí se mueve).
+        if ($type === 'controller-concern' && ! str_contains($finding['message'], 'ningún controlador lo usa')) {
+            return 'controller-shape';
         }
 
         return $type;

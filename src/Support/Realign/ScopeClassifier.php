@@ -323,7 +323,11 @@ final class ScopeClassifier
     private function missing(array $entry, string $relative, ?array $tracked, ?string $counterpart): array
     {
         if ($tracked === null) {
-            return $counterpart === null
+            // Una migración se busca por su nombre sin la fecha: si hay otra
+            // con el mismo nombre en disco (la renombrada), ésta no falta.
+            $key = self::migrationKey($relative);
+
+            return $counterpart === null || ($key !== null && $this->migrationOnDisk($relative, $key))
                 ? $entry
                 : $this->resolve($entry, FileClass::MISSING, 'el contrato lo generaría y no está');
         }
@@ -455,6 +459,25 @@ final class ScopeClassifier
 
         // Dos candidatos es ambiguo: no se adivina.
         return count($candidates) === 1 ? $candidates[0] : null;
+    }
+
+    private function migrationOnDisk(string $relative, string $key): bool
+    {
+        $directory = dirname($relative);
+
+        if (! is_dir($this->scope['root'].'/'.$directory)) {
+            return false;
+        }
+
+        foreach (scandir($this->scope['root'].'/'.$directory) ?: [] as $name) {
+            $candidate = ($directory === '.' ? '' : $directory.'/').$name;
+
+            if ($candidate !== $relative && self::migrationKey($candidate) === $key && is_file($this->scope['root'].'/'.$candidate)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

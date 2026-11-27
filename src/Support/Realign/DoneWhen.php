@@ -2,6 +2,7 @@
 
 namespace Innoboxrr\LarapackGenerator\Support\Realign;
 
+use Innoboxrr\LarapackGenerator\Support\Files;
 use Innoboxrr\LarapackGenerator\Support\Import\ImportDocument;
 use Innoboxrr\LarapackGenerator\Support\Import\SemanticValidator;
 use Innoboxrr\LarapackGenerator\Support\ProjectVerification;
@@ -23,6 +24,9 @@ use Innoboxrr\LarapackGenerator\Support\Verifier;
  *  - `unmanaged`: ninguno de los archivos sigue siendo código sin gestionar
  *    (se declaró en el contrato o se aprobó como excepción).
  *  - `contract`: el laraimport del ámbito valida.
+ *  - `foreign-keys`: el laraimport del ámbito declara `on_delete` /
+ *    `on_update` en cada una de esas columnas (`columns`); el valor que
+ *    declare es suyo: callar era lo que había que resolver.
  *  - `decision`: hay una decisión registrada (`larapack:realign decide`).
  *
  * Una decisión, además de su comprobación, necesita estar decidida: hasta
@@ -35,7 +39,7 @@ use Innoboxrr\LarapackGenerator\Support\Verifier;
  */
 final class DoneWhen
 {
-    public const KINDS = ['verify', 'classification', 'unmanaged', 'contract', 'decision'];
+    public const KINDS = ['verify', 'classification', 'unmanaged', 'contract', 'foreign-keys', 'decision'];
 
     private RealignState $state;
 
@@ -60,10 +64,11 @@ final class DoneWhen
         $files = array_values(array_filter((array) ($condition['files'] ?? []), 'is_string'));
 
         $remaining = match ($kind) {
-            'verify' => $this->verify($condition, $files),
+            'verify' => $this->verify($condition, $files, (string) ($step['type'] ?? '')),
             'classification' => $this->classification($condition, $files),
             'unmanaged' => $this->unmanaged($files),
             'contract' => $this->contract((string) ($condition['scope'] ?? '.')),
+            'foreign-keys' => $this->foreignKeys((string) ($condition['scope'] ?? '.'), array_values(array_filter((array) ($condition['columns'] ?? []), 'is_array'))),
             'decision' => [],
             default => ["No se sabe comprobar `{$kind}`: actualiza innoboxrr/larapack-generator."],
         };
@@ -80,7 +85,7 @@ final class DoneWhen
      * @param  list<string>  $files
      * @return list<string>
      */
-    private function verify(array $condition, array $files): array
+    private function verify(array $condition, array $files, string $type = ''): array
     {
         $checks = array_values(array_intersect((array) ($condition['checks'] ?? []), Verifier::CHECKS));
         $package = is_string($condition['package'] ?? null) ? $condition['package'] : null;
@@ -106,6 +111,13 @@ final class DoneWhen
 
         foreach ($verification->run($checks)['findings'] as $finding) {
             if ($finding['level'] === Verifier::INFO || ($files !== [] && ! in_array($finding['file'], $files, true))) {
+                continue;
+            }
+
+            // Un hallazgo que pide otro tipo de paso es de ese paso, aunque
+            // esté en el mismo archivo: el `fix` del fallback de la SPA está
+            // hecho aunque en routes/web.php quede otro closure (una decisión).
+            if ($type !== '' && StepTypes::exists($type) && StepTypes::forFinding($finding) !== $type) {
                 continue;
             }
 
@@ -196,6 +208,55 @@ final class DoneWhen
         );
 
         return array_values(array_map(fn (array $error): string => "{$path}/laraimport.json {$error['path']}: {$error['message']}", $errors));
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $columns
+     * @return list<string>
+     */
+    private function foreignKeys(string $path, array $columns): array
+    {
+        $file = ($path === '.' ? $this->root : $this->root.'/'.$path).'/laraimport.json';
+        $raw = is_file($file) ? json_decode(Files::read($file), true) : null;
+
+        if (! is_array($raw)) {
+            return ["{$path}/laraimport.json no se puede leer."];
+        }
+
+        $declared = [];
+
+        foreach (is_array($raw['models'] ?? null) ? $raw['models'] : [] as $model) {
+            foreach (is_array($model) && is_array($model['props'] ?? null) ? $model['props'] : [] as $prop) {
+                if (is_array($prop) && is_string($prop['name'] ?? null)) {
+                    $declared[($model['name'] ?? '').'.'.$prop['name']] = $prop;
+                }
+            }
+        }
+
+        $remaining = [];
+
+        foreach ($columns as $column) {
+            $key = ($column['model'] ?? '').'.'.($column['column'] ?? '');
+            $prop = $declared[$key] ?? null;
+
+            foreach (['on_delete', 'on_update'] as $action) {
+                if (! isset($column[$action])) {
+                    continue;
+                }
+
+                if ($prop === null) {
+                    $remaining[] = "{$key}: el contrato ya no la declara.";
+
+                    break;
+                }
+
+                if (! array_key_exists($action, $prop)) {
+                    $remaining[] = "{$key}: no declara {$action} (la migración hace {$column[$action]}).";
+                }
+            }
+        }
+
+        return $remaining;
     }
 
     /**

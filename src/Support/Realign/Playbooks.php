@@ -179,6 +179,7 @@ final class Playbooks
             },
             'unmanaged' => "ninguno de los {$files} archivos sigue sin gestionar.",
             'contract' => 'el laraimport.json del ámbito valida.',
+            'foreign-keys' => 'el laraimport.json declara on_delete/on_update en cada una de las '.count((array) ($condition['columns'] ?? [])).' llaves.',
             'decision' => 'hay una decisión registrada.',
             default => 'no se sabe comprobar.',
         };

@@ -67,6 +67,7 @@ class RealignCommand extends Command
         'decide' => ['note'],
         'help' => [],
         'write' => ['package', 'dry-run', 'allow-dirty', 'option'],
+        'apply' => ['package', 'dry-run', 'allow-dirty', 'option', 'deterministic'],
     ];
 
     protected function configure(): void
@@ -84,7 +85,8 @@ class RealignCommand extends Command
             ->addOption('dry-run', null, InputOption::VALUE_NONE, 'Operaciones que escriben: dice qué haría sin escribir nada')
             ->addOption('allow-dirty', null, InputOption::VALUE_NONE, 'Operaciones que escriben: escribe aunque el árbol git tenga cambios sin comitear (no se podrá deshacer con git)')
             ->addOption('option', null, InputOption::VALUE_REQUIRED | InputOption::VALUE_IS_ARRAY, 'Operaciones que escriben: clave=valor para la operación. Repetible')
-            ->addOption('note', null, InputOption::VALUE_REQUIRED, 'decide: por qué se decide así (queda en el plan)');
+            ->addOption('note', null, InputOption::VALUE_REQUIRED, 'decide: por qué se decide así (queda en el plan)')
+            ->addOption('deterministic', null, InputOption::VALUE_NONE, 'apply: todos los pasos deterministas pendientes, en el orden del plan (sin ids hay que pedirlo así)');
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
@@ -99,7 +101,7 @@ class RealignCommand extends Command
             return $this->reportFailure($input, $output, "Acción desconocida: {$action}.", 'Disponibles: '.implode(', ', [...self::READS, ...Operations::ACTIONS]).'.');
         }
 
-        $unexpected = $this->unexpectedOptions($input, $writes ? 'write' : $action);
+        $unexpected = $this->unexpectedOptions($input, $action === 'apply' ? 'apply' : ($writes ? 'write' : $action));
 
         if ($unexpected !== []) {
             return $this->reportFailure($input, $output, "`{$action}` no usa ".implode(', ', array_map(fn (string $option): string => '--'.$option, $unexpected)).'.',
@@ -132,7 +134,7 @@ class RealignCommand extends Command
         $accepted = self::ACCEPTS[$action] ?? [];
         $unexpected = [];
 
-        foreach (['package', 'no-cache', 'dry-run', 'allow-dirty', 'option', 'note'] as $option) {
+        foreach (['package', 'no-cache', 'dry-run', 'allow-dirty', 'option', 'note', 'deterministic'] as $option) {
             $value = $input->getOption($option);
 
             if ($value !== false && $value !== null && $value !== [] && ! in_array($option, $accepted, true)) {
@@ -346,7 +348,9 @@ class RealignCommand extends Command
             Category::DECISION => is_array($step['decision'] ?? null)
                 ? ['decided' => $step['decision'], 'then' => $this->optionOf($step, (string) ($step['decision']['option'] ?? ''))['run'] ?? null]
                 : ['options' => $step['options'] ?? [], 'decide' => 'larapack:realign decide '.$step['id'].' <opción> --note="por qué"'],
-            default => ['command' => $step['command'] ?? null, 'available' => $this->commandAvailable((string) ($step['command'] ?? ''))],
+            default => ['command' => $step['command'] ?? null, 'available' => $this->commandAvailable((string) ($step['command'] ?? ''))]
+                // Lo que la orden salte se hace a mano: el playbook del tipo.
+                + (isset($step['playbook']) ? ['fallback' => ['playbook' => Playbooks::resolve((string) $step['playbook']), 'instructions' => Playbooks::render($step)]] : []),
         };
         $check = 'larapack:realign check '.$step['id'];
 
@@ -380,8 +384,12 @@ class RealignCommand extends Command
 
             $this->writeFiles($output, $step);
         } else {
-            $output->writeln("\n  Ejecuta: ".OutputFormatter::escape((string) $how['command']).($how['available'] ? '' : '  <comment>(no disponible en esta versión: hazlo a mano como describe el paso)</comment>'));
+            $output->writeln("\n  Ejecuta: ".OutputFormatter::escape((string) $how['command']).' (primero con --dry-run)'.($how['available'] ? '' : '  <comment>(no disponible en esta versión: hazlo a mano como describe el paso)</comment>'));
             $this->writeFiles($output, $step);
+
+            if (isset($how['fallback'])) {
+                $output->writeln("\n  Lo que la orden salte (y diga por qué) se hace a mano así:\n\n".OutputFormatter::escape((string) $how['fallback']['instructions']));
+            }
         }
 
         $output->writeln("\n  Está hecho cuando ".OutputFormatter::escape(Playbooks::describeCondition((array) $step['done_when'])));
@@ -495,6 +503,17 @@ class RealignCommand extends Command
      */
     private function write(InputInterface $input, OutputInterface $output, string $root, string $action, array $targets): int
     {
+        // apply reescribe código: sin ids, sólo si se pide en voz alta.
+        if ($action === 'apply' && $targets === [] && ! $input->getOption('deterministic')) {
+            return $this->reportFailure($input, $output, 'apply reescribe código: nombra los pasos (larapack:realign apply <id>…) o pide todos los deterministas con --deterministic.',
+                extra: ['format_version' => RealignState::FORMAT_VERSION, 'action' => $action]);
+        }
+
+        if ($action === 'apply' && $targets !== [] && $input->getOption('deterministic')) {
+            return $this->reportFailure($input, $output, '--deterministic es para todos los pasos: no se combina con ids.',
+                extra: ['format_version' => RealignState::FORMAT_VERSION, 'action' => $action]);
+        }
+
         $options = [];
 
         foreach ((array) $input->getOption('option') as $pair) {

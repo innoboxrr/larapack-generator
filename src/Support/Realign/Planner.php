@@ -54,7 +54,7 @@ final class Planner
     /**
      * Y antes de devolver código a sus huecos, además, lo que lo reescribe.
      */
-    private const REWRITES = ['regenerate', 'fix'];
+    private const REWRITES = ['regenerate', 'fix', 'model-lists'];
 
     /**
      * @param  array<string, mixed>  $report
@@ -101,6 +101,11 @@ final class Planner
                 'fix' => $add($type, $scope, (string) $finding['check'], ['finding' => $finding]),
                 default => $add($type, $scope, null, ['finding' => $finding]),
             };
+        }
+
+        // Lo que el contrato tiene que decir y no dice (ForeignKeyPins).
+        foreach (self::listOf($report, 'contract') as $item) {
+            $add((string) $item['type'], (string) $item['scope'], null, ['contract' => $item]);
         }
 
         foreach ((array) ($report['scopes'] ?? []) as $path => $scope) {
@@ -192,6 +197,7 @@ final class Planner
         $files = [];
         $findings = [];
         $unmanaged = [];
+        $contract = [];
 
         foreach ($group['items'] as $item) {
             if (isset($item['file']) && is_array($item['file'])) {
@@ -205,12 +211,17 @@ final class Planner
             if (isset($item['unmanaged']) && is_array($item['unmanaged'])) {
                 $unmanaged[] = array_intersect_key($item['unmanaged'], array_flip(['file', 'kind']));
             }
+
+            if (isset($item['contract']) && is_array($item['contract'])) {
+                $contract[] = array_intersect_key($item['contract'], array_flip(['file', 'model', 'column', 'table', 'on_delete', 'on_update', 'migration']));
+            }
         }
 
         $paths = array_values(array_unique(array_filter([
             ...array_column($files, 'file'),
             ...array_column($findings, 'file'),
             ...array_column($unmanaged, 'file'),
+            ...array_column($contract, 'file'),
         ], 'is_string')));
         sort($paths);
 
@@ -219,16 +230,16 @@ final class Planner
             'type' => $type,
             'category' => $meta['category'],
             'title' => $meta['title'],
-            'description' => self::describe($type, $group['subject'], count($files) + count($findings) + count($unmanaged)),
+            'description' => self::describe($type, $group['subject'], count($files) + count($findings) + count($unmanaged) + count($contract)),
             'scope' => ['package' => $package, 'path' => $scopePath],
             'subject' => $group['subject'],
             'files' => $paths,
             // Lo que hay detrás de cada archivo: su clase, el hallazgo de
             // verify con su mensaje. El JSON lo lee un agente.
-            'details' => ['files' => $files, 'findings' => $findings, 'unmanaged' => $unmanaged],
+            'details' => ['files' => $files, 'findings' => $findings, 'unmanaged' => $unmanaged] + ($contract === [] ? [] : ['contract' => $contract]),
             'risk' => ['level' => $meta['risk'], 'why' => $meta['why']],
             'reversible' => $meta['reversible'],
-            'done_when' => self::doneWhen($type, $group, $paths, $findings, $package),
+            'done_when' => self::doneWhen($type, $group, $paths, $findings, $package, $contract),
             'status' => self::PENDING,
             'history' => [],
         ];
@@ -259,10 +270,22 @@ final class Planner
      * @param  array{id: string, type: string, scope: string, subject: string|null, items: list<array<string, mixed>>}  $group
      * @param  list<string>  $paths
      * @param  list<array<string, mixed>>  $findings
+     * @param  list<array<string, mixed>>  $contract
      * @return array<string, mixed>
      */
-    private static function doneWhen(string $type, array $group, array $paths, array $findings, ?string $package): array
+    private static function doneWhen(string $type, array $group, array $paths, array $findings, ?string $package, array $contract = []): array
     {
+        if ($contract !== []) {
+            return [
+                'kind' => 'foreign-keys',
+                'scope' => $group['scope'],
+                'columns' => array_map(
+                    fn (array $item): array => array_intersect_key($item, array_flip(['model', 'column', 'on_delete', 'on_update'])),
+                    $contract
+                ),
+            ];
+        }
+
         if ($findings !== []) {
             return [
                 'kind' => 'verify',
@@ -459,6 +482,10 @@ final class Planner
             'adopt' => 'archivos iguales a lo que generaría el contrato que el manifiesto da por editados o no conoce',
             'regenerate' => 'archivos sin editar que difieren de lo que genera hoy el contrato, o que el contrato pide y faltan',
             'fix' => "hallazgos de {$subject} que corrige `larapack:fix {$subject}`",
+            'pin-foreign-keys' => 'llaves foráneas cuya acción hacen las migraciones y el contrato no declara',
+            'endpoint-tests' => 'tests de endpoints a los que les faltan pruebas que trae hoy la plantilla',
+            'model-lists' => 'modelos cuyas listas no tienen lo que declara el contrato',
+            'controller-concern' => 'traits de Http/Controllers/Concerns que sólo usan requests',
             'edited-outside' => 'archivos generados editados fuera de sus huecos',
             'unmanaged-http' => 'controladores y archivos de rutas escritos a mano',
             'unmanaged-models' => 'modelos escritos a mano',

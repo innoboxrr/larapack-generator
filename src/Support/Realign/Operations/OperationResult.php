@@ -81,6 +81,20 @@ final class OperationResult
         return $this;
     }
 
+    /**
+     * Suma lo que hizo otra operación (la que delega, como `apply` en
+     * `adopt`).
+     */
+    public function merge(self $other): self
+    {
+        $this->fixed = [...$this->fixed, ...$other->fixed];
+        $this->skipped = [...$this->skipped, ...$other->skipped];
+        $this->unchanged = [...$this->unchanged, ...$other->unchanged];
+        $this->notes = [...$this->notes, ...$other->notes];
+
+        return $this;
+    }
+
     public function hasSkipped(): bool
     {
         return $this->skipped !== [];

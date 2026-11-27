@@ -111,8 +111,7 @@ final class RealignPlanTest extends TestCase
         $this->assertSame('adopt@.', $next['step']['id']);
         $this->assertSame(Planner::PENDING, $next['step']['effective_status']);
         $this->assertSame('larapack:realign adopt adopt@.', $next['how']['command']);
-        // adopt todavía no tiene implementación en el núcleo: se dice.
-        $this->assertFalse($next['how']['available']);
+        $this->assertTrue($next['how']['available']);
         $this->assertSame('larapack:realign check adopt@.', $next['check']);
     }
 
@@ -304,7 +303,8 @@ final class RealignPlanTest extends TestCase
 
         $this->assertSame(Command::SUCCESS, $this->runCommand('larapack:realign', ['action' => 'next', '--root' => $this->project->path]));
         $this->assertStringContainsString('Ejecuta: larapack:realign adopt adopt@.', $this->lastOutput);
-        $this->assertStringContainsString('no disponible en esta versión', $this->lastOutput);
+        $this->assertStringContainsString('(primero con --dry-run)', $this->lastOutput);
+        $this->assertStringNotContainsString('no disponible en esta versión', $this->lastOutput);
 
         $this->assertSame(Command::SUCCESS, $this->runCommand('larapack:realign', ['action' => 'diagnose', '--root' => $this->project->path]));
         $this->assertStringContainsString('format_only', $this->lastOutput);
