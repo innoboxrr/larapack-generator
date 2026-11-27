@@ -434,32 +434,87 @@ final class ControllerShape
      * aviso y no error porque es el patrón de la documentación de Laravel y
      * aparece en proyectos que nunca lo usaron como atajo; con --strict falla.
      *
-     * No se cuenta el que sólo pinta una vista —`return view('welcome');`, el
-     * routes/web.php con el que nace toda aplicación—: equivale a
-     * Route::view() y no tiene dónde esconder lógica. Tampoco los closures de
-     * group(), que agrupan rutas y no son una acción.
+     * Cuando es el fallback de la SPA que escribía laravel-setup <= 7.2.0
+     * (SpaFallback), el mensaje dice que `larapack:fix` lo corrige.
      *
      * @param  list<Finding>  $findings
      */
     private function checkRouteClosures(array &$findings): void
     {
-        foreach ($this->routeFiles() as $file) {
-            foreach (PhpOutline::ofFile($file)->closuresPassedTo(self::ROUTE_METHODS) as $closure) {
-                if ($this->onlyRendersAView($closure)) {
-                    continue;
-                }
-
-                $findings[] = $this->finding(Verifier::WARNING, self::ROUTE_CLOSURE, $this->project->relative($file),
-                    "La ruta de la línea {$closure['line']} lleva su acción en un closure ({$closure['call']}()): es una acción sin controlador, y nada de lo que verify comprueba en los controladores la alcanza. "
-                    .'Llévala a un controlador cuya acción sea `return $request->handle();` con un FormRequest propio (o usa Route::view() si sólo pinta una vista).');
+        foreach ($this->routeClosures() as $file => $closures) {
+            foreach ($closures as ['closure' => $closure, 'spa' => $spa]) {
+                $findings[] = $this->finding(Verifier::WARNING, self::ROUTE_CLOSURE, $this->project->relative($file), self::routeClosureMessage($closure, $spa));
             }
         }
     }
 
     /**
+     * Los closures que `route-closure` marca en cada routes/*.php del proyecto
+     * y de sus paquetes locales, por archivo; también los archivos sin
+     * ninguno, con la lista vacía. `spa` dice si es el fallback de la SPA de
+     * laravel-setup <= 7.2.0, que sólo se reconoce en el routes/web.php de la
+     * raíz: es donde lo escribía, y donde SpaController es de la aplicación.
+     *
+     * @return array<string, list<array{closure: ClosureOutline, spa: bool}>>
+     */
+    public function routeClosures(): array
+    {
+        $result = [];
+        $web = $this->project->root().'/routes/web.php';
+
+        foreach ($this->routeFiles() as $file) {
+            $code = (string) file_get_contents($file);
+            $spa = $file === $web ? SpaFallback::fallback($code) : null;
+            $result[$file] = array_map(
+                fn (array $closure): array => [
+                    'closure' => $closure,
+                    'spa' => $spa !== null && $closure['call'] === 'fallback' && $closure['line'] === $spa['line'],
+                ],
+                self::flaggedClosures($code)
+            );
+        }
+
+        return $result;
+    }
+
+    /**
+     * Los closures con cuerpo que se pasan a una ruta en este código. No se
+     * cuenta el que sólo pinta una vista —`return view('welcome');`, el
+     * routes/web.php con el que nace toda aplicación—: equivale a
+     * Route::view() y no tiene dónde esconder lógica. Tampoco los closures de
+     * group(), que agrupan rutas y no son una acción.
+     *
+     * @return list<ClosureOutline>
+     */
+    public static function flaggedClosures(string $code): array
+    {
+        return array_values(array_filter(
+            PhpOutline::ofCode($code)->closuresPassedTo(self::ROUTE_METHODS),
+            fn (array $closure): bool => ! self::onlyRendersAView($closure)
+        ));
+    }
+
+    /**
+     * El mensaje de `route-closure`, que `larapack:fix route-closure` repite
+     * como razón de lo que no corrige.
+     *
      * @param  ClosureOutline  $closure
      */
-    private function onlyRendersAView(array $closure): bool
+    public static function routeClosureMessage(array $closure, bool $spa): string
+    {
+        $message = "La ruta de la línea {$closure['line']} lleva su acción en un closure ({$closure['call']}()): es una acción sin controlador, y nada de lo que verify comprueba en los controladores la alcanza. ";
+
+        if ($spa) {
+            return $message.'Es el fallback de la SPA que escribía laravel-setup hasta la 7.2.0: larapack:fix lo corrige (`larapack:fix route-closure` lo lleva a SpaController y SpaRequest, como laravel-setup 7.2.1).';
+        }
+
+        return $message.'Llévala a un controlador cuya acción sea `return $request->handle();` con un FormRequest propio (o usa Route::view() si sólo pinta una vista).';
+    }
+
+    /**
+     * @param  ClosureOutline  $closure
+     */
+    private static function onlyRendersAView(array $closure): bool
     {
         $body = $closure['body'];
 

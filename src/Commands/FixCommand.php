@@ -27,6 +27,11 @@ use Symfony\Component\Console\Output\OutputInterface;
  * el bloque setAppends() cuando tienen la forma generada; si no, skipped. La
  * lógica propia que haya alrededor no se pierde.
  *
+ * `route-closure` corrige un solo caso: el fallback de la SPA que escribía
+ * laravel-setup <= 7.2.0 en routes/web.php, que pasa a SpaController y
+ * SpaRequest como en laravel-setup 7.2.1 (SpaFallback). Cualquier otro
+ * closure de las rutas se salta con el mensaje de `verify`.
+ *
  * --package (repetible) acota a un paquete local —por su directorio en
  * packages/ o su nombre de Composer— o a `app`, el núcleo: lo que no cuelga de
  * ningún paquete. Se combina con --path.
@@ -52,8 +57,8 @@ class FixCommand extends Command
         $this->addRootOption();
 
         $this->setName('larapack:fix')
-            ->setDescription('Corrige de forma determinista la deuda de seguridad que verify marca en lo generado con versiones anteriores')
-            ->addArgument('checks', InputArgument::IS_ARRAY | InputArgument::REQUIRED, 'Qué corregir: '.implode(', ', LegacySecurity::CHECKS))
+            ->setDescription('Corrige de forma determinista la deuda que verify marca en lo generado con versiones anteriores (y el fallback de la SPA de laravel-setup <= 7.2.0)')
+            ->addArgument('checks', InputArgument::IS_ARRAY | InputArgument::REQUIRED, 'Qué corregir: '.implode(', ', LegacyFix::CHECKS))
             ->addOption('dry-run', null, InputOption::VALUE_NONE, 'Muestra el diff de cada archivo sin escribir nada')
             ->addOption('format', null, InputOption::VALUE_REQUIRED, 'Formato de salida: txt o json', 'txt')
             ->addOption('path', null, InputOption::VALUE_REQUIRED, 'Sólo lo que cuelga de este subdirectorio de la raíz (p. ej. packages/school-library)')
@@ -65,12 +70,12 @@ class FixCommand extends Command
         $this->applyRootOption($input);
 
         $checks = array_values(array_unique((array) $input->getArgument('checks')));
-        $unknown = array_diff($checks, LegacySecurity::CHECKS);
+        $unknown = array_diff($checks, LegacyFix::CHECKS);
 
         if ($unknown !== []) {
             return $this->reportFailure($input, $output,
                 'Corrección desconocida: '.implode(', ', $unknown).'.',
-                'Disponibles: '.implode(', ', LegacySecurity::CHECKS).'.');
+                'Disponibles: '.implode(', ', LegacyFix::CHECKS).'.');
         }
 
         $path = $input->getOption('path');

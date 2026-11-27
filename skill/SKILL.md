@@ -522,7 +522,11 @@ Y en **todos** los controladores, generados o no, con o sin manifiesto:
   `larapack:hand-rolled approve` o `revoke` —la guardia lo bloquea—. Devuelve la acción a
   `return $request->handle();` o díselo al dueño. `larapack:hand-rolled list`
   sí puedes correrlo.
-- **`route-closure`** (aviso): una ruta con un closure con cuerpo.
+- **`route-closure`** (aviso): una ruta con un closure con cuerpo. Si el
+  mensaje dice «larapack:fix lo corrige», es el fallback de la SPA de
+  laravel-setup <= 7.2.0: corre `larapack:fix route-closure` (crea SpaController
+  y SpaRequest como laravel-setup 7.2.1); no lo reescribas a mano. Los demás
+  closures los llevas tú a un controlador que delega.
 - **`index-managed`** y **`resource-appends`** (aviso): una request que lista sin
   forzar `managed`, o un Resource que pasa `appends` del cliente sin
   `$appendable`. Es código de antes de 9.0: no lo copies, y no lo edites
