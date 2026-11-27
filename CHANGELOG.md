@@ -50,6 +50,24 @@ Al actualizar: un método que devuelve por referencia y estaba aprobado en
 `Clase::metodo`, con otra huella: la aprobación vieja sale como sobrante y el
 método vuelve a pedir la del dueño.
 
+### El hook previo ya no escribe «Broken pipe»
+
+El hook `PreToolUse` que instala `larapack:skill --hooks` le pasa la entrada a
+PHP con `printf … |`, y comprobaba que existiera `vendor/bin/builder` (o
+`vendor/autoload.php`) *dentro* de la tubería. Sin `vendor/`, el lado que lee
+salía sin leer; si salía antes de que printf escribiera, la shell añadía
+`printf: write error: Broken pipe` a la salida del hook. Con una orden corta
+era una carrera —el test `AgentHooksTest` que fallaba de vez en cuando—, y con
+una entrada mayor que el búfer de la tubería, siempre. Ahora la comprobación va
+delante de la tubería, y el error de escritura de printf (que aquí sólo puede
+ser esa tubería cerrada) va a `/dev/null`: lo que cuenta es lo que dice PHP y
+su código de salida. El test nuevo lo prueba con 256 KiB de entrada, sin
+builder y con uno que sale sin leer, y repite la orden corta veinticinco veces.
+
+Al actualizar: un hook ya instalado se reconoce y no se reescribe. Para tener
+el nuevo, quita el grupo `PreToolUse` de LaraPack de `.claude/settings.json` y
+vuelve a correr `larapack:skill --hooks`.
+
 ## 9.1.0
 
 Una menor: la CI pasa a ser la barrera de la arquitectura y las excepciones
