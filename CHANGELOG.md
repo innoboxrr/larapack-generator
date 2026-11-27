@@ -24,37 +24,50 @@ prueba en `StaticAnalysisRegressionTest`:
   manifiesto. Hacer que devolviera `''` habría sido peor —se probó—: el modelo
   salía en el namespace global (`namespace Models;`) y la factoría escribía
   `Database\Factories\` sin el prefijo del paquete en su `composer.json`, con
-  el comando en 0. Ahora es una `MakerException` que dice qué falta.
+  el comando en 0. Ahora es una `MakerException` que dice qué falta. La
+  entrada se lee como la lee Composer: la ruta sin barra final (`"src"`) y una
+  lista de rutas (`["lib/", "src/"]`) valen —en 9.1 tampoco se reconocían—; el
+  prefijo vacío (`""`) también lo acepta Composer, pero es el namespace global
+  y se rechaza con su propio mensaje.
 - **Un `composer.json` roto en una aplicación** se leía como vacío, es decir,
   como un paquete con destino `src/`. Ahora falla igual que en un paquete,
   antes de escribir nada.
 - **Un modelo o un pivote que el laraimport no declara**, con el importador
   activo, acababa en un TypeError sin contexto; ahora dice cuál falta.
-- **`larapack:fix` dejaba en `fixed` el segundo de dos arreglos del mismo
-  archivo** cuando lo formateado no parseaba y se devolvía el original (quitaba
-  por índice mientras reindexaba). Las pruebas están en
-  `FixLegacySecurityTest`: un Pint que rompe lo que toca fuerza ese camino.
 
-Y otros que eran frágiles: un archivo que no se podía leer, o una expresión
-regular que fallaba, se reescribía vacío; y donde una lectura decide algo —el
-manifiesto, el hash de un archivo, el esquema, `ecosystem.json`— un `false`
-pasaba por `''`: un manifiesto ilegible parecía vacío y un archivo ilegible,
-editado a mano. Ahora esas lecturas van por `Files::read`, que falla.
+Y otros que eran frágiles. `revert()` de `larapack:fix` (`LegacyFix`) no
+dependía de que `plan()` anote cada archivo una vez, y debía: quitaba por
+índice mientras reindexaba, así que con dos arreglos del mismo archivo dejaba
+el segundo en `fixed` al devolver el original. Hoy `plan()` anota cada archivo
+una vez y el caso no se alcanza; ahora tampoco depende de ello. Las pruebas
+están en `FixLegacySecurityTest`: la de los dos arreglos fuerza ese estado por
+reflexión, y la de un Pint falso que rompe lo que toca cubre la reversión de
+punta a punta, con un arreglo por archivo.
+
+Además, un archivo que no se podía leer, o una expresión regular que fallaba,
+se reescribía vacío; y donde una lectura decide algo —el manifiesto, el hash
+de un archivo, el esquema, `ecosystem.json`— un `false` pasaba por `''`: un
+manifiesto ilegible parecía vacío y un archivo ilegible, editado a mano. Ahora
+esas lecturas van por `Files::read`, que falla con la ruta en el mensaje
+(`FilesTest`: un archivo que no existe y un directorio).
 `full-model`, `remove-full-model` y `providers` instanciaban las herramientas
 por reflexión y llamaban a `create()` sobre un `object`; ahora las de un modelo
 implementan `ModelArtifact` y las del paquete, `PackageArtifact`, y
 `Artifacts` falla si un nombre de la lista no resuelve a una de ellas, en vez
-de saltársela en silencio (`ArtifactsTest` recorre las tres listas).
+de saltársela en silencio (`ArtifactsTest` recorre las tres listas, y prueba
+un nombre que no existe y una clase que existe sin el contrato, de herramienta
+y de proveedor).
 
 Con un `composer.json` válido y su PSR-4, nada cambia en lo que se genera: las
 fotos y la suite siguen idénticas.
 
-**Por qué no el 9.** El nivel 9 da 606 errores, y casi todos vienen de lo
-mismo: el laraimport, `ecosystem.json` y las opciones de consola llegan como
-`mixed`, y el código los lee sabiendo que el esquema ya los validó. Subirlo de
-verdad es declarar la forma del documento validado (`@phpstan-type` por
-modelo, propiedad, relación y endpoint) en el único punto donde el esquema la
-garantiza; anotarlo línea a línea sería callarlo.
+**Por qué no el 9.** El nivel 9 da unos 600 errores (605 medidos con PHP 8.3
+al cerrar la ronda), y casi todos vienen de lo mismo: el laraimport,
+`ecosystem.json` y las opciones de consola llegan como `mixed`, y el código
+los lee sabiendo que el esquema ya los validó. Subirlo de verdad es declarar la
+forma del documento validado (`@phpstan-type` por modelo, propiedad, relación y
+endpoint) en el único punto donde el esquema la garantiza; anotarlo línea a
+línea sería callarlo.
 
 `tests/` no entra en el análisis: en el nivel 5 da 41 errores y casi todos son
 clases que sólo existen en tiempo de ejecución —lo que el generador escribe en
@@ -65,16 +78,25 @@ un proyecto temporal y luego se carga—, que habría que callar una a una.
 El aviso `verify-job` se daba a todo paquete que tuviera LaraPack en
 `composer.json`, y muchos lo tienen en `require-dev` sólo para correr
 `larapack:audit`: no generan nada, y su `verify --strict` fallaría con
-`empty-manifest`. Les pedía una puerta que estaría siempre en rojo (24 paquetes
-del ecosistema). Ahora sólo se pide a quien genera con LaraPack: tiene
-`.larapack/manifest.json` o `laraimport.json`. Está en `AuditTest`.
+`empty-manifest`. Les pedía una puerta que estaría siempre en rojo. Ahora sólo
+se pide a quien genera con LaraPack, y con la misma vara que usa verify para
+no dar `empty-manifest`: su `.larapack/manifest.json` registra modelos o
+archivos del paquete, o su `laraimport.json` declara algún modelo. Que el
+archivo exista no basta: un manifiesto sin nada registrado o un laraimport sin
+modelos también darían `empty-manifest`. Un laraimport con modelos que aún no
+se importó sí recibe el aviso: ahí el rojo de verify es real. Está en
+`AuditTest`. Cuántos paquetes del ecosistema dejan de recibirlo no se midió
+aquí: el ecosistema no está en este repositorio.
 
 ### Al actualizar
 
 - **Un proyecto sin `autoload.psr-4` hacia `src/` (o `app/`), o con un
   `composer.json` que no es JSON válido, ya no genera**: falla con un mensaje.
   En 9.1 tampoco generaba nada correcto (acababa en un TypeError); añade la
-  entrada (`"Acme\\Blog\\": "src/"`) y vuelve a ejecutar.
+  entrada (`"Acme\\Blog\\": "src/"`) y vuelve a ejecutar. La ruta sin barra
+  final (`"src"`) o dentro de una lista de rutas vale igual. **Si la única
+  entrada que apunta a `src/` es la del prefijo vacío (`""`)**, también falla:
+  antes se generaba en el namespace global; dale un namespace con nombre.
 - **Rompe si extiendes `Tool` fuera del generador**, aunque sea una menor. Las
   herramientas no se pensaron como punto de extensión, pero nada lo impedía:
   los métodos de `Tool` llevan ahora tipos nativos y una subclase que

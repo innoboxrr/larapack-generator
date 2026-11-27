@@ -53,9 +53,18 @@ class MakerException extends Exception
     /**
      * Sin el namespace no hay nada correcto que generar: el modelo saldría en
      * el namespace global y el PSR-4 de las factorías, sin el del paquete.
+     *
+     * Con `$onlyGlobal`, la única entrada que apunta al directorio es la del
+     * prefijo vacío (""): Composer la acepta, pero no da namespace.
      */
-    public static function missingNamespace(string $file, string $directory): self
+    public static function missingNamespace(string $file, string $directory, bool $onlyGlobal = false): self
     {
-        return new self("{$file} no declara en `autoload.psr-4` ningún namespace para {$directory}/, y es el namespace de todo lo que se genera. Añádelo (por ejemplo, \"Acme\\\\Blog\\\\\": \"{$directory}/\") y vuelve a ejecutar.");
+        $example = "(por ejemplo, \"Acme\\\\Blog\\\\\": \"{$directory}/\")";
+
+        if ($onlyGlobal) {
+            return new self("{$file} sólo apunta a {$directory}/ desde el prefijo vacío (\"\") de `autoload.psr-4`, que es el namespace global, y lo generado necesita uno propio. Añádelo {$example} y vuelve a ejecutar.");
+        }
+
+        return new self("{$file} no declara en `autoload.psr-4` ningún namespace que apunte a {$directory}/ (ni como cadena ni en una lista de rutas), y es el namespace de todo lo que se genera. Añádelo {$example} y vuelve a ejecutar.");
     }
 }

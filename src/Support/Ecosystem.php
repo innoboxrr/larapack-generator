@@ -190,12 +190,17 @@ final class Ecosystem
      * Un paquete que genera con LaraPack y cuya CI no corre `larapack:verify
      * --strict`: el contrato depende de que alguien se acuerde de correrlo.
      *
-     * Genera con LaraPack si tiene manifiesto (`.larapack/manifest.json`) o
-     * laraimport (`laraimport.json`). Pedirlo en composer.json no basta: muchos
-     * paquetes del ecosistema lo tienen en require-dev sólo para correr
-     * `larapack:audit`, no generan nada, y su `verify --strict` fallaría con
-     * `empty-manifest`; pedirles el job era pedirles una puerta siempre en
-     * rojo. Se buscan las líneas de los workflows, sin comentarios, que llamen
+     * Genera con LaraPack si su manifiesto registra algo —modelos o archivos
+     * del paquete, lo mismo que mira `verify` para no dar `empty-manifest`— o
+     * si su laraimport declara algún modelo. Pedirlo en composer.json no
+     * basta: muchos paquetes del ecosistema lo tienen en require-dev sólo para
+     * correr `larapack:audit`, no generan nada, y su `verify --strict`
+     * fallaría con `empty-manifest`; pedirles el job era pedirles una puerta
+     * siempre en rojo. Por lo mismo no basta con que los archivos existan: un
+     * manifiesto sin nada registrado o un laraimport sin modelos también dan
+     * `empty-manifest`. Un laraimport con modelos y sin importar sí se avisa:
+     * ahí el rojo de verify es real, el contrato declara lo que no se generó.
+     * Se buscan las líneas de los workflows, sin comentarios, que llamen
      * a verify con --strict; el nombre del job no se mira, porque cualquier job
      * que lo corra hace de puerta.
      *
@@ -210,7 +215,7 @@ final class Ecosystem
      */
     private function auditVerifyJob(string $directory, string $name): array
     {
-        if (! is_file("{$directory}/.larapack/manifest.json") && ! is_file("{$directory}/laraimport.json")) {
+        if (! $this->generatesWithLarapack($directory)) {
             return [];
         }
 
@@ -229,6 +234,23 @@ final class Ecosystem
             : 'Está en packages/ de '.basename($host).', y ningún workflow de esa raíz corre `larapack:verify --strict`: el contrato no es una puerta de la rama. El job va en la raíz (`larapack:ci` allí), cuyo verify recorre también packages/* con un solo candado; no hace falta un larapack.yml ni un candado por paquete.';
 
         return [$this->finding(self::WARNING, 'verify-job', $name, $message)];
+    }
+
+    /**
+     * Si hay algo que `verify` comprobaría: lo registrado en el manifiesto
+     * (leído con Manifest, como lo lee verify) o los modelos del laraimport.
+     */
+    private function generatesWithLarapack(string $directory): bool
+    {
+        $manifest = new Manifest($directory);
+
+        if ($manifest->models() !== [] || $manifest->packageFiles() !== []) {
+            return true;
+        }
+
+        $models = $this->readJson("{$directory}/laraimport.json")['models'] ?? null;
+
+        return is_array($models) && $models !== [];
     }
 
     /**

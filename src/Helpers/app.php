@@ -68,7 +68,12 @@ if (! function_exists('get_namespace')) {
     /**
      * El namespace PSR-4 que apunta a src/ o app/, con su separador final.
      *
-     * Sin ninguno no hay namespace que dar, y se falla. En 9.1 devolvía null y
+     * Se lee como lo lee Composer: la ruta puede ir sin barra final («src») o
+     * ser una lista de rutas («["lib/", "src/"]»); basta con que una apunte al
+     * directorio. El prefijo vacío ("") también lo acepta Composer, pero no
+     * es un namespace que dar: lo generado acabaría en el global.
+     *
+     * Sin ninguno no hay namespace, y se falla. En 9.1 devolvía null y
      * reventaba más abajo con un TypeError; devolver '' era peor: el modelo
      * salía en el namespace global (`namespace Models;`) y la factoría
      * escribía `Database\Factories\` sin el del paquete en su composer.json.
@@ -77,14 +82,40 @@ if (! function_exists('get_namespace')) {
     {
         $directory = app_dir_name();
         $psr4 = root_composer_json()['autoload']['psr-4'] ?? [];
+        $onlyGlobal = false;
 
-        foreach (is_array($psr4) ? $psr4 : [] as $key => $path) {
-            if (is_string($key) && $key !== '' && is_string($path) && strpos($path, $directory.'/') !== false) {
-                return $key;
+        foreach (is_array($psr4) ? $psr4 : [] as $key => $paths) {
+            if (! is_string($key) || ! psr4_points_to($paths, $directory)) {
+                continue;
+            }
+
+            if ($key === '') {
+                $onlyGlobal = true;
+
+                continue;
+            }
+
+            return $key;
+        }
+
+        throw MakerException::missingNamespace(root_path().'/composer.json', $directory, $onlyGlobal);
+    }
+}
+
+if (! function_exists('psr4_points_to')) {
+    /**
+     * Si una entrada PSR-4 —una ruta o una lista de rutas— apunta al
+     * directorio. La barra final se normaliza: Composer acepta «src» y «src/».
+     */
+    function psr4_points_to(mixed $paths, string $directory): bool
+    {
+        foreach (is_array($paths) ? $paths : [$paths] as $path) {
+            if (is_string($path) && strpos(rtrim($path, '/').'/', $directory.'/') !== false) {
+                return true;
             }
         }
 
-        throw MakerException::missingNamespace(root_path().'/composer.json', $directory);
+        return false;
     }
 }
 

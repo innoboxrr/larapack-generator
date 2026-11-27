@@ -190,7 +190,10 @@ prefijo de las vistas de exportación (`Tool::init`). Los dos leen `composer.jso
 con `root_composer_json()`, que falla si no se puede leer o no es un objeto
 JSON, y `get_namespace()` falla si ningún `autoload.psr-4` apunta a ese
 directorio: sin namespace, lo generado acababa en el global
-(`namespace Models;`). `Tool::init` los llama antes de escribir nada.
+(`namespace Models;`). La entrada se lee como la lee Composer —con o sin barra
+final, o dentro de una lista de rutas (`psr4_points_to()`)—, y el prefijo vacío
+(`""`) no cuenta: es el namespace global. `Tool::init` los llama antes de
+escribir nada.
 
 ---
 

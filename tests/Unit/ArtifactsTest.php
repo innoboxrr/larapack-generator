@@ -93,12 +93,25 @@ final class ArtifactsTest extends TestCase
         Artifacts::model('PivotMigration');
     }
 
-    public function test_un_proveedor_sin_el_contrato_falla(): void
+    public function test_un_proveedor_que_no_existe_falla(): void
     {
         $this->expectException(LogicException::class);
         $this->expectExceptionMessage('no existe');
 
         Artifacts::provider('Ghost');
+    }
+
+    /**
+     * La clase existe donde se busca, pero no implementa PackageArtifact.
+     */
+    public function test_un_proveedor_sin_el_contrato_falla(): void
+    {
+        require_once dirname(__DIR__).'/Fixtures/artifacts/NotAnArtifactServiceProviderTool.php';
+
+        $this->expectException(LogicException::class);
+        $this->expectExceptionMessage('no implementa '.PackageArtifact::class);
+
+        Artifacts::provider('NotAnArtifact');
     }
 
     /**

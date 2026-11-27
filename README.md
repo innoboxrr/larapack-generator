@@ -1814,10 +1814,12 @@ una cuenta que no sea la del único dueño de código. `--no-enforce-admins` dej
 `false`, con aviso.
 
 `larapack:audit` avisa con `verify-job` si la CI de un paquete que genera con
-LaraPack (tiene `.larapack/manifest.json` o `laraimport.json`) no corre
+LaraPack (su `.larapack/manifest.json` registra modelos o archivos del paquete,
+o su `laraimport.json` declara algún modelo) no corre
 `larapack:verify --strict`; uno en `packages/` de un repositorio cuya raíz ya
-lo corre no avisa, y uno que sólo lo tiene en `require-dev` para auditar,
-tampoco.
+lo corre no avisa, y uno que sólo lo tiene en `require-dev` para auditar, o
+con un manifiesto o un laraimport vacíos —su `verify --strict` daría
+`empty-manifest`—, tampoco.
 
 ---
 

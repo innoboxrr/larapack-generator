@@ -7,6 +7,7 @@ use Innoboxrr\LarapackGenerator\Tests\Support\FakeProject;
 use Innoboxrr\LarapackGenerator\Tests\TestCase;
 use Innoboxrr\LarapackGenerator\Tools\Model\ModelTool;
 use Innoboxrr\LarapackGenerator\Tools\Tool;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Symfony\Component\Console\Command\Command;
 
 /**
@@ -74,7 +75,7 @@ final class StaticAnalysisRegressionTest extends TestCase
             $this->runCommand('larapack:factory', ['name' => 'Post']);
             $this->fail('Se esperaba que fallara sin namespace PSR-4.');
         } catch (MakerException $e) {
-            $this->assertStringContainsString('no declara en `autoload.psr-4` ningún namespace para src/', $e->getMessage());
+            $this->assertStringContainsString('no declara en `autoload.psr-4` ningún namespace que apunte a src/', $e->getMessage());
         }
 
         $this->assertSame($composer, $this->project->read('composer.json'));
@@ -103,13 +104,70 @@ final class StaticAnalysisRegressionTest extends TestCase
             $this->runCommand('larapack:full-model', ['name' => 'Post']);
             $this->fail('Se esperaba que fallara sin namespace PSR-4 para src/.');
         } catch (MakerException $e) {
-            $this->assertStringContainsString('ningún namespace para src/', $e->getMessage());
+            $this->assertStringContainsString('ningún namespace que apunte a src/', $e->getMessage());
         }
 
         $this->assertSame($composer, $this->project->read('composer.json'));
         $this->assertFalse($this->project->has('src'));
         $this->assertFalse($this->project->has('database'));
         $this->assertFalse($this->project->has('.larapack'));
+    }
+
+    /**
+     * Composer acepta la ruta sin barra final y una lista de rutas; leerlas
+     * sólo como «src/» en una cadena hacía fallar diciendo que no había
+     * namespace a quien sí lo declaraba.
+     *
+     * @return array<string, array{0: array<string, mixed>, 1: string}>
+     */
+    public static function psr4Accepted(): array
+    {
+        return [
+            'con barra' => [['Acme\\Blog\\' => 'src/'], 'Acme\\Blog\\'],
+            'sin barra' => [['Acme\\Blog\\' => 'src'], 'Acme\\Blog\\'],
+            'en una lista' => [['Acme\\Blog\\' => ['lib/', 'src']], 'Acme\\Blog\\'],
+            'el vacío no tapa al que tiene nombre' => [['' => 'src/', 'Acme\\Blog\\' => 'src/'], 'Acme\\Blog\\'],
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $psr4
+     */
+    #[DataProvider('psr4Accepted')]
+    public function test_el_namespace_se_lee_como_lo_lee_composer(array $psr4, string $expected): void
+    {
+        $this->useProject(FakeProject::library('Acme\\Blog\\'));
+        $this->writeComposer(['name' => 'acme/blog', 'type' => 'library', 'autoload' => ['psr-4' => $psr4]]);
+
+        $this->assertSame($expected, get_namespace());
+    }
+
+    /**
+     * De punta a punta: con la ruta sin barra se genera en el namespace del
+     * paquete, no se falla.
+     */
+    public function test_genera_con_una_ruta_psr4_sin_barra_final(): void
+    {
+        $this->useProject(FakeProject::library('Acme\\Blog\\'));
+        $this->writeComposer(['name' => 'acme/blog', 'type' => 'library', 'autoload' => ['psr-4' => ['Acme\\Blog\\' => 'src']]]);
+
+        $this->assertSame(Command::SUCCESS, $this->runCommand('larapack:model', ['name' => 'Post']), $this->lastOutput);
+        $this->assertStringContainsString('namespace Acme\\Blog\\Models;', $this->project->read('src/Models/Post.php'));
+    }
+
+    /**
+     * El prefijo vacío lo acepta Composer, pero es el namespace global: se
+     * falla, y el mensaje dice eso, no que falta la entrada.
+     */
+    public function test_el_prefijo_vacio_no_es_un_namespace(): void
+    {
+        $this->useProject(FakeProject::library('Acme\\Blog\\'));
+        $this->writeComposer(['name' => 'acme/blog', 'type' => 'library', 'autoload' => ['psr-4' => ['' => 'src/']]]);
+
+        $this->expectException(MakerException::class);
+        $this->expectExceptionMessage('sólo apunta a src/ desde el prefijo vacío ("")');
+
+        get_namespace();
     }
 
     /**
@@ -177,5 +235,13 @@ final class StaticAnalysisRegressionTest extends TestCase
             Tool::setFromJsonImporter(false);
             Tool::setJsonContent([]);
         }
+    }
+
+    /**
+     * @param  array<string, mixed>  $composer
+     */
+    private function writeComposer(array $composer): void
+    {
+        file_put_contents($this->project->path.'/composer.json', json_encode($composer, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
     }
 }
