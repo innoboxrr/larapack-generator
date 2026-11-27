@@ -1,5 +1,93 @@
 # Changelog
 
+## 9.4.0 (sin publicar)
+
+### `larapack:realign`: el núcleo del realineamiento
+
+Llevar de vuelta al contrato un proyecto que empezó (o no) con LaraPack y se
+desvió, sin reconstruirlo y sin escribir un prompt por proyecto. La guía para
+quien lo ejecuta, persona o agente, está en
+[docs/realign/README.md](docs/realign/README.md); cómo está hecho y dónde se
+extiende, en [ARCHITECTURE.md](ARCHITECTURE.md#realign).
+
+Un solo comando con la acción como argumento, como `larapack:hand-rolled`:
+
+```bash
+larapack:realign diagnose [--package=…] [--jobs=4] [--no-cache]
+larapack:realign plan
+larapack:realign status
+larapack:realign next
+larapack:realign check <id>
+larapack:realign decide <id> <opción> --note="…"
+larapack:realign adopt|apply|infer|except [<id>…] [--dry-run] [--allow-dirty] [--option clave=valor]
+```
+
+- **`diagnose`** regenera el contrato de cada ámbito —la raíz y cada paquete
+  local con contrato o manifiesto— con la versión actual en
+  `.larapack/realign/cache/`, en procesos hijos (`--jobs`), con la Pint y el
+  `pint.json` del proyecto y caché por hash. Compara archivo por archivo y
+  clasifica: `identical`, `format_only` (espacios, coma final, orden de
+  imports, lo que cambia Pint; el mismo código con otros comentarios, marcado),
+  `version_delta`, `hole_edited`, `edited_outside` (con las piezas que
+  difieren), `missing`, `renamed`, `not_regenerated`, `migration_history` y
+  `untracked`. Lista los controladores, rutas y modelos escritos a mano,
+  cuenta el resto del código que no es de LaraPack y corre `verify` sobre todo
+  el proyecto. Todo, en cuatro categorías: `deterministic`, `guided`,
+  `decision` y `out_of_scope`. No escribe código.
+- **`plan`** lo convierte en pasos con id estable, riesgo con su razón, si se
+  deshacen, la orden, el playbook o las opciones, y un `done_when` concreto.
+  Primero lo que desbloquea (manifiesto, formato, saltos de versión, `fix`),
+  luego lo guiado del paquete que más cumple al que menos, al final las
+  decisiones agrupadas. Volver a planificar conserva lo hecho y lo decidido.
+- **`next`** da el siguiente paso con todo para hacerlo sin contexto: los
+  pasos guiados traen su playbook del paquete
+  (`resources/realign/playbooks/`) rellenado con sus archivos, hallazgos y
+  órdenes. **`check`** corre su `done_when` (verify acotado, la misma
+  clasificación, el código sin gestionar, el contrato) y es lo único que da un
+  paso por hecho. **`decide`** registra una decisión con su nota.
+- **Las operaciones que escriben** tienen su contrato
+  (`RealignOperation`) y se enchufan por convención; mientras no tengan
+  implementación lo dicen. Lo común lo hace el núcleo: árbol git limpio (salvo
+  `--allow-dirty`), `--dry-run`, pasos que la operación sabe hacer y no
+  bloqueados, informe `fixed`/`skipped`/`unchanged` e historia del paso.
+- **Las excepciones aprobadas** (`.larapack/realign/exceptions.json`, con
+  razón obligatoria) dejan de proponerse.
+- Toda salida `--format=json` y los archivos de estado llevan
+  `format_version` (1).
+
+Ensayado sobre copias, sin tocar los originales:
+
+| | school-management (82 ámbitos) | expediente (7.x) | brandai (sin contrato) |
+|---|---|---|---|
+| Tiempo de `diagnose` (4 procesos) | 283 s; 116 s con la caché | 128 s | 3 s |
+| Archivos clasificados | 22 846 | 3 550 | — |
+| Idénticos y con el manifiesto al día | 14 682 | 930 | — |
+| `adopt` (iguales a lo regenerado, manifiesto viejo) | 3 481 + 159 sólo formato | 1 914 | — |
+| `version_delta` | 983 | 38 | — |
+| `hole_edited` | 2 239 | 255 | — |
+| `edited_outside` | 404 (297 son el `managed` que paga `fix index-managed`) | 247 (61 notificaciones de exportación con el mismo parche, 60 exportaciones, 47 modelos) | — |
+| `missing` / `prune` | 9 / 2 | 0 / 94 (StaffMember retirado y 41 alteraciones) | — |
+| `not_regenerated` / `migration_history` | 596 / 207 | 6 / 65 | — |
+| Código sin gestionar | 354 controladores, 280 archivos de rutas | 77 controladores, 67 modelos, 6 de rutas | 250 controladores, 205 modelos, 41 de rutas |
+| Pasos del plan | 566 | 96 (77 controladores) | 208 (196 controladores) |
+
+Cuadra con los informes de viabilidad: los 983 saltos de versión y los 596 de
+proveedores y configuración de school-management salen exactos, y los 1 914
+de expediente que sólo eran formato, también.
+
+### El manifiesto pasa a la versión 2
+
+Cada archivo dice qué versión del generador lo escribió (`generator`) y, si se
+adoptó en vez de generarse, `state: adopted`. Un manifiesto de la versión 1 se
+sigue leyendo igual y la siguiente escritura lo deja en la 2; uno de una
+versión posterior no se reescribe. Nuevas primitivas: `Manifest::adopt`,
+`relink`, `drop`, `entryOf` y `formatVersion`.
+
+- **Al actualizar.** La primera vez que algo escribe el manifiesto lo pasa a
+  la versión 2 y anota `generator` en los archivos que escribe; los demás
+  siguen sin versión, y el diagnóstico los trata como de una versión
+  anterior.
+
 ## 9.3.1
 
 ### Migraciones: se leen todas antes de escribir ninguna
