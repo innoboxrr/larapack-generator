@@ -18,7 +18,7 @@ namespace Innoboxrr\LarapackGenerator\Support;
  * @phpstan-type Token array{0: int|string, 1: string, 2: int}
  * @phpstan-type AttributeOutline array{name: string, line: int, args: list<Token>|null}
  * @phpstan-type ParameterOutline array{name: string, type: string|null, raw: string}
- * @phpstan-type MethodOutline array{name: string, line: int, visibility: string, static: bool, attributes: list<AttributeOutline>, params: list<ParameterOutline>, signature: list<Token>, body: list<Token>|null}
+ * @phpstan-type MethodOutline array{name: string, line: int, visibility: string, static: bool, byRef: bool, attributes: list<AttributeOutline>, params: list<ParameterOutline>, signature: list<Token>, body: list<Token>|null}
  * @phpstan-type ClassOutline array{kind: string, name: string, fqcn: string, line: int, abstract: bool, extends: string|null, traits: list<string>, attributes: list<AttributeOutline>, methods: list<MethodOutline>}
  * @phpstan-type ClosureOutline array{call: string, line: int, arrow: bool, params: list<Token>, body: list<Token>}
  *
@@ -69,7 +69,11 @@ final class PhpOutline
 
         foreach (token_get_all($code) as $token) {
             if (is_array($token)) {
-                $line = $token[2];
+                // Un token de un carácter no trae su línea: es la del token
+                // anterior más los saltos que éste contenga. Un espacio que
+                // cruza de línea deja el `;` o el `(` que lo sigue en la
+                // siguiente, no en la suya.
+                $line = $token[2] + substr_count($token[1], "\n");
 
                 if (! in_array($token[0], self::IGNORED, true)) {
                     $this->tokens[] = [$token[0], $token[1], $token[2]];
@@ -421,9 +425,9 @@ final class PhpOutline
             return;
         }
 
+        // Lo que sigue hasta el `;` lo recorre parseFile() sin registrar nada:
+        // ni un nombre ni unas llaves de grupo cambian su estado.
         if (in_array($this->tokens[$this->i][0] ?? null, [T_FUNCTION, T_CONST], true)) {
-            $this->skipTo(';');
-
             return;
         }
 
@@ -662,7 +666,14 @@ final class PhpOutline
         $line = $this->tokens[$this->i][2];
         $this->i++;
 
-        if (($this->tokens[$this->i][0] ?? null) === '&') {
+        // `function &items()`: desde PHP 8.1 el `&` es un token con nombre
+        // (T_AMPERSAND_NOT_FOLLOWED_BY_VAR_OR_VARARG), no el carácter suelto.
+        // Compararlo con '&' no lo saltaba, y el método se llamaba `&`. Se
+        // salta, pero se apunta: devolver por referencia es parte de lo que
+        // se aprueba (HandRolledLock::method()).
+        $byRef = ($this->tokens[$this->i][0] ?? null) === T_AMPERSAND_NOT_FOLLOWED_BY_VAR_OR_VARARG;
+
+        if ($byRef) {
             $this->i++;
         }
 
@@ -702,6 +713,7 @@ final class PhpOutline
             'line' => $line,
             'visibility' => $visibility,
             'static' => in_array('static', $modifiers, true),
+            'byRef' => $byRef,
             'attributes' => $attributes,
             'params' => $params,
             'signature' => $signature,
@@ -810,16 +822,5 @@ final class PhpOutline
         }
 
         return $inner;
-    }
-
-    private function skipTo(string $token): void
-    {
-        $count = count($this->tokens);
-
-        while ($this->i < $count && $this->tokens[$this->i][0] !== $token) {
-            $this->i++;
-        }
-
-        $this->i++;
     }
 }

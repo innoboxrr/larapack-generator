@@ -16,11 +16,12 @@ silencio lo que ya está generado.
 3. [Las fotos de lo generado](#las-fotos-de-lo-generado)
 4. [Las pruebas de punta a punta](#las-pruebas-de-punta-a-punta)
 5. [Formato y análisis estático](#formato-y-análisis-estático)
-6. [Cómo se escribe aquí](#cómo-se-escribe-aquí)
-7. [Commits](#commits)
-8. [Versionar](#versionar)
-9. [Publicar](#publicar)
-10. [El ecosistema](#el-ecosistema)
+6. [Las pruebas de mutación](#las-pruebas-de-mutación)
+7. [Cómo se escribe aquí](#cómo-se-escribe-aquí)
+8. [Commits](#commits)
+9. [Versionar](#versionar)
+10. [Publicar](#publicar)
+11. [El ecosistema](#el-ecosistema)
 
 ---
 
@@ -128,17 +129,185 @@ La primera compilación instala Vite y sus plugins en un directorio del temporal
 del sistema (`larapack-ui-toolchain-*`, y `larapack-esbuild` para el JSX) y lo
 reutiliza en las siguientes: hace falta red una vez.
 
+### La del ecosistema publicado
+
+Las de arriba usan el `vendor/` de este repositorio y una aplicación a medida.
+Ninguna instala LaraPack como lo instala un cliente, junto a lo publicado, y
+por eso el choque entre laravel-setup y la 9.0 lo descubrió un cliente:
+`innoboxrr/laravel-setup` pedía `^7.10 || ^8.0` y Composer no dejaba instalar
+la 9.
+
+[`.github/scripts/ecosystem-e2e.sh`](.github/scripts/ecosystem-e2e.sh) hace lo
+que haría quien empieza una aplicación, con la última laravel-setup publicada
+que cumpla `SETUP_CONSTRAINT` (`^7.2.1` por omisión) y LaraPack **desde este
+checkout**:
+
+1. `composer create-project laravel/laravel` (Laravel 13).
+2. LaraPack como repositorio `path` hecho con `git archive` —como la dist de
+   Packagist: lo que no está comiteado no entra— y con la versión de `VERSION`;
+   laravel-setup fijada a la última versión estable que cumpla
+   `SETUP_CONSTRAINT`, para que Composer no baje en silencio a una más vieja
+   que sí lo admita. Si ninguna la cumple, falla diciéndolo; si hay una más
+   nueva fuera de la restricción, lo avisa (`::warning` en Actions).
+3. `app:setup` (con `--react` según la interfaz) y `app:install --without-build`.
+   Que el LaraPack instalado salga del repositorio `path` con la versión de
+   `VERSION` se mira después del `require`, después de `app:install` y después
+   de `import`: `app:setup` reescribe la restricción de LaraPack en
+   `composer.json` y `app:install` corre `composer update`.
+4. [`ecosystem-e2e.laraimport.json`](.github/scripts/ecosystem-e2e.laraimport.json)
+   añadido al laraimport de laravel-setup: dos modelos con relación, un endpoint
+   de registro, uno público y un `controllers[]`. `validate --strict` e `import`.
+5. `migrate` en SQLite, `route:json`, `npm install` y `npm run build`.
+6. `php artisan test`, contando por archivo que cada test generado se ejecutó
+   (incluidos los de autorización de la 9.1) y que ninguno se salta.
+7. `verify --strict --format=json`, `larapack:ci --dry-run` y la guardia de los
+   hooks con el `artisan` de la aplicación. Estas tres se corren todas aunque
+   falle una. `verify` tiene que salir **limpio**: no hay hallazgos esperados
+   ni excepciones, porque un rojo conocido tapa al siguiente.
+
+Si un paso falla, el script dice qué paquete y por qué: el choque que cita
+Composer, los paquetes de `vendor/innoboxrr/` que aparecen en la traza, el
+paquete npm que no resuelve, o, para cada hallazgo de `verify`, de dónde viene
+el archivo: idéntico a un stub de laravel-setup (lo puso ella), en sus stubs
+pero con otro contenido (lo reescribió LaraPack o la aplicación) o fuera de
+ellos (LaraPack).
+
+Las lecturas —qué versión, de dónde salió LaraPack, el informe JUnit y el de
+`verify`— están en
+[`.github/scripts/ecosystem-e2e-checks.php`](.github/scripts/ecosystem-e2e-checks.php),
+que falla con código 1 y el motivo en stderr. `EcosystemE2eChecksTest` las
+alimenta con informes rotos (tests saltados, un archivo generado sin ejecutar,
+un XML ilegible, un `verify` que no es JSON) y exige que fallen;
+`EcosystemE2eScriptTest` corre el principio del script con un `composer` de
+mentira para ver qué laravel-setup elige y a quién le da el token.
+
+Corre en [`.github/workflows/ecosystem.yml`](.github/workflows/ecosystem.yml)
+cada noche, a mano desde Actions (con la restricción de laravel-setup como
+entrada), en un *pull request* que toque el workflow, el script, sus
+comprobaciones, su laraimport, `ecosystem.json`, `composer.json` o `VERSION`,
+y **antes de publicar** (ver [Publicar](#publicar)); con Vue y con React, PHP
+8.4 y Node 22. Un cambio en `src/` no lo dispara en el PR —serían 45 minutos
+por interfaz en cada uno—: lo cubren la noche y la puerta de `Release`. Si
+falla, los registros de cada paso quedan como artefacto del run.
+
+El token de GitHub que necesita Composer llega como `ECOSYSTEM_COMPOSER_AUTH`
+y el script lo saca del entorno al empezar (también un `COMPOSER_AUTH` que
+hubiera): sólo se lo pasa a Composer y a `app:install`, que lo lanza. Ni
+`npm install` ni los tests de la aplicación lo ven.
+
+En local, desde la raíz, con el cambio comiteado:
+
+```
+bash .github/scripts/ecosystem-e2e.sh vue      # o react
+```
+
+Tarda unos minutos y necesita red. Deja la aplicación en un directorio
+temporal que se borra si todo pasa; `ECOSYSTEM_WORK=<dir>` lo fija y
+`ECOSYSTEM_KEEP=1` lo conserva siempre. `SETUP_CONSTRAINT` elige la
+laravel-setup (una restricción de Composer o una versión exacta:
+`SETUP_CONSTRAINT=7.2.0`). Otras variables, en la cabecera del script:
+`ECOSYSTEM_LARAPACK_REF` (el commit que se instala) y
+`ECOSYSTEM_LARAPACK_VERSION`.
+
+Sin acceso a las dist de GitHub (un contenedor detrás de un proxy), Composer
+puede bajar todo por git: se le da un `COMPOSER_HOME` propio cuyo
+`config.json` diga `{"config": {"preferred-install": "source"}}`. El script no
+cambia: lo que cambia cómo descarga Composer va en el entorno, no en él. Por git, Composer clona cada paquete con su historia entera: hacen
+falta más de 8 GB libres solo para el `create-project`.
+
 ## Formato y análisis estático
 
 ```
 vendor/bin/pint --test                                         # el formato (preset laravel)
 vendor/bin/pint                                                # y lo arregla
-vendor/bin/phpstan analyse --no-progress --memory-limit=1G     # Larastan, nivel 5 sobre src/
+vendor/bin/phpstan analyse --no-progress --memory-limit=1G     # Larastan, nivel 8 sobre src/
 ```
+
+PHPStan va sin baseline y sin `ignoreErrors`: un error se arregla. Si es un
+falso positivo del framework, se calla en su línea con
+`@phpstan-ignore <identificador>` y un comentario que diga por qué. Las formas
+de los arrays que cruzan clases se declaran una vez con `@phpstan-type` y se
+importan (`Finding` de `Verifier`, `ManifestData` de `Manifest`), en vez de
+repetir `array<string, mixed>`.
 
 Los dos corren en el trabajo `quality` de la CI, igual que en cada paquete que
 crea `larapack:new`. `tests/Fixtures` queda fuera de Pint a propósito: son
 archivos con la forma exacta que se quiere probar, también la mala.
+
+## Las pruebas de mutación
+
+Que una línea la recorra un test no dice que el test la compruebe. Infection
+cambia el código de `src/` de una en una —un `&&` por un `||`, un `[0]` por un
+`[1]`, una sentencia fuera— y corre los tests que pasan por esa línea: si
+ninguno falla, el cambio «sobrevive», y eso es una regla que la suite no
+sostiene.
+
+No se muta todo el generador. [`infection.json5`](infection.json5) lo acota a
+las piezas que sostienen la garantía: lo que `verify` comprueba
+([`Verifier`](src/Support/Verifier.php),
+[`ControllerShape`](src/Support/ControllerShape.php),
+[`LegacySecurity`](src/Support/LegacySecurity.php)), cómo se lee el código
+([`PhpOutline`](src/Support/PhpOutline.php)), la aprobación de las excepciones
+([`HandRolledLock`](src/Support/HandRolledLock.php)), lo que la guardia deja
+pasar ([`Guard`](src/Support/Guard.php)), lo que `fix` reescribe
+([`LegacyFix`](src/Support/LegacyFix.php)) y la puerta de la CI
+([`CiGate`](src/Support/CiGate.php)). Y los tests que corre son los suyos, con
+el `--filter` del mismo archivo: la suite entera tardaría una hora.
+
+Infection no está en `require-dev`, y es a propósito: trae su propio
+`nikic/php-parser` y su Symfony, y como el repositorio no versiona
+`composer.lock`, sumarlos cambiaría lo que resuelve cada versión de PHP de la
+matriz. Se instala aparte, en un directorio propio, y se le pasa el proyecto:
+
+```
+mkdir -p ../infection
+echo '{"config":{"allow-plugins":{"infection/extension-installer":false}}}' > ../infection/composer.json
+composer require --working-dir=../infection infection/infection:0.31.9
+
+php -m | grep -E -i 'pcov|xdebug'      # hace falta un driver de cobertura; pcov es el rápido
+../infection/vendor/bin/infection --threads=max --only-covering-test-cases --with-uncovered
+../infection/vendor/bin/infection --threads=max --only-covering-test-cases --with-uncovered --filter=src/Support/Guard.php --show-mutations
+php -d memory_limit=2G .github/scripts/mutation-floors.php .infection/infection.json .github/mutation-floors.json
+```
+
+La primera orden mide todo (unos veinte minutos con cuatro núcleos); la segunda,
+una pieza, con cada mutante superviviente en pantalla; la tercera compara cada
+pieza con su suelo. El detalle queda en `.infection/` (fuera de git):
+`infection.log` con el diff de cada superviviente y `infection.json` para
+leerlo con un script.
+
+`--with-uncovered` no es un detalle. Sin él, Infection sólo muta las líneas
+que algún test recorre: lo que ningún test toca no produce mutantes y no cuenta
+en contra, y borrar el test que cubría un mutante difícil *subía* el MSI. Con
+él, esas líneas se mutan y cuentan como no detectadas, y `--min-msi` (todo) y
+`--min-covered-msi` (sólo lo recorrido) dejan de ser el mismo número.
+
+El trabajo «Mutación» de la CI ([`.github/workflows/mutation.yml`](.github/workflows/mutation.yml))
+corre lo mismo con PHP 8.3, PHPUnit 12.5 e Infection 0.31.9 —la configuración
+con la que se midió—, en cada pull request que toca `src/`, `tests/` o la
+propia configuración, y a mano desde Actions. Tiene dos barreras:
+
+- `--min-msi` y `--min-covered-msi`, de las ocho piezas juntas.
+- El suelo de cada pieza, en [`.github/mutation-floors.json`](.github/mutation-floors.json),
+  que comprueba [`.github/scripts/mutation-floors.php`](.github/scripts/mutation-floors.php)
+  (`MutationFloorsTest`). Sin él, una pieza podía bajar mientras las otras la
+  compensaban. Falla también si una pieza con suelo deja de tener mutantes o si
+  se muta un archivo sin suelo: una pieza nueva en `infection.json5` entra con
+  el suyo.
+
+Los umbrales y los suelos son lo logrado, redondeado hacia abajo. Si una pieza
+sube, su suelo sube en el mismo cambio; lo que se baje de ahí no entra. Con un
+mutante que sobrevive hay tres salidas, y sólo tres:
+
+1. **Falta un test.** Se escribe el que comprueba el comportamiento que el
+   mutante cambia —el mensaje entero, el segundo de dos hallazgos, el caso con
+   mayúsculas—, no uno que mire el detalle interno.
+2. **Es un fallo o código muerto.** Se arregla, con su test. Así salieron en
+   la 9.2.0 el método que devuelve por referencia, el `bash -ce` de la guardia
+   y el `<<<` que escondía las órdenes siguientes.
+3. **Es equivalente**: ningún test puede distinguirlo porque el programa hace
+   lo mismo. Se apunta en [`docs/mutacion.md`](docs/mutacion.md) con su razón.
+   No se baja el umbral ni se excluye en bloque.
 
 ## Cómo se escribe aquí
 
@@ -236,7 +405,10 @@ No se publica a mano: no se crean tags ni se sube nada a Packagist.
    en la matriz de PHP, la guardia en Windows y `quality`.
 4. Si pasa, `Release`
    ([`.github/workflows/release.yml`](.github/workflows/release.yml)) lee
-   `VERSION` y crea ese tag si no existe. Packagist publica al recibir el tag.
+   `VERSION`. Si ese tag no existe, corre antes la
+   [prueba del ecosistema publicado](#la-del-ecosistema-publicado) con esa
+   versión, Vue y React, y sólo si pasa crea el tag. Packagist publica al
+   recibir el tag.
 
 `Release` se dispara cuando `Tests` termina, también si falla: la puerta es el
 `if` de su job, que sólo deja pasar un `Tests` en verde o un lanzamiento a mano.
@@ -249,6 +421,15 @@ existe no se vuelve a crear: subir `VERSION` es la única forma de publicar, y l
 `release.yml` declara `permissions: contents: write` por sí mismo; sin esa
 línea, en un repositorio con permisos de sólo lectura el workflow no arranca y
 no deja log.
+
+La prueba del ecosistema antes del tag es la que habría parado la 9.0: la
+laravel-setup publicada no la admitía. Una mayor nueva, entonces, se publica en
+este orden: primero laravel-setup amplía su restricción sobre
+`innoboxrr/larapack-generator` (Composer admite una restricción sobre una
+versión que aún no existe) y se publica; después se sube `VERSION` aquí. Al
+revés, `Release` se queda en rojo en el paso de Composer y no etiqueta nada.
+Sólo corre si la versión está sin publicar: con el tag ya puesto no habría
+nada que proteger.
 
 ## El ecosistema
 

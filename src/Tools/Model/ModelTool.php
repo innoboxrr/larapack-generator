@@ -2,29 +2,30 @@
 
 namespace Innoboxrr\LarapackGenerator\Tools\Model;
 
+use Innoboxrr\LarapackGenerator\Tools\ModelArtifact;
 use Innoboxrr\LarapackGenerator\Tools\Tool;
 
-class ModelTool extends Tool
+class ModelTool extends Tool implements ModelArtifact
 {
-    protected $modelPath;
+    protected string $modelPath = '';
 
-    protected $modelTemplatePath;
+    protected string $modelTemplatePath = '';
 
-    private function setModelPath()
+    private function setModelPath(): static
     {
         $this->modelPath = get_path(app_dir_name().'/Models');
 
         return $this;
     }
 
-    private function setModelTemplatePath()
+    private function setModelTemplatePath(): static
     {
         $this->modelTemplatePath = stubs_path('Model');
 
         return $this;
     }
 
-    public function create(string $ModelName)
+    public function create(string $ModelName): bool
     {
         $this->init($ModelName)
             ->setModelPath()
@@ -35,7 +36,7 @@ class ModelTool extends Tool
         return $this->generate($this->modelTemplatePath.'/ModelTemplate.txt', $modelFile);
     }
 
-    public function remove(string $ModelName)
+    public function remove(string $ModelName): bool
     {
         $this->init($ModelName)
             ->setModelPath();
@@ -44,16 +45,13 @@ class ModelTool extends Tool
         return (file_exists($path)) ? $this->dropFile($path) : false;
     }
 
-    protected function processFileWithJson($modelFile)
+    protected function processFileWithJson(string $modelFile): void
     {
-        // Obtener el contenido JSON
-        $data = self::getJsonContent();
-
         // Recuperar la información del modelo
-        $model = collect($data['models'])->where('name', $this->ModelName)->first();
+        $model = self::declaredEntry('models', $this->ModelName);
 
         // Recuperar el contenido del archivo del modelo
-        $fileContent = file_get_contents($modelFile);
+        $fileContent = self::contents($modelFile);
 
         // Obtener los valores para los diferentes secciones de la plantilla
         $authenticatable = ! empty($model['authenticatable']);
@@ -92,7 +90,10 @@ class ModelTool extends Tool
         file_put_contents($modelFile, $updatedFileContent);
     }
 
-    private function generateListFromProps(array $props, $field)
+    /**
+     * @param  list<array<string, mixed>>  $props
+     */
+    private function generateListFromProps(array $props, string $field): string
     {
         $list = [];
 
@@ -109,6 +110,8 @@ class ModelTool extends Tool
      * Las columnas que nunca salen por la API: las secretas y, en un usuario
      * que inicia sesión, la contraseña y el token de "recordarme" aunque no se
      * declaren.
+     *
+     * @param  list<array<string, mixed>>  $props
      */
     private function generateHidden(array $props, bool $authenticatable): string
     {
@@ -124,8 +127,10 @@ class ModelTool extends Tool
     /**
      * Los casts declarados y, en un usuario que inicia sesión, los que Laravel
      * espera: la fecha de verificación y la contraseña cifrada al asignarla.
+     *
+     * @param  list<array<string, mixed>>  $props
      */
-    private function generateCasts(array $props, bool $authenticatable = false)
+    private function generateCasts(array $props, bool $authenticatable = false): string
     {
         $casts = [];
 
@@ -148,7 +153,10 @@ class ModelTool extends Tool
         return implode(', ', $casts);
     }
 
-    private function generateEditableMetas(array $editableMetas)
+    /**
+     * @param  list<string>  $editableMetas
+     */
+    private function generateEditableMetas(array $editableMetas): string
     {
         if (empty($editableMetas)) {
             return '';
@@ -157,7 +165,10 @@ class ModelTool extends Tool
         return implode(', ', array_map(fn ($meta) => "'{$meta}'", $editableMetas));
     }
 
-    private function generateExportCols(array $props)
+    /**
+     * @param  list<array<string, mixed>>  $props
+     */
+    private function generateExportCols(array $props): string
     {
         $exportCols = [];
 
@@ -170,7 +181,10 @@ class ModelTool extends Tool
         return implode(', ', $exportCols);
     }
 
-    private function generateLoadableRelations(array $loadRelations)
+    /**
+     * @param  list<array<string, mixed>>  $loadRelations
+     */
+    private function generateLoadableRelations(array $loadRelations): string
     {
         if (empty($loadRelations)) {
             return '';
@@ -179,7 +193,10 @@ class ModelTool extends Tool
         return implode(', ', array_map(fn ($relation) => "'{$relation['name']}'", $loadRelations));
     }
 
-    private function generateLoadableCounts(array $loadCounts)
+    /**
+     * @param  list<string>  $loadCounts
+     */
+    private function generateLoadableCounts(array $loadCounts): string
     {
         if (empty($loadCounts)) {
             return '';

@@ -4,41 +4,42 @@ namespace Innoboxrr\LarapackGenerator\Tools\ModelTraits;
 
 use Innoboxrr\LarapackGenerator\Exceptions\MakerException;
 use Innoboxrr\LarapackGenerator\Support\Generation;
+use Innoboxrr\LarapackGenerator\Tools\ModelArtifact;
 use Innoboxrr\LarapackGenerator\Tools\Tool;
 
-class ModelTraitsTool extends Tool
+class ModelTraitsTool extends Tool implements ModelArtifact
 {
-    protected $modelTraitsPath;
+    protected string $modelTraitsPath = '';
 
-    protected $modelTraitsTemplatePath;
+    protected string $modelTraitsTemplatePath = '';
 
-    protected $assignmentsPath;
+    protected string $assignmentsPath = '';
 
-    protected $mutatorsPath;
+    protected string $mutatorsPath = '';
 
-    protected $operationsPath;
+    protected string $operationsPath = '';
 
-    protected $queriesPath;
+    protected string $queriesPath = '';
 
-    protected $relationsPath;
+    protected string $relationsPath = '';
 
-    protected $storagePath;
+    protected string $storagePath = '';
 
-    private function setModelTraitsPath()
+    private function setModelTraitsPath(): static
     {
         $this->modelTraitsPath = get_path(app_dir_name().'/Models/Traits');
 
         return $this;
     }
 
-    private function setModelTraitsTemplatePath()
+    private function setModelTraitsTemplatePath(): static
     {
         $this->modelTraitsTemplatePath = stubs_path('ModelTraits');
 
         return $this;
     }
 
-    protected function setTraitsPath()
+    protected function setTraitsPath(): static
     {
         $this->assignmentsPath = $this->modelTraitsPath.'/Assignments';
         if (! file_exists($this->assignmentsPath)) {
@@ -80,7 +81,7 @@ class ModelTraitsTool extends Tool
         return true;
     }
 
-    public function create(string $ModelName)
+    public function create(string $ModelName): bool
     {
         $this->init($ModelName)
             ->setModelTraitsPath()
@@ -91,7 +92,7 @@ class ModelTraitsTool extends Tool
         return true;
     }
 
-    private function createTraits()
+    private function createTraits(): static
     {
         $this->createAssignmentTrait()
             ->createMutatorsTrait()
@@ -102,7 +103,7 @@ class ModelTraitsTool extends Tool
         return $this;
     }
 
-    private function createAssignmentTrait()
+    private function createAssignmentTrait(): static
     {
         $assignmentTraitFile = $this->modelTraitsPath.'/Assignments/'.$this->PascalCaseModelName.'Assignment.php';
         if (! file_exists($assignmentTraitFile)) {
@@ -120,7 +121,7 @@ class ModelTraitsTool extends Tool
         return $this;
     }
 
-    private function createMutatorsTrait()
+    private function createMutatorsTrait(): static
     {
         $mutatorsTraitFile = $this->modelTraitsPath.'/Mutators/'.$this->PascalCaseModelName.'Mutators.php';
         if (! file_exists($mutatorsTraitFile)) {
@@ -138,7 +139,7 @@ class ModelTraitsTool extends Tool
         return $this;
     }
 
-    private function createOperationsTrait()
+    private function createOperationsTrait(): static
     {
         $operationsTraitFile = $this->modelTraitsPath.'/Operations/'.$this->PascalCaseModelName.'Operations.php';
         if (! file_exists($operationsTraitFile)) {
@@ -204,7 +205,7 @@ class ModelTraitsTool extends Tool
         return $lines;
     }
 
-    private function createRelationsTrait()
+    private function createRelationsTrait(): static
     {
         $relationsTraitFile = $this->modelTraitsPath.'/Relations/'.$this->PascalCaseModelName.'Relations.php';
         if (! file_exists($relationsTraitFile)) {
@@ -228,13 +229,10 @@ class ModelTraitsTool extends Tool
         return $this;
     }
 
-    private function processRelationsTraitWithJson($traitFile)
+    private function processRelationsTraitWithJson(string $traitFile): void
     {
-        // Obtener el contenido del JSON
-        $data = self::getJsonContent();
-
         // Encontrar el modelo actual basado en su nombre
-        $model = collect($data['models'])->where('name', $this->ModelName)->first();
+        $model = $this->jsonModel();
 
         // Obtener las relaciones
         $relations = $model['load_relations'] ?? [];
@@ -277,7 +275,7 @@ class ModelTraitsTool extends Tool
         }
 
         // Cargar el contenido del archivo de plantilla
-        $fileContent = file_get_contents($traitFile);
+        $fileContent = self::contents($traitFile);
 
         // Unir los imports generados
         $importCode = implode("\n", $imports);
@@ -290,7 +288,7 @@ class ModelTraitsTool extends Tool
         file_put_contents($traitFile, $fileContent);
     }
 
-    private function createStorageTrait()
+    private function createStorageTrait(): static
     {
         $storageTraitFile = $this->modelTraitsPath.'/Storage/'.$this->PascalCaseModelName.'Storage.php';
         if (! file_exists($storageTraitFile)) {
@@ -309,7 +307,7 @@ class ModelTraitsTool extends Tool
         return $this;
     }
 
-    public function remove(string $ModelName)
+    public function remove(string $ModelName): bool
     {
         $this->init($ModelName)
             ->setModelTraitsPath()
@@ -320,7 +318,7 @@ class ModelTraitsTool extends Tool
         return true;
     }
 
-    private function removeTraits()
+    private function removeTraits(): static
     {
         $this->removeAssignmentTrait()
             ->removeMutatorsTrait()
@@ -331,7 +329,7 @@ class ModelTraitsTool extends Tool
         return $this;
     }
 
-    private function removeAssignmentTrait()
+    private function removeAssignmentTrait(): static
     {
         $path = $this->modelTraitsPath.'/Assignments/'.$this->PascalCaseModelName.'Assignment.php';
         $res = (file_exists($path)) ? $this->dropFile($path) : false;
@@ -339,7 +337,7 @@ class ModelTraitsTool extends Tool
         return $this;
     }
 
-    private function removeMutatorsTrait()
+    private function removeMutatorsTrait(): static
     {
         $path = $this->modelTraitsPath.'/Mutators/'.$this->PascalCaseModelName.'Mutators.php';
         $res = (file_exists($path)) ? $this->dropFile($path) : false;
@@ -347,7 +345,7 @@ class ModelTraitsTool extends Tool
         return $this;
     }
 
-    private function removeOperationsTrait()
+    private function removeOperationsTrait(): static
     {
         $path = $this->modelTraitsPath.'/Operations/'.$this->PascalCaseModelName.'Operations.php';
         $res = (file_exists($path)) ? $this->dropFile($path) : false;
@@ -355,7 +353,7 @@ class ModelTraitsTool extends Tool
         return $this;
     }
 
-    private function removeRelationsTrait()
+    private function removeRelationsTrait(): static
     {
         $path = $this->modelTraitsPath.'/Relations/'.$this->PascalCaseModelName.'Relations.php';
         $res = (file_exists($path)) ? $this->dropFile($path) : false;
@@ -363,7 +361,7 @@ class ModelTraitsTool extends Tool
         return $this;
     }
 
-    private function removeStorageTrait()
+    private function removeStorageTrait(): static
     {
         $path = $this->modelTraitsPath.'/Storage/'.$this->PascalCaseModelName.'Storage.php';
         $res = (file_exists($path)) ? $this->dropFile($path) : false;

@@ -89,12 +89,22 @@ final class StubBlocks
         $conditions = [];
 
         foreach ($matches[1] as $expression) {
-            foreach (preg_split('/[|&]/', $expression) as $condition) {
+            foreach (self::split($expression) as $condition) {
                 $conditions[] = ltrim($condition, '!');
             }
         }
 
         return array_values(array_unique($conditions));
+    }
+
+    /**
+     * Las condiciones de una expresión, sin sus operadores.
+     *
+     * @return list<string>
+     */
+    private static function split(string $expression): array
+    {
+        return preg_split('/[|&]/', $expression) ?: throw new MakerException("La condición '{$expression}' no se puede leer.");
     }
 
     /**
@@ -120,7 +130,7 @@ final class StubBlocks
             throw new MakerException("La condición '{$expression}' de la línea ".($number + 1).' mezcla & y |.');
         }
 
-        $conditions = preg_split('/[|&]/', $expression);
+        $conditions = self::split($expression);
 
         $holds = static fn (string $condition): bool => str_starts_with($condition, '!')
             ? ! $holds(substr($condition, 1))

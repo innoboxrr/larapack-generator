@@ -2,38 +2,39 @@
 
 namespace Innoboxrr\LarapackGenerator\Tools\Controller;
 
+use Innoboxrr\LarapackGenerator\Tools\ModelArtifact;
 use Innoboxrr\LarapackGenerator\Tools\Tool;
 
-class ControllerTool extends Tool
+class ControllerTool extends Tool implements ModelArtifact
 {
-    protected $controllerPath;
+    protected string $controllerPath = '';
 
-    protected $controllerTemplatePath;
+    protected string $controllerTemplatePath = '';
 
-    private function setControllerPath()
+    private function setControllerPath(): static
     {
         $this->controllerPath = get_path(app_dir_name().'/Http/Controllers');
 
         return $this;
     }
 
-    private function setControllerTemplatePath()
+    private function setControllerTemplatePath(): static
     {
         $this->controllerTemplatePath = stubs_path('Controller');
 
         return $this;
     }
 
-    private function checkControllerClass()
+    private function checkControllerClass(): void
     {
         if (app_dir_name() == 'src') {
             $controllerFile = $this->controllerPath.'/'.'Controller.php';
 
-            return $this->generate($this->controllerTemplatePath.'/Controller.txt', $controllerFile);
+            $this->generate($this->controllerTemplatePath.'/Controller.txt', $controllerFile);
         }
     }
 
-    private function setUp(string $ModelName)
+    private function setUp(string $ModelName): void
     {
         $this->init($ModelName)
             ->setControllerPath()
@@ -41,7 +42,7 @@ class ControllerTool extends Tool
             ->checkControllerClass();
     }
 
-    public function create(string $ModelName)
+    public function create(string $ModelName): bool
     {
         if (! $this->init($ModelName)->declaresAnyAction()) {
             return false;
@@ -103,11 +104,11 @@ class ControllerTool extends Tool
         file_put_contents($file, str_replace(
             "new Middleware('auth:sanctum'),",
             "new Middleware('auth:sanctum', except: [{$except}]),",
-            file_get_contents($file)
+            self::contents($file)
         ));
     }
 
-    public function remove(string $ModelName)
+    public function remove(string $ModelName): bool
     {
         $this->setUp($ModelName);
         $path = $this->controllerPath.'/'.$this->PascalCaseModelName.'Controller.php';

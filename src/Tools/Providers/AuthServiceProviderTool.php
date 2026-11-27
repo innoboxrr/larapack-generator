@@ -2,15 +2,16 @@
 
 namespace Innoboxrr\LarapackGenerator\Tools\Providers;
 
+use Innoboxrr\LarapackGenerator\Tools\PackageArtifact;
 use Innoboxrr\LarapackGenerator\Tools\Tool;
 
-class AuthServiceProviderTool extends Tool
+class AuthServiceProviderTool extends Tool implements PackageArtifact
 {
-    protected $authServiceProviderPath;
+    protected string $authServiceProviderPath = '';
 
-    protected $authServiceProviderTemplatePath;
+    protected string $authServiceProviderTemplatePath = '';
 
-    private function setAuthServiceProviderPath()
+    private function setAuthServiceProviderPath(): static
     {
 
         $this->authServiceProviderPath = get_path(app_dir_name().'/Providers');
@@ -19,7 +20,7 @@ class AuthServiceProviderTool extends Tool
 
     }
 
-    private function setAuthServiceProviderTemplatePath()
+    private function setAuthServiceProviderTemplatePath(): static
     {
 
         $this->authServiceProviderTemplatePath = stubs_path('Providers');
@@ -28,7 +29,7 @@ class AuthServiceProviderTool extends Tool
 
     }
 
-    public function create()
+    public function create(): bool
     {
 
         $this->init('')

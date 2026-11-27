@@ -4,15 +4,16 @@ namespace Innoboxrr\LarapackGenerator\Tools\Resource;
 
 use Innoboxrr\LarapackGenerator\Support\Import\Endpoints;
 use Innoboxrr\LarapackGenerator\Support\Translations;
+use Innoboxrr\LarapackGenerator\Tools\ModelArtifact;
 use Innoboxrr\LarapackGenerator\Tools\Tool;
 
-class ResourceTool extends Tool
+class ResourceTool extends Tool implements ModelArtifact
 {
-    protected $resourcePath;
+    protected string $resourcePath = '';
 
-    protected $resourceTemplatePath;
+    protected string $resourceTemplatePath = '';
 
-    private function setResourcePath()
+    private function setResourcePath(): static
     {
 
         $this->resourcePath = get_path(app_dir_name().'/Http/Resources/Models');
@@ -21,7 +22,7 @@ class ResourceTool extends Tool
 
     }
 
-    private function setResourceTemplatePath()
+    private function setResourceTemplatePath(): static
     {
 
         $this->resourceTemplatePath = stubs_path('Resource');
@@ -30,7 +31,7 @@ class ResourceTool extends Tool
 
     }
 
-    public function create(string $ModelName)
+    public function create(string $ModelName): bool
     {
 
         $this->init($ModelName)
@@ -94,7 +95,7 @@ class ResourceTool extends Tool
         return $lines;
     }
 
-    public function remove(string $ModelName)
+    public function remove(string $ModelName): bool
     {
 
         $this->init($ModelName)

@@ -13,6 +13,16 @@ use Symfony\Component\Console\Command\Command;
  */
 final class AuditTest extends TestCase
 {
+    /**
+     * Lo mínimo para que verify tenga algo que comprobar: un modelo declarado,
+     * uno registrado o un archivo del paquete registrado.
+     */
+    private const LARAIMPORT_WITH_A_MODEL = '{"models": [{"name": "Post"}]}';
+
+    private const MANIFEST_WITH_A_MODEL = '{"version": 1, "package": {"namespace": "X\\\\", "files": {}}, "models": {"Post": {"namespace": "X\\\\", "files": {}}}}';
+
+    private const MANIFEST_WITH_PACKAGE_FILES = '{"version": 1, "package": {"namespace": "X\\\\", "files": {"src/Providers/AppServiceProvider.php": {"stub": "providers/app.stub", "hash": "x"}}}, "models": {}}';
+
     private string $root;
 
     protected function setUp(): void
@@ -436,9 +446,9 @@ final class AuditTest extends TestCase
     }
 
     /**
-     * Un paquete que usa LaraPack y cuya CI no corre `verify --strict`: el
-     * contrato depende de que alguien se acuerde. A uno que no usa LaraPack
-     * no se le pide, y un comentario que lo nombra no cuenta.
+     * Un paquete que genera con LaraPack y cuya CI no corre `verify --strict`:
+     * el contrato depende de que alguien se acuerde. A uno que no genera con
+     * LaraPack no se le pide, y un comentario que lo nombra no cuenta.
      */
     public function test_avisa_si_la_ci_no_corre_verify_strict(): void
     {
@@ -451,6 +461,7 @@ final class AuditTest extends TestCase
             'require-dev' => ['innoboxrr/larapack-generator' => '^9.0'],
         ];
         $package = $this->package('sin-puerta', $composer);
+        file_put_contents("{$package}/laraimport.json", self::LARAIMPORT_WITH_A_MODEL);
 
         $this->withTests($package);
         $this->withWorkflows($package, ['tests.yml', 'release.yml']);
@@ -476,11 +487,68 @@ final class AuditTest extends TestCase
 
         $this->assertNotHasCheck('verify-job', $this->audit($other));
 
-        // Con manifiesto sí, aunque no lo pida en composer.json.
+        // Con un manifiesto que registra algo sí, aunque no lo pida en
+        // composer.json.
         mkdir("{$other}/.larapack");
-        file_put_contents("{$other}/.larapack/manifest.json", '{}');
+        file_put_contents("{$other}/.larapack/manifest.json", self::MANIFEST_WITH_A_MODEL);
 
         $this->assertHasCheck('verify-job', $this->audit($other));
+    }
+
+    /**
+     * LaraPack en require-dev sólo para `larapack:audit`, sin manifiesto ni
+     * laraimport: no genera nada, y `verify --strict` fallaría con
+     * `empty-manifest`. Pedirle el job era pedirle una puerta siempre en rojo.
+     *
+     * Lo mismo con los archivos pero vacíos: un manifiesto sin nada registrado
+     * o un laraimport sin modelos dan `empty-manifest` igual. Se pide en
+     * cuanto hay algo que verify comprobaría de verdad.
+     */
+    public function test_no_pide_verify_a_un_paquete_que_no_genera_con_larapack(): void
+    {
+        $package = $this->package('solo-audita', [
+            'name' => 'innoboxrr/solo-audita',
+            'description' => 'x',
+            'license' => 'MIT',
+            'autoload' => ['psr-4' => ['X\\' => 'src/']],
+            'require' => ['php' => '^8.3'],
+            'require-dev' => ['innoboxrr/larapack-generator' => '^9.0'],
+        ]);
+        $this->withTests($package);
+        $this->withWorkflows($package, ['tests.yml', 'release.yml']);
+
+        $this->assertNotHasCheck('verify-job', $this->audit($package));
+
+        // Un laraimport sin modelos no genera nada que verificar.
+        file_put_contents("{$package}/laraimport.json", '{"models": []}');
+
+        $this->assertNotHasCheck('verify-job', $this->audit($package));
+
+        // Con modelos, sí: aunque aún no se haya importado, el contrato
+        // declara algo que verify no encontraría generado.
+        file_put_contents("{$package}/laraimport.json", self::LARAIMPORT_WITH_A_MODEL);
+
+        $this->assertHasCheck('verify-job', $this->audit($package));
+
+        unlink("{$package}/laraimport.json");
+        mkdir("{$package}/.larapack");
+
+        // Un manifiesto sin nada registrado, tampoco.
+        foreach (['{}', '{"models": {}}', '{"version": 1, "package": {"namespace": "X\\\\", "files": {}}, "models": {}}'] as $empty) {
+            file_put_contents("{$package}/.larapack/manifest.json", $empty);
+
+            $this->assertNotHasCheck('verify-job', $this->audit($package));
+        }
+
+        // Con un modelo registrado, o sólo con archivos del paquete (uno que
+        // sólo integra, que verify sí comprueba), sí.
+        file_put_contents("{$package}/.larapack/manifest.json", self::MANIFEST_WITH_A_MODEL);
+
+        $this->assertHasCheck('verify-job', $this->audit($package));
+
+        file_put_contents("{$package}/.larapack/manifest.json", self::MANIFEST_WITH_PACKAGE_FILES);
+
+        $this->assertHasCheck('verify-job', $this->audit($package));
     }
 
     /**
@@ -502,6 +570,7 @@ final class AuditTest extends TestCase
         mkdir("{$app}/.git", 0777, true);
         mkdir("{$app}/packages", 0777, true);
         $package = $this->package('escuela/packages/finanzas', $composer);
+        file_put_contents("{$package}/laraimport.json", self::LARAIMPORT_WITH_A_MODEL);
         $this->withTests($package);
 
         $warning = array_values(array_filter($this->audit($package)['findings'], fn (array $f): bool => $f['check'] === 'verify-job'));

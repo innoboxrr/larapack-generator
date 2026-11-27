@@ -2,15 +2,16 @@
 
 namespace Innoboxrr\LarapackGenerator\Tools\Providers;
 
+use Innoboxrr\LarapackGenerator\Tools\PackageArtifact;
 use Innoboxrr\LarapackGenerator\Tools\Tool;
 
-class RouteServiceProviderTool extends Tool
+class RouteServiceProviderTool extends Tool implements PackageArtifact
 {
-    protected $routeServiceProviderPath;
+    protected string $routeServiceProviderPath = '';
 
-    protected $routeServiceProviderTemplatePath;
+    protected string $routeServiceProviderTemplatePath = '';
 
-    private function setRouteServiceProviderPath()
+    private function setRouteServiceProviderPath(): static
     {
 
         $this->routeServiceProviderPath = get_path(app_dir_name().'/Providers');
@@ -19,7 +20,7 @@ class RouteServiceProviderTool extends Tool
 
     }
 
-    private function setRouteServiceProviderTemplatePath()
+    private function setRouteServiceProviderTemplatePath(): static
     {
 
         $this->routeServiceProviderTemplatePath = stubs_path('Providers');
@@ -28,7 +29,7 @@ class RouteServiceProviderTool extends Tool
 
     }
 
-    public function create()
+    public function create(): bool
     {
 
         $this->init('')

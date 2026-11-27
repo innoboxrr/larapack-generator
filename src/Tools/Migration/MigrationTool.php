@@ -6,9 +6,10 @@ use Innoboxrr\LarapackGenerator\Exceptions\MakerException;
 use Innoboxrr\LarapackGenerator\Support\Generation;
 use Innoboxrr\LarapackGenerator\Support\MigrationTimestamp;
 use Innoboxrr\LarapackGenerator\Support\TablePrefix;
+use Innoboxrr\LarapackGenerator\Tools\ModelArtifact;
 use Innoboxrr\LarapackGenerator\Tools\Tool;
 
-class MigrationTool extends Tool
+class MigrationTool extends Tool implements ModelArtifact
 {
     /**
      * Una columna tal como la escribe el generador: `$table->tipo('nombre')`
@@ -16,25 +17,25 @@ class MigrationTool extends Tool
      */
     private const COLUMN = '/^\s*(\$table->(\w+)\(\'([A-Za-z0-9_]+)\'\).*;)\s*$/m';
 
-    protected $migrationPath;
+    protected string $migrationPath = '';
 
-    protected $migrationTemplatePath;
+    protected string $migrationTemplatePath = '';
 
-    private function setMigrationPath()
+    private function setMigrationPath(): static
     {
         $this->migrationPath = get_path('database/migrations');
 
         return $this;
     }
 
-    private function setMigrationTemplatePath()
+    private function setMigrationTemplatePath(): static
     {
         $this->migrationTemplatePath = stubs_path('Migration');
 
         return $this;
     }
 
-    public function create(string $ModelName)
+    public function create(string $ModelName): bool
     {
         $this->init($ModelName)
             ->setMigrationPath()
@@ -79,7 +80,7 @@ class MigrationTool extends Tool
      */
     private function alter(string $createFile): ?bool
     {
-        $model = collect(self::getJsonContent()['models'])->where('name', $this->ModelName)->first();
+        $model = self::declaredEntry('models', $this->ModelName);
 
         $desired = [];
 
@@ -152,7 +153,7 @@ class MigrationTool extends Tool
 
         $this->replaceData($destination);
 
-        file_put_contents($destination, strtr((string) file_get_contents($destination), [
+        file_put_contents($destination, strtr(self::contents($destination), [
             '//UP//' => implode("\n            ", $up),
             '//DOWN//' => implode("\n            ", array_reverse($down)),
         ]));
@@ -174,14 +175,14 @@ class MigrationTool extends Tool
     {
         $columns = [];
 
-        preg_match_all(self::COLUMN, (string) file_get_contents($createFile), $matches, PREG_SET_ORDER);
+        preg_match_all(self::COLUMN, self::contents($createFile), $matches, PREG_SET_ORDER);
 
         foreach ($matches as [, $statement, , $name]) {
             $columns[$name] = $statement;
         }
 
         foreach ($this->alterFiles() as $alter) {
-            $source = (string) file_get_contents($alter);
+            $source = self::contents($alter);
             $up = substr($source, 0, strpos($source, 'function down') ?: strlen($source));
 
             preg_match_all(self::COLUMN, $up, $lines, PREG_SET_ORDER);
@@ -234,6 +235,12 @@ class MigrationTool extends Tool
 
         $moment = \DateTimeImmutable::createFromFormat('Y_m_d_His', $latest, new \DateTimeZone('UTC'));
 
+        // Los nombres salen de migrationFile() y alterFiles(), que sólo dan los
+        // que empiezan por la hora: uno que no se lea es un error del generador.
+        if ($moment === false) {
+            throw new MakerException("«{$latest}» no es la hora de una migración.");
+        }
+
         return $moment->modify('+1 second')->format('Y_m_d_His');
     }
 
@@ -249,7 +256,7 @@ class MigrationTool extends Tool
         return str_contains($definition, '->constrained(');
     }
 
-    public function remove(string $ModelName)
+    public function remove(string $ModelName): bool
     {
         $this->init($ModelName)
             ->setMigrationPath()
@@ -272,17 +279,19 @@ class MigrationTool extends Tool
         return true;
     }
 
-    protected function processFileWithJson($migrationFile)
+    protected function processFileWithJson(string $migrationFile): void
     {
-        $data = self::getJsonContent();
-        $model = collect($data['models'])->where('name', $this->ModelName)->first();
-        $fileContent = file_get_contents($migrationFile);
+        $model = self::declaredEntry('models', $this->ModelName);
+        $fileContent = self::contents($migrationFile);
         $columnsSchema = $this->generateMigrationColumns($model['props']);
         $updatedFileContent = str_replace('//EDIT//', $columnsSchema, $fileContent);
         file_put_contents($migrationFile, $updatedFileContent);
     }
 
-    private function generateMigrationColumns(array $props)
+    /**
+     * @param  list<array<string, mixed>>  $props
+     */
+    private function generateMigrationColumns(array $props): string
     {
         $columns = '';
         foreach ($props as $index => $prop) {
@@ -299,7 +308,10 @@ class MigrationTool extends Tool
         return $columns;
     }
 
-    private function getColumnDefinition(array $prop)
+    /**
+     * @param  array<string, mixed>  $prop
+     */
+    private function getColumnDefinition(array $prop): string
     {
         $column = "\$table->{$prop['type']}('{$prop['name']}')";
 

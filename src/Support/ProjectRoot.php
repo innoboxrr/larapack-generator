@@ -84,6 +84,12 @@ final class ProjectRoot
             $path = $parent;
         }
 
-        return realpath($path);
+        $resolved = realpath($path);
+
+        if ($resolved === false) {
+            throw new RuntimeException("La raíz descubierta ya no existe: {$path}");
+        }
+
+        return $resolved;
     }
 }

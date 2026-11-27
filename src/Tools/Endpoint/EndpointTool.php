@@ -5,6 +5,7 @@ namespace Innoboxrr\LarapackGenerator\Tools\Endpoint;
 use Innoboxrr\LarapackGenerator\Support\Declaration;
 use Innoboxrr\LarapackGenerator\Support\Import\Endpoints;
 use Innoboxrr\LarapackGenerator\Support\StubBlocks;
+use Innoboxrr\LarapackGenerator\Tools\ModelArtifact;
 use Innoboxrr\LarapackGenerator\Tools\Tool;
 
 /**
@@ -19,7 +20,7 @@ use Innoboxrr\LarapackGenerator\Tools\Tool;
  * rellenó no se pisa al regenerar, y el manifiesto la conoce, así que verify
  * sabe si falta.
  */
-class EndpointTool extends Tool
+class EndpointTool extends Tool implements ModelArtifact
 {
     /**
      * El endpoint que se está generando. Los tokens y las condiciones de los
@@ -29,7 +30,7 @@ class EndpointTool extends Tool
      */
     private ?array $endpoint = null;
 
-    public function create(string $ModelName)
+    public function create(string $ModelName): bool
     {
         $this->init($ModelName);
 
@@ -55,7 +56,7 @@ class EndpointTool extends Tool
     /**
      * Las requests las retira RequestsTool con su carpeta; aquí, los tests.
      */
-    public function remove(string $ModelName)
+    public function remove(string $ModelName): bool
     {
         $this->init($ModelName);
 
@@ -69,7 +70,7 @@ class EndpointTool extends Tool
      */
     protected function applyBlocks(string $file): void
     {
-        $content = file_get_contents($file);
+        $content = self::contents($file);
 
         if (! str_contains($content, '@larapack:')) {
             return;
@@ -126,8 +127,8 @@ class EndpointTool extends Tool
             'endpointRouteName' => $endpoint['route'],
             'endpointHttpVerb' => strtoupper($endpoint['method']),
             'endpointUri' => $endpoint['uri'],
-            'endpointGuestRouteArgs' => $this->routeArguments(false),
-            'endpointRecordRouteArgs' => $this->routeArguments(true),
+            'endpointGuestRouteArgs' => $this->routeArguments($endpoint, false),
+            'endpointRecordRouteArgs' => $this->routeArguments($endpoint, true),
             'endpointRecordPayload' => $this->recordPayload(),
         ];
     }
@@ -141,10 +142,12 @@ class EndpointTool extends Tool
      * ser el de uno que exista, o la request respondería 404 antes de llegar a
      * la política. Sólo lo hay si el endpoint actúa sobre un registro: es lo
      * que crea la prueba.
+     *
+     * @param  array<string, mixed>  $endpoint
      */
-    private function routeArguments(bool $withRecord): string
+    private function routeArguments(array $endpoint, bool $withRecord): string
     {
-        $parameters = Endpoints::parameters($this->endpoint['uri']);
+        $parameters = Endpoints::parameters($endpoint['uri']);
 
         if ($parameters === []) {
             return '';

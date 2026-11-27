@@ -149,8 +149,10 @@ temprano discreparían.
 3. Por cada modelo, ya ordenado, ejecuta
    [`MakeFullModelCommand`](src/Commands/MakeFullModelCommand.php) anidado. La
    lista de herramientas es `MakeFullModelCommand::$commands`, y cada nombre se
-   resuelve por convención a `Tools\<Nombre>\<Nombre>Tool`. `--vue`, `--react` y
-   `metas` añaden la suya.
+   resuelve por convención a `Tools\<Nombre>\<Nombre>Tool` con
+   `Artifacts::model`, que falla si no existe o no implementa
+   [`ModelArtifact`](src/Tools/ModelArtifact.php): saltársela dejaba esa pieza
+   sin generar y el comando en 0. `--vue`, `--react` y `metas` añaden la suya.
 4. Los pivotes van a `PivotMigrationTool`; los `controllers[]`, a
    `ControllerTool`, `RouteTool`, `EndpointTool` y, con interfaz, sólo al
    contrato JS.
@@ -184,15 +186,25 @@ Los helpers globales de [`src/Helpers/app.php`](src/Helpers/app.php) —
 `ProjectRoot`. `app_dir_name()` decide si el destino es un paquete (`src/`, tipo
 `library` en `composer.json`) o una aplicación (`app/`), y de esa decisión
 cuelgan el namespace de factorías y tests, la clave de configuración y el
-prefijo de las vistas de exportación (`Tool::init`).
+prefijo de las vistas de exportación (`Tool::init`). Los dos leen `composer.json`
+con `root_composer_json()`, que falla si no se puede leer o no es un objeto
+JSON, y `get_namespace()` falla si ningún `autoload.psr-4` apunta a ese
+directorio: sin namespace, lo generado acababa en el global
+(`namespace Models;`). La entrada se lee como la lee Composer —con o sin barra
+final, o dentro de una lista de rutas (`psr4_points_to()`)—, y el prefijo vacío
+(`""`) no cuenta: es el namespace global. `Tool::init` los llama antes de
+escribir nada.
 
 ---
 
 ## Las herramientas
 
 Una herramienta por pieza, en `src/Tools/<Área>/<Área>Tool.php`, todas sobre
-[`Tool`](src/Tools/Tool.php). Cada una expone `create(string $ModelName)` y
-`remove(string $ModelName)`, decide el destino y llama a `Tool::generate`. Es
+[`Tool`](src/Tools/Tool.php). Las de un modelo implementan
+[`ModelArtifact`](src/Tools/ModelArtifact.php) —`create(string $ModelName)` y
+`remove(string $ModelName)`, que devuelven si escribieron o quitaron algo—, y
+las del paquete, [`PackageArtifact`](src/Tools/PackageArtifact.php). Cada una
+decide el destino y llama a `Tool::generate`. Es
 el camino **principal**, no el único (los demás, en
 [la tabla de abajo](#lo-que-no-pasa-por-toolgenerate)), y es el único que da
 todas las garantías de una vez:
@@ -219,6 +231,16 @@ Una herramienta puede especializar un paso sin salirse del camino:
 `EndpointTool::applyBlocks` añade las condiciones de `Endpoints::FLAGS` a las
 del modelo, y `ControllerTool::applyEndpoints` saca de `auth:sanctum` los
 endpoints públicos. Siguen pasando por `generate()`, con todo lo demás.
+
+Lo que una herramienta reescribe lo lee con `Tool::contents` (`Files::read`),
+que falla si no puede leer: con `file_get_contents()` suelto, un `false`
+acababa como `''` y el archivo quedaba vacío. Lo mismo donde una lectura decide
+algo: el manifiesto, su hash, el esquema. Entre las herramientas,
+`composer.json` sólo lo toca `Tool::editComposerJson` —los proveedores, el
+PSR-4 de factorías y el de tests—, que no escribe en una aplicación ni en una
+simulación, y no reescribe uno que no sea un objeto JSON. Fuera de ellas lo
+escribe `NewPackageCommand`, que lo crea al hacer el paquete y lo vuelve a
+escribir al final, con el salto de línea que dejaría Composer.
 
 ### Lo que no pasa por `Tool::generate`
 
@@ -601,7 +623,7 @@ que rompe está en [CONTRIBUTING](CONTRIBUTING.md#qué-cuenta-como-cambio-que-ro
 | [`tests/Feature/`](tests/Feature/) | Comandos sobre un proyecto falso en un temporal (`tests/Support/FakeProject.php`). |
 | [`tests/EndToEnd/`](tests/EndToEnd/) | Lo generado se instala y se ejecuta: migra, llama a las rutas, compila el front. |
 | [`tests/Fixtures/`](tests/Fixtures/) | Laraimports de prueba y las fotos de `GeneratedOutputSnapshotTest`. |
-| [`.github/`](.github/) | La CI, que llama a los workflows reutilizables de `innoboxrr/.github`. |
+| [`.github/`](.github/) | La CI, que llama a los workflows reutilizables de `innoboxrr/.github`, y la prueba del ecosistema publicado (`.github/scripts/ecosystem-e2e.sh`, con sus lecturas en `.github/scripts/ecosystem-e2e-checks.php`), que corre cada noche y antes de etiquetar una versión nueva. |
 
 ---
 
@@ -689,6 +711,10 @@ cambia algo que ve quien usa el generador.
 7. Un test en `tests/Feature/Verify*Test.php`, con el caso que debe marcar y,
    sobre todo, los que **no** debe marcar. Su tabla en «Verificar la
    arquitectura» del README.
+8. Si vive en una de las piezas de `infection.json5`, corre su mutación
+   ([CONTRIBUTING](CONTRIBUTING.md#las-pruebas-de-mutación)): el trabajo
+   «Mutación» de la CI no deja bajar el MSI de las ocho juntas ni el de cada
+   una por debajo de su suelo (`.github/mutation-floors.json`).
 
 ### Una opción o un comando
 

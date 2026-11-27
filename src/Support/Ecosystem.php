@@ -19,6 +19,8 @@ use UnexpectedValueException;
  * La regla vive en `ecosystem.json`, en un único sitio, y esta clase la
  * ejerce. Deliberadamente no intenta arreglar nada: informa, y el arreglo es
  * una decisión humana o un paso explícito de CI.
+ *
+ * @phpstan-type AuditFinding array{level: string, check: string, package: string, message: string}
  */
 final class Ecosystem
 {
@@ -31,9 +33,11 @@ final class Ecosystem
     /** @var array<string, mixed>|null */
     private ?array $rules = null;
 
-    public function __construct(private ?string $manifestPath = null)
+    private string $manifestPath;
+
+    public function __construct(?string $manifestPath = null)
     {
-        $this->manifestPath ??= dirname(__DIR__, 2).'/'.self::FILE;
+        $this->manifestPath = $manifestPath ?? dirname(__DIR__, 2).'/'.self::FILE;
     }
 
     /**
@@ -49,7 +53,7 @@ final class Ecosystem
             throw new RuntimeException("No se encontró {$this->manifestPath}.");
         }
 
-        $decoded = json_decode((string) file_get_contents($this->manifestPath), true);
+        $decoded = json_decode(Files::read($this->manifestPath), true);
 
         if (! is_array($decoded)) {
             throw new RuntimeException("{$this->manifestPath} no es JSON válido.");
@@ -62,7 +66,7 @@ final class Ecosystem
      * Audita un directorio de paquete. Detecta por sí solo si es Composer,
      * npm o ambos, para no exigir un tipo que el paquete no es.
      *
-     * @return array<int, array{level: string, check: string, package: string, message: string}>
+     * @return list<AuditFinding>
      */
     public function audit(string $directory): array
     {
@@ -97,7 +101,7 @@ final class Ecosystem
 
     /**
      * @param  array<string, mixed>  $composer
-     * @return array<int, array<string, mixed>>
+     * @return list<AuditFinding>
      */
     private function auditComposer(string $directory, string $name, array $composer): array
     {
@@ -178,18 +182,27 @@ final class Ecosystem
             ...$findings,
             ...$this->auditTests($directory, $name),
             ...$this->auditWorkflows($directory, $name, 'composer'),
-            ...$this->auditVerifyJob($directory, $name, array_key_exists('innoboxrr/larapack-generator', $all)),
+            ...$this->auditVerifyJob($directory, $name),
         ];
     }
 
     /**
-     * Un paquete que usa LaraPack y cuya CI no corre `larapack:verify
+     * Un paquete que genera con LaraPack y cuya CI no corre `larapack:verify
      * --strict`: el contrato depende de que alguien se acuerde de correrlo.
      *
-     * Usa LaraPack si lo pide en composer.json o tiene manifiesto; a uno que
-     * no lo usa no se le exige. Se buscan las líneas de los workflows, sin
-     * comentarios, que llamen a verify con --strict; el nombre del job no se
-     * mira, porque cualquier job que lo corra hace de puerta.
+     * Genera con LaraPack si su manifiesto registra algo —modelos o archivos
+     * del paquete, lo mismo que mira `verify` para no dar `empty-manifest`— o
+     * si su laraimport declara algún modelo. Pedirlo en composer.json no
+     * basta: muchos paquetes del ecosistema lo tienen en require-dev sólo para
+     * correr `larapack:audit`, no generan nada, y su `verify --strict`
+     * fallaría con `empty-manifest`; pedirles el job era pedirles una puerta
+     * siempre en rojo. Por lo mismo no basta con que los archivos existan: un
+     * manifiesto sin nada registrado o un laraimport sin modelos también dan
+     * `empty-manifest`. Un laraimport con modelos y sin importar sí se avisa:
+     * ahí el rojo de verify es real, el contrato declara lo que no se generó.
+     * Se buscan las líneas de los workflows, sin comentarios, que llamen
+     * a verify con --strict; el nombre del job no se mira, porque cualquier job
+     * que lo corra hace de puerta.
      *
      * Un paquete dentro de `packages/` de un repositorio (un monorepo como
      * school-management) no tiene CI propia que valga: GitHub sólo lee los
@@ -198,11 +211,11 @@ final class Ecosystem
      * no, el remedio es el job en la raíz, no un larapack.yml y un candado por
      * paquete.
      *
-     * @return array<int, array<string, mixed>>
+     * @return list<AuditFinding>
      */
-    private function auditVerifyJob(string $directory, string $name, bool $requiresLarapack): array
+    private function auditVerifyJob(string $directory, string $name): array
     {
-        if (! $requiresLarapack && ! is_file("{$directory}/.larapack/manifest.json")) {
+        if (! $this->generatesWithLarapack($directory)) {
             return [];
         }
 
@@ -221,6 +234,23 @@ final class Ecosystem
             : 'Está en packages/ de '.basename($host).', y ningún workflow de esa raíz corre `larapack:verify --strict`: el contrato no es una puerta de la rama. El job va en la raíz (`larapack:ci` allí), cuyo verify recorre también packages/* con un solo candado; no hace falta un larapack.yml ni un candado por paquete.';
 
         return [$this->finding(self::WARNING, 'verify-job', $name, $message)];
+    }
+
+    /**
+     * Si hay algo que `verify` comprobaría: lo registrado en el manifiesto
+     * (leído con Manifest, como lo lee verify) o los modelos del laraimport.
+     */
+    private function generatesWithLarapack(string $directory): bool
+    {
+        $manifest = new Manifest($directory);
+
+        if ($manifest->models() !== [] || $manifest->packageFiles() !== []) {
+            return true;
+        }
+
+        $models = $this->readJson("{$directory}/laraimport.json")['models'] ?? null;
+
+        return is_array($models) && $models !== [];
     }
 
     /**
@@ -261,7 +291,7 @@ final class Ecosystem
 
     /**
      * @param  array<string, mixed>  $npm
-     * @return array<int, array<string, mixed>>
+     * @return list<AuditFinding>
      */
     private function auditNpm(string $directory, string $name, array $npm): array
     {
@@ -306,7 +336,7 @@ final class Ecosystem
     }
 
     /**
-     * @return array<int, array<string, mixed>>
+     * @return list<AuditFinding>
      */
     private function auditTests(string $directory, string $name): array
     {
@@ -327,7 +357,7 @@ final class Ecosystem
     }
 
     /**
-     * @return array<int, array<string, mixed>>
+     * @return list<AuditFinding>
      */
     private function auditWorkflows(string $directory, string $name, string $kind): array
     {
@@ -403,7 +433,7 @@ final class Ecosystem
             return null;
         }
 
-        $decoded = json_decode((string) file_get_contents($path), true);
+        $decoded = json_decode(Files::read($path), true);
 
         return is_array($decoded) ? $decoded : null;
     }
@@ -426,7 +456,7 @@ final class Ecosystem
      *            verdad eso que promete
      *   estrecha no la admite -> error, ahi si hay algo roto
      *
-     * @return array<int, array<string, mixed>>
+     * @return list<AuditFinding>
      */
     private function auditConstraint(string $check, string $package, string $dependency, string $declared, string $baseline): array
     {
@@ -451,7 +481,7 @@ final class Ecosystem
     }
 
     /**
-     * @return array{level: string, check: string, package: string, message: string}
+     * @return AuditFinding
      */
     private function finding(string $level, string $check, string $package, string $message): array
     {

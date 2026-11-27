@@ -2,8 +2,10 @@
 
 namespace Innoboxrr\LarapackGenerator\Support\Import;
 
+use Innoboxrr\LarapackGenerator\Support\Files;
 use JsonException;
 use Opis\JsonSchema\Errors\ErrorFormatter;
+use Opis\JsonSchema\Resolvers\SchemaResolver;
 use Opis\JsonSchema\Validator;
 use RuntimeException;
 
@@ -40,7 +42,17 @@ final class Schema
      */
     public static function toArray(): array
     {
-        return self::$decoded ??= json_decode(file_get_contents(self::path()), true);
+        if (self::$decoded !== null) {
+            return self::$decoded;
+        }
+
+        $decoded = json_decode(Files::read(self::path()), true);
+
+        if (! is_array($decoded)) {
+            throw new RuntimeException('schema/laraimport.schema.json no es un objeto JSON válido.');
+        }
+
+        return self::$decoded = $decoded;
     }
 
     public static function id(): string
@@ -57,9 +69,12 @@ final class Schema
      */
     public static function validate(array $document): array
     {
-        $validator = new Validator;
+        // El resolvedor se crea aquí, y no se pide al Validator: resolver()
+        // puede devolver null y el registro del esquema se perdería.
+        $resolver = new SchemaResolver;
+        $resolver->registerRaw(Files::read(self::path()), self::id());
 
-        $validator->resolver()->registerRaw(file_get_contents(self::path()), self::id());
+        $validator = (new Validator)->setResolver($resolver);
 
         // Opis valida objetos, y no todo array de PHP se puede volver objeto:
         // una clave que empieza por NUL no es un nombre de propiedad válido, y
@@ -75,13 +90,13 @@ final class Schema
             ]];
         }
 
-        $result = $validator->validate($data, self::id());
+        $error = $validator->validate($data, self::id())->error();
 
-        if ($result->isValid()) {
+        if ($error === null) {
             return [];
         }
 
-        return self::flatten((new ErrorFormatter)->format($result->error(), true));
+        return self::flatten((new ErrorFormatter)->format($error, true));
     }
 
     /**

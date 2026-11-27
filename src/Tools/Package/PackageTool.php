@@ -158,7 +158,7 @@ class PackageTool extends Tool
             throw MakerException::directoryNotCreated($directory);
         }
 
-        file_put_contents($destination, $this->replaceTokens((string) file_get_contents($stub)));
+        file_put_contents($destination, $this->replaceTokens(self::contents($stub)));
 
         Generation::record('create', $destination, $stub);
     }

@@ -2,31 +2,31 @@
 
 namespace Innoboxrr\LarapackGenerator\Tools\Factory;
 
-use Illuminate\Support\Pluralizer;
-use Innoboxrr\LarapackGenerator\Support\Generation;
+use Innoboxrr\LarapackGenerator\Support\TablePrefix;
+use Innoboxrr\LarapackGenerator\Tools\ModelArtifact;
 use Innoboxrr\LarapackGenerator\Tools\Tool;
 
-class FactoryTool extends Tool
+class FactoryTool extends Tool implements ModelArtifact
 {
-    protected $factoryPath;
+    protected string $factoryPath = '';
 
-    protected $factoryTemplatePath;
+    protected string $factoryTemplatePath = '';
 
-    private function setFactoryPath()
+    private function setFactoryPath(): static
     {
         $this->factoryPath = get_path('database/factories');
 
         return $this;
     }
 
-    private function setFactoryTemplatePath()
+    private function setFactoryTemplatePath(): static
     {
         $this->factoryTemplatePath = stubs_path('Factory');
 
         return $this;
     }
 
-    public function create(string $ModelName)
+    public function create(string $ModelName): bool
     {
         $this->init($ModelName)
             ->setFactoryPath()
@@ -38,32 +38,17 @@ class FactoryTool extends Tool
         return $this->generate($this->factoryTemplatePath.'/FactoryTemplate.txt', $factoryFile);
     }
 
-    private function addDatabaseNamespaceToComposerJson()
+    private function addDatabaseNamespaceToComposerJson(): static
     {
-        // Una simulación no escribe nada, tampoco composer.json.
-        if (app_dir_name() == 'src' && ! Generation::isDryRun()) {
-            $composerJsonPath = root_path().'/composer.json';
-            $composerJsonData = json_decode(file_get_contents($composerJsonPath), true);
-            $baseNamespace = array_keys($composerJsonData['autoload']['psr-4'])[0];
-            if (isset($composerJsonData['autoload']['psr-4'])) {
-                $composerJsonData['autoload']['psr-4'][$baseNamespace.'Database\\Factories\\'] = 'database/factories/';
-            } else {
-                $composerJsonData['autoload'] = [
-                    'psr-4' => [
-                        $baseNamespace.'Database\\Factories\\' => 'database/factories/',
-                    ],
-                ];
-            }
-            file_put_contents(
-                $composerJsonPath,
-                json_encode($composerJsonData, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)
-            );
-        }
+        // Leía la primera clave de `autoload.psr-4` antes de mirar si existía:
+        // sin ella, array_keys(null) reventaba y la rama que la creaba no
+        // corría nunca.
+        $this->addPsr4ToComposerJson('autoload', 'Database\\Factories\\', 'database/factories/');
 
         return $this;
     }
 
-    public function remove(string $ModelName)
+    public function remove(string $ModelName): bool
     {
         $this->init($ModelName)
             ->setFactoryPath();
@@ -72,11 +57,10 @@ class FactoryTool extends Tool
         return (file_exists($path)) ? $this->dropFile($path) : false;
     }
 
-    protected function processFileWithJson($factoryFile)
+    protected function processFileWithJson(string $factoryFile): void
     {
-        $data = self::getJsonContent();
-        $model = collect($data['models'])->where('name', $this->ModelName)->first();
-        $fileContent = file_get_contents($factoryFile);
+        $model = self::declaredEntry('models', $this->ModelName);
+        $fileContent = self::contents($factoryFile);
         // `payload` lo arma updatePayload() a partir de las metas: una factory
         // que lo inventara guardaría una copia que no corresponde a nada.
         $props = empty($model['metas'])
@@ -88,7 +72,10 @@ class FactoryTool extends Tool
         file_put_contents($factoryFile, $updatedFileContent);
     }
 
-    private function generateFactoryDefinition(array $props)
+    /**
+     * @param  list<array<string, mixed>>  $props
+     */
+    private function generateFactoryDefinition(array $props): string
     {
         $lines = [];
 
@@ -112,6 +99,8 @@ class FactoryTool extends Tool
      * salia null, y un decimal o un booleano no anulables hacian fallar el
      * insert. La clave foranea valia siempre 1, una fila que nadie garantizaba.
      * Una factory que no inserta rompe los tests generados y cualquier seeder.
+     *
+     * @param  array<string, mixed>  $prop
      */
     private function fakerValue(array $prop): ?string
     {
@@ -189,11 +178,13 @@ class FactoryTool extends Tool
     /**
      * La factory del modelo al que apunta la clave, si se declara en el mismo
      * laraimport: Laravel crea la fila relacionada antes de insertar esta.
+     *
+     * @param  array<string, mixed>  $prop
      */
     private function foreignKeyValue(array $prop): string
     {
-        foreach (self::getJsonContent()['models'] ?? [] as $model) {
-            $table = Pluralizer::plural(mb_strtolower(preg_replace('/(?<!^)[A-Z]/', '_$0', $model['name'])));
+        foreach (self::jsonEntries('models') as $model) {
+            $table = TablePrefix::tableOf($model['name']);
 
             if ($table !== $prop['constraint']) {
                 continue;

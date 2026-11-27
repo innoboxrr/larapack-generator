@@ -17,6 +17,8 @@ use Innoboxrr\LarapackGenerator\Support\Import\Endpoints;
  *
  * La forma de los controladores también es determinista, y no depende del
  * manifiesto: ControllerShape la comprueba en todos, generados o no.
+ *
+ * @phpstan-type Finding array{level: string, check: string, model: string|null, file: string|null, message: string}
  */
 final class Verifier
 {
@@ -77,14 +79,16 @@ final class Verifier
      */
     public const CHECKS = [...self::MANIFEST_CHECKS, ...ControllerShape::CHECKS, ...LegacySecurity::CHECKS];
 
-    public function __construct(private ?Manifest $manifest = null)
+    private Manifest $manifest;
+
+    public function __construct(?Manifest $manifest = null)
     {
-        $this->manifest ??= new Manifest;
+        $this->manifest = $manifest ?? new Manifest;
     }
 
     /**
      * @param  array<int, string>  $only  sólo estas comprobaciones; vacío, todas
-     * @return array<int, array{level: string, check: string, model: string|null, file: string|null, message: string}>
+     * @return list<Finding>
      */
     public function run(array $only = []): array
     {
@@ -107,7 +111,7 @@ final class Verifier
     }
 
     /**
-     * @return array<int, array{level: string, check: string, model: string|null, file: string|null, message: string}>
+     * @return list<Finding>
      */
     private function manifestFindings(): array
     {
@@ -125,7 +129,7 @@ final class Verifier
     }
 
     /**
-     * @return array<int, array{level: string, check: string, model: string|null, file: string|null, message: string}>
+     * @return list<Finding>
      */
     private function checks(): array
     {
@@ -172,7 +176,7 @@ final class Verifier
 
     /**
      * @param  array<int, string>  $models
-     * @return array<int, array<string, mixed>>
+     * @return list<Finding>
      */
     private function checkFilesExist(array $models): array
     {
@@ -202,7 +206,7 @@ final class Verifier
      * claro qué no se puede regenerar sin perder trabajo.
      *
      * @param  array<int, string>  $models
-     * @return array<int, array<string, mixed>>
+     * @return list<Finding>
      */
     private function checkCustomisations(array $models): array
     {
@@ -242,7 +246,7 @@ final class Verifier
      * el aviso se convertiría en ruido que nadie lee.
      *
      * @param  array<int, string>  $models
-     * @return array<int, array<string, mixed>>
+     * @return list<Finding>
      */
     private function checkComponentConsistency(array $models): array
     {
@@ -297,7 +301,7 @@ final class Verifier
      * los dos cambia, el front deja de encontrar el backend en silencio.
      *
      * @param  array<int, string>  $models
-     * @return array<int, array<string, mixed>>
+     * @return list<Finding>
      */
     private function checkRoutePrefixContract(array $models): array
     {
@@ -321,7 +325,7 @@ final class Verifier
                     basename(dirname($relative))
                 );
 
-                if (! preg_match("/API_ROUTE_PREFIX\s*=\s*'([^']+)'/", file_get_contents($absolute), $matches)) {
+                if (! preg_match("/API_ROUTE_PREFIX\s*=\s*'([^']+)'/", Files::read($absolute), $matches)) {
                     $findings[] = [
                         'level' => self::ERROR,
                         'check' => 'route-prefix',
@@ -361,7 +365,7 @@ final class Verifier
      * en todos los controladores, generados o no, con una sola regla.
      *
      * @param  array<int, string>  $models
-     * @return array<int, array<string, mixed>>
+     * @return list<Finding>
      */
     private function checkDeclaredActions(array $models): array
     {
@@ -408,7 +412,7 @@ final class Verifier
      * operación, y aquí se dice cuál falta y cómo se llama.
      *
      * @param  array{actions: array<int, string>, immutable: bool, secret: array<int, string>, endpoints: array<int, array<string, mixed>>, controller: bool}  $declaration
-     * @return array<int, array<string, mixed>>
+     * @return list<Finding>
      */
     private function checkEndpoints(string $model, array $declaration): array
     {
@@ -505,7 +509,7 @@ final class Verifier
      * laraimport no sabía declarar un endpoint.
      *
      * @param  array{actions: array<int, string>, immutable: bool, secret: array<int, string>, endpoints: array<int, array<string, mixed>>, controller: bool}  $declaration
-     * @return array<int, array<string, mixed>>
+     * @return list<Finding>
      */
     private function undeclaredEndpoints(string $model, array $declaration): array
     {
@@ -603,7 +607,7 @@ final class Verifier
      * modelo siga en su sitio: es lo que sostiene la invariante en ejecución.
      *
      * @param  array<int, string>  $models
-     * @return array<int, array<string, mixed>>
+     * @return list<Finding>
      */
     private function checkImmutable(array $models): array
     {
@@ -654,7 +658,7 @@ final class Verifier
      * uno que no existe no se echa en falta.
      *
      * @param  array<int, string>  $models
-     * @return array<int, array<string, mixed>>
+     * @return list<Finding>
      */
     private function checkEndpointTests(array $models): array
     {
@@ -700,7 +704,7 @@ final class Verifier
      * Una columna secreta que vuelve a salir.
      *
      * @param  array<int, string>  $models
-     * @return array<int, array<string, mixed>>
+     * @return list<Finding>
      */
     private function checkSecrets(array $models): array
     {
@@ -774,11 +778,11 @@ final class Verifier
         $app = $this->appDirectory($model);
 
         foreach ($actions as $action) {
-            if (str_contains($routesContent, "->name('".Actions::routeName($action)."')")) {
+            if ($routes !== null && str_contains($routesContent, "->name('".Actions::routeName($action)."')")) {
                 $traces[] = [$action, $routes, 'Hay una ruta para'];
             }
 
-            if (preg_match('/public function '.$action.'\s*\(/', $controllerContent)) {
+            if ($controller !== null && preg_match('/public function '.$action.'\s*\(/', $controllerContent)) {
                 $traces[] = [$action, $controller, 'El controlador tiene un método para'];
             }
 
@@ -816,7 +820,7 @@ final class Verifier
     {
         $declaration = $this->manifest->declarationOf($model);
 
-        return json_encode([$declaration['actions'], $declaration['immutable'], $declaration['controller']]);
+        return json_encode([$declaration['actions'], $declaration['immutable'], $declaration['controller']], JSON_THROW_ON_ERROR);
     }
 
     private function fileFromStub(string $model, string $stub): ?string
@@ -889,7 +893,7 @@ final class Verifier
     }
 
     /**
-     * @return array{level: string, check: string, model: string|null, file: string|null, message: string}
+     * @return Finding
      */
     private function finding(string $level, string $check, ?string $model, ?string $file, string $message): array
     {

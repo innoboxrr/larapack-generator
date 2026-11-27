@@ -2,17 +2,20 @@
 
 namespace Innoboxrr\LarapackGenerator\Tools\Requests;
 
+use Innoboxrr\LarapackGenerator\Exceptions\MakerException;
+use Innoboxrr\LarapackGenerator\Tools\ModelArtifact;
 use Innoboxrr\LarapackGenerator\Tools\Tool;
 
-class RequestsTool extends Tool
+class RequestsTool extends Tool implements ModelArtifact
 {
-    protected $requestPath;
+    protected string $requestPath = '';
 
-    protected $requestsTemplatePath;
+    protected string $requestsTemplatePath = '';
 
-    protected $mainRequestsPath;
+    protected string $mainRequestsPath = '';
 
-    protected $requests = [
+    /** @var list<string> */
+    protected array $requests = [
         'CreateRequest',
         'DeleteRequest',
         'ExportRequest',
@@ -27,21 +30,21 @@ class RequestsTool extends Tool
         'BulkDeleteRequest',
     ];
 
-    private function setRequestPath()
+    private function setRequestPath(): static
     {
         $this->requestPath = get_path(app_dir_name().'/Http/Requests');
 
         return $this;
     }
 
-    private function setRequestsTemplatePath()
+    private function setRequestsTemplatePath(): static
     {
         $this->requestsTemplatePath = stubs_path('Requests');
 
         return $this;
     }
 
-    protected function setMainRequestsPath()
+    protected function setMainRequestsPath(): static
     {
         $path = $this->requestPath.'/'.$this->PascalCaseModelName;
         if (! file_exists($path)) {
@@ -52,30 +55,34 @@ class RequestsTool extends Tool
         return $this;
     }
 
-    protected function createRequest($requestName)
+    protected function createRequest(string $requestName): bool
     {
         $requestFile = $this->mainRequestsPath.'/'.$requestName.'.php';
 
         return $this->generate($this->requestsTemplatePath.'/'.$requestName.'.txt', $requestFile);
     }
 
-    public function create(string $ModelName)
+    public function create(string $ModelName): bool
     {
         $this->init($ModelName)
             ->setRequestPath()
             ->setRequestsTemplatePath()
             ->setMainRequestsPath();
 
+        $written = false;
+
         foreach ($this->requests as $request) {
             if (! $this->declares(lcfirst(substr($request, 0, -strlen('Request'))))) {
                 continue;
             }
 
-            $this->createRequest($request);
+            $written = $this->createRequest($request) || $written;
         }
+
+        return $written;
     }
 
-    public function remove(string $ModelName)
+    public function remove(string $ModelName): bool
     {
         $this->init($ModelName)
             ->setRequestPath();
@@ -128,27 +135,26 @@ class RequestsTool extends Tool
      * Ahora se inyecta en un marcador, como hacen los demas tools: lo que el
      * stub declara fuera del marcador es intocable.
      */
-    protected function processFileWithJson($filePath)
+    protected function processFileWithJson(string $filePath): void
     {
         if (! in_array(basename($filePath), ['CreateRequest.php', 'UpdateRequest.php'])) {
             return;
         }
 
-        $data = self::getJsonContent();
-        $model = collect($data['models'])->where('name', $this->ModelName)->first();
+        $model = $this->jsonModel();
         if (! $model) {
             return;
         }
 
         $requestType = str_contains(basename($filePath), 'CreateRequest') ? 'Create' : 'Update';
-        $requestData = collect($model['requests'] ?? [])->firstWhere('name', $requestType);
+        $requestData = self::firstNamed($model['requests'] ?? [], $requestType);
         if (! $requestData) {
             return;
         }
 
         $rules = isset($requestData['rules']) && is_array($requestData['rules']) ? $requestData['rules'] : [];
 
-        $fileContent = file_get_contents($filePath);
+        $fileContent = self::contents($filePath);
 
         // El stub de Update trae la regla del identificador por defecto, para
         // que el archivo sea correcto aunque nadie lo importe. Si el JSON
@@ -161,10 +167,10 @@ class RequestsTool extends Tool
                 '/^[ \t]*'.preg_quote("'{$idKey}' => 'required|numeric',", '/').'\R/m',
                 '',
                 $fileContent
-            );
+            ) ?? throw MakerException::rewriteFailed($filePath);
         }
 
-        return file_put_contents($filePath, str_replace(
+        file_put_contents($filePath, str_replace(
             '//RULES//',
             $this->buildRules($rules),
             $fileContent

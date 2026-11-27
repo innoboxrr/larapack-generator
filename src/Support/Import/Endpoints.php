@@ -77,6 +77,8 @@ final class Endpoints
     /**
      * La URI de las acciones CRUD. Un endpoint con la misma URI quedaría
      * detrás de la CRUD, que se registra antes.
+     *
+     * @return list<string>
      */
     public static function crudUris(): array
     {

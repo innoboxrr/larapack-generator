@@ -43,7 +43,13 @@ class GeneratorServiceProvider extends ServiceProvider
         $classes = [];
 
         foreach (glob(__DIR__.'/../Commands/*Command.php') ?: [] as $file) {
-            $classes[] = self::COMMAND_NAMESPACE.basename($file, '.php');
+            $class = self::COMMAND_NAMESPACE.basename($file, '.php');
+
+            // Un archivo que se llame *Command y no sea un comando no se
+            // registra: Artisan fallaría al instanciarlo.
+            if (is_a($class, Command::class, true)) {
+                $classes[] = $class;
+            }
         }
 
         return $classes;

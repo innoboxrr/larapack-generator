@@ -10,27 +10,27 @@ use Innoboxrr\LarapackGenerator\Tools\Tool;
 
 class PivotMigrationTool extends Tool
 {
-    protected $migrationPath;
+    protected string $migrationPath = '';
 
-    protected $migrationTemplatePath;
+    protected string $migrationTemplatePath = '';
 
-    protected $migrationName;
+    protected string $migrationName = '';
 
-    private function setMigrationPath()
+    private function setMigrationPath(): static
     {
         $this->migrationPath = get_path('database/migrations');
 
         return $this;
     }
 
-    private function setPivotMigrationTemplatePath()
+    private function setPivotMigrationTemplatePath(): static
     {
         $this->migrationTemplatePath = stubs_path('PivotMigration');
 
         return $this;
     }
 
-    public function create(string $migrationName)
+    public function create(string $migrationName): bool
     {
         $this->migrationName = $migrationName;
         $this->setMigrationPath()
@@ -61,7 +61,7 @@ class PivotMigrationTool extends Tool
         return true;
     }
 
-    public function remove(string $migrationName)
+    public function remove(string $migrationName): bool
     {
         $this->migrationName = $migrationName;
         // Asegurarte de que la zona horaria sea la correcta
@@ -85,24 +85,26 @@ class PivotMigrationTool extends Tool
         return true;
     }
 
-    private function replaceMigrationData($migrationFile)
+    private function replaceMigrationData(string $migrationFile): void
     {
-        $content = file_get_contents($migrationFile);
+        $content = self::contents($migrationFile);
         $content = str_replace('migration_name', TablePrefix::table($this->migrationName), $content);
         file_put_contents($migrationFile, $content);
     }
 
-    protected function processFileWithJson($migrationFile)
+    protected function processFileWithJson(string $migrationFile): void
     {
-        $data = self::getJsonContent();
-        $pivot = collect($data['pivots'])->where('name', $this->migrationName)->first();
-        $fileContent = file_get_contents(filename: $migrationFile);
+        $pivot = self::declaredEntry('pivots', $this->migrationName);
+        $fileContent = self::contents($migrationFile);
         $columnsSchema = $this->generateMigrationColumns($pivot['props']);
         $updatedFileContent = str_replace('//EDIT//', $columnsSchema, $fileContent);
         file_put_contents($migrationFile, $updatedFileContent);
     }
 
-    private function generateMigrationColumns(array $props)
+    /**
+     * @param  list<array<string, mixed>>  $props
+     */
+    private function generateMigrationColumns(array $props): string
     {
         $columns = '';
         foreach ($props as $index => $prop) {
@@ -119,7 +121,10 @@ class PivotMigrationTool extends Tool
         return $columns;
     }
 
-    private function getColumnDefinition(array $prop)
+    /**
+     * @param  array<string, mixed>  $prop
+     */
+    private function getColumnDefinition(array $prop): string
     {
         $column = "\$table->{$prop['type']}('{$prop['name']}')";
 

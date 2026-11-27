@@ -2,17 +2,23 @@
 
 namespace Innoboxrr\LarapackGenerator\Tools\Events;
 
+use Innoboxrr\LarapackGenerator\Tools\ModelArtifact;
 use Innoboxrr\LarapackGenerator\Tools\Tool;
 
-class EventsTool extends Tool
+class EventsTool extends Tool implements ModelArtifact
 {
-    private $eventsPath;
+    private string $eventsPath = '';
 
-    private $eventsTemplatePath;
+    private string $eventsTemplatePath = '';
 
-    private $mainEventsPath;
+    private string $mainEventsPath = '';
 
-    private $events = [
+    /**
+     * Cada evento con sus oyentes, en el orden en que se generan.
+     *
+     * @var array<string, list<string>>
+     */
+    private array $events = [
         'CreateEvent' => [
             'DefaultOperation',
         ],
@@ -34,21 +40,21 @@ class EventsTool extends Tool
         ],
     ];
 
-    private function setEventsPath()
+    private function setEventsPath(): static
     {
         $this->eventsPath = get_path(app_dir_name().'/Http/Events');
 
         return $this;
     }
 
-    private function setEventsTemplatePath()
+    private function setEventsTemplatePath(): static
     {
         $this->eventsTemplatePath = stubs_path('Events');
 
         return $this;
     }
 
-    private function setMainEventsPath()
+    private function setMainEventsPath(): static
     {
         $path = $this->eventsPath.'/'.$this->PascalCaseModelName;
         if (! file_exists($path)) {
@@ -59,7 +65,7 @@ class EventsTool extends Tool
         return $this;
     }
 
-    private function setModelEventsPath()
+    private function setModelEventsPath(): static
     {
         $path = $this->mainEventsPath.'/'.'Events';
         if (! file_exists($path)) {
@@ -69,7 +75,7 @@ class EventsTool extends Tool
         return $this;
     }
 
-    private function setModelListenersPath()
+    private function setModelListenersPath(): static
     {
         $path = $this->mainEventsPath.'/'.'Listeners';
         if (! file_exists($path)) {
@@ -79,9 +85,9 @@ class EventsTool extends Tool
         return $this;
     }
 
-    public function create(string $ModelName)
+    public function create(string $ModelName): bool
     {
-        $this->init($ModelName)
+        return $this->init($ModelName)
             ->setEventsPath()
             ->setEventsTemplatePath()
             ->setMainEventsPath()
@@ -90,28 +96,32 @@ class EventsTool extends Tool
             ->createEvents();
     }
 
-    private function createEvents()
+    private function createEvents(): bool
     {
+        $written = false;
+
         foreach ($this->events as $event => $listeners) {
             if (! $this->declares(lcfirst(substr($event, 0, -strlen('Event'))))) {
                 continue;
             }
 
-            $this->createEvent($event);
+            $written = $this->createEvent($event) || $written;
             foreach ($listeners as $listener) {
-                $this->createListener($event, $listener);
+                $written = $this->createListener($event, $listener) || $written;
             }
         }
+
+        return $written;
     }
 
-    private function createEvent($eventName)
+    private function createEvent(string $eventName): bool
     {
         $eventFile = $this->mainEventsPath.'/Events/'.$eventName.'.php';
 
         return $this->generate($this->eventsTemplatePath.'/Events/'.$eventName.'.txt', $eventFile);
     }
 
-    private function createListener($eventName, $listenerName)
+    private function createListener(string $eventName, string $listenerName): bool
     {
         $listenerPath = $this->createEventListenerDir($eventName);
         $listenerFile = $listenerPath.'/'.$listenerName.'.php';
@@ -119,7 +129,7 @@ class EventsTool extends Tool
         return $this->generate($this->eventsTemplatePath.'/Listeners/'.$eventName.'/'.$listenerName.'.txt', $listenerFile);
     }
 
-    private function createEventListenerDir($eventName)
+    private function createEventListenerDir(string $eventName): string
     {
         $path = $this->mainEventsPath.'/Listeners/'.$eventName;
         if (! file_exists($path)) {
@@ -129,7 +139,7 @@ class EventsTool extends Tool
         return $path;
     }
 
-    public function remove(string $ModelName)
+    public function remove(string $ModelName): bool
     {
         $this->init($ModelName)
             ->setEventsPath();

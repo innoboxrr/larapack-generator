@@ -1,0 +1,21 @@
+{
+    "$schema": "https://raw.githubusercontent.com/infection/infection/0.31.9/resources/schema.json",
+    "source": {
+        "directories": ["src/Support"],
+        "excludes": [
+            "#(^|/)(?!(?:Verifier|ControllerShape|Guard|HandRolledLock|PhpOutline|LegacySecurity|LegacyFix|CiGate)\\.php$)[^/]+$#"
+        ]
+    },
+    "timeout": 30,
+    "logs": {
+        "text": ".infection/infection.log",
+        "summary": ".infection/summary.log",
+        "json": ".infection/infection.json",
+        "perMutator": ".infection/per-mutator.md"
+    },
+    "tmpDir": ".infection/tmp",
+    "mutators": {
+        "@default": true
+    },
+    "testFrameworkOptions": "--filter='GuardTest|GuardHandRolledTest|GuardInputsTest|VerifyTest|VerifyDeclaredEndpointsTest|VerifyControllerShapeTest|VerifyDeclaredShapeTest|VerifyLegacySecurityTest|VerifierTest|HandRolledLockTest|HandRolledLockFormatTest|PhpOutlineTest|PhpOutlineEdgeCasesTest|ProjectSourcesTest|ControllerShapeTest|LegacySecurityTest|LegacyFixTest|FixReviewTest|FixLegacySecurityTest|CiCommandTest|CiGateTest'"
+}

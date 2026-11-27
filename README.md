@@ -1315,8 +1315,9 @@ php artisan larapack:hand-rolled revoke 'App\Http\Controllers\Integrations\Inbou
 
 Guarda el objetivo (`Clase` o `Clase::metodo`, con el nombre completo), la
 razón y la huella del código —sha256 de los tokens, sin espacios ni
-comentarios: de un método, su firma y su cuerpo; de una clase, todos sus
-métodos, su padre y sus traits—, ordenado y estable. Cambiar la razón o el
+comentarios: de un método, su firma (con el `&` si devuelve por referencia) y
+su cuerpo; de una clase, todos sus métodos, su padre y sus traits—, ordenado y
+estable. Cambiar la razón o el
 código invalida la aprobación: a una clase aprobada no se le añade una acción
 sin que el dueño la vuelva a aprobar, y ese diff del candado es el que revisa.
 `approve` recalcula la huella; sin nada que aprobar, `approve --all` no crea un
@@ -1813,9 +1814,13 @@ precio es que GitHub no deja aprobar un PR propio: los PR del agente salen de
 una cuenta que no sea la del único dueño de código. `--no-enforce-admins` deja
 `false`, con aviso.
 
-`larapack:audit` avisa con `verify-job` si la CI de un paquete que usa
-LaraPack no corre `larapack:verify --strict`; uno en `packages/` de un
-repositorio cuya raíz ya lo corre no avisa.
+`larapack:audit` avisa con `verify-job` si la CI de un paquete que genera con
+LaraPack (su `.larapack/manifest.json` registra modelos o archivos del paquete,
+o su `laraimport.json` declara algún modelo) no corre
+`larapack:verify --strict`; uno en `packages/` de un repositorio cuya raíz ya
+lo corre no avisa, y uno que sólo lo tiene en `require-dev` para auditar, o
+con un manifiesto o un laraimport vacíos —su `verify --strict` daría
+`empty-manifest`—, tampoco.
 
 ---
 

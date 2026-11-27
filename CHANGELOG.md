@@ -1,5 +1,302 @@
 # Changelog
 
+## 9.2.0
+
+### PHPStan en nivel 8, y lo que escondía
+
+`phpstan.neon.dist` pasa del nivel 5 al 8 sobre `src/`, sin baseline ni
+`ignoreErrors`: los 442 errores que daba el nivel 8 sobre 9.1 se arreglaron
+uno a uno (335 del 6, casi todos tipos sin declarar en `src/Tools`; el resto,
+nulos y `false` sin comprobar). Estos eran fallos de verdad, y tienen su
+prueba en `StaticAnalysisRegressionTest`:
+
+- **Un `composer.json` que no es JSON válido se reescribía.** `json_decode()`
+  daba null, se le añadía la clave de los proveedores o del PSR-4 y se escribía
+  encima un archivo con sólo eso. Ahora `composer.json` se lee y se valida en
+  `Tool::init`, antes de escribir nada: todo comando que genera falla con un
+  mensaje y no lo toca. `larapack:test`, que escribía `tests/TestCase.php` y
+  `tests/User.php` antes de llegar a él, ya no deja nada a medias.
+- **`larapack:test` borraba lo que hubiera en `autoload-dev`** si no traía
+  `psr-4`: la sección se sustituía entera. Ahora se añade la entrada.
+- **Sin un `autoload.psr-4` que apunte a `src/` (o `app/`) no hay namespace, y
+  ahora se falla.** En 9.1 `get_namespace()` devolvía null: `larapack:factory`
+  reventaba con un TypeError de `array_keys(null)` y lo demás, con otro en el
+  manifiesto. Hacer que devolviera `''` habría sido peor —se probó—: el modelo
+  salía en el namespace global (`namespace Models;`) y la factoría escribía
+  `Database\Factories\` sin el prefijo del paquete en su `composer.json`, con
+  el comando en 0. Ahora es una `MakerException` que dice qué falta. La
+  entrada se lee como la lee Composer: la ruta sin barra final (`"src"`) y una
+  lista de rutas (`["lib/", "src/"]`) valen —en 9.1 tampoco se reconocían—; el
+  prefijo vacío (`""`) también lo acepta Composer, pero es el namespace global
+  y se rechaza con su propio mensaje.
+- **Un `composer.json` roto en una aplicación** se leía como vacío, es decir,
+  como un paquete con destino `src/`. Ahora falla igual que en un paquete,
+  antes de escribir nada.
+- **Un modelo o un pivote que el laraimport no declara**, con el importador
+  activo, acababa en un TypeError sin contexto; ahora dice cuál falta.
+
+Y otros que eran frágiles. `revert()` de `larapack:fix` (`LegacyFix`) no
+dependía de que `plan()` anote cada archivo una vez, y debía: quitaba por
+índice mientras reindexaba, así que con dos arreglos del mismo archivo dejaba
+el segundo en `fixed` al devolver el original. Hoy `plan()` anota cada archivo
+una vez y el caso no se alcanza; ahora tampoco depende de ello. Las pruebas
+están en `FixLegacySecurityTest`: la de los dos arreglos fuerza ese estado por
+reflexión, y la de un Pint falso que rompe lo que toca cubre la reversión de
+punta a punta, con un arreglo por archivo.
+
+Además, un archivo que no se podía leer, o una expresión regular que fallaba,
+se reescribía vacío; y donde una lectura decide algo —el manifiesto, el hash
+de un archivo, el esquema, `ecosystem.json`— un `false` pasaba por `''`: un
+manifiesto ilegible parecía vacío y un archivo ilegible, editado a mano. Ahora
+esas lecturas van por `Files::read`, que falla con la ruta en el mensaje
+(`FilesTest`: un archivo que no existe y un directorio).
+`full-model`, `remove-full-model` y `providers` instanciaban las herramientas
+por reflexión y llamaban a `create()` sobre un `object`; ahora las de un modelo
+implementan `ModelArtifact` y las del paquete, `PackageArtifact`, y
+`Artifacts` falla si un nombre de la lista no resuelve a una de ellas, en vez
+de saltársela en silencio (`ArtifactsTest` recorre las tres listas, y prueba
+un nombre que no existe y una clase que existe sin el contrato, de herramienta
+y de proveedor).
+
+Con un `composer.json` válido y su PSR-4, nada cambia en lo que se genera: las
+fotos y la suite siguen idénticas.
+
+**Por qué no el 9.** El nivel 9 da unos 600 errores (605 medidos con PHP 8.3
+al cerrar la ronda), y casi todos vienen de lo mismo: el laraimport,
+`ecosystem.json` y las opciones de consola llegan como `mixed`, y el código
+los lee sabiendo que el esquema ya los validó. Subirlo de verdad es declarar la
+forma del documento validado (`@phpstan-type` por modelo, propiedad, relación y
+endpoint) en el único punto donde el esquema la garantiza; anotarlo línea a
+línea sería callarlo.
+
+`tests/` no entra en el análisis: en el nivel 5 da 41 errores y casi todos son
+clases que sólo existen en tiempo de ejecución —lo que el generador escribe en
+un proyecto temporal y luego se carga—, que habría que callar una a una.
+
+### `larapack:audit` ya no pide `verify --strict` a quien no genera
+
+El aviso `verify-job` se daba a todo paquete que tuviera LaraPack en
+`composer.json`, y muchos lo tienen en `require-dev` sólo para correr
+`larapack:audit`: no generan nada, y su `verify --strict` fallaría con
+`empty-manifest`. Les pedía una puerta que estaría siempre en rojo. Ahora sólo
+se pide a quien genera con LaraPack, y con la misma vara que usa verify para
+no dar `empty-manifest`: su `.larapack/manifest.json` registra modelos o
+archivos del paquete, o su `laraimport.json` declara algún modelo. Que el
+archivo exista no basta: un manifiesto sin nada registrado o un laraimport sin
+modelos también darían `empty-manifest`. Un laraimport con modelos que aún no
+se importó sí recibe el aviso: ahí el rojo de verify es real. Está en
+`AuditTest`. Cuántos paquetes del ecosistema dejan de recibirlo no se midió
+aquí: el ecosistema no está en este repositorio.
+
+### Pruebas de mutación de lo que sostiene la garantía
+
+Que la suite pase por una línea no dice que compruebe lo que hace. Ahora se
+mide: [`infection.json5`](infection.json5) muta las ocho piezas de las que
+depende lo que LaraPack promete —`Verifier`, `ControllerShape`,
+`LegacySecurity`, `PhpOutline`, `HandRolledLock`, `Guard`, `LegacyFix` y
+`CiGate`— y el trabajo «Mutación» de la CI
+([`mutation.yml`](.github/workflows/mutation.yml)) falla si el MSI de las ocho
+juntas, o el de cualquiera, baja de lo logrado. Cómo correrlo en local, en
+CONTRIBUTING («Las pruebas de mutación»); el MSI de cada pieza antes y después,
+y los mutantes que sobreviven con su razón, en
+[`docs/mutacion.md`](docs/mutacion.md).
+
+MSI antes → después: `HandRolledLock` 53,7 → 97,9 %, `CiGate` 79,7 → 95,9 %,
+`Guard` 75,0 → 95,7 %, `ControllerShape` 77,4 → 95,3 %, `Verifier` 82,7 →
+93,3 %, `LegacySecurity` 74,5 → 92,8 %, `PhpOutline` 83,8 → 90,3 %,
+`LegacyFix` 72,5 → 89,9 %; las ocho juntas, 77,0 → 93,4 %
+(4335 mutantes; 93,9 % de los que algún test recorre). «Antes» se
+midió sin `--with-uncovered`, sólo con lo que la suite de la 9.1.0 recorría;
+«después», con él: lo que ningún test recorre también se muta y cuenta en
+contra. Sin eso, Infection no muta lo no cubierto, y borrar el test que cubría
+un mutante difícil subía el MSI. La CI exige `--min-msi=93` y
+`--min-covered-msi=93`, y a cada pieza su suelo de
+[`.github/mutation-floors.json`](.github/mutation-floors.json), que comprueba
+`.github/scripts/mutation-floors.php` (con su test). Corre con PHP 8.3,
+PHPUnit 12.5 e Infection 0.31.9, la configuración con la que se midió, sólo en
+los pull requests que tocan `src/`, `tests/` o su configuración (y a mano), con
+un límite de una hora y cancelando la corrida anterior de la misma rama. Hasta
+que corra en un pull request, no se ha visto pasar en GitHub: lo de aquí está
+medido en local con esa misma configuración.
+
+Las pruebas nuevas comparan mensajes enteros y casos límite, y convierten los
+avisos de PHP en excepciones como Laravel: un mutante que sólo deja un aviso
+también cuenta.
+
+Queda pendiente, y apuntado en `docs/mutacion.md`: los mutantes de las barras
+invertidas de `CiGate` sólo los mataría una CI en Windows, y el trabajo
+`windows-guard` no corre `CiGateTest` ni `GuardInputsTest` (lo que en ellos
+depende del sistema —`posix_geteuid()`, permisos, enlaces— no está escrito para
+Windows). Una primera versión de ese documento decía lo contrario.
+
+Los mutantes que sobrevivían destaparon fallos, y se arreglan con su prueba:
+
+- **`PhpOutline` llamaba `&` a un método que devuelve por referencia**
+  (`public function &items()`). Desde PHP 8.1 el `&` es un token con nombre
+  (`T_AMPERSAND_NOT_FOLLOWED_BY_VAR_OR_VARARG`) y se comparaba con el carácter
+  suelto. ControllerShape lo leía como una acción llamada `&`, y la huella de
+  una excepción aprobada sobre ese método no nombraba el método. El `&` no se
+  pierde: el esquema del método lo apunta (`byRef`) y la huella lo pone
+  delante de la firma, como en el código, así que pasar un método aprobado a
+  devolver por referencia (o al revés) deja la aprobación sin efecto. La
+  huella de los métodos sin `&` no cambia.
+- **La línea de un `;` o un `(` tras un salto dentro de un espacio** era la de
+  la línea anterior. Afecta a la línea que citan los mensajes de la forma del
+  constructor.
+- **La guardia no veía `bash -ce '…'`**: sólo leía como orden el argumento de
+  un grupo de opciones que *acaba* en `c` (`-c`, `-ec`). `bash -ce` ejecuta el
+  texto igual.
+- **La guardia leía `<<<` como un heredoc.** Su segundo `<` abría un heredoc
+  con la cadena de delimitador, y las líneas siguientes —órdenes— se tomaban
+  por su cuerpo: `cat <<< x` y debajo `larapack:hand-rolled approve` pasaba.
+  Ahora `<<<` se salta entero, y la cadena que recibe una shell
+  (`bash <<< '…'`) se lee como órdenes, igual que su heredoc.
+- **La guardia dejaba pasar lo que no terminaba de leer.** Lee hasta tres
+  shells dentro de la orden (`bash -c`, `eval`, un heredoc que recibe una
+  shell); más adentro no leía nada y lo daba por bueno, así que
+  `larapack:hand-rolled approve` dentro de cuatro `bash -c` pasaba. Una prueba
+  de mutación lo fijaba como si fuera lo esperado. Ahora falla cerrado: lo que
+  no se termina de leer cuenta como una aprobación y se bloquea. Al hook sólo
+  llegan las órdenes que nombran `approve`, `revoke` o `hand-rolled`, así que
+  lo único que se bloquea de más son cuatro shells anidadas que además nombran
+  una de esas palabras.
+- **`LegacySecurity` confundía `$Appends` con `$appends`**: las variables de
+  PHP distinguen mayúsculas, y bajar todo a minúsculas avisaba de un
+  setAppends() que recibía la variable limpia.
+- Código muerto: `PhpOutline::skipTo()`, que saltaba hasta el `;` de un
+  `use function` lo que `parseFile()` ya recorre sin registrar nada.
+
+Al actualizar: un método que devuelve por referencia y estaba aprobado en
+`.larapack/hand-rolled.lock` se aprobó como `Clase::&`. Ahora es
+`Clase::metodo`, con otra huella: la aprobación vieja sale como sobrante y el
+método vuelve a pedir la del dueño.
+
+### El hook previo ya no escribe «Broken pipe»
+
+El hook `PreToolUse` que instala `larapack:skill --hooks` le pasa la entrada a
+PHP con `printf … |`, y comprobaba que existiera `vendor/bin/builder` (o
+`vendor/autoload.php`) *dentro* de la tubería. Sin `vendor/`, el lado que lee
+salía sin leer; si salía antes de que printf escribiera, la shell añadía
+`printf: write error: Broken pipe` a la salida del hook. Con una orden corta
+era una carrera —el test `AgentHooksTest` que fallaba de vez en cuando—, y con
+una entrada mayor que el búfer de la tubería, siempre. Ahora la comprobación va
+delante de la tubería, y el error de escritura de printf (que aquí sólo puede
+ser esa tubería cerrada) va a `/dev/null`: lo que cuenta es lo que dice PHP y
+su código de salida. El test nuevo lo prueba con 256 KiB de entrada, sin
+builder y con uno que sale sin leer, y repite la orden corta veinticinco veces.
+
+Al actualizar: un hook ya instalado se reconoce y no se reescribe. Para tener
+el nuevo, quita el grupo `PreToolUse` de LaraPack de `.claude/settings.json` y
+vuelve a correr `larapack:skill --hooks`.
+
+### La CI prueba el ecosistema publicado, cada noche y antes de publicar
+
+El choque entre `innoboxrr/laravel-setup` y la 9.0 —laravel-setup pedía
+`^7.10 || ^8.0` y Composer no dejaba instalar la 9— lo descubrió un cliente: las
+pruebas de punta a punta usan el `vendor/` de este repositorio y nunca instalan
+LaraPack junto a lo publicado.
+
+`.github/workflows/ecosystem.yml` corre cada noche, a mano, en los *pull
+request* que tocan el workflow, su script, sus comprobaciones, su laraimport,
+`ecosystem.json`, `composer.json` o `VERSION`, y **antes de publicar**: con Vue
+y con React. Los pasos están en `.github/scripts/ecosystem-e2e.sh`, que se corre
+igual en local: Laravel 13 recién creado con `create-project`, la última
+laravel-setup publicada que cumpla `SETUP_CONSTRAINT` (`^7.2.1` por omisión)
+fijada a su versión exacta, LaraPack desde este checkout como dist
+(`git archive`, con la versión de `VERSION`), `app:setup` y `app:install`, un
+laraimport de ejemplo (dos modelos con relación, endpoints de modelo y un
+`controllers[]`), `validate --strict` e `import`, `migrate` en SQLite,
+`npm run build`, `php artisan test` contando por archivo que cada test generado
+se ejecute —incluidos los de autorización de la 9.1— y ninguno se salte,
+`verify --strict --format=json`, `larapack:ci --dry-run` y la guardia de los
+hooks con el `artisan` de la aplicación.
+
+**La puerta de `Release`.** El incidente fue una subida de versión, así que la
+prueba corre también donde se publica: `release.yml` mira si la versión de
+`VERSION` ya tiene tag y, si no, llama a `ecosystem.yml` (ahora también
+`workflow_call`) y sólo etiqueta si pasa. Una mayor que la laravel-setup
+publicada no admita se queda sin publicar, en vez de descubrirse a la noche
+siguiente con Packagist ya sirviéndola. El orden para una mayor queda en
+CONTRIBUTING: primero laravel-setup amplía su restricción, después se sube
+`VERSION`. Los PR que cambian `src/` no la disparan (45 minutos por interfaz):
+los cubren la noche y esta puerta.
+
+**Las comprobaciones pueden fallar.** Las lecturas del script —qué
+laravel-setup, de dónde salió LaraPack, el informe JUnit, el de `verify`— están
+en `.github/scripts/ecosystem-e2e-checks.php`. En la primera versión eran
+`php -r` con `exit("mensaje")`, que en PHP imprime y sale con 0: la que cuenta
+los tests generados no podía fallar ni con tests saltados, ni con un archivo
+generado sin ejecutar, ni con el XML roto. Ahora cada fallo sale con 1 y el
+motivo en stderr, y `EcosystemE2eChecksTest` lo comprueba con esos informes
+rotos. `EcosystemE2eScriptTest` corre el principio del script con un `composer`
+de mentira: qué laravel-setup elige, que falla si ninguna cumple la
+restricción, que vuelve a mirar el origen de LaraPack y a quién le llega el
+token.
+
+Si un paso falla, el mensaje dice qué paquete y por qué: el choque que cita
+Composer, los paquetes de `vendor/innoboxrr/` de la traza, el paquete npm que
+no resuelve o, para cada hallazgo de `verify`, de dónde viene el archivo. Que
+la ruta exista entre los stubs de laravel-setup no basta para culparla —LaraPack
+regenera encima el User, su política o las rutas—: sólo un archivo idéntico al
+stub se le atribuye; uno con otro contenido se dice «en sus stubs, pero
+reescrito».
+
+Además: el origen de LaraPack (el repositorio `path`, con la versión de
+`VERSION`) se mira después del `require`, de `app:install` y de `import`, porque
+`app:setup` reescribe su restricción en `composer.json` y `app:install` corre
+`composer update`; y el token de GitHub llega como `ECOSYSTEM_COMPOSER_AUTH`,
+que el script saca del entorno y sólo pasa a Composer y a `app:install`: ni
+`npm install` ni los tests de la aplicación lo ven.
+
+**Lo primero que encontró:** una aplicación recién hecha con laravel-setup 7.2.0
+no pasa `larapack:verify --strict`, la puerta que pone `larapack:ci` desde la
+9.1: el `Route::fallback()` de la SPA en `routes/web.php` (de los stubs de
+laravel-setup) lleva lógica en un closure, y `verify` lo avisa como
+`route-closure`. No se deja como hallazgo esperado: `verify --strict` tiene que
+salir limpio, sin excepciones, porque un rojo conocido tapa al siguiente. El
+arreglo es de laravel-setup (el fallback pasa a un controlador que sólo hace
+`return $request->handle();`), sale en su 7.2.1, y por eso `SETUP_CONSTRAINT`
+pide `^7.2.1`. Si ninguna versión publicada cumple la restricción, el workflow
+falla en el paso que la busca con «ninguna versión publicada de
+innoboxrr/laravel-setup cumple SETUP_CONSTRAINT=^7.2.1»: un rojo distinto del
+de cualquier regresión. Al cerrar este cambio Packagist ya sirve la 7.2.1 (que
+admite `^9.0`) y el script la elige. Con la 7.2.0, la primera versión del
+script pasaba todo salvo `verify`, con Vue y con React.
+
+Lo que no se ha podido probar aquí, y por qué: la corrida entera con la 7.2.1
+y con este script. El contenedor donde se hizo el cambio no puede bajar las
+dist de GitHub (el proxy las rechaza) y los clones de git con los que Composer
+lo suple llenaron el disco a mitad del `create-project`. Lo nuevo del script se
+probó por partes: las comprobaciones con `EcosystemE2eChecksTest`, el principio
+del script con `EcosystemE2eScriptTest` y la elección de versión contra
+Packagist de verdad. La primera noche o el primer PR que toque `VERSION` es la
+corrida entera. La puerta de `Release` y el `workflow_call` sólo existen en
+GitHub Actions: los tests comprueban la forma de los workflows, no una
+ejecución.
+
+Cómo correrlo en local, también sin acceso a las dist de GitHub, en
+CONTRIBUTING.md.
+
+### Al actualizar
+
+- **Un proyecto sin `autoload.psr-4` hacia `src/` (o `app/`), o con un
+  `composer.json` que no es JSON válido, ya no genera**: falla con un mensaje.
+  En 9.1 tampoco generaba nada correcto (acababa en un TypeError); añade la
+  entrada (`"Acme\\Blog\\": "src/"`) y vuelve a ejecutar. La ruta sin barra
+  final (`"src"`) o dentro de una lista de rutas vale igual. **Si la única
+  entrada que apunta a `src/` es la del prefijo vacío (`""`)**, también falla:
+  antes se generaba en el namespace global; dale un namespace con nombre.
+- **Rompe si extiendes `Tool` fuera del generador**, aunque sea una menor. Las
+  herramientas no se pensaron como punto de extensión, pero nada lo impedía:
+  los métodos de `Tool` llevan ahora tipos nativos y una subclase que
+  sobrescriba uno sin ellos (`processFileWithJson(): void`, `init(): static`,
+  `addProvidersToComposerJson(): void`…) no compila; `create()` de
+  `EventsTool`, `RequestsTool` y `TestTool` devuelve `bool`, como las demás, y
+  una subclase que lo declare sin tipo tampoco. Hay que añadir los mismos tipos
+  a las firmas que sobrescribes.
+- Si la CI de un paquete corre `larapack:audit --strict` y tenía el job de
+  verify sólo por el aviso, sin generar nada, ese job puede irse.
+
 ## 9.1.0
 
 Una menor: la CI pasa a ser la barrera de la arquitectura y las excepciones

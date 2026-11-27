@@ -9,6 +9,7 @@ use Illuminate\Support\Pluralizer;
 use Illuminate\Support\Str;
 use Innoboxrr\LarapackGenerator\Exceptions\MakerException;
 use Innoboxrr\LarapackGenerator\Support\Declaration;
+use Innoboxrr\LarapackGenerator\Support\Files;
 use Innoboxrr\LarapackGenerator\Support\Generation;
 use Innoboxrr\LarapackGenerator\Support\Literal;
 use Innoboxrr\LarapackGenerator\Support\Manifest;
@@ -18,70 +19,78 @@ use Innoboxrr\LarapackGenerator\Support\TablePrefix;
 
 class Tool
 {
-    protected static $fromJsonImporter = false;
+    protected static bool $fromJsonImporter = false;
 
-    protected static $jsonContent;
+    /**
+     * El laraimport ya resuelto, tal como lo deja ImportDocument::toArray().
+     *
+     * @var array<string, mixed>
+     */
+    protected static array $jsonContent = [];
 
     // INFLECTOR
-    protected $inflector;
+    protected Inflector $inflector;
 
     // NAMESPACE
-    protected $namespace;
+    //
+    // Todas las cadenas de nombres las rellena init(). Valen '' hasta entonces,
+    // que es lo mismo que daba el null de antes al concatenarlas.
+    protected string $namespace = '';
 
-    protected $dotNamespace;
+    protected string $dotNamespace = '';
 
-    protected $kebabNamespace;
+    protected string $kebabNamespace = '';
 
-    protected $packageName;
+    protected string $packageName = '';
 
-    protected $namespaceWithoutSeparation;
+    protected string $namespaceWithoutSeparation = '';
 
-    protected $lowerNamespace;
+    protected string $lowerNamespace = '';
 
-    protected $slashLowerNamespace;
+    protected string $slashLowerNamespace = '';
 
-    protected $databaseNamespace;
+    protected string $databaseNamespace = '';
 
-    protected $testsNamespace;
+    protected string $testsNamespace = '';
 
-    protected $configKey;
+    protected string $configKey = '';
 
-    protected $excelViewPrefix;
+    protected string $excelViewPrefix = '';
 
     // MODEL NAME
-    protected $ModelName;
+    protected string $ModelName = '';
 
-    protected $snake_case_model_name;
+    protected string $snake_case_model_name = '';
 
-    protected $camelCaseModelName;
+    protected string $camelCaseModelName = '';
 
-    protected $PascalCaseModelName;
+    protected string $PascalCaseModelName = '';
 
-    protected $kebabcasemodelname;
+    protected string $kebabcasemodelname = '';
 
-    protected $dotModelName;
+    protected string $dotModelName = '';
 
-    protected $pluralModelName;
+    protected string $pluralModelName = '';
 
-    protected $plural_snake_case_model_name;
+    protected string $plural_snake_case_model_name = '';
 
-    protected $pluralCamelCaseModelName;
+    protected string $pluralCamelCaseModelName = '';
 
-    protected $PluralPascalCaseModelName;
+    protected string $PluralPascalCaseModelName = '';
 
-    protected $pluralkebabcasemodelname;
+    protected string $pluralkebabcasemodelname = '';
 
-    protected $pluralDotModelName;
+    protected string $pluralDotModelName = '';
 
-    protected $SingularModelLabel;
+    protected string $SingularModelLabel = '';
 
-    protected $PluralModelLabel;
+    protected string $PluralModelLabel = '';
 
     // MANIFIESTO
     protected ?Manifest $manifest = null;
 
     // SET FROM JSON IMPORTER
-    public static function setFromJsonImporter(bool $value)
+    public static function setFromJsonImporter(bool $value): void
     {
         self::$fromJsonImporter = $value;
     }
@@ -91,17 +100,93 @@ class Tool
         return self::$fromJsonImporter;
     }
 
-    public static function setJsonContent(array $content)
+    /**
+     * @param  array<string, mixed>  $content
+     */
+    public static function setJsonContent(array $content): void
     {
         self::$jsonContent = $content;
     }
 
+    /**
+     * @return array<string, mixed>
+     */
     public static function getJsonContent(): array
     {
         return self::$jsonContent;
     }
 
-    protected function processFileWithJson($fileToProcess) {}
+    /**
+     * Las entradas de una lista del laraimport importado —`models`, `pivots`—,
+     * sólo las que son objetos. Sin importación, o si no la declara, ninguna.
+     *
+     * Cada herramienta hacía `collect($data['models'])->where(...)` sobre lo que
+     * fuera que hubiera en esa clave; aquí se lee una vez y con su tipo.
+     *
+     * @return list<array<mixed>>
+     */
+    protected static function jsonEntries(string $key): array
+    {
+        $entries = self::$jsonContent[$key] ?? [];
+
+        return is_array($entries) ? array_values(array_filter($entries, 'is_array')) : [];
+    }
+
+    /**
+     * La entrada con ese nombre de una lista del laraimport, o null si no la
+     * declara.
+     *
+     * @return array<mixed>|null
+     */
+    protected static function jsonEntry(string $key, string $name): ?array
+    {
+        return self::firstNamed(self::jsonEntries($key), $name);
+    }
+
+    /**
+     * La primera entrada de una lista cuyo `name` es ése: un modelo, un
+     * pivote, una request declarada. Lo que no es un objeto no cuenta.
+     *
+     * @return array<mixed>|null
+     */
+    protected static function firstNamed(mixed $entries, string $name): ?array
+    {
+        foreach (is_array($entries) ? $entries : [] as $entry) {
+            if (is_array($entry) && ($entry['name'] ?? null) === $name) {
+                return $entry;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * El modelo que se está generando, tal como lo declara el laraimport.
+     *
+     * @return array<mixed>|null
+     */
+    protected function jsonModel(): ?array
+    {
+        return self::jsonEntry('models', $this->ModelName);
+    }
+
+    /**
+     * La entrada que el post-proceso del importador tiene que encontrar: el
+     * modelo que se está generando o el pivote que se está migrando.
+     *
+     * Sin ella, cada herramienta seguía con null y reventaba más abajo con un
+     * TypeError que no decía qué faltaba en el laraimport.
+     *
+     * @param  'models'|'pivots'  $key
+     * @return array<mixed>
+     */
+    protected static function declaredEntry(string $key, string $name): array
+    {
+        return self::jsonEntry($key, $name)
+            ?? throw MakerException::notDeclared($key === 'models' ? 'el modelo' : 'el pivote', $name);
+    }
+
+    protected function processFileWithJson(string $fileToProcess): void {}
 
     // INIT
 
@@ -132,7 +217,7 @@ class Tool
      *                             (proveedores, configuración), que no nombran
      *                             ningún modelo.
      */
-    protected function init(string $ModelName)
+    protected function init(string $ModelName): static
     {
         if ($ModelName !== '' && ! self::isValidModelName($ModelName)) {
             throw MakerException::invalidModelName($ModelName);
@@ -198,7 +283,7 @@ class Tool
 
     // MODEL NAME
 
-    private function setModelNames($ModelName)
+    private function setModelNames(string $ModelName): void
     {
         $this->ModelName = $ModelName;
         $this->snake_case_model_name = $this->inflector->tableize($this->ModelName);
@@ -290,35 +375,110 @@ class Tool
         return strtr($content, $this->replacementMap());
     }
 
-    protected function replaceData($file)
+    protected function replaceData(string $file): void
     {
-        file_put_contents($file, $this->replaceTokens(file_get_contents($file)));
+        file_put_contents($file, $this->replaceTokens(self::contents($file)));
 
         // Toda copia de un stub pasa por aquí, también las que no usan
         // generate(): así se formatea todo lo generado.
         Generation::written($file);
     }
 
-    public function addProvidersToComposerJson(array $providers)
+    /**
+     * @param  list<string>  $providers
+     */
+    public function addProvidersToComposerJson(array $providers): void
     {
-        // Una simulacion no escribe nada, tampoco composer.json.
-        if (app_dir_name() == 'src' && ! Generation::isDryRun()) {
-            $composerJsonPath = root_path().'/composer.json';
-            $composerJsonData = json_decode(file_get_contents($composerJsonPath), true);
-            if (! isset($composerJsonData['extra']['laravel']['providers'])) {
-                $composerJsonData['extra']['laravel']['providers'] = [];
-            }
+        $this->editComposerJson(function (array $composer) use ($providers): array {
+            $extra = self::arrayAt($composer, 'extra');
+            $laravel = self::arrayAt($extra, 'laravel');
+
             // Sin quitar repetidos, volver a ejecutar larapack:providers
             // declaraba cada proveedor otra vez y Laravel lo registraba dos.
-            $composerJsonData['extra']['laravel']['providers'] = array_values(array_unique(array_merge(
-                $composerJsonData['extra']['laravel']['providers'],
-                $providers
-            )));
-            file_put_contents(
-                $composerJsonPath,
-                json_encode($composerJsonData, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)
-            );
+            $laravel['providers'] = array_values(array_unique(array_merge(self::arrayAt($laravel, 'providers'), $providers)));
+            $extra['laravel'] = $laravel;
+            $composer['extra'] = $extra;
+
+            return $composer;
+        });
+    }
+
+    /**
+     * Añade una entrada PSR-4 bajo el namespace del paquete: el primero que
+     * declara `autoload.psr-4`, como siempre. Lo demás de la sección se queda
+     * como estaba.
+     *
+     * Sin namespace no se escribe nada: `Database\Factories\` a secas, en el
+     * composer.json de un paquete, choca con el de la aplicación que lo instala.
+     * init() ya falla antes (get_namespace()); esto es para quien llegue aquí
+     * sin pasar por él.
+     *
+     * @param  'autoload'|'autoload-dev'  $section
+     */
+    protected function addPsr4ToComposerJson(string $section, string $suffix, string $directory): void
+    {
+        $this->editComposerJson(function (array $composer) use ($section, $suffix, $directory): array {
+            $base = (string) (array_key_first(self::arrayAt($composer, 'autoload', 'psr-4')) ?? $this->namespace);
+
+            if ($base === '') {
+                throw MakerException::missingNamespace(root_path().'/composer.json', app_dir_name());
+            }
+
+            $entries = self::arrayAt($composer, $section);
+            $psr4 = self::arrayAt($entries, 'psr-4');
+            $psr4[$base.$suffix] = $directory;
+            $entries['psr-4'] = $psr4;
+            $composer[$section] = $entries;
+
+            return $composer;
+        });
+    }
+
+    /**
+     * Lee, cambia y vuelve a escribir composer.json, sólo en un paquete y nunca
+     * en una simulación.
+     *
+     * Un composer.json que no es un objeto JSON no se toca: antes json_decode()
+     * devolvía null, se le añadía la clave que tocaba y se escribía encima un
+     * archivo con esa clave y nada más.
+     *
+     * @param  callable(array<mixed>): array<mixed>  $edit
+     */
+    protected function editComposerJson(callable $edit): void
+    {
+        if (app_dir_name() != 'src' || Generation::isDryRun()) {
+            return;
         }
+
+        file_put_contents(root_path().'/composer.json', json_encode($edit(root_composer_json()), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+    }
+
+    /**
+     * El array que cuelga de esas claves, o uno vacío si falta alguna o no es
+     * un array.
+     *
+     * @param  array<mixed>  $data
+     * @return array<mixed>
+     */
+    protected static function arrayAt(array $data, string ...$keys): array
+    {
+        foreach ($keys as $key) {
+            $data = is_array($data[$key] ?? null) ? $data[$key] : [];
+        }
+
+        return $data;
+    }
+
+    /**
+     * El contenido de un archivo que se va a reescribir.
+     *
+     * file_get_contents() suelto devuelve false si no puede leer, y ese false
+     * acababa como '' en el file_put_contents() de después: el archivo se
+     * reescribía vacío. Aquí no se lee, se falla (`Files::read`).
+     */
+    protected static function contents(string $file): string
+    {
+        return Files::read($file);
     }
 
     // GENERACION
@@ -570,7 +730,7 @@ class Tool
      */
     protected function applyEndpoints(string $file): void
     {
-        $content = file_get_contents($file);
+        $content = self::contents($file);
 
         if (! str_contains($content, '//ENDPOINT_')) {
             return;
@@ -591,7 +751,7 @@ class Tool
                 ));
             },
             $content
-        );
+        ) ?? throw MakerException::rewriteFailed($file);
 
         file_put_contents($file, $content);
     }
@@ -616,7 +776,7 @@ class Tool
      */
     protected function applyBlocks(string $file): void
     {
-        $content = file_get_contents($file);
+        $content = self::contents($file);
 
         if (! str_contains($content, '@larapack:')) {
             return;
@@ -630,7 +790,7 @@ class Tool
 
     // TOOLS
 
-    protected function dropFile(string $file)
+    protected function dropFile(string $file): bool
     {
         return unlink($file);
     }
@@ -655,7 +815,7 @@ class Tool
         return (is_dir($path) || is_link($path)) ? $this->dropDir($path) : false;
     }
 
-    protected function dropDir(string $path)
+    protected function dropDir(string $path): bool
     {
         // Si la carpeta misma es un enlace, se quita el enlace: recorrerlo
         // vaciaba el destino y luego rmdir() fallaba sobre el enlace.

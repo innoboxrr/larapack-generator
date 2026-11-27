@@ -3,15 +3,16 @@
 namespace Innoboxrr\LarapackGenerator\Tools\Route;
 
 use Innoboxrr\LarapackGenerator\Support\Import\Endpoints;
+use Innoboxrr\LarapackGenerator\Tools\ModelArtifact;
 use Innoboxrr\LarapackGenerator\Tools\Tool;
 
-class RouteTool extends Tool
+class RouteTool extends Tool implements ModelArtifact
 {
-    protected $apiRoutepath;
+    protected string $apiRoutepath = '';
 
-    protected $routeTemplatePath;
+    protected string $routeTemplatePath = '';
 
-    private function setApiRoutepath()
+    private function setApiRoutepath(): static
     {
 
         $this->apiRoutepath = get_path('routes/api/models');
@@ -20,7 +21,7 @@ class RouteTool extends Tool
 
     }
 
-    private function setRouteTemplatePath()
+    private function setRouteTemplatePath(): static
     {
 
         $this->routeTemplatePath = stubs_path('Route');
@@ -29,7 +30,7 @@ class RouteTool extends Tool
 
     }
 
-    public function create(string $ModelName)
+    public function create(string $ModelName): bool
     {
 
         if (! $this->init($ModelName)->declaresAnyAction()) {
@@ -87,7 +88,7 @@ class RouteTool extends Tool
         return $lines;
     }
 
-    public function remove(string $ModelName)
+    public function remove(string $ModelName): bool
     {
 
         $this->init($ModelName)

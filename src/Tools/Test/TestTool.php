@@ -4,19 +4,20 @@ namespace Innoboxrr\LarapackGenerator\Tools\Test;
 
 use Innoboxrr\LarapackGenerator\Exceptions\MakerException;
 use Innoboxrr\LarapackGenerator\Support\Generation;
+use Innoboxrr\LarapackGenerator\Tools\ModelArtifact;
 use Innoboxrr\LarapackGenerator\Tools\Tool;
 
-class TestTool extends Tool
+class TestTool extends Tool implements ModelArtifact
 {
-    protected $testPath;
+    protected string $testPath = '';
 
-    protected $testTemplatePath;
+    protected string $testTemplatePath = '';
 
-    protected $testCasePath;
+    protected string $testCasePath = '';
 
-    protected $testUnitPath;
+    protected string $testUnitPath = '';
 
-    private function setTestPath()
+    private function setTestPath(): static
     {
 
         $this->testPath = get_path('tests/Feature/Models');
@@ -25,7 +26,7 @@ class TestTool extends Tool
 
     }
 
-    private function setTestCasePath()
+    private function setTestCasePath(): static
     {
 
         $this->testCasePath = get_path('tests');
@@ -34,7 +35,7 @@ class TestTool extends Tool
 
     }
 
-    private function setTestUnitPath()
+    private function setTestUnitPath(): static
     {
 
         $this->testUnitPath = get_path('tests/Unit');
@@ -43,7 +44,7 @@ class TestTool extends Tool
 
     }
 
-    private function setTestTemplatePath()
+    private function setTestTemplatePath(): static
     {
 
         $this->testTemplatePath = stubs_path('Test');
@@ -52,10 +53,10 @@ class TestTool extends Tool
 
     }
 
-    public function create(string $ModelName)
+    public function create(string $ModelName): bool
     {
 
-        $this->init($ModelName)
+        return $this->init($ModelName)
             ->setTestPath()
             ->setTestCasePath()
             ->setTestUnitPath()
@@ -71,7 +72,7 @@ class TestTool extends Tool
     /**
      * Lo que un proyecto necesita para tener tests antes de su primer modelo.
      */
-    public function createScaffold()
+    public function createScaffold(): static
     {
 
         $this->init('')
@@ -119,7 +120,7 @@ class TestTool extends Tool
 
     }
 
-    private function createTestCaseClass()
+    private function createTestCaseClass(): static
     {
 
         $testCaseFile = $this->testCasePath.'/TestCase.php';
@@ -145,7 +146,7 @@ class TestTool extends Tool
      * El usuario con que se autentican los tests de un paquete. Una aplicacion
      * ya tiene el suyo; un paquete no conoce el de quien lo instale.
      */
-    private function createTestUserClass()
+    private function createTestUserClass(): static
     {
 
         $userFile = $this->testCasePath.'/User.php';
@@ -160,7 +161,7 @@ class TestTool extends Tool
 
     }
 
-    private function createPhpUnitXmlFile()
+    private function createPhpUnitXmlFile(): static
     {
 
         $phpunitFile = root_path().'/phpunit.xml';
@@ -183,7 +184,7 @@ class TestTool extends Tool
                 file_put_contents($phpunitFile, str_replace(
                     '__SOURCE_DIR__',
                     app_dir_name(),
-                    file_get_contents($phpunitFile)
+                    self::contents($phpunitFile)
                 ));
 
             }
@@ -194,48 +195,16 @@ class TestTool extends Tool
 
     }
 
-    private function addTestNamespaceToComposerJson()
+    private function addTestNamespaceToComposerJson(): static
     {
-
-        // Una simulación no escribe nada, tampoco composer.json.
-        if (app_dir_name() == 'src' && ! Generation::isDryRun()) {
-
-            $composerJsonPath = root_path().'/composer.json';
-
-            $composerJsonData = json_decode(file_get_contents($composerJsonPath), true);
-
-            $baseNamespace = array_keys($composerJsonData['autoload']['psr-4'])[0];
-
-            if (isset($composerJsonData['autoload-dev']['psr-4'])) {
-
-                $composerJsonData['autoload-dev']['psr-4'][$baseNamespace.'Tests\\'] = 'tests/';
-
-            } else {
-
-                $composerJsonData['autoload-dev'] = [
-
-                    'psr-4' => [
-
-                        $baseNamespace.'Tests\\' => 'tests/',
-
-                    ],
-
-                ];
-
-            }
-
-            file_put_contents(
-                $composerJsonPath,
-                json_encode($composerJsonData, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)
-            );
-
-        }
+        // Sin `autoload-dev.psr-4`, la sección se reescribía entera y se
+        // perdía lo que tuviera (un classmap, unos files): ahora se añade.
+        $this->addPsr4ToComposerJson('autoload-dev', 'Tests\\', 'tests/');
 
         return $this;
-
     }
 
-    private function createFeatureTest()
+    private function createFeatureTest(): bool
     {
 
         $testFile = $this->testPath.'/'.$this->PascalCaseModelName.'EndpointsTest.php';
@@ -252,7 +221,8 @@ class TestTool extends Tool
 
                 Generation::record('create', $testFile, $templateFile);
 
-                return $this;
+                // Como generate(): en una simulación, true es «se escribiría».
+                return true;
 
             }
 
@@ -277,7 +247,7 @@ class TestTool extends Tool
 
     }
 
-    public function remove(string $ModelName)
+    public function remove(string $ModelName): bool
     {
 
         $this->init($ModelName)

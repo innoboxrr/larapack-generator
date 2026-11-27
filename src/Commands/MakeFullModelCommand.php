@@ -8,6 +8,7 @@ use Innoboxrr\LarapackGenerator\Support\Generation;
 use Innoboxrr\LarapackGenerator\Support\Import\Actions;
 use Innoboxrr\LarapackGenerator\Support\Import\Endpoints;
 use Innoboxrr\LarapackGenerator\Support\Manifest;
+use Innoboxrr\LarapackGenerator\Tools\Artifacts;
 use Innoboxrr\LarapackGenerator\Tools\Tool;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
@@ -19,7 +20,8 @@ class MakeFullModelCommand extends Command
 {
     use ReportsGeneration;
 
-    protected $commands = [
+    /** @var list<string> */
+    protected array $commands = [
         'Migration',
         'Controller',
         'Events',
@@ -110,12 +112,10 @@ class MakeFullModelCommand extends Command
             Declaration::enableMetas($modelName);
         }
 
+        // Un nombre que no resuelve a un ModelArtifact falla aquí: saltárselo
+        // dejaba esa pieza sin generar y el comando salía en 0.
         foreach ($commands as $command) {
-            $className = '\Innoboxrr\LarapackGenerator\Tools\\'.$command.'\\'.$command.'Tool';
-            if (class_exists($className)) {
-                $class = new \ReflectionClass($className);
-                ($class->newInstance())->create($modelName);
-            }
+            Artifacts::model($command)->create($modelName);
         }
 
         if (! Generation::isDryRun()) {
@@ -211,8 +211,10 @@ class MakeFullModelCommand extends Command
             }
         }
 
-        if ($immutable && array_intersect(Actions::MODIFY, $routes['only'] ?? []) !== []) {
-            return 'Un modelo inmutable no puede declarar '.implode(', ', array_intersect(Actions::MODIFY, $routes['only'])).'.';
+        $modifying = array_intersect(Actions::MODIFY, $routes['only'] ?? []);
+
+        if ($immutable && $modifying !== []) {
+            return 'Un modelo inmutable no puede declarar '.implode(', ', $modifying).'.';
         }
 
         Declaration::set(
