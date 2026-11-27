@@ -12,8 +12,10 @@ use Innoboxrr\LarapackGenerator\Support\Realign\Operations\OperationRunner;
 use Innoboxrr\LarapackGenerator\Support\Realign\Operations\Operations;
 use Innoboxrr\LarapackGenerator\Support\Realign\Planner;
 use Innoboxrr\LarapackGenerator\Support\Realign\Playbooks;
+use Innoboxrr\LarapackGenerator\Support\Realign\RealignActions;
 use Innoboxrr\LarapackGenerator\Support\Realign\RealignState;
 use Innoboxrr\LarapackGenerator\Support\Realign\Scopes;
+use Innoboxrr\LarapackGenerator\Support\Realign\StepTypes;
 use RuntimeException;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Formatter\OutputFormatter;
@@ -54,32 +56,15 @@ class RealignCommand extends Command
 
     private const READS = ['diagnose', 'plan', 'status', 'next', 'check', 'decide', 'playbook', 'help'];
 
-    /**
-     * Las opciones que acepta cada acción además de --root y --format. Una
-     * opción que la acción no usa es un error: ignorarla haría creer que
-     * hizo algo (un `diagnose --dry-run` que en verdad no simula nada).
-     */
-    private const ACCEPTS = [
-        'diagnose' => ['package', 'jobs', 'no-cache'],
-        'plan' => [],
-        'status' => ['package'],
-        'next' => ['package'],
-        'check' => [],
-        'decide' => ['note'],
-        'playbook' => [],
-        'help' => [],
-        'write' => ['package', 'dry-run', 'allow-dirty', 'option'],
-        'apply' => ['package', 'dry-run', 'allow-dirty', 'option', 'deterministic'],
-    ];
-
     protected function configure(): void
     {
         $this->addRootOption();
 
         $this->setName('larapack:realign')
             ->setDescription('Realinea con el contrato un proyecto que se desvió: diagnose, plan, status, next, check, decide, playbook y las operaciones adopt, apply, infer y except')
+            ->setHelp(RealignActions::helpText())
             ->addArgument('action', InputArgument::OPTIONAL, 'diagnose, plan, status, next, check, decide, playbook, adopt, apply, infer, except o help', 'help')
-            ->addArgument('targets', InputArgument::OPTIONAL | InputArgument::IS_ARRAY, 'check: el id del paso; decide: el id y la opción; playbook: su nombre; adopt/apply/infer/except: ids de paso (vacío, todos los que sepa hacer)')
+            ->addArgument('targets', InputArgument::OPTIONAL | InputArgument::IS_ARRAY, 'check: el id del paso; decide: el id y la opción; playbook: su nombre; help: una acción; adopt/apply/infer/except: ids de paso (vacío, todos los que sepa hacer)')
             ->addOption('format', null, InputOption::VALUE_REQUIRED, 'Formato de salida: txt o json', 'txt')
             ->addOption('package', null, InputOption::VALUE_REQUIRED | InputOption::VALUE_IS_ARRAY, 'Sólo este paquete local (directorio, ruta o nombre de Composer), o `app` para el núcleo. Repetible')
             ->addOption('jobs', null, InputOption::VALUE_REQUIRED, 'diagnose: cuántas regeneraciones a la vez', '4')
@@ -93,9 +78,15 @@ class RealignCommand extends Command
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
-        $this->applyRootOption($input);
-
         $action = strtolower((string) $input->getArgument('action'));
+        // help y playbook responden sin proyecto: son lo primero que corre
+        // quien todavía no sabe qué es esto, a menudo desde fuera de él.
+        $needsProject = ! in_array($action, RealignActions::WITHOUT_PROJECT, true);
+
+        if ($needsProject) {
+            $this->applyRootOption($input);
+        }
+
         $targets = array_values(array_map('strval', (array) $input->getArgument('targets')));
         $writes = in_array($action, Operations::ACTIONS, true);
 
@@ -103,18 +94,18 @@ class RealignCommand extends Command
             return $this->reportFailure($input, $output, "Acción desconocida: {$action}.", 'Disponibles: '.implode(', ', [...self::READS, ...Operations::ACTIONS]).'.');
         }
 
-        $unexpected = $this->unexpectedOptions($input, $action === 'apply' ? 'apply' : ($writes ? 'write' : $action));
+        $unexpected = $this->unexpectedOptions($input, $action);
 
         if ($unexpected !== []) {
             return $this->reportFailure($input, $output, "`{$action}` no usa ".implode(', ', array_map(fn (string $option): string => '--'.$option, $unexpected)).'.',
                 $writes || $action === 'help' ? null : ($action === 'diagnose' ? 'diagnose no escribe código: no hay nada que simular.' : null));
         }
 
-        $root = root_path();
+        $root = $needsProject ? root_path() : '';
 
         try {
             return match ($action) {
-                'help' => $this->help($input, $output),
+                'help' => $this->help($input, $output, $targets),
                 'diagnose' => $this->diagnose($input, $output, $root),
                 'plan' => $this->plan($input, $output, $root),
                 'status' => $this->status($input, $output, $root),
@@ -134,7 +125,10 @@ class RealignCommand extends Command
      */
     private function unexpectedOptions(InputInterface $input, string $action): array
     {
-        $accepted = self::ACCEPTS[$action] ?? [];
+        // Lo que acepta cada acción vive en RealignActions: una opción que la acción
+        // no usa es un error, porque ignorarla haría creer que hizo algo (un
+        // `diagnose --dry-run` que en verdad no simula nada).
+        $accepted = RealignActions::options($action);
         $unexpected = [];
 
         foreach (['package', 'no-cache', 'dry-run', 'allow-dirty', 'option', 'note', 'deterministic'] as $option) {
@@ -152,37 +146,86 @@ class RealignCommand extends Command
         return $unexpected;
     }
 
-    private function help(InputInterface $input, OutputInterface $output): int
+    /**
+     * @param  list<string>  $targets
+     */
+    private function help(InputInterface $input, OutputInterface $output, array $targets = []): int
     {
-        $actions = [
-            'diagnose' => 'Regenera el contrato aparte con la versión actual y clasifica cada archivo y cada hallazgo de verify. No escribe código.',
-            'plan' => 'Convierte el diagnóstico en pasos ordenados y reanudables (.larapack/realign/plan.json).',
-            'status' => 'Dónde se va: pasos hechos, pendientes y bloqueados, y si el diagnóstico está viejo.',
-            'next' => 'El siguiente paso, con todo lo necesario para hacerlo sin contexto.',
-            'check' => 'Comprueba el done_when de un paso y lo marca hecho, o dice qué falta.',
-            'decide' => 'Registra la opción elegida en un paso de decisión.',
-            'playbook' => 'Lista los playbooks del paquete, o imprime uno sin rellenar con sus marcadores explicados.',
-        ];
+        if ($targets !== []) {
+            return $this->helpFor($input, $output, $targets);
+        }
 
-        foreach (Operations::ACTIONS as $operation) {
-            $actions[$operation] = Operations::DESCRIPTIONS[$operation].(Operations::available($operation) ? '' : ' (no disponible en esta versión)');
+        $actions = [];
+
+        foreach (array_keys(RealignActions::ALL) as $action) {
+            if ($action !== 'help') {
+                $actions[$action] = RealignActions::summary($action);
+            }
         }
 
         if ($this->wantsJson($input)) {
             $this->writeJson($output, ['format_version' => RealignState::FORMAT_VERSION, 'ok' => true, 'action' => 'help', 'actions' => $actions,
-                'categories' => Category::ALL, 'classes' => FileClass::ALL, 'guide' => 'docs/realign/README.md']);
+                'categories' => Category::ALL, 'classes' => FileClass::ALL, 'guide' => RealignActions::GUIDE,
+                'guides' => array_map(fn (array $definition): string => $definition['guide'], RealignActions::ALL),
+                'entry_point' => 'larapack:realign status']);
 
             return Command::SUCCESS;
         }
 
-        $output->writeln('  <info>larapack:realign</info> <acción>   (guía: docs/realign/README.md del paquete)');
+        $output->writeln('  <info>larapack:realign</info> <acción>   (guía: '.RealignActions::GUIDE.' del paquete)');
         $output->writeln('');
 
         foreach ($actions as $name => $description) {
-            $output->writeln(sprintf('  %-9s %s', $name, $description));
+            $output->writeln(sprintf('  %-9s %s', $name, OutputFormatter::escape($description)));
         }
 
-        $output->writeln("\n  El ciclo: diagnose → plan → next → (hacer el paso) → check → next …");
+        $output->writeln('
+  El ciclo: diagnose → plan → next → (hacer el paso) → check → next …');
+        $output->writeln('  Si llegas sin contexto: larapack:realign status. Una acción en detalle: larapack:realign help <acción>.');
+
+        return Command::SUCCESS;
+    }
+
+    /**
+     * @param  list<string>  $targets
+     */
+    private function helpFor(InputInterface $input, OutputInterface $output, array $targets): int
+    {
+        $action = strtolower($targets[0]);
+
+        if (count($targets) > 1 || ! isset(RealignActions::ALL[$action])) {
+            return $this->reportFailure($input, $output, 'help recibe a lo sumo una acción conocida: '.implode(', ', array_keys(RealignActions::ALL)).'.',
+                extra: ['format_version' => RealignState::FORMAT_VERSION, 'action' => 'help']);
+        }
+
+        $definition = RealignActions::ALL[$action];
+        $summary = RealignActions::summary($action);
+
+        if ($this->wantsJson($input)) {
+            $this->writeJson($output, ['format_version' => RealignState::FORMAT_VERSION, 'ok' => true, 'action' => 'help', 'topic' => $action,
+                'summary' => $summary, 'usage' => $definition['usage'], 'writes' => $definition['writes'],
+                'options' => $definition['options'], 'keys' => (object) $definition['keys'], 'guide' => $definition['guide'],
+                'available' => ! in_array($action, Operations::ACTIONS, true) || Operations::available($action)]);
+
+            return Command::SUCCESS;
+        }
+
+        $output->writeln('  <info>larapack:realign '.$action.'</info>');
+        $output->writeln('  '.OutputFormatter::escape($summary));
+        $output->writeln('');
+
+        foreach ($definition['usage'] as $usage) {
+            $output->writeln('    '.OutputFormatter::escape($usage));
+        }
+
+        foreach ($definition['keys'] as $key => $meaning) {
+            $output->writeln('    --option '.$key.'=…  '.OutputFormatter::escape($meaning));
+        }
+
+        $output->writeln('');
+        $output->writeln('  Escribe: '.OutputFormatter::escape($definition['writes']));
+        $output->writeln('  Opciones: '.($definition['options'] === [] ? '—' : implode(' ', array_map(fn (string $option): string => '--'.$option, $definition['options']))).' (y --root, --format en todas)');
+        $output->writeln('  Guía: '.$definition['guide'].' del paquete');
 
         return Command::SUCCESS;
     }
@@ -549,7 +592,12 @@ class RealignCommand extends Command
 
             foreach (Playbooks::names() as $name) {
                 $first = strtok(Playbooks::describe($name), "\n");
-                $list[$name] = trim(ltrim($first === false ? '' : $first, '# '));
+                $title = trim(ltrim($first === false ? '' : $first, '# '));
+                // Un playbook titulado con el del paso (`# {{title}}`) se
+                // nombra en la lista por su tipo, no por el marcador.
+                $list[$name] = str_starts_with($title, '<') ? ($name === Playbooks::GENERIC
+                    ? 'Cualquier paso sin playbook propio: leer el hallazgo, el contrato antes que el código'
+                    : (StepTypes::exists($name) ? (string) StepTypes::get($name)['title'] : $title)) : $title;
             }
 
             if ($this->wantsJson($input)) {
@@ -610,7 +658,19 @@ class RealignCommand extends Command
             }
 
             [$key, $value] = explode('=', $pair, 2);
-            $options[trim($key)] = $value;
+            $key = trim($key);
+
+            // Una clave que la operación no lee es un error, como una opción:
+            // ignorarla haría creer que hizo algo.
+            $known = RealignActions::ALL[$action]['keys'];
+
+            if (! Operations::overridden($action) && ! isset($known[$key])) {
+                return $this->reportFailure($input, $output, "`{$action}` no usa --option {$key}.",
+                    $known === [] ? "{$action} no lee ninguna clave." : 'Claves de '.$action.': '.implode(', ', array_keys($known)).' (larapack:realign help '.$action.').',
+                    extra: ['format_version' => RealignState::FORMAT_VERSION, 'action' => $action]);
+            }
+
+            $options[$key] = $value;
         }
 
         $report = (new OperationRunner($root))->run($action, $targets, $this->scopePaths($input, $root), (bool) $input->getOption('dry-run'), (bool) $input->getOption('allow-dirty'), $options);

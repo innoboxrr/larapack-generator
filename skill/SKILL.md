@@ -603,6 +603,28 @@ en `AGENTS.md`—, la comprobación la haces tú con la lista de abajo.
 
 Si algo falla, la tarea no ha terminado.
 
+## Realinear un proyecto que se desvió
+
+Si el proyecto ya existe y lo que hay en disco no es lo que generaría su
+contrato —una versión vieja de LaraPack, código editado fuera de los huecos,
+controladores y modelos escritos a mano, o ni siquiera hay contrato—, no lo
+arregles a mano ni con un `import --force` a ciegas: **realinéalo**.
+
+```bash
+larapack:realign status        # siempre primero: dice si hay un realineamiento en curso y qué sigue
+larapack:realign diagnose      # sin plan: compara el proyecto con lo que generaría su contrato
+larapack:realign plan
+larapack:realign next          # el siguiente paso, con su playbook y su comprobación
+larapack:realign check <id>    # sólo esto da un paso por hecho
+```
+
+Lo determinista lo hace `larapack:realign apply`; lo guiado lo haces tú con el
+playbook que da `next`; las decisiones las toma el dueño (`decide`) y las
+excepciones las aprueba él (`larapack:hand-rolled approve`), nunca tú. Nada del
+realineamiento escribe migraciones ni cambia nombres de ruta. La guía para
+agentes es el skill `larapack-realign` (lo instala `larapack:skill` junto a
+éste) y la completa, `docs/realign/README.md` del paquete.
+
 ## Regenerar
 
 El generador es idempotente y **nunca destruye trabajo**:

@@ -2,6 +2,8 @@
 
 namespace Innoboxrr\LarapackGenerator\Support\Realign\Operations;
 
+use Innoboxrr\LarapackGenerator\Support\Realign\RealignActions;
+
 /**
  * El registro de las operaciones que escriben.
  *
@@ -14,13 +16,14 @@ namespace Innoboxrr\LarapackGenerator\Support\Realign\Operations;
 final class Operations
 {
     /**
-     * Las acciones que escriben, y qué hace cada una.
+     * Las acciones que escriben, y qué hace cada una (de RealignActions, que es
+     * donde se escribe una vez para --help, help y la documentación).
      */
     public const DESCRIPTIONS = [
-        'adopt' => 'Pone el manifiesto al día con lo que hay: adopta lo que ya es lo que generaría el contrato, vuelve a enlazar lo renombrado y olvida lo que ya no existe.',
-        'apply' => 'Ejecuta un paso determinista que reescribe código: regenera lo que nadie editó y quedó atrás, o lo que falta.',
-        'infer' => 'Infiere el contrato (laraimport.json) desde el código: modelos, columnas, endpoints y controladores escritos a mano.',
-        'except' => 'Registra como excepción aprobada lo que se decide dejar como está, con su razón.',
+        'adopt' => RealignActions::ALL['adopt']['summary'],
+        'apply' => RealignActions::ALL['apply']['summary'],
+        'infer' => RealignActions::ALL['infer']['summary'],
+        'except' => RealignActions::ALL['except']['summary'],
     ];
 
     public const ACTIONS = ['adopt', 'apply', 'infer', 'except'];
@@ -51,6 +54,16 @@ final class Operations
     public static function available(string $action): bool
     {
         return ! self::for($action) instanceof PendingOperation;
+    }
+
+    /**
+     * Si la acción tiene una implementación registrada por encima de la
+     * convención (las pruebas, o un proyecto que quiera la suya): sus
+     * claves de `--option` son suyas y no las de RealignActions.
+     */
+    public static function overridden(string $action): bool
+    {
+        return isset(self::$registered[$action]);
     }
 
     /**

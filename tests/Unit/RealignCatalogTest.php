@@ -163,12 +163,35 @@ final class RealignCatalogTest extends TestCase
         $this->assertStringNotContainsString('{{', $rendered);
     }
 
-    public function test_la_documentacion_nombra_categorias_clases_tipos_y_comprobaciones(): void
+    /**
+     * Cada nombre del catálogo, en la guía que lo explica: las categorías y
+     * las acciones en la de entrada, las clases de archivo en la del
+     * diagnóstico, los tipos de paso y las comprobaciones de terminado en la
+     * del plan.
+     *
+     * @return array<string, array{0: string, 1: list<string>}>
+     */
+    public static function documentedNames(): array
     {
-        $guide = (string) file_get_contents(dirname(__DIR__, 2).'/docs/realign/README.md');
+        return [
+            'categorías' => ['README.md', Category::ALL],
+            'acciones' => ['README.md', Operations::ACTIONS],
+            'clases de archivo' => ['diagnose.md', FileClass::ALL],
+            'tipos de paso' => ['plan.md', array_keys(StepTypes::TYPES)],
+            'comprobaciones de terminado' => ['plan.md', DoneWhen::KINDS],
+        ];
+    }
 
-        foreach ([...Category::ALL, ...FileClass::ALL, ...array_keys(StepTypes::TYPES), ...DoneWhen::KINDS, ...Operations::ACTIONS] as $name) {
-            $this->assertStringContainsString('`'.$name.'`', $guide, "docs/realign/README.md no nombra `{$name}`.");
+    /**
+     * @param  list<string>  $names
+     */
+    #[DataProvider('documentedNames')]
+    public function test_la_documentacion_nombra_categorias_clases_tipos_y_comprobaciones(string $page, array $names): void
+    {
+        $guide = (string) file_get_contents(dirname(__DIR__, 2).'/docs/realign/'.$page);
+
+        foreach ($names as $name) {
+            $this->assertStringContainsString('`'.$name.'`', $guide, "docs/realign/{$page} no nombra `{$name}`.");
         }
     }
 

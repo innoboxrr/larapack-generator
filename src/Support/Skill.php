@@ -18,9 +18,21 @@ final class Skill
     private const RELATIVE_PATH = '/../../skill/SKILL.md';
 
     /**
+     * La guía del realineamiento para un agente: un segundo skill, aparte,
+     * porque se usa en otro momento (llevar un proyecto de vuelta al
+     * contrato) y un agente que sólo genera no necesita leerla entera.
+     */
+    private const REALIGN_RELATIVE_PATH = '/../../skill/realign/SKILL.md';
+
+    /**
      * Destino por omisión dentro del proyecto anfitrión.
      */
     public const DEFAULT_TARGET = '.claude/skills/larapack/SKILL.md';
+
+    /**
+     * Destino de la guía del realineamiento, al lado del skill.
+     */
+    public const REALIGN_TARGET = '.claude/skills/larapack-realign/SKILL.md';
 
     public static function path(): string
     {
@@ -44,12 +56,73 @@ final class Skill
         return $contents;
     }
 
+    public static function realignPath(): string
+    {
+        $path = realpath(__DIR__.self::REALIGN_RELATIVE_PATH);
+
+        if ($path === false) {
+            throw new RuntimeException('No se encontró skill/realign/SKILL.md en el paquete.');
+        }
+
+        return $path;
+    }
+
+    public static function realignContents(): string
+    {
+        $contents = file_get_contents(self::realignPath());
+
+        if ($contents === false) {
+            throw new RuntimeException('No se pudo leer skill/realign/SKILL.md.');
+        }
+
+        return $contents;
+    }
+
+    /**
+     * Dónde va la guía del realineamiento si el skill va en `$target`: en un
+     * directorio de skills (`…/larapack/SKILL.md`), su hermano
+     * `…/larapack-realign/SKILL.md`, que es donde un agente busca skills. En
+     * otro destino (`AGENTS.md`, un archivo suelto) no hay dónde ponerla sin
+     * adivinar: null, y el bloque de AGENTS.md apunta a la guía del paquete.
+     */
+    public static function realignTargetFor(string $target): ?string
+    {
+        $normalised = str_replace('\\', '/', $target);
+
+        if (basename($normalised) !== 'SKILL.md') {
+            return null;
+        }
+
+        $directory = dirname($normalised);
+
+        return (dirname($directory) === '.' ? '' : dirname($directory).'/').'larapack-realign/SKILL.md';
+    }
+
+    /**
+     * Copia la guía del realineamiento al proyecto, con las mismas reglas que
+     * el skill: no pisa una modificada sin `$force`.
+     *
+     * @return array{written: bool, target: string, reason: string}
+     */
+    public static function installRealign(string $target, bool $force): array
+    {
+        return self::write($target, self::realignContents(), $force);
+    }
+
     /**
      * Copia el skill al proyecto.
      *
      * @return array{written: bool, target: string, reason: string}
      */
     public static function install(string $target, bool $force): array
+    {
+        return self::write($target, self::contents(), $force);
+    }
+
+    /**
+     * @return array{written: bool, target: string, reason: string}
+     */
+    private static function write(string $target, string $contents, bool $force): array
     {
         $absolute = self::absolute($target);
 
@@ -64,7 +137,7 @@ final class Skill
             // Puede haberse ampliado con reglas del proyecto; sobrescribir
             // sin avisar se llevaría por delante ese trabajo.
             return [
-                'written' => self::contents() === file_get_contents($absolute),
+                'written' => $contents === file_get_contents($absolute),
                 'target' => $absolute,
                 'reason' => 'ya existe',
             ];
@@ -76,7 +149,7 @@ final class Skill
             throw new RuntimeException("No se pudo crear el directorio {$directory}.");
         }
 
-        if (file_put_contents($absolute, self::contents()) === false) {
+        if (file_put_contents($absolute, $contents) === false) {
             throw new RuntimeException("No se pudo escribir {$absolute}.");
         }
 

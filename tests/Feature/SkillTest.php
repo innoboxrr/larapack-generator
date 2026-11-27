@@ -134,4 +134,79 @@ final class SkillTest extends TestCase
             $this->assertGenerated($hole);
         }
     }
+
+    /**
+     * Un agente que llega a un proyecto que se desvió tiene que encontrar la
+     * guía del realineamiento donde busca los skills, sin que nadie le
+     * escriba un prompt, y empezar por `larapack:realign status`.
+     */
+    public function test_instala_la_guia_del_realineamiento_junto_al_skill(): void
+    {
+        $this->assertSame(Command::SUCCESS, $this->runCommand('larapack:skill'), $this->lastOutput);
+
+        $this->assertSame('.claude/skills/larapack-realign/SKILL.md', Skill::REALIGN_TARGET);
+        $this->assertSame(Skill::realignContents(), $this->project->read(Skill::REALIGN_TARGET));
+        $this->assertStringContainsString('Guía del realineamiento instalada', $this->lastOutput);
+        $this->assertMatchesRegularExpression('/^name:\s*larapack-realign$/m', Skill::realignContents());
+        $this->assertStringContainsString('larapack:realign status', Skill::realignContents());
+        $this->assertStringContainsString('docs/realign/README.md', Skill::realignContents());
+
+        // Reinstalar es el caso normal; una guía editada no se pisa sin --force.
+        $this->assertSame(Command::SUCCESS, $this->runCommand('larapack:skill'));
+        $this->assertStringContainsString('Guía del realineamiento al día', $this->lastOutput);
+
+        file_put_contents($this->project->path.'/'.Skill::REALIGN_TARGET, "propia\n");
+        $this->runCommand('larapack:skill');
+        $this->assertSame("propia\n", $this->project->read(Skill::REALIGN_TARGET));
+        $this->assertStringContainsString('difiere del paquete', $this->lastOutput);
+
+        $this->runCommand('larapack:skill', ['--force' => true]);
+        $this->assertSame(Skill::realignContents(), $this->project->read(Skill::REALIGN_TARGET));
+    }
+
+    public function test_sin_realineamiento_o_fuera_de_un_directorio_de_skills_no_se_adivina_el_destino(): void
+    {
+        $this->assertSame(Command::SUCCESS, $this->runCommand('larapack:skill', ['--no-realign' => true]));
+        $this->assertFileDoesNotExist($this->project->path.'/'.Skill::REALIGN_TARGET);
+
+        $this->assertSame(Command::SUCCESS, $this->runCommand('larapack:skill', ['--path' => 'AGENTS.md']));
+        $this->assertFileDoesNotExist($this->project->path.'/'.Skill::REALIGN_TARGET);
+        $this->assertStringContainsString('larapack:realign status', $this->lastOutput);
+
+        $this->assertSame('.cursor/skills/larapack-realign/SKILL.md', Skill::realignTargetFor('.cursor/skills/larapack/SKILL.md'));
+        $this->assertSame('/abs/skills/larapack-realign/SKILL.md', Skill::realignTargetFor('/abs/skills/larapack/SKILL.md'));
+        $this->assertNull(Skill::realignTargetFor('docs/agentes.md'));
+    }
+
+    /**
+     * El bloque de AGENTS.md es también el de las reglas de Cursor, Codex,
+     * Gemini y Copilot: los cinco tienen que mandar al punto de entrada.
+     */
+    public function test_el_bloque_de_los_agentes_manda_al_punto_de_entrada_del_realineamiento(): void
+    {
+        $this->assertSame(Command::SUCCESS, $this->runCommand('larapack:skill', ['--agents' => 'all']), $this->lastOutput);
+
+        foreach (['AGENTS.md', '.cursor/rules/larapack.mdc', 'GEMINI.md', '.github/copilot-instructions.md', '.windsurf/rules/larapack.md'] as $file) {
+            $contents = $this->project->read($file);
+
+            $this->assertStringContainsString('larapack:realign status', $contents, "{$file} no manda a larapack:realign status.");
+            $this->assertStringContainsString('docs/realign/README.md', $contents, "{$file} no dice dónde está la guía del realineamiento.");
+        }
+
+        $this->assertStringContainsString('larapack:realign status', Skill::contents());
+    }
+
+    public function test_la_guia_del_realineamiento_solo_menciona_comandos_que_existen(): void
+    {
+        preg_match_all('/larapack:[a-z-]+/', Skill::realignContents(), $matches);
+
+        $available = [];
+
+        foreach (glob(dirname(__DIR__, 2).'/src/Commands/*Command.php') as $file) {
+            $class = 'Innoboxrr\\LarapackGenerator\\Commands\\'.basename($file, '.php');
+            $available[] = (new $class)->getName();
+        }
+
+        $this->assertSame([], array_values(array_diff(array_unique($matches[0]), $available)));
+    }
 }

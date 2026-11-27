@@ -580,7 +580,8 @@ Es **un comando con la acción como argumento** (`diagnose`, `plan`, `status`,
 `next`, `check`, `decide` y las operaciones), como `larapack:hand-rolled`: todas
 comparten la raíz, el estado, `--package` y `--format`, y así una operación
 nueva se enchufa sin registrar un comando. Cada acción declara qué opciones usa
-(`RealignCommand::ACCEPTS`); una que no usa es un error, no un silencio.
+(`RealignActions::options`, que es también lo que dicen `--help` y
+`larapack:realign help <acción>`); una que no usa es un error, no un silencio.
 
 **El diagnóstico** ([`Diagnosis`](src/Support/Realign/Diagnosis.php)):
 
@@ -956,7 +957,7 @@ cambia algo que ve quien usa el generador.
   `StepTypes::ORDER` y, si lo pide una comprobación de verify, en
   `StepTypes::CHECKS`. Si su `done_when` no es el de siempre, en
   `Planner::doneWhen`. `RealignCatalogTest` comprueba que no falte nada y que
-  [docs/realign/README.md](docs/realign/README.md) lo nombre.
+  [docs/realign/plan.md](docs/realign/plan.md) lo nombre.
 - **Un playbook**: `resources/realign/playbooks/<tipo>.md`, con los
   marcadores de `Playbooks::PLACEHOLDERS`; el tipo, la decisión o la opción
   apunta a él con `playbook`, y un anexo, desde `Playbooks::annexesFor`. Su
@@ -973,6 +974,15 @@ cambia algo que ve quien usa el generador.
   edición como «fuera de los huecos».
 - **Un `kind` de comprobación**: en `DoneWhen::check` y `DoneWhen::KINDS`, y
   en la guía.
+- **Una acción, una opción o una clave de `--option`**: en
+  [`RealignActions`](src/Support/Realign/RealignActions.php) (`RealignActions::ALL`: su resumen,
+  su uso, lo que escribe, las opciones que acepta, las claves que lee y su
+  guía). De ahí salen `--help`, `larapack:realign help <acción>`, las
+  descripciones de `Operations::DESCRIPTIONS` y lo que el comando rechaza; una
+  clave de `--option` que no esté ahí es un error. La guía de la acción, en
+  `docs/realign/`, enlazada desde su README: `RealignDocTest` comprueba que
+  cada orden, opción y clave que la documentación y el skill citan exista, que
+  cada enlace y ancla resuelva y que ninguna página quede sin enlazar.
 
 ### Una versión del ecosistema
 

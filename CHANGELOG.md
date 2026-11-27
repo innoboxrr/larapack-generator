@@ -79,7 +79,7 @@ de expediente que sólo eran formato, también.
 
 Las dos operaciones que escriben lo determinista. La guía de cada una —qué
 hace, qué nunca hace, cuándo salta y su riesgo— está en
-[docs/realign/README.md](docs/realign/README.md#las-operaciones-que-escriben).
+[docs/realign/adopt.md](docs/realign/adopt.md) y [docs/realign/apply.md](docs/realign/apply.md).
 
 ```bash
 larapack:realign adopt [<id>…] [--dry-run]

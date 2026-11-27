@@ -20,14 +20,15 @@ o una aplicación, lo genera siempre igual y comprueba que siga siendo así.
 6. [El contrato: laraimport.json](#el-contrato-laraimportjson)
 7. [Qué se genera y dónde va tu código](#qué-se-genera-y-dónde-va-tu-código)
 8. [Regenerar sin destruir](#regenerar-sin-destruir)
-9. [Verificar la arquitectura](#verificar-la-arquitectura)
-10. [La interfaz: Vue y React](#la-interfaz-vue-y-react)
-11. [Montar un paquete en una aplicación](#montar-un-paquete-en-una-aplicación)
-12. [La línea base y la publicación](#la-línea-base-y-la-publicación)
-13. [Guía de actualización](#guía-de-actualización)
-14. [Referencia de comandos](#referencia-de-comandos)
-15. [Código generado (Laravel 13)](#código-generado-laravel-13)
-16. [Apoya nuestro trabajo](#apoya-nuestro-trabajo)
+9. [Realinear un proyecto que se desvió](#realinear-un-proyecto-que-se-desvió)
+10. [Verificar la arquitectura](#verificar-la-arquitectura)
+11. [La interfaz: Vue y React](#la-interfaz-vue-y-react)
+12. [Montar un paquete en una aplicación](#montar-un-paquete-en-una-aplicación)
+13. [La línea base y la publicación](#la-línea-base-y-la-publicación)
+14. [Guía de actualización](#guía-de-actualización)
+15. [Referencia de comandos](#referencia-de-comandos)
+16. [Código generado (Laravel 13)](#código-generado-laravel-13)
+17. [Apoya nuestro trabajo](#apoya-nuestro-trabajo)
 
 ---
 
@@ -1294,6 +1295,39 @@ Sigue dejándose a mano una migración de creación editada, porque lo escrito
 fuera del laraimport en ella no se puede leer con seguridad.
 
 El manifiesto debe versionarse con el proyecto.
+
+---
+
+## Realinear un proyecto que se desvió
+
+Cuando lo que hay en disco ya no es lo que generaría el contrato —un proyecto
+de una versión vieja de LaraPack, código editado fuera de los huecos,
+controladores y modelos escritos a mano, o un proyecto sin contrato—,
+`larapack:realign` lo lleva de vuelta **sin reconstruirlo**: lo determinista se
+aplica solo, lo mecánico lo hace un agente con el playbook del paquete y una
+comprobación como criterio de terminado, lo que es decisión se presenta con
+sus opciones y lo que no es de LaraPack se declara fuera y no se toca.
+
+```
+php artisan larapack:realign status                     # si llegas sin contexto: dónde se va y qué sigue
+php artisan larapack:realign diagnose                   # regenera el contrato aparte y clasifica cada archivo
+php artisan larapack:realign plan                       # pasos ordenados y reanudables
+php artisan larapack:realign apply --deterministic      # lo determinista (con --dry-run primero)
+php artisan larapack:realign next                       # el siguiente paso, con su playbook
+php artisan larapack:realign check <id>                 # sólo esto lo da por hecho
+php artisan larapack:realign help <acción>              # cada acción: uso, lo que escribe, su guía
+```
+
+Nada de lo que sólo lee escribe código; lo que escribe tiene `--dry-run`, exige
+el árbol git limpio y nunca toca una migración ni un nombre de ruta. El estado
+vive en `.larapack/realign/`, así que cualquiera —persona o agente— lo retoma
+con `status`. `larapack:skill` instala la guía para agentes
+(`.claude/skills/larapack-realign/SKILL.md`).
+
+La guía completa —diagnóstico, plan, adopción, correcciones, pasos guiados,
+excepciones, inferir el contrato, verificación, limitaciones y riesgos, y el
+recorrido por perfil de proyecto— está en
+[docs/realign/README.md](docs/realign/README.md).
 
 ---
 
@@ -2805,7 +2839,8 @@ larapack:hand-rolled             Lista, aprueba o retira las excepciones #[HandR
 larapack:ci                      Crea el workflow «LaraPack verify», el ruleset para la rama y, con --owner, CODEOWNERS;
                                  con --check, dice si la rama exige el check.
 larapack:realign                 Realinea con el contrato un proyecto que se desvió: diagnose, plan, status, next, check,
-                                 decide y las operaciones adopt, apply, infer, except. Guía: docs/realign/README.md.
+                                 decide, playbook y las operaciones adopt, apply, infer, except. help <acción> explica cada una.
+                                 Guía: docs/realign/README.md.
 
 larapack:full-model              Crea un entorno completo de modelo.
 larapack:remove-full-model       Elimina todas las entidades de un modelo.

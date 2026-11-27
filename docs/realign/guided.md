@@ -59,7 +59,7 @@ Todos tienen la misma forma, para que se lean sin pensar:
 | `edited-outside` | `edited-outside` | Devolver a sus huecos (o al contrato) lo editado fuera de ellos, por familia de plantilla. |
 | `declared-routes` | `declared-routes` | Cuadrar rutas, acciones y requests con el contrato: declararlas o retirarlas y regenerar. |
 | `security` | `security` | Cerrar una escritura a un modelo inmutable o una columna secreta expuesta. |
-| `controller-concern`, `endpoint-tests`, `model-lists` | los suyos | Cuando la versión los trae; sin él, el paso usa `generic`. |
+| `controller-concern`, `endpoint-tests`, `model-lists` | los suyos (deterministas) | Lo que la orden de `apply` salte, con su razón, se hace a mano con éste: `next` lo da en `how.fallback` ([apply.md](apply.md)). |
 | `generic` | cualquier otro | Leer el hallazgo, cambiar el contrato antes que el código, no adivinar. |
 
 **Los anexos** (se añaden al de arriba cuando los hallazgos lo piden):
@@ -86,7 +86,7 @@ Todos tienen la misma forma, para que se lean sin pensar:
 | `decide-unmanaged-http` | `unmanaged-http` | Declarar un controlador a mano en el contrato o dejarlo como código propio. |
 | `decide-adopt-model` | `unmanaged-models` | Adoptar o no un modelo: lo que genera, los inmutables, los de Laravel, las llaves. |
 | `decide-package-without-models` | `contract-invalid` | El paquete de integración sin modelos (`models: []`): corregir el contrato o retirarlo. |
-| `decide-foreign-keys` | (se lee aparte) | `cascade` frente a `restrict` al saltar de 7.x: fijar lo que hay primero (`pin-foreign-keys`, si la versión lo trae) y decidir después, llave por llave. |
+| `decide-foreign-keys` | (se lee aparte) | `cascade` frente a `restrict` al saltar de 7.x: fijar lo que hay primero (`pin-foreign-keys`, [apply.md](apply.md)) y decidir después, llave por llave. |
 
 ## Anexos, decisiones y opciones
 
