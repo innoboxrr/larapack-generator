@@ -62,6 +62,13 @@ final class ApplyOperation implements RealignOperation
      */
     private array $documents = [];
 
+    /**
+     * Las comprobaciones de `fix` que ya se corrieron en esta corrida.
+     *
+     * @var array<string, true>
+     */
+    private array $fixed = [];
+
     public function name(): string
     {
         return 'apply';
@@ -101,7 +108,7 @@ final class ApplyOperation implements RealignOperation
             match ($type) {
                 'regenerate' => $this->regenerate($step, $reference, $context, $result),
                 'missing' => $this->restore($step, $reference, $context, $result),
-                'fix' => $this->fix($step, $reference, $context, $result),
+                'fix' => $this->fix($step, $context, $result),
                 'endpoint-tests' => $this->endpointTests($step, $reference, $context, $result),
                 'controller-concern' => $this->concerns($step, $context, $result),
                 'model-lists' => $this->modelLists($step, $reference, $context, $result),
@@ -241,34 +248,74 @@ final class ApplyOperation implements RealignOperation
     }
 
     /**
+     * Todos los pasos `fix` de una misma comprobación en una sola corrida de
+     * LegacyFix, acotada a sus paquetes: LegacyFix lee el proyecto entero al
+     * planificar, y en school-management son 135 pasos `fix` en 82 ámbitos.
+     * Lo que hace cada archivo se anota en el paso de su ámbito.
+     *
      * @param  array<string, mixed>  $step
      */
-    private function fix(array $step, ScopeReference $reference, OperationContext $context, OperationResult $result): void
+    private function fix(array $step, OperationContext $context, OperationResult $result): void
     {
         $check = (string) ($step['subject'] ?? '');
-        $extra = ['step' => $step['id']];
+
+        if (isset($this->fixed[$check])) {
+            return;
+        }
+
+        $this->fixed[$check] = true;
 
         if (! in_array($check, LegacyFix::CHECKS, true)) {
-            $result->skipped(null, "{$step['id']}: `larapack:fix` no sabe corregir {$check}.", $extra);
+            $result->skipped(null, "{$step['id']}: `larapack:fix` no sabe corregir {$check}.", ['step' => $step['id']]);
 
             return;
         }
 
-        $fix = new LegacyFix($context->root, [$check], null, [$reference->scope['root']]);
+        // Ruta del ámbito => id del paso, de los pasos de esta comprobación.
+        $steps = [];
+        $roots = [];
+
+        foreach ($context->steps as $other) {
+            if (($other['type'] ?? null) === 'fix' && ($other['subject'] ?? null) === $check) {
+                $path = (string) ($other['scope']['path'] ?? '.');
+                $reference = ScopeReference::for($context->root, $path, $context->state);
+
+                if ($reference !== null) {
+                    $steps[$path] = (string) $other['id'];
+                    $roots[] = $reference->scope['root'];
+                }
+            }
+        }
+
+        $stepOf = function (?string $file) use ($steps): string {
+            $best = '.';
+
+            foreach (array_keys($steps) as $path) {
+                $path = (string) $path;
+
+                if ($path !== '.' && $file !== null && str_starts_with($file, $path.'/') && strlen($path) > strlen($best)) {
+                    $best = $path;
+                }
+            }
+
+            return $steps[$best] ?? (string) reset($steps);
+        };
+
+        $fix = new LegacyFix($context->root, [$check], null, array_values(array_unique($roots)));
         $fix->plan();
         $report = $context->dryRun() ? $fix->withDiffs() : $fix->apply()['report'];
         $entry = $report[$check] ?? ['fixed' => [], 'skipped' => [], 'unchanged' => 0];
 
         foreach ($entry['fixed'] as $fixed) {
-            $result->fixed($fixed['file'], "larapack:fix {$check}.", $extra + (isset($fixed['diff']) ? ['diff' => $fixed['diff']] : []));
+            $result->fixed($fixed['file'], "larapack:fix {$check}.", ['step' => $stepOf($fixed['file'])] + (isset($fixed['diff']) ? ['diff' => $fixed['diff']] : []));
         }
 
         foreach ($entry['skipped'] as $skipped) {
-            $result->skipped($skipped['file'], $skipped['reason'], $extra);
+            $result->skipped($skipped['file'], $skipped['reason'], ['step' => $stepOf($skipped['file'])]);
         }
 
         if ($entry['unchanged'] > 0) {
-            $result->unchanged(null, "{$check}: {$entry['unchanged']} ya estaban bien.", $extra);
+            $result->unchanged(null, "{$check}: {$entry['unchanged']} ya estaban bien.", ['steps' => array_values($steps)]);
         }
 
         if (($entry['admin_path_missing'] ?? []) !== []) {

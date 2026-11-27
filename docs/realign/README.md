@@ -13,8 +13,9 @@ paquete trae el diagnóstico, el plan, las instrucciones de cada tipo de paso y
 sus comprobaciones.
 
 > Estado en 9.4.0: el núcleo (`diagnose`, `plan`, `status`, `next`, `check`,
-> `decide`) está completo. Las operaciones que escriben (`adopt`, `apply`,
-> `infer`, `except`) tienen su contrato y su registro; mientras una no tenga
+> `decide`) está completo, y también `adopt` (poner el manifiesto al día) y
+> `apply` (los pasos deterministas que reescriben). Las operaciones que
+> escriben comparten contrato y registro; mientras una no tenga
 > implementación, `larapack:realign help` lo dice y `next` muestra el paso para
 > hacerlo a mano. Las secciones marcadas *(por completar)* las amplía la guía
 > de cada operación.
@@ -143,11 +144,12 @@ Cada comprobación de `verify` pide un tipo de paso (`StepTypes::CHECKS`):
 |---|---|---|
 | `index-managed`, `resource-appends`, `relation-missing` y el `route-closure` del fallback de la SPA | `fix` | `deterministic` |
 | `controller-shape`, `request-handle` | `controller-shape` | `guided` |
-| `controller-concern` | `controller-concern` | `guided` |
-| `endpoint-tests-outdated` | `endpoint-tests` | `guided` |
+| `controller-concern` (aviso: sólo lo usan requests) | `controller-concern` | `deterministic` |
+| `controller-concern` (error: lo usa un controlador) | `controller-shape` | `guided` |
+| `endpoint-tests-outdated` | `endpoint-tests` | `deterministic` |
 | `route-not-declared`, `endpoint-missing`, `route-prefix` | `declared-routes` | `guided` |
 | `immutable-write`, `secret-exposed` | `security` | `guided` |
-| `model-lists-outdated` | `model-lists` | `guided` |
+| `model-lists-outdated` | `model-lists` | `deterministic` |
 | `hand-rolled` (sin aprobar) | `hand-rolled` | `decision` |
 | `route-closure` (otro closure) | `route-closure` | `decision` |
 | `inconsistent-entity` | `inconsistent-entity` | `decision` |
@@ -183,8 +185,9 @@ agrupa lo que se resuelve junto y lleva:
 luego lo guiado **por ámbito, del que más cumple al que menos** (así los
 primeros pasos terminan paquetes enteros), y al final las decisiones agrupadas
 por tipo. Lo guiado y las decisiones de un ámbito esperan a su `relink`,
-`prune` y `adopt`; `edited-outside` y `model-lists` esperan además a
-`regenerate` y `fix`.
+`prune` y `adopt`; `edited-outside` espera además a `regenerate`, `fix` y
+`model-lists`. Dentro de lo determinista, `pin-foreign-keys` va el último:
+cambia el contrato, y lo que va detrás se compararía con otra regeneración.
 
 **Los tipos de paso** (`src/Support/Realign/StepTypes.php`):
 
@@ -196,12 +199,13 @@ por tipo. Lo guiado y las decisiones de un ámbito esperan a su `relink`,
 | `regenerate` | `deterministic` | Regenera lo que nadie editó y quedó atrás, o lo que falta. |
 | `fix` | `deterministic` | `larapack:fix <comprobación> --package=<paquete>`. |
 | `controller-shape` | `guided` | Lleva la lógica del controlador a su FormRequest. Playbook propio. |
-| `controller-concern` | `guided` | Saca los traits de `Http/Controllers/Concerns`. |
-| `endpoint-tests` | `guided` | Completa las pruebas de endpoints de versiones anteriores. |
+| `controller-concern` | `deterministic` | Mueve a `Http/Requests/Concerns` los traits de `Http/Controllers/Concerns` que sólo usan requests, con sus `use`. Playbook propio para lo que salte. |
+| `endpoint-tests` | `deterministic` | Añade a cada `<Modelo>EndpointsTest` las pruebas que trae hoy la plantilla, conservando lo escrito a mano. Playbook propio para lo que salte. |
 | `edited-outside` | `guided` | Devuelve a sus huecos (o al contrato) lo editado fuera. Un paso por familia de plantilla. Playbook propio. |
 | `declared-routes` | `guided` | Cuadra rutas y requests con lo declarado. |
 | `security` | `guided` | Cierra una escritura o una exposición que el contrato prohíbe. |
-| `model-lists` | `guided` | Pone las listas del modelo al día con el contrato. |
+| `model-lists` | `deterministic` | Completa las listas del modelo con lo que declara el contrato (sólo añade). Playbook propio para lo que salte. |
+| `pin-foreign-keys` | `deterministic` | Escribe en el contrato el `on_delete`/`on_update` que hacen hoy las migraciones donde el contrato calla. |
 | `verify-other` | `guided` | Cualquier otro hallazgo de verify. |
 | `hand-rolled` | `decision` | Aprobar o deshacer las excepciones `#[HandRolled]`. |
 | `route-closure` | `decision` | Closures de rutas que no son el fallback de la SPA. |
@@ -224,7 +228,8 @@ Da el primer paso que no esté hecho ni bloqueado, con todo lo necesario para
 hacerlo **sin contexto**: qué es, su riesgo, sus archivos y hallazgos, y
 
 - si es `deterministic`, la orden (y si esa operación está disponible en esta
-  versión);
+  versión) y, si el tipo tiene playbook, el playbook rellenado en
+  `how.fallback`: es lo que se hace a mano con lo que la orden salte;
 - si es `guided`, su **playbook rellenado** con los archivos, los hallazgos, la
   orden de `verify` acotada y la de `check`;
 - si es `decision`, las opciones con sus consecuencias y cómo decidir; si ya se
@@ -249,6 +254,7 @@ elemento por elemento, y termina con código distinto de cero. Hacer un paso
 | `classification` | Cada archivo, comparado otra vez con lo regenerado (con la misma clasificación del diagnóstico), queda en una de las clases de `accept`, en ninguna de `reject`, y, si se pide, registrado (`tracked`) con el hash actual (`hash_current`) o sin paso pendiente (`resolved`). |
 | `unmanaged` | Ninguno de los archivos sigue siendo código sin gestionar. |
 | `contract` | El `laraimport.json` del ámbito valida. |
+| `foreign-keys` | El `laraimport.json` del ámbito declara `on_delete`/`on_update` en cada una de sus columnas (`columns`). El valor que declare es suyo: lo que había que resolver era que callaba. |
 | `decision` | Hay una decisión registrada. |
 
 Una decisión, además de su comprobación, necesita estar decidida.
@@ -288,12 +294,13 @@ Las de `#[HandRolled]` no van aquí: tienen su candado
 | Acción | Qué hace | Pasos |
 |---|---|---|
 | `adopt` | Pone el manifiesto al día con lo que hay: adopta, vuelve a enlazar, olvida. | `adopt`, `relink`, `prune`, `untracked-edited` |
-| `apply` | Ejecuta un paso determinista que reescribe código. | `regenerate`, `missing` (restaurar) |
+| `apply` | Ejecuta los pasos deterministas que reescriben código o el contrato (uno a uno, o todos con `--deterministic`). | `regenerate`, `missing` (restaurar), `fix`, `endpoint-tests`, `controller-concern`, `model-lists`, `pin-foreign-keys`, y los de `adopt` |
 | `infer` | Infiere el contrato desde el código. | `no-contract`, `unmanaged-models`, `unmanaged-http` |
 | `except` | Registra una excepción aprobada con su razón. | las decisiones con opción «dejarlo así» |
 
 ```bash
 larapack:realign <acción> [<id>…] [--package=…] [--dry-run] [--allow-dirty] [--option clave=valor]
+larapack:realign apply --deterministic [--package=…] [--dry-run] [--allow-dirty]
 ```
 
 Lo común a todas lo garantiza el núcleo (`OperationRunner`):
@@ -310,8 +317,94 @@ Lo común a todas lo garantiza el núcleo (`OperationRunner`):
   error) y `unchanged`, como `larapack:fix`.
 - Anota en la historia del paso lo que hizo, sin darlo por hecho.
 
-*(por completar: la guía de cada operación, con sus opciones, límites y
-riesgos.)*
+### `adopt`: que el manifiesto diga la verdad
+
+```bash
+larapack:realign adopt adopt@. --dry-run      # qué anotaría
+larapack:realign adopt adopt@.                # lo anota
+larapack:realign adopt                        # todos sus pasos pendientes (y las decisiones `adopt` tomadas)
+```
+
+**Nunca cambia el contenido de un archivo**: sólo `.larapack/manifest.json`
+(se escribe una vez, al final). Antes de anotar cada archivo lo vuelve a
+comparar con lo regenerado, con la misma clasificación del diagnóstico: si
+alguien lo editó después de diagnosticar, lo salta diciéndolo.
+
+| Paso | Qué hace con cada archivo | Cuándo lo salta |
+|---|---|---|
+| `adopt` | Igual a lo regenerado (`identical`, `format_only`). Si el manifiesto lo conoce, vuelve a anotar su hash y la versión del generador, **conservando su estado** (lo generado sigue siendo `generated`). Si no lo conoce, lo registra con `state: adopted`, con el modelo, el namespace y el stub de lo regenerado. | Ya no es igual a lo regenerado. Lo regenerado no lo registra. |
+| `relink` | Renombrado: mueve el registro a la ruta nueva con su stub y su hash. | Ya no se reconoce como renombrado (dos candidatos, o el original volvió). |
+| `prune` | Borrado y el contrato no lo volvería a generar (`retired`, `not_regenerated`, `superseded`): lo olvida. Si es de un modelo que ya no está en el contrato, lo que le queda en disco pasa a quien lo genera hoy (el módulo compartido de la interfaz) o, si no lo genera nadie (una vista que se quedó), a lo que no es de ninguna entidad —sigue registrado y vigilado—, y el modelo se olvida: si no, `verify` lo vería como una entidad a la que le falta todo. | Vuelve a estar en disco. El contrato lo sigue pidiendo: eso es la decisión `missing`. |
+| `untracked-edited` (si se decidió `adopt`) | Escrito a mano en la ruta de uno generado: lo registra con `state: adopted` y **el hash de lo regenerado**. Queda personalizado: `verify` lo sigue (deriva, forma de controlador) y `--force` no lo sobrescribe jamás. | Falta decidir, o se decidió otra cosa. Ya no es de esa clase. |
+
+**La versión en lo heredado.** En cada ámbito que toca, `adopt` anota además
+la versión actual del generador en los archivos de un manifiesto v1 que siguen
+siendo, **sin editar** (su hash es el del manifiesto), idénticos o iguales
+salvo espacios a lo regenerado. Su hash no cambia. Desde ahí, si una versión
+posterior cambia la plantilla, el diagnóstico lo distingue de un cambio del
+contrato. Lo que sólo es igual pasándolo por Pint, o está editado en sus
+huecos, se queda sin versión: no se afirma lo que no se comprobó.
+
+**Riesgos.** Bajos: se deshace con el control de versiones. Adoptar un
+`format_only` marcado `comments: true` deja que un `import --force` posterior
+reemplace esos comentarios por los de la plantilla. Adoptar como editado algo
+escrito a mano hace que `--force` no lo regenere nunca: si después se quiere lo
+generado, hay que borrarlo y regenerarlo.
+
+### `apply`: lo determinista que reescribe
+
+```bash
+larapack:realign apply <id>… --dry-run        # con el diff de cada archivo
+larapack:realign apply <id>…
+larapack:realign apply --deterministic --dry-run
+larapack:realign apply --deterministic        # todos los deterministas pendientes, en el orden del plan
+```
+
+**Sin ids hay que pedirlo** (`--deterministic`): `apply` reescribe código y no
+lo hace por omisión. Con `--deterministic` hace también los pasos de `adopt`
+(`relink`, `prune`, `adopt`), en su orden. Las decisiones sólo entran si se
+decidió la opción que ejecuta `apply` (`restore` en `missing`).
+
+Cada cambio se escribe entero o no se escribe: si después de escribirlo (y de
+pasarle la Pint del proyecto, donde se dice) un PHP no parsea, todo lo de ese
+cambio vuelve a como estaba —un archivo creado se borra, uno borrado se
+restaura— y se salta con la razón. Lo saltado deja el paso pendiente; lo que
+falta lo dice su playbook (`next`, en `how.fallback`).
+
+| Paso | Qué escribe | Qué nunca hace / cuándo salta | Riesgo |
+|---|---|---|---|
+| `regenerate` | Lo que nadie editó y quedó atrás (`version_delta`: su hash es el del manifiesto) y lo que el contrato pide y nunca se generó, **copiado de lo regenerado**, que ya pasó por la Pint del proyecto. Lo registra como generado, con la versión actual. Es un `import --force` acotado a lo seguro. | Nunca un archivo editado (si alguien lo editó después de diagnosticar, salta), **nunca una migración**, nunca nada de un modelo que no se ha importado (su migración la escribe `larapack:import`). | Medio: cambia comportamiento si la plantilla nueva lo cambia (un IndexRequest que fuerza `managed`, un Resource que deja de servir `appends`). Puede pedir dependencias nuevas que la plantilla usa. |
+| `missing` (si se decidió `restore`) | Lo generado que se borró, igual que `regenerate`. | Lo que no está como `missing` borrado. | Medio: vuelve algo que alguien quitó. |
+| `fix` | Lo mismo que `larapack:fix <comprobación> --package=<paquete>` (LegacyFix): `index-managed`, `resource-appends`, `relation-missing`, el fallback de la SPA. | Lo que no tiene la forma generada: lo salta con la razón de `larapack:fix`. | Medio: ver `fix` en el plan. |
+| `endpoint-tests` | Añade a cada `<Modelo>EndpointsTest` las pruebas que trae hoy la plantilla (sin sesión no se entra, cada acción pregunta a la política, el listado pasa por su ManagedFilter), copiadas de lo regenerado, con los auxiliares privados que llaman y los `use` que necesitan. Pasa la Pint del proyecto por el test. | Nunca quita ni cambia un método que ya está. Salta si el test no se reconoce con certeza (dos clases, una importación agrupada), si su clase o su namespace no son los de lo regenerado, o si una importación choca con otra del mismo nombre. | Bajo: no toca código de producción. Una prueba nueva **puede fallar con razón** (una acción que responde sin sesión): no se quita, se arregla la acción. |
+| `controller-concern` | Mueve el trait de `Http/Controllers/Concerns` a `Http/Requests/Concerns` (el aviso: sólo lo usan requests), cambia su namespace y reescribe **por tokens** cada nombre que lo apunta en el proyecto: `use`, `\…::class`, nombres relativos. Si el manifiesto lo registraba, el registro lo sigue. | El que usa un controlador (es `controller-shape`). Salta si alguien lo nombra en una cadena (configuración), en un `use` agrupado o por su nombre corto desde su mismo namespace, si ya hay un archivo en el destino o si su namespace no es el de su ruta. Un comentario que lo nombra se queda. | Bajo: el comportamiento no cambia. |
+| `model-lists` | Completa `$fillable`, `$creatable`, `$updatable`, `$export_cols` y `casts()` de un modelo editado con lo que declara el contrato (ModelRegions, lo mismo que `import --force`). | Sólo añade: nunca quita lo que el contrato ya no declara ni cambia un cast distinto (son avisos `info`). Una región que no se localiza con certeza se salta con su orden manual. | Medio: cambia qué se asigna en masa y cómo se convierte una columna. |
+| `pin-foreign-keys` | Escribe en `laraimport.json` el `on_delete`/`on_update` que hacen hoy las migraciones (leídas todas, por tokens) donde el contrato calla y difiere de `restrict` —la cascada de 7.x—. Edita el JSON **en su sitio**: sólo cambian las líneas de esas columnas. Valida el contrato antes de escribirlo. | Nunca toca una migración ni la base. Salta si el contrato ya declara otra acción (es una decisión), o si el JSON no se puede editar sin reescribirlo. Una llave que alguna migración toca de forma que no se lee no se propone. | Bajo: la base no cambia; el contrato pasa a decir lo que hace producción. Cambiar la acción de verdad es otra decisión (declarar otra y migrar). |
+
+Después de `apply --deterministic`, **vuelve a diagnosticar y planificar**: lo
+que una corrección deja igual a lo regenerado (un IndexRequest que arregló
+`fix`) aparece como `adopt` en la siguiente pasada. Dos pasadas bastan en los
+proyectos ensayados; cuando `plan` no tiene deterministas pendientes, se sigue
+con lo guiado.
+
+### Saltar de versión mayor (7.x → 8 → 9)
+
+Las guías «Al actualizar» del CHANGELOG, convertidas en pasos del plan. Lo que
+es determinista lo hace `apply --deterministic`; lo demás queda como paso
+guiado o decisión, con su razón.
+
+| Guía | Qué pide | Paso |
+|---|---|---|
+| 8.0 — `restrict` por omisión en las llaves | Declarar `on_delete`/`on_update` si el proyecto dependía de la cascada | `pin-foreign-keys` (`deterministic`) |
+| 8.0 / 9.3.1 D4 — alteraciones vacías de 9.x | Borrar las que no se han migrado | Ninguno: saber si se migró pide la base de producción. Se dice, no se hace. |
+| 9.0 — forma de los controladores | Llevar la lógica a su FormRequest | `controller-shape` (`guided`) |
+| 9.0 — traits en `Http/Controllers/Concerns` | Moverlos a `Http/Requests/Concerns` | `controller-concern` (`deterministic`) si sólo los usan requests; `controller-shape` si los usa un controlador |
+| 9.0 — IndexRequest, Resource y exportación nuevos | `import --force` en lo no editado; `fix index-managed resource-appends` en lo editado | `regenerate` y `fix` (`deterministic`) |
+| 9.1 — pruebas de autorización en `<Modelo>EndpointsTest` | Borrar, importar y volver a pegar lo propio | `endpoint-tests` (`deterministic`, sin borrar nada) |
+| 9.2 — `relation-missing` | `fix relation-missing` | `fix` |
+| 9.2 — `model-lists-outdated` | `import --force` | `model-lists` (`deterministic`) |
+| 9.3.0 — lo formateado después de generar figura `customised` | No se arreglaba solo | `adopt` (`deterministic`) |
+| 9.4.0 — manifiesto v2 | Nada | `adopt` anota la versión en lo heredado |
 
 ## Seguridad: qué nunca hace
 
@@ -348,8 +441,10 @@ pide actualizar el paquete.
   contrato y del manifiesto), más `files` (sólo lo que no cumple:
   `{scope, package, file, path, model, stub, class, category, type, reason,
   tracked, hash_current, generator, to?, members?, cause?}`), `unmanaged`,
-  `findings` (los de verify, con `scope`, `category` y `type`) y
-  `out_of_scope`.
+  `findings` (los de verify, con `scope`, `category` y `type`), `contract`
+  (lo que el contrato tiene que decir y calla: `{scope, package, file, model,
+  column, table, on_delete?, on_update?, migration, category, type}`, hoy sólo
+  `pin-foreign-keys`) y `out_of_scope`.
 - `status --format=json`: `{format_version, ok, action, diagnosed_at,
   planned_at, stale, totals, verify, steps: {total, by_status, by_category},
   next, last_check, plan}`. `stale` lista los ámbitos cuyo contrato o
@@ -361,7 +456,10 @@ pide actualizar el paquete.
 - `decide --format=json`: `{format_version, ok, action, id, decision, then,
   check}`.
 - Las operaciones: `{format_version, ok, action, dry_run, steps, fixed,
-  skipped, unchanged, notes}`.
+  skipped, unchanged, notes}`. Cada elemento de `fixed`/`skipped`/`unchanged`
+  es `{file, reason, step}` más lo suyo: `diff` en una simulación de `apply`,
+  `to` y `references` en `controller-concern`, `model` y `stub` en `adopt`,
+  `stamped` en la línea de la versión anotada en lo heredado (`file: null`).
 - Un error, en cualquiera: `{ok: false, error, format_version, action}`.
 
 **El manifiesto v2.** Desde 9.4.0 cada archivo del manifiesto dice qué versión
@@ -419,6 +517,31 @@ contrato (`infer`) o dejar el proyecto fuera de LaraPack y quedarse con
 - **Cada paso guiado mueve código** y puede cambiar comportamiento (por ejemplo,
   un 403 que llega antes que un 422). Las pruebas del paquete tienen que pasar
   antes y después; el playbook lo pide.
+- **`regenerate` copia lo que generaría hoy la plantilla**, y la plantilla
+  nueva puede usar clases de una versión nueva de una dependencia
+  (`innoboxrr/search-surge`, por ejemplo). `apply` comprueba que el PHP
+  parsea, no que esas clases existan: corre las pruebas del proyecto después,
+  y actualiza la dependencia si hace falta.
+- **`adopt` sólo anota la versión** en lo heredado que se sabe igual sin Pint;
+  el resto sigue sin versión, y el diagnóstico lo trata como de una versión
+  anterior (que es lo prudente).
+- **`endpoint-tests`** sólo reconoce las pruebas por el final de su nombre (el
+  mismo criterio que `verify`): una prueba propia que se llame igual cuenta
+  como la de la plantilla. Y copia las pruebas de lo regenerado, que se
+  formatean con la Pint del proyecto; si el proyecto no tiene Pint ni la tiene
+  el generador, quedan con el formato de la plantilla.
+- **`controller-concern`** reescribe nombres de clase por tokens, no
+  comentarios ni docblocks: un `@see` al namespace viejo se queda. Y busca
+  referencias en los PHP del proyecto (fuera de `vendor`, `node_modules`,
+  `storage` y `cache`): un nombre en un archivo que no es PHP (un `.json`, un
+  `.yaml`) no se ve.
+- **`pin-foreign-keys`** lee las migraciones por tokens (SchemaHistory). Si
+  una llave se cambió en la base sin migración, o con SQL que no se lee, el
+  contrato diría otra cosa que la base: no se propone lo incierto, pero lo que
+  no está en una migración no lo puede saber nadie desde el código.
+- **Una pasada no deja todo**: lo que `fix` deja igual a lo regenerado sale
+  como `adopt` en la siguiente. Diagnostica y planifica otra vez después de
+  `apply --deterministic`.
 
 ## Para un agente: la receta
 
@@ -428,7 +551,11 @@ contrato (`infer`) o dejar el proyecto fuera de LaraPack y quedarse con
    `plan` otra vez para confirmar; si sigue sin nada, se terminó.
 3. Según `step.category`:
    - `deterministic`: si `how.available`, ejecuta `how.command` (primero con
-     `--dry-run`). Si no, hazlo a mano como dice `step.description`.
+     `--dry-run`). Si no, hazlo a mano como dice `step.description`. Lo que la
+     orden salte (`skipped`, con su razón) se hace a mano siguiendo
+     `how.fallback.instructions`. Para ir más rápido, `apply --deterministic`
+     hace todos los deterministas de una vez; después, `diagnose` y `plan`
+     otra vez.
    - `guided`: sigue `how.instructions` al pie de la letra.
    - `decision`: **no decidas tú**. Presenta `how.options` a quien tenga
      autoridad y, cuando decida, `larapack:realign decide <id> <opción>
