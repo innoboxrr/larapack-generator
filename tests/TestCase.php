@@ -7,6 +7,7 @@ use Innoboxrr\LarapackGenerator\Support\Declaration;
 use Innoboxrr\LarapackGenerator\Support\Generation;
 use Innoboxrr\LarapackGenerator\Support\MigrationTimestamp;
 use Innoboxrr\LarapackGenerator\Support\ProjectRoot;
+use Innoboxrr\LarapackGenerator\Support\Realign\Operations\Operations;
 use Innoboxrr\LarapackGenerator\Tests\Support\FakeProject;
 use Innoboxrr\LarapackGenerator\Tests\Support\Larapack;
 use PHPUnit\Framework\TestCase as BaseTestCase;
@@ -24,6 +25,7 @@ abstract class TestCase extends BaseTestCase
         Generation::reset();
         Declaration::reset();
         MigrationTimestamp::reset();
+        Operations::reset();
 
         if (isset($this->project)) {
             $this->project->cleanup();

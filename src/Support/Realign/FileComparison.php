@@ -1,0 +1,333 @@
+<?php
+
+namespace Innoboxrr\LarapackGenerator\Support\Realign;
+
+use Innoboxrr\LarapackGenerator\Support\Files;
+
+/**
+ * Compara un archivo del proyecto con el que generaría hoy el contrato.
+ *
+ * Tres niveles, de más estricto a menos:
+ *
+ *  1. Idénticos: los mismos bytes, con los finales de línea normalizados
+ *     (como el hash del manifiesto).
+ *  2. Iguales salvo formato: en PHP, la misma secuencia de tokens sin
+ *     espacios, con los comentarios sin espacios dentro, sin la coma final
+ *     de una lista y con los `use` de la cabecera ordenados —lo que cambia
+ *     Pint—; en JSON, el mismo valor; en lo demás, el mismo texto sin
+ *     espacios. Lo que esto no reconoce lo intenta después Diagnosis pasando
+ *     el archivo del proyecto por la misma Pint (PintPass).
+ *  3. Distintos: y entonces members() dice qué piezas cambiaron, para saber
+ *     si la edición cae dentro de los huecos (Holes).
+ *
+ * Los comentarios cuentan a propósito: un comentario añadido a mano es una
+ * edición, y adoptar el archivo como «sólo formato» dejaría que un
+ * `--force` lo borrara.
+ *
+ * @phpstan-type Piece array{0: int|string, 1: string}
+ */
+final class FileComparison
+{
+    public const IDENTICAL = 'identical';
+
+    public const FORMAT = 'format';
+
+    public const DIFFERENT = 'different';
+
+    private const OPENING = ['{', '(', '['];
+
+    private const CLOSING = ['}', ')', ']'];
+
+    public static function compareFiles(string $current, string $regenerated): string
+    {
+        return self::compare(Files::read($current), Files::read($regenerated), self::kindOf($current));
+    }
+
+    /**
+     * @param  'php'|'json'|'text'  $kind
+     */
+    public static function compare(string $current, string $regenerated, string $kind): string
+    {
+        $current = str_replace("\r\n", "\n", $current);
+        $regenerated = str_replace("\r\n", "\n", $regenerated);
+
+        if ($current === $regenerated) {
+            return self::IDENTICAL;
+        }
+
+        return self::normalise($current, $kind) === self::normalise($regenerated, $kind) ? self::FORMAT : self::DIFFERENT;
+    }
+
+    /**
+     * @return 'php'|'json'|'text'
+     */
+    public static function kindOf(string $file): string
+    {
+        return match (strtolower(pathinfo($file, PATHINFO_EXTENSION))) {
+            'php' => 'php',
+            'json' => 'json',
+            default => 'text',
+        };
+    }
+
+    /**
+     * Las piezas de un PHP que difieren entre los dos: `method:<nombre>` (en
+     * minúsculas, como los compara PHP) por cada método distinto, añadido o
+     * quitado, y `outside` si cambió algo fuera de los métodos —un `use`,
+     * una propiedad, la cabecera de la clase—. Sin espacios ni comentarios:
+     * aquí importa dónde está la diferencia, no si es de formato.
+     *
+     * @return list<string>
+     */
+    public static function members(string $current, string $regenerated): array
+    {
+        $a = self::split($current);
+        $b = self::split($regenerated);
+        $differing = [];
+
+        foreach (array_unique([...array_keys($a), ...array_keys($b)]) as $member) {
+            if (($a[$member] ?? null) !== ($b[$member] ?? null)) {
+                $differing[] = $member;
+            }
+        }
+
+        sort($differing);
+
+        return $differing;
+    }
+
+    /**
+     * @param  'php'|'json'|'text'  $kind
+     */
+    private static function normalise(string $content, string $kind): string
+    {
+        if ($kind === 'json') {
+            $decoded = json_decode($content, true);
+
+            return $decoded === null && trim($content) !== 'null'
+                ? (string) preg_replace('/\s+/', '', $content)
+                : (string) json_encode(self::sortKeys($decoded));
+        }
+
+        if ($kind === 'text') {
+            return (string) preg_replace('/\s+/', '', $content);
+        }
+
+        return implode(' ', self::sortImports(self::tokens($content)));
+    }
+
+    /**
+     * El orden de las claves de un objeto JSON no cambia su valor; el de una
+     * lista sí.
+     */
+    private static function sortKeys(mixed $value): mixed
+    {
+        if (! is_array($value)) {
+            return $value;
+        }
+
+        $value = array_map(self::sortKeys(...), $value);
+
+        if (! array_is_list($value)) {
+            ksort($value);
+        }
+
+        return $value;
+    }
+
+    /**
+     * Los tokens de un PHP sin espacios, con los comentarios sin espacios
+     * dentro y sin coma final.
+     *
+     * @return list<string>
+     */
+    private static function tokens(string $code): array
+    {
+        $tokens = [];
+
+        foreach (token_get_all($code) as $token) {
+            if (! is_array($token)) {
+                $tokens[] = $token;
+
+                continue;
+            }
+
+            [$id, $text] = $token;
+
+            if ($id === T_WHITESPACE) {
+                continue;
+            }
+
+            // `<?php` lleva su salto de línea dentro del token.
+            $tokens[] = in_array($id, [T_COMMENT, T_DOC_COMMENT, T_OPEN_TAG], true)
+                ? (string) preg_replace('/\s+/', '', $text)
+                : $text;
+        }
+
+        return self::withoutTrailingCommas($tokens);
+    }
+
+    /**
+     * Los `use` de importación de la cabecera, ordenados: Pint los ordena
+     * (ordered_imports) y el orden no cambia lo que significan. Sólo los de
+     * arriba del todo: la cabecera termina en la primera sentencia que no es
+     * `namespace`, `declare` ni `use` (los `use` de traits van dentro de la
+     * clase y no se tocan).
+     *
+     * @param  list<string>  $tokens
+     * @return list<string>
+     */
+    private static function sortImports(array $tokens): array
+    {
+        $head = [];
+        $imports = [];
+        $current = [];
+        $depth = 0;
+        $count = count($tokens);
+        $index = 0;
+
+        for (; $index < $count; $index++) {
+            $token = $tokens[$index];
+
+            // El primer token es `<?php`: no abre ninguna sentencia.
+            if ($current === [] && $depth === 0 && $index > 0 && ! in_array(strtolower($token), ['namespace', 'declare', 'use'], true)) {
+                break;
+            }
+
+            $current[] = $token;
+            $depth += in_array($token, self::OPENING, true) ? 1 : (in_array($token, self::CLOSING, true) ? -1 : 0);
+
+            if ($index === 0 || ($token === ';' && $depth === 0)) {
+                if (strtolower($current[0]) === 'use') {
+                    $imports[] = implode(' ', $current);
+                } else {
+                    array_push($head, ...$current);
+                }
+
+                $current = [];
+            }
+        }
+
+        sort($imports);
+
+        return [...$head, ...$imports, ...$current, ...array_slice($tokens, $index)];
+    }
+
+    /**
+     * Pieza => su texto normalizado: un método por nombre y todo lo demás en
+     * `outside`.
+     *
+     * @return array<string, string>
+     */
+    private static function split(string $code): array
+    {
+        /** @var list<Piece> $tokens */
+        $tokens = [];
+
+        foreach (token_get_all($code) as $token) {
+            if (is_array($token) && in_array($token[0], [T_WHITESPACE, T_COMMENT, T_DOC_COMMENT, T_OPEN_TAG], true)) {
+                continue;
+            }
+
+            $tokens[] = is_array($token) ? [$token[0], $token[1]] : [$token, $token];
+        }
+
+        $methods = [];
+        $outside = [];
+        $depth = 0;
+        $classDepth = null;
+        $pendingClass = false;
+        $count = count($tokens);
+
+        for ($i = 0; $i < $count; $i++) {
+            [$id, $text] = $tokens[$i];
+            $previous = $i > 0 ? $tokens[$i - 1][0] : null;
+
+            if ($classDepth === null && in_array($id, [T_CLASS, T_TRAIT, T_INTERFACE, T_ENUM], true) && ! in_array($previous, [T_DOUBLE_COLON, T_NEW], true)) {
+                $pendingClass = true;
+            }
+
+            if ($classDepth !== null && $depth === $classDepth && $id === T_FUNCTION) {
+                [$name, $end] = self::method($tokens, $i);
+                $methods['method:'.$name] = implode(' ', self::withoutTrailingCommas(array_column(array_slice($tokens, $i, $end - $i + 1), 1)));
+                $i = $end;
+
+                continue;
+            }
+
+            if ($text === '{' || in_array($id, [T_CURLY_OPEN, T_DOLLAR_OPEN_CURLY_BRACES], true)) {
+                $depth++;
+
+                if ($pendingClass) {
+                    $classDepth = $depth;
+                    $pendingClass = false;
+                }
+            } elseif ($text === '}') {
+                $depth--;
+            }
+
+            $outside[] = $text;
+        }
+
+        return ['outside' => implode(' ', self::withoutTrailingCommas($outside))] + $methods;
+    }
+
+    /**
+     * El nombre de un método (en minúsculas) y dónde acaba: el `}` de su
+     * cuerpo o el `;` de uno abstracto.
+     *
+     * @param  list<Piece>  $tokens
+     * @return array{0: string, 1: int}
+     */
+    private static function method(array $tokens, int $start): array
+    {
+        $count = count($tokens);
+        $j = $start + 1;
+
+        while ($j < $count && ($tokens[$j][1] === '&' || $tokens[$j][0] === T_AMPERSAND_NOT_FOLLOWED_BY_VAR_OR_VARARG)) {
+            $j++;
+        }
+
+        $name = $j < $count && $tokens[$j][1] !== '(' ? strtolower($tokens[$j][1]) : '';
+        $level = 0;
+
+        for (; $j < $count; $j++) {
+            $piece = $tokens[$j][1];
+
+            if ($level === 0 && $piece === ';') {
+                break;
+            }
+
+            if (in_array($piece, self::OPENING, true) || in_array($tokens[$j][0], [T_CURLY_OPEN, T_DOLLAR_OPEN_CURLY_BRACES], true)) {
+                $level++;
+            } elseif (in_array($piece, self::CLOSING, true)) {
+                $level--;
+
+                if ($level === 0 && $piece === '}') {
+                    break;
+                }
+            }
+        }
+
+        return [$name, min($j, $count - 1)];
+    }
+
+    /**
+     * @param  list<string>  $pieces
+     * @return list<string>
+     */
+    private static function withoutTrailingCommas(array $pieces): array
+    {
+        $clean = [];
+
+        foreach ($pieces as $piece) {
+            if (in_array($piece, self::CLOSING, true) && end($clean) === ',') {
+                array_pop($clean);
+            }
+
+            $clean[] = $piece;
+        }
+
+        return $clean;
+    }
+}
