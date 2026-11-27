@@ -2,8 +2,12 @@
 
 namespace Innoboxrr\LarapackGenerator\Commands;
 
+use Innoboxrr\LarapackGenerator\Support\AgentAdapters;
+use Innoboxrr\LarapackGenerator\Support\AgentIntegrations;
 use Innoboxrr\LarapackGenerator\Support\ControllerShape;
+use Innoboxrr\LarapackGenerator\Support\GitHooks;
 use Innoboxrr\LarapackGenerator\Support\Guard;
+use Innoboxrr\LarapackGenerator\Support\GuardDoctor;
 use Innoboxrr\LarapackGenerator\Support\Manifest;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
@@ -32,8 +36,20 @@ use Throwable;
  * Con `--pre` (o el evento PreToolUse) es el hook de antes de la herramienta:
  * sólo mira si va a tocar la aprobación de las excepciones —editar
  * `.larapack/hand-rolled.lock` o correr `larapack:hand-rolled approve` o
- * `revoke`— y, si es así, la impide. Después de la herramienta (PostToolUse)
- * también lo bloquea, pero ya está hecho: sólo puede pedir que se deshaga.
+ * `revoke`— o a saltarse el hook de git (`--no-verify`, cambiar
+ * `core.hooksPath`) y, si es así, lo impide. Después de la herramienta
+ * (PostToolUse) el candado también se bloquea, pero ya está hecho: sólo puede
+ * pedir que se deshaga.
+ *
+ * Con `--agent` habla el idioma de otro agente —Cursor, Codex, Gemini CLI,
+ * Copilot, Windsurf— (AgentAdapters): la decisión es la misma; cambia cómo
+ * llega la entrada y cómo se contesta. Sin `--agent`, lo deduce de la entrada.
+ *
+ * Con `--git` es el hook de git (GitHooks), la capa que no depende de ningún
+ * agente, y con `--doctor` dice qué capas tiene el proyecto y cuáles le faltan
+ * (GuardDoctor).
+ *
+ * @phpstan-import-type Verdict from AgentAdapters
  */
 class GuardCommand extends Command
 {
@@ -46,10 +62,14 @@ class GuardCommand extends Command
     protected function configure(): void
     {
         $this->setName('larapack:guard')
-            ->setDescription('Hook para agentes: comprueba contra el contrato el archivo que se acaba de editar')
+            ->setDescription('Hook para agentes y para git: comprueba contra el contrato lo que se acaba de editar o se va a comitear')
             ->addOption('stop', null, InputOption::VALUE_NONE, 'Hook de fin de turno: verifica el proyecto entero')
-            ->addOption('pre', null, InputOption::VALUE_NONE, 'Hook de antes de la herramienta: impide tocar la aprobación de las excepciones #[HandRolled]')
-            ->addOption('root', null, InputOption::VALUE_REQUIRED, 'Raíz del proyecto (por defecto, la del archivo tocado)');
+            ->addOption('pre', null, InputOption::VALUE_NONE, 'Hook de antes de la herramienta: impide tocar la aprobación de las excepciones #[HandRolled] y saltarse el hook de git')
+            ->addOption('root', null, InputOption::VALUE_REQUIRED, 'Raíz del proyecto (por defecto, la del archivo tocado)')
+            ->addOption('agent', null, InputOption::VALUE_REQUIRED, 'El agente que llama al hook: '.implode(', ', AgentAdapters::AGENTS).' (por defecto, se deduce de la entrada)')
+            ->addOption('git', null, InputOption::VALUE_REQUIRED, 'Hook de git ('.implode(' o ', GitHooks::HOOKS).'): comprueba lo que se va a comitear o a empujar')
+            ->addOption('doctor', null, InputOption::VALUE_NONE, 'Dice qué capas de la guardia tiene el proyecto y cuáles faltan, con la orden para instalarlas')
+            ->addOption('format', null, InputOption::VALUE_REQUIRED, 'Con --doctor: txt o json', 'txt');
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
@@ -76,30 +96,88 @@ class GuardCommand extends Command
             $root = null;
         }
 
-        $payload = $this->payload($input);
+        if ($input->getOption('doctor')) {
+            return $this->doctor($root ?? str_replace('\\', '/', (string) getcwd()), (string) $input->getOption('format'), $output);
+        }
 
-        if ($payload === null) {
+        $git = $input->getOption('git');
+
+        if (is_string($git) && $git !== '') {
+            return $this->git($git, $input, $output);
+        }
+
+        $agent = $input->getOption('agent');
+
+        if ($agent !== null && ! in_array($agent, AgentAdapters::AGENTS, true)) {
+            $this->stderr($output)->writeln(
+                'larapack:guard: --agent='.Guard::inline((string) $agent).' no es un agente conocido ('.implode(', ', AgentAdapters::AGENTS).'); no se comprobó nada. Corrige el comando del hook.',
+                OutputInterface::OUTPUT_RAW
+            );
+
+            return Command::FAILURE;
+        }
+
+        $raw = $this->payload($input);
+
+        if ($raw === null) {
+            return Command::SUCCESS;
+        }
+
+        $detected = AgentAdapters::detect($raw);
+        $agent = is_string($agent) ? $agent : $detected;
+        $payload = AgentAdapters::normalise($agent, $raw);
+        $event = $this->event($input, $payload);
+
+        // Cursor ejecuta también los hooks de .claude/settings.json, con su
+        // entrada. Si el proyecto ya tiene los de Cursor, ésos contestan y
+        // éste calla: la misma comprobación dos veces sólo duplica la espera
+        // y el mensaje.
+        if ($input->getOption('agent') === null && $detected === AgentAdapters::CURSOR
+            && AgentIntegrations::hasNative($this->projectFor($payload, $root), AgentAdapters::CURSOR)) {
             return Command::SUCCESS;
         }
 
         try {
-            $stop = $input->getOption('stop')
-                || in_array($payload['hook_event_name'] ?? null, ['Stop', 'SubagentStop'], true);
-
-            if ($stop) {
-                return $this->onStop($payload, $root, $output);
-            }
-
-            return $input->getOption('pre') || ($payload['hook_event_name'] ?? null) === 'PreToolUse'
-                ? $this->onPre($payload, $output)
-                : $this->onEdit($payload, $root, $output);
+            $verdict = match ($event) {
+                'stop' => $this->onStop($payload, $root),
+                'pre' => $this->onPre($payload),
+                default => $this->onEdit($payload, $root),
+            };
         } catch (Throwable $e) {
             // Un fallo de la guardia no debe bloquear al agente: con 1 Claude
             // Code se lo enseña al usuario y sigue.
-            $this->stderr($output)->writeln(self::failure($e), OutputInterface::OUTPUT_RAW);
-
-            return Command::FAILURE;
+            $verdict = ['kind' => 'failure', 'message' => self::failure($e)];
         }
+
+        $reply = AgentAdapters::reply($agent, $event, $verdict);
+
+        if ($reply['stdout'] !== '') {
+            $output->writeln($reply['stdout'], OutputInterface::OUTPUT_RAW);
+        }
+
+        if ($reply['stderr'] !== '') {
+            $this->stderr($output)->writeln($reply['stderr'], OutputInterface::OUTPUT_RAW);
+        }
+
+        return $reply['code'];
+    }
+
+    /**
+     * Qué hook es: la opción del comando manda; si no hay, el evento de la
+     * entrada. Sin ninguno, el de después de editar, como siempre.
+     *
+     * @param  array<string, mixed>  $payload
+     * @return 'pre'|'edit'|'stop'
+     */
+    private function event(InputInterface $input, array $payload): string
+    {
+        $name = $payload['hook_event_name'] ?? null;
+
+        if ($input->getOption('stop') || in_array($name, ['Stop', 'SubagentStop'], true)) {
+            return 'stop';
+        }
+
+        return $input->getOption('pre') || $name === 'PreToolUse' ? 'pre' : 'edit';
     }
 
     /**
@@ -116,26 +194,82 @@ class GuardCommand extends Command
     }
 
     /**
+     * El proyecto de la sesión, para lo que no depende de un archivo.
+     *
+     * @param  array<string, mixed>  $payload
+     */
+    private function projectFor(array $payload, ?string $root): ?string
+    {
+        return $root ?? Guard::projectOf(Guard::workingDirectory($payload));
+    }
+
+    /**
+     * El hook de git: 0 deja seguir, 2 bloquea y 3 pide que lo confirme una
+     * persona desde una terminal (lo pregunta el script del hook, no PHP). Si
+     * la guardia falla sale con 1, y el script deja seguir avisando: la CI lo
+     * comprobará.
+     */
+    private function git(string $hook, InputInterface $input, OutputInterface $output): int
+    {
+        if (! in_array($hook, GitHooks::HOOKS, true)) {
+            $this->stderr($output)->writeln(
+                'larapack:guard: --git='.Guard::inline($hook).' no es un hook conocido ('.implode(', ', GitHooks::HOOKS).').',
+                OutputInterface::OUTPUT_RAW
+            );
+
+            return Command::FAILURE;
+        }
+
+        try {
+            $result = GitHooks::check($hook, str_replace('\\', '/', (string) getcwd()), $hook === 'pre-push' ? $this->rawInput($input) : '');
+        } catch (Throwable $e) {
+            $this->stderr($output)->writeln(self::failure($e), OutputInterface::OUTPUT_RAW);
+
+            return Command::FAILURE;
+        }
+
+        if ($result['message'] !== '') {
+            $this->stderr($output)->writeln($result['message'], OutputInterface::OUTPUT_RAW);
+        }
+
+        return $result['code'];
+    }
+
+    private function doctor(string $root, string $format, OutputInterface $output): int
+    {
+        $diagnosis = GuardDoctor::diagnose($root);
+
+        if ($format === 'json') {
+            $this->json($output, $diagnosis);
+        } else {
+            $output->writeln(GuardDoctor::render($diagnosis), OutputInterface::OUTPUT_RAW);
+        }
+
+        return $diagnosis['ok'] ? Command::SUCCESS : Command::FAILURE;
+    }
+
+    /**
      * Antes de la herramienta: impide que un agente apruebe o retire una
-     * excepción #[HandRolled]. Nada más: lo demás se comprueba sobre lo
-     * escrito, después.
+     * excepción #[HandRolled] y que se salte el hook de git. Nada más: lo
+     * demás se comprueba sobre lo escrito, después.
      *
      * Con 2 Claude Code no ejecuta la herramienta y le enseña al modelo el
      * porqué.
      *
      * @param  array<string, mixed>  $payload
+     * @return Verdict
      */
-    private function onPre(array $payload, OutputInterface $output): int
+    private function onPre(array $payload): array
     {
-        $message = $this->lockMessage($payload, false);
+        $bypasses = Guard::bypassesGitHooks($payload);
+        $messages = array_values(array_filter([
+            $this->lockMessage($payload, false),
+            $bypasses === [] ? null : Guard::bypassMessage($bypasses),
+        ]));
 
-        if ($message === null) {
-            return Command::SUCCESS;
-        }
-
-        $this->stderr($output)->writeln($message, OutputInterface::OUTPUT_RAW);
-
-        return self::BLOCK;
+        return $messages === []
+            ? ['kind' => 'pass', 'message' => '']
+            : ['kind' => 'block', 'message' => implode("\n\n", $messages)];
     }
 
     /**
@@ -151,8 +285,9 @@ class GuardCommand extends Command
 
     /**
      * @param  array<string, mixed>  $payload
+     * @return Verdict
      */
-    private function onEdit(array $payload, ?string $root, OutputInterface $output): int
+    private function onEdit(array $payload, ?string $root): array
     {
         $locked = $this->lockMessage($payload, true);
         $messages = $locked === null ? [] : [$locked];
@@ -204,24 +339,15 @@ class GuardCommand extends Command
         }
 
         if ($messages !== []) {
-            $this->stderr($output)->writeln(implode("\n\n", $messages), OutputInterface::OUTPUT_RAW);
-
-            return self::BLOCK;
+            return ['kind' => 'block', 'message' => implode("\n\n", $messages)];
         }
 
-        if ($reminders !== []) {
-            // Con 0, Claude Code lee la salida estándar como JSON: el texto
-            // llega al modelo junto al resultado de la herramienta, sin
-            // bloquear nada.
-            $this->json($output, [
-                'hookSpecificOutput' => [
-                    'hookEventName' => 'PostToolUse',
-                    'additionalContext' => implode("\n\n", $reminders),
-                ],
-            ]);
-        }
-
-        return Command::SUCCESS;
+        // Un recordatorio llega al modelo junto al resultado de la
+        // herramienta, sin bloquear nada (en Claude Code, el JSON con
+        // additionalContext).
+        return $reminders === []
+            ? ['kind' => 'pass', 'message' => '']
+            : ['kind' => 'context', 'message' => implode("\n\n", $reminders)];
     }
 
     /**
@@ -236,19 +362,22 @@ class GuardCommand extends Command
      * un proyecto con errores antiguos retendría cada turno de cada sesión.
      *
      * @param  array<string, mixed>  $payload
+     * @return Verdict
      */
-    private function onStop(array $payload, ?string $root, OutputInterface $output): int
+    private function onStop(array $payload, ?string $root): array
     {
+        $pass = ['kind' => 'pass', 'message' => ''];
+
         // Si el turno ya sigue por culpa de este hook, se deja terminar: un
         // error que el agente no sabe arreglar no puede retenerlo para siempre.
         if (($payload['stop_hook_active'] ?? false) === true) {
-            return Command::SUCCESS;
+            return $pass;
         }
 
-        $project = $root ?? Guard::projectOf(Guard::workingDirectory($payload));
+        $project = $this->projectFor($payload, $root);
 
         if ($project === null) {
-            return Command::SUCCESS;
+            return $pass;
         }
 
         // Sin manifiesto, como en la edición, sólo la forma de los
@@ -257,21 +386,19 @@ class GuardCommand extends Command
         $errors = Guard::errorsFor(Guard::findings($project, $managed ? [] : ControllerShape::CHECKS));
 
         if ($errors === []) {
-            return Command::SUCCESS;
+            return $pass;
         }
 
         $sessionFiles = Guard::sessionFiles($payload, $project);
         [$blocking, $others] = Guard::partition($errors, $sessionFiles);
 
         if ($blocking === []) {
-            // Con 0 y un JSON en la salida estándar, systemMessage es un aviso
-            // para el usuario; el turno termina.
-            $this->json($output, ['systemMessage' => Guard::message(sprintf(
+            // Un aviso para el usuario (en Claude Code, systemMessage); el
+            // turno termina.
+            return ['kind' => 'notice', 'message' => Guard::message(sprintf(
                 'LaraPack: larapack:verify encuentra %s en archivos que esta sesión no tocó; no retienen el turno.',
                 $this->errors(count($others))
-            ), $others, $project)]);
-
-            return Command::SUCCESS;
+            ), $others, $project)];
         }
 
         // Sin forma de saber qué tocó la sesión, retiene todo, y no se dice
@@ -289,9 +416,7 @@ class GuardCommand extends Command
             );
         }
 
-        $this->stderr($output)->writeln($message, OutputInterface::OUTPUT_RAW);
-
-        return self::BLOCK;
+        return ['kind' => 'block', 'message' => $message];
     }
 
     private function errors(int $count): string
@@ -310,18 +435,34 @@ class GuardCommand extends Command
     /**
      * El JSON del hook, o null si no hay nada que leer o no es un objeto.
      *
-     * Sin entrada redirigida no se lee: ejecutado a mano en una terminal, el
-     * comando se quedaría esperando a que alguien escribiera.
-     *
      * @return array<string, mixed>|null
      */
     private function payload(InputInterface $input): ?array
+    {
+        $raw = $this->rawInput($input);
+
+        if (trim($raw) === '') {
+            return null;
+        }
+
+        $decoded = json_decode($raw, true);
+
+        return is_array($decoded) && ! array_is_list($decoded) ? $decoded : null;
+    }
+
+    /**
+     * Lo que llega por la entrada estándar, o '' si no hay nada redirigido.
+     *
+     * Sin entrada redirigida no se lee: ejecutado a mano en una terminal, el
+     * comando se quedaría esperando a que alguien escribiera.
+     */
+    private function rawInput(InputInterface $input): string
     {
         $stream = $input instanceof StreamableInputInterface ? $input->getStream() : null;
 
         if ($stream === null) {
             if (! defined('STDIN') || stream_isatty(STDIN)) {
-                return null;
+                return '';
             }
 
             $stream = STDIN;
@@ -329,13 +470,7 @@ class GuardCommand extends Command
 
         $raw = stream_get_contents($stream);
 
-        if (! is_string($raw) || trim($raw) === '') {
-            return null;
-        }
-
-        $decoded = json_decode($raw, true);
-
-        return is_array($decoded) && ! array_is_list($decoded) ? $decoded : null;
+        return is_string($raw) ? $raw : '';
     }
 
     private function stderr(OutputInterface $output): OutputInterface

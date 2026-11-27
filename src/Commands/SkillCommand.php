@@ -4,9 +4,12 @@ namespace Innoboxrr\LarapackGenerator\Commands;
 
 use Innoboxrr\LarapackGenerator\Commands\Concerns\TargetsProject;
 use Innoboxrr\LarapackGenerator\Support\AgentHooks;
+use Innoboxrr\LarapackGenerator\Support\AgentIntegrations;
+use Innoboxrr\LarapackGenerator\Support\GitHooks;
 use Innoboxrr\LarapackGenerator\Support\Skill;
 use RuntimeException;
 use Symfony\Component\Console\Command\Command;
+use Symfony\Component\Console\Formatter\OutputFormatter;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
@@ -19,8 +22,11 @@ use Symfony\Component\Console\Output\OutputInterface;
  * el paquete, actualizar el generador actualiza las instrucciones.
  *
  * Además deja la regla en `AGENTS.md`, que es lo que leen Codex y compañía, y
- * con `--hooks` la hace ejecutable en Claude Code: un texto se olvida a mitad
- * de una sesión larga; un hook que devuelve el error en cada edición, no.
+ * con `--hooks` la hace ejecutable: en Claude Code, y en git, que frena el
+ * commit de cualquier agente o persona. Un texto se olvida a mitad de una
+ * sesión larga; un hook que devuelve el error en cada edición, no. Con
+ * `--agents` instala también los hooks y las reglas de otros agentes
+ * (AgentIntegrations).
  */
 class SkillCommand extends Command
 {
@@ -36,7 +42,8 @@ class SkillCommand extends Command
             ->addOption('print', null, InputOption::VALUE_NONE, 'Emite el texto por salida estándar en vez de instalarlo')
             ->addOption('source', null, InputOption::VALUE_NONE, 'Muestra sólo la ruta del original en el paquete')
             ->addOption('force', null, InputOption::VALUE_NONE, 'Sobrescribe el destino aunque ya exista')
-            ->addOption('hooks', null, InputOption::VALUE_NONE, 'Fusiona en .claude/settings.json los hooks que ejecutan larapack:guard')
+            ->addOption('hooks', null, InputOption::VALUE_NONE, 'Fusiona en .claude/settings.json los hooks que ejecutan larapack:guard, y pone los hooks de git (.githooks/, core.hooksPath)')
+            ->addOption('agents', null, InputOption::VALUE_REQUIRED, 'Hooks y reglas de otros agentes, separados por comas: '.implode(', ', AgentIntegrations::AGENTS).' o all')
             ->addOption('no-agents', null, InputOption::VALUE_NONE, 'No escribe el bloque de LaraPack en AGENTS.md');
     }
 
@@ -55,6 +62,14 @@ class SkillCommand extends Command
         }
 
         $this->applyRootOption($input);
+
+        try {
+            $integrations = is_string($input->getOption('agents')) ? AgentIntegrations::parse($input->getOption('agents')) : [];
+        } catch (RuntimeException $e) {
+            $output->writeln("<error>{$e->getMessage()}</error>");
+
+            return Command::FAILURE;
+        }
 
         $path = (string) $input->getOption('path');
         $result = Skill::install($path, (bool) $input->getOption('force'));
@@ -96,6 +111,24 @@ class SkillCommand extends Command
                 $output->writeln($hooks['added'] === []
                     ? "  <info>Hooks de LaraPack ya presentes:</info> {$hooks['target']}"
                     : '  <info>Hooks añadidos ('.implode(', ', $hooks['added'])."):</info> {$hooks['target']}");
+
+                $this->gitHooks($output);
+            }
+
+            foreach ($integrations as $agent) {
+                foreach (AgentIntegrations::install(root_path(), $agent, $path) as $written) {
+                    $output->writeln(sprintf('  <info>%s, %s:</info> %s', AgentIntegrations::NAMES[$agent], match ($written['action']) {
+                        'created' => 'creado',
+                        'updated' => 'actualizado',
+                        'appended' => 'bloque añadido al final',
+                        'kept' => 'existe y no es de LaraPack, no se toca',
+                        default => 'al día',
+                    }, $written['target']));
+                }
+            }
+
+            if ($input->getOption('hooks') || $integrations !== []) {
+                $output->writeln('  Qué capas tiene el proyecto y cuáles faltan: larapack:guard --doctor');
             }
         } catch (RuntimeException $e) {
             $output->writeln("<error>{$e->getMessage()}</error>");
@@ -104,5 +137,31 @@ class SkillCommand extends Command
         }
 
         return Command::SUCCESS;
+    }
+
+    /**
+     * La capa de git: los scripts en `.githooks/` y `core.hooksPath`.
+     */
+    private function gitHooks(OutputInterface $output): void
+    {
+        $git = GitHooks::install(root_path());
+
+        foreach ($git['written'] as $file) {
+            $output->writeln("  <info>Hook de git escrito:</info> {$file}");
+        }
+
+        foreach ($git['current'] as $file) {
+            $output->writeln("  <info>Hook de git al día:</info> {$file}");
+        }
+
+        $output->writeln(match ($git['hooks_path']) {
+            'set' => '  <info>git usa los hooks de '.GitHooks::DIRECTORY.'</info> (core.hooksPath). Cada clon lo activa con: git config core.hooksPath '.GitHooks::DIRECTORY,
+            'present' => '  <info>git ya usa los hooks de '.GitHooks::DIRECTORY.'.</info>',
+            default => '  <comment>git todavía no usa los hooks de '.GitHooks::DIRECTORY.':</comment>',
+        });
+
+        foreach ($git['instructions'] as $instruction) {
+            $output->writeln('  - '.OutputFormatter::escape($instruction));
+        }
     }
 }

@@ -225,6 +225,177 @@ final class Guard
     }
 
     /**
+     * Las órdenes de git de la orden de Bash que se saltan los hooks de git:
+     * `commit` o `merge` con `--no-verify` (o `-n` en `commit`), `push
+     * --no-verify`, y lo que cambia `core.hooksPath` —`git config` o
+     * `git -c core.hooksPath=…`—, que los desactiva todos de una vez.
+     *
+     * El hook de git es la capa que no depende del agente (GitHooks), y la
+     * única forma de quitarla sin tocar un archivo es una de éstas. Se leen
+     * como la aprobación de una excepción: por la shell, sin ejecutar nada, y
+     * también dentro de `bash -c`, `eval` o un heredoc que recibe una shell.
+     * Leer la configuración (`git config --get core.hooksPath`) no la cambia
+     * y no cuenta.
+     *
+     * @param  array<string, mixed>  $payload
+     * @return list<string> cada orden que se salta los hooks, en corto
+     */
+    public static function bypassesGitHooks(array $payload): array
+    {
+        $command = self::bashCommand($payload);
+
+        if ($command === null) {
+            return [];
+        }
+
+        $locks = [];
+        $bypasses = [];
+        self::shellScan($command, 0, $locks, $bypasses);
+
+        return array_values(array_unique($bypasses));
+    }
+
+    /**
+     * Si una orden de git se salta los hooks de git, cómo se dice en corto;
+     * null si no.
+     *
+     * Git admite abreviar una opción larga mientras no sea ambigua:
+     * `--no-veri` es `--no-verify` (`--no-ve` no, que también puede ser
+     * `--no-verbose`). En `commit`, `-n` puede ir en un grupo de opciones
+     * cortas (`-anm "…"`), salvo que vaya detrás de una que toma valor
+     * (`-mn` es el mensaje «n»). Los subcomandos de git distinguen
+     * mayúsculas (`git COMMIT` no existe); el programa, no en Windows ni en
+     * macOS (`GIT.EXE`).
+     *
+     * @param  list<string>  $words
+     */
+    private static function gitBypass(array $words): ?string
+    {
+        $index = 0;
+
+        while (isset($words[$index]) && (preg_match('/^[A-Za-z_][A-Za-z0-9_]*=/', $words[$index]) === 1 || in_array($words[$index], self::WRAPPERS, true))) {
+            $index++;
+        }
+
+        if (! in_array(strtolower(basename(str_replace('\\', '/', $words[$index] ?? ''))), ['git', 'git.exe'], true)) {
+            return null;
+        }
+
+        // Las opciones globales van antes del subcomando, y algunas llevan su
+        // valor en la palabra siguiente.
+        $subcommand = null;
+        $arguments = [];
+        $pending = null;
+
+        foreach (array_slice($words, $index + 1) as $word) {
+            if ($subcommand !== null) {
+                $arguments[] = $word;
+            } elseif ($pending === 'config' && self::namesHooksPath($word)) {
+                return 'git -c core.hooksPath';
+            } elseif ($pending !== null) {
+                $pending = null;
+            } elseif (in_array($word, ['-c', '--config-env'], true)) {
+                $pending = 'config';
+            } elseif (str_starts_with($word, '--config-env=') && self::namesHooksPath(substr($word, 13))) {
+                return 'git -c core.hooksPath';
+            } elseif (in_array($word, ['-C', '--git-dir', '--work-tree', '--namespace', '--exec-path', '--super-prefix', '--list-cmds', '--attr-source'], true)) {
+                $pending = 'value';
+            } elseif (! str_starts_with($word, '-')) {
+                $subcommand = $word;
+            }
+        }
+
+        // Tras `--` vienen rutas, no opciones.
+        $separator = array_search('--', $arguments, true);
+        $options = $separator === false ? $arguments : array_slice($arguments, 0, $separator);
+        $noVerify = array_filter($options, fn (string $option): bool => strlen($option) >= 9 && str_starts_with('--no-verify', explode('=', $option)[0]));
+
+        return match ($subcommand) {
+            'commit' => $noVerify !== [] || self::shortNoVerify($options) ? 'git commit --no-verify' : null,
+            'merge' => $noVerify !== [] ? 'git merge --no-verify' : null,
+            'push' => $noVerify !== [] ? 'git push --no-verify' : null,
+            'config' => self::setsHooksPath($arguments) ? 'git config core.hooksPath' : null,
+            default => null,
+        };
+    }
+
+    /**
+     * Si `git commit` lleva `-n` en alguna de sus opciones cortas.
+     *
+     * Un grupo de opciones cortas son banderas hasta la primera que toma
+     * valor: `m`, `F`, `C`, `c` y `t` lo toman pegado o, al final del grupo,
+     * en la palabra siguiente; `u` y `S`, sólo pegado. Lo que sigue a ésa es
+     * su valor, y una `n` ahí no es `--no-verify`.
+     *
+     * @param  list<string>  $options
+     */
+    private static function shortNoVerify(array $options): bool
+    {
+        $value = false;
+
+        foreach ($options as $option) {
+            if ($value) {
+                $value = false;
+
+                continue;
+            }
+
+            if (preg_match('/^-([^-mFCctuS]*)([mFCct]?)(.*)/', $option, $parts) !== 1) {
+                continue;
+            }
+
+            if (str_contains($parts[1], 'n')) {
+                return true;
+            }
+
+            $value = $parts[2] !== '' && $parts[3] === '';
+        }
+
+        return false;
+    }
+
+    /**
+     * Si los argumentos de `git config` cambian `core.hooksPath`: lo nombran
+     * y no es una lectura.
+     *
+     * @param  list<string>  $arguments
+     */
+    private static function setsHooksPath(array $arguments): bool
+    {
+        if (array_filter($arguments, self::namesHooksPath(...)) === []) {
+            return false;
+        }
+
+        $reads = ['--get', '--get-all', '--get-regexp', '--get-urlmatch', '-l', '--list', 'get', 'list', '--show-origin', '--show-scope'];
+
+        return array_intersect($arguments, $reads) === [];
+    }
+
+    private static function namesHooksPath(string $word): bool
+    {
+        return preg_match('/^core\.hookspath(=|$)/i', $word) === 1;
+    }
+
+    /**
+     * El mensaje de bloqueo por saltarse los hooks de git.
+     *
+     * @param  list<string>  $bypasses
+     */
+    public static function bypassMessage(array $bypasses): string
+    {
+        $lines = [];
+
+        foreach ($bypasses as $bypass) {
+            $lines[] = 'LaraPack: `'.self::inline($bypass).'` se salta el hook de git que comprueba el contrato antes de cada commit.';
+        }
+
+        $lines[] = 'Comitea sin saltártelo: si el hook te frena, corrige lo que dice (o, si es una excepción, déjasela al dueño del proyecto). '
+            .'Tú no desactivas los hooks de git ni cambias core.hooksPath. La CI comprueba lo mismo, así que saltárselo sólo retrasa el rechazo.';
+
+        return implode("\n", $lines);
+    }
+
+    /**
      * @param  array<string, mixed>  $payload
      */
     private static function bashCommand(array $payload): ?string
@@ -248,9 +419,13 @@ final class Guard
      * lo que esto bloquea de más son cuatro shells anidadas que además nombran
      * una de esas palabras.
      *
+     * Las órdenes de git que se saltan sus hooks van a `$bypasses`
+     * (gitBypass()).
+     *
      * @param  list<string>  $locks
+     * @param  list<string>  $bypasses
      */
-    private static function shellScan(string $command, int $depth, array &$locks): bool
+    private static function shellScan(string $command, int $depth, array &$locks, array &$bypasses = []): bool
     {
         $scripts = [];
         $redirects = [];
@@ -265,11 +440,17 @@ final class Guard
 
         // Un heredoc que se le pasa a una shell (`bash <<EOF`) sí son órdenes.
         foreach ($scripts as $script) {
-            $approves = self::nestedScan($script, $depth, $locks) || $approves;
+            $approves = self::nestedScan($script, $depth, $locks, $bypasses) || $approves;
         }
 
         foreach ($commands as $words) {
             $locks = [...$locks, ...self::lockWrites($words)];
+            $bypass = self::gitBypass($words);
+
+            if ($bypass !== null) {
+                $bypasses[] = $bypass;
+            }
+
             $invoked = false;
             $eval = ($words[0] ?? null) === 'eval';
 
@@ -284,7 +465,7 @@ final class Guard
                 $nested = $eval || preg_match('/^-[a-z]*c/i', $words[$index - 1] ?? '') === 1;
 
                 if ($nested) {
-                    $approves = self::nestedScan($word, $depth, $locks) || $approves;
+                    $approves = self::nestedScan($word, $depth, $locks, $bypasses) || $approves;
                 }
             }
         }
@@ -298,11 +479,12 @@ final class Guard
      * ejecuta nada.
      *
      * @param  list<string>  $locks
+     * @param  list<string>  $bypasses
      */
-    private static function nestedScan(string $script, int $depth, array &$locks): bool
+    private static function nestedScan(string $script, int $depth, array &$locks, array &$bypasses = []): bool
     {
         if ($depth < self::MAX_SHELL_DEPTH) {
-            return self::shellScan($script, $depth + 1, $locks);
+            return self::shellScan($script, $depth + 1, $locks, $bypasses);
         }
 
         return trim($script) !== '';

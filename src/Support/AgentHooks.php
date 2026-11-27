@@ -81,6 +81,13 @@ final class AgentHooks
             }
 
             if (self::hasGuard($groups, self::FLAGS[$event])) {
+                if ($event === 'PreToolUse' && self::upgradePreFilter($groups, $group)) {
+                    $settings->hooks->{$event} = $groups;
+                    $added[] = $event;
+
+                    continue;
+                }
+
                 $present[] = $event;
 
                 continue;
@@ -177,6 +184,11 @@ final class AgentHooks
      * `\\\n`): la continuación de línea puede partir una palabra por
      * cualquier sitio, y quitarla aquí con la shell no es fiable.
      *
+     * Desde 9.3.0 deja pasar también `no-veri`, `commit` y `hooksPath` (sin
+     * distinguir mayúsculas): la guardia impide además saltarse el hook de
+     * git (Guard::gitBypass()), y esas órdenes contienen alguna. `commit`
+     * arranca PHP en cada `git commit`, que no es una orden de cada segundo.
+     *
      * La entrada le llega a PHP por una tubería, y el lado que lee puede
      * cerrarla sin haber leído. Antes, la comprobación de `$required` iba
      * dentro de la tubería (`printf … | { [ ! -f … ] || php …; }`): sin
@@ -190,13 +202,94 @@ final class AgentHooks
      * porque la aplicación no arranca—, y lo que cuenta entonces es lo que
      * dice PHP, con su código de salida, que es el de la tubería.
      */
-    private static function preCommand(string $required, string $php): string
+    public static function preCommand(string $required, string $php, string $arguments = '--pre'): string
     {
         $filter = <<<'SH'
-        input=$(cat); bare=$(printf '%s' "$input" | tr -d '\\"'"'"); case "$input $bare" in *approve*|*revoke*|*[Hh][Aa][Nn][Dd]-[Rr][Oo][Ll][Ll][Ee][Dd]*|*'\\\'[nr]*)
+        input=$(cat); bare=$(printf '%s' "$input" | tr -d '\\"'"'"); case "$input $bare" in *approve*|*revoke*|*[Hh][Aa][Nn][Dd]-[Rr][Oo][Ll][Ll][Ee][Dd]*|*no-veri*|*commit*|*[Hh][Oo][Oo][Kk][Ss][Pp][Aa][Tt][Hh]*|*'\\\'[nr]*)
         SH;
 
-        return $filter." [ ! -f {$required} ] || printf '%s' \"\$input\" 2>/dev/null | {$php} larapack:guard --pre;; esac";
+        return $filter." [ ! -f {$required} ] || printf '%s' \"\$input\" 2>/dev/null | {$php} larapack:guard {$arguments};; esac";
+    }
+
+    /**
+     * Pone al día el filtro de la shell del hook PreToolUse que escribió una
+     * versión anterior, si es exactamente el suyo.
+     *
+     * El de 9.2 sólo dejaba pasar a PHP las órdenes con `approve`, `revoke` o
+     * `hand-rolled`, y nunca llegaría a ver un `git commit --no-verify`. Un
+     * hook se reconoce como de LaraPack, y se reemplaza, sólo si es el filtro
+     * que generaba LaraPack (`input=$(cat); bare=…` con `larapack:guard
+     * --pre`) y le falta el de ahora; uno cambiado a mano de otra forma se
+     * deja.
+     *
+     * @param  array<int, mixed>  $groups
+     */
+    private static function upgradePreFilter(array &$groups, stdClass $current): bool
+    {
+        $command = $current->hooks[0]->command ?? null;
+
+        if (! is_string($command)) {
+            return false;
+        }
+
+        foreach ($groups as $group) {
+            foreach (is_object($group) && isset($group->hooks) && is_array($group->hooks) ? $group->hooks : [] as $handler) {
+                $existing = is_object($handler) && isset($handler->command) && is_string($handler->command) ? $handler->command : '';
+
+                if (str_starts_with($existing, 'input=$(cat); bare=') && str_contains($existing, 'larapack:guard --pre')
+                    && ! str_contains($existing, '*no-veri*') && ! str_contains($existing, '--agent=')) {
+                    $handler->command = $command;
+
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Qué hooks de LaraPack tiene `.claude/settings.json`: por evento, si
+     * está, si es el de ahora y si falta.
+     *
+     * @return array<string, 'installed'|'outdated'|'missing'>
+     */
+    public static function settingsStatus(string $root): array
+    {
+        $target = rtrim($root, '/').'/'.self::SETTINGS;
+
+        try {
+            $settings = self::readSettings($target);
+        } catch (RuntimeException) {
+            $settings = new stdClass;
+        }
+
+        $status = [];
+        $hooks = isset($settings->hooks) && $settings->hooks instanceof stdClass ? $settings->hooks : new stdClass;
+
+        foreach (self::hooks($root) as $event => $group) {
+            $groups = is_array($hooks->{$event} ?? null) ? $hooks->{$event} : [];
+
+            if (! self::hasGuard($groups, self::FLAGS[$event])) {
+                $status[$event] = 'missing';
+
+                continue;
+            }
+
+            $copy = unserialize(serialize($groups));
+            $status[$event] = $event === 'PreToolUse' && self::upgradePreFilter($copy, $group) ? 'outdated' : 'installed';
+        }
+
+        return $status;
+    }
+
+    /**
+     * Escribe un archivo del proyecto sin salir de él por un enlace
+     * simbólico (assertInside()).
+     */
+    public static function writeInside(string $root, string $file, string $contents): void
+    {
+        self::write($root, $file, $contents);
     }
 
     /**

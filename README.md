@@ -255,7 +255,9 @@ se instalan en el proyecto:
 
 ```
 php vendor/bin/builder larapack:skill                  # skill + bloque en AGENTS.md
-php vendor/bin/builder larapack:skill --hooks          # además, la guardia en .claude/settings.json
+php vendor/bin/builder larapack:skill --hooks          # además, la guardia: Claude Code y el hook de git
+php vendor/bin/builder larapack:skill --agents=all     # y la de Cursor, Codex, Gemini CLI, Copilot y Windsurf
+php vendor/bin/builder larapack:guard --doctor         # qué capas tiene el proyecto y cuáles faltan
 php vendor/bin/builder larapack:skill --no-agents      # sólo la skill
 php vendor/bin/builder larapack:skill --print          # por salida estándar
 ```
@@ -301,10 +303,14 @@ demás:
   Bash (`>`, `tee`, `cp`, `mv`, `sed -i`, `dd`, `php -r`…) o correr
   `larapack:hand-rolled approve` o `revoke` (también por alias, abreviatura
   —`:h` incluida—, con la palabra partida por comillas o por una continuación
-  de línea, o dentro de `bash -c`). Lee la orden como la shell, sin ejecutarla,
-  y la shell sólo arranca PHP si la entrada contiene `approve`, `revoke` o
-  `hand-rolled`, también sin comillas ni barras. No es infranqueable: la
-  barrera real es la revisión del dueño en la rama protegida.
+  de línea, o dentro de `bash -c`). Impide también saltarse el hook de git:
+  `git commit --no-verify` (o `-n`, también en un grupo como `-anm`), `git push`
+  o `git merge --no-verify`, y cambiar `core.hooksPath` (`git config`,
+  `git -c`). Lee la orden como la shell, sin ejecutarla, y la shell sólo arranca
+  PHP si la entrada contiene `approve`, `revoke`, `hand-rolled`, `no-veri`,
+  `commit` o `hooksPath`, también sin comillas ni barras. Un hook PreToolUse
+  escrito por la 9.2 se pone al día al reinstalar con `--hooks`. No es
+  infranqueable: la barrera real es la revisión del dueño en la rama protegida.
 
 La guardia nunca se bloquea a sí misma: una entrada vacía o rota, un archivo de
 `vendor/` o fuera de un proyecto salen con 0, y mientras no exista `vendor/` el
@@ -322,6 +328,87 @@ que expanda variables (en Windows, Git Bash).
 **Actívala con `verify` limpio.** En un proyecto con errores previos, cada
 edición de esos archivos retendría al agente por algo que no causó. Primero
 `larapack:verify` en verde, después `--hooks`.
+
+### Otros agentes, y el hook de git que no depende de ninguno
+
+Los hooks de Claude Code sólo los ejecuta Claude Code. Para que la guardia no
+dependa de con qué agente se trabaja, va por capas, y cada una llama al mismo
+`larapack:guard`:
+
+1. **El hook de git**, para todos. `larapack:skill --hooks` escribe
+   `.githooks/pre-commit` y `.githooks/pre-push` (versionados) y pone
+   `git config core.hooksPath .githooks`. Git los ejecuta sea quien sea quien
+   comitea, con su shell (en Windows, la de Git for Windows), y corren
+   `larapack:guard --git=pre-commit|pre-push` sobre **lo que se va a comitear o a
+   empujar**: de esos archivos, lo que es arquitectura, con las comprobaciones de
+   `verify`. Frenan un controlador con lógica, lo generado que se desvía y una
+   excepción `#[HandRolled]` sin aprobar (lo que `verify --strict` rechazaría). Si
+   no hay nada que mirar ni siquiera corre el Verifier. Un archivo vigilado
+   preparado a medias (`git add -p`) no se da por bueno: la guardia lee el
+   disco y no podría comprobar lo que se comitea. Un cambio en
+   `.larapack/hand-rolled.lock` lo tiene que confirmar una persona escribiendo
+   «apruebo» en su terminal; un agente no tiene terminal en la que hacerlo, y el
+   commit no entra. El `pre-push` mira los commits que todavía no tiene ningún
+   remoto: frena lo que se comiteó saltándose el hook.
+2. **Los hooks de cada agente**, donde el agente los tiene de verdad.
+   `larapack:skill --agents=cursor,codex,gemini,copilot,windsurf` (o `all`)
+   escribe sus hooks y sus reglas, fusionando sin pisar lo del proyecto. La
+   misma decisión en el idioma de cada uno (`larapack:guard --agent=…`): antes
+   de la herramienta impide aprobar una excepción y saltarse el hook de git
+   (`--no-verify`, `-n`, `core.hooksPath`); después de editar devuelve el motivo
+   por el canal que llega al modelo; al terminar el turno, donde se puede, lo
+   hace seguir.
+3. **La CI y la rama protegida** (`larapack:ci`), lo único que no depende de la
+   máquina de nadie. Es la barrera: lo demás llega antes, pero se puede quitar.
+
+| Agente | Hook en vivo | Reglas que lee | Qué lo frena |
+|---|---|---|---|
+| Claude Code | `.claude/settings.json`: PreToolUse, PostToolUse, Stop | `.claude/skills/larapack/SKILL.md`, `AGENTS.md` | hook en vivo + git + CI |
+| Cursor | `.cursor/hooks.json`: preToolUse (niega), postToolUse (`additional_context`), stop (`followup_message`) | `.cursor/rules/larapack.mdc` | hook en vivo + git + CI |
+| Codex CLI | `.codex/hooks.json`: PreToolUse, PostToolUse (también los parches de `apply_patch`), Stop | `AGENTS.md` | hook en vivo + git + CI |
+| Gemini CLI | `.gemini/settings.json`: BeforeTool, AfterTool, AfterAgent | `GEMINI.md` | hook en vivo + git + CI |
+| GitHub Copilot (CLI y agente en la nube) | `.github/hooks/larapack.json`: preToolUse (`permissionDecision`), postToolUse (`additionalContext`), agentStop (`decision: block`) | `.github/copilot-instructions.md` | hook en vivo + git + CI |
+| Windsurf | `.windsurf/hooks.json`: pre_write_code y pre_run_command (bloquean), post_write_code (sólo avisa a la persona) | `.windsurf/rules/larapack.md` | antes de escribir y de cada orden + git + CI; lo que ya escribió, sólo git y CI |
+| Aider | no tiene | `AGENTS.md` si se lo pasas | git **sólo con `git-commit-verify: true`** en `.aider.conf.yml` (por defecto comitea con `--no-verify`) + CI |
+| Cualquier otro | — | `AGENTS.md` | git + CI |
+
+`larapack:guard --doctor` dice, para el proyecto, qué capas están y cuáles
+faltan, con la orden de cada una; con `--format=json`, lo mismo para un script.
+Sale con 1 si falta una de las dos que no dependen del agente: el hook de git
+activo o un workflow que corra `verify --strict`. La protección de la rama no
+se ve desde el disco: lo dice, y `larapack:ci` imprime la orden.
+
+Lo que no cierra, dicho claro:
+
+- **`core.hooksPath` es de cada clon.** Los scripts viajan con el repositorio;
+  activarlos no. Un clon nuevo corre `git config core.hooksPath .githooks` (o
+  `larapack:skill --hooks`), y `--doctor` lo detecta si falta. Si el proyecto ya
+  usa otro `core.hooksPath` (husky) o tiene hooks propios en `.git/hooks`, no se
+  cambia nada: se dice qué línea añadir para encadenar.
+- **Un hook de git se salta con `--no-verify`.** Los hooks de los agentes que
+  los tienen lo impiden, y el `pre-push` frena lo que se comiteó así, pero un
+  agente sin hooks o una persona pueden hacerlo. Por eso la CI.
+- **La confirmación del candado es un control, no una prueba de identidad.** Un
+  agente con una terminal interactiva podría escribir «apruebo». La barrera es
+  la revisión del dueño (CODEOWNERS) en la rama protegida.
+- **Los hooks de los otros agentes son POSIX sh**, como los de Claude Code. En
+  Windows funcionan si el agente los ejecuta con Git Bash; con PowerShell o cmd,
+  no (Copilot no tiene escrita su variante `powershell`). El hook de git sí
+  funciona en Windows: lo ejecuta la shell de Git for Windows.
+- **Hay que aceptarlos en el agente.** Codex sólo carga los hooks de un proyecto
+  de confianza y pide revisarlos en `/hooks`; Gemini CLI avisa antes de ejecutar
+  un hook de proyecto nuevo o cambiado. `--doctor` ve que están escritos, no que
+  el agente los haya aceptado.
+- **Cursor y Windsurf se implementaron por la documentación de terceros.** Las
+  de Codex (sus esquemas), Gemini CLI y Copilot se leyeron de sus repositorios
+  oficiales; las páginas de Cursor y de Windsurf no fueron accesibles al
+  escribir esto, y sus adaptadores siguen los campos que documentan paquetes y
+  guías que integran esos hooks. Las pruebas simulan la entrada de cada agente
+  y ejecutan el comando escrito con bash; no corren los agentes de verdad.
+- **Cursor ejecuta también los hooks de `.claude/settings.json`**, con su
+  entrada. La guardia la reconoce (antes, el de antes de la herramienta no veía
+  la orden y dejaba pasar todo) y, si el proyecto tiene además los de Cursor,
+  calla para no repetir.
 
 ### El ciclo que sigue el agente
 
