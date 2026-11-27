@@ -54,7 +54,10 @@ Casi todos aceptan `--format=json` (parséalo, no raspes el texto; no lo tienen
 `schema`, que ya emite JSON, `skill`, `guard`, que es un hook, ni
 `remove-full-model`) y `--root=<ruta>`
 para decir sobre qué proyecto trabajar (no lo tienen `new`, `schema` ni `audit`,
-que reciben la ruta como argumento). Los generadores aceptan además `--force` y
+que reciben la ruta como argumento). Sin `--root`, el proyecto es el del
+directorio de trabajo (el primero hacia arriba con `laraimport.json`,
+`.larapack/manifest.json` o un `composer.json` que requiere el generador); si
+no hay ninguno, el comando falla: no lo leas como un verde. Los generadores aceptan además `--force` y
 `--dry-run`. Con `--format=json` la salida es un único documento,
 también si algo falla: mira `ok`, y si es `false`, `error` o `findings` dicen
 por qué.
@@ -512,6 +515,11 @@ generado con su hash. Detecta:
   (no lo borres para que se regenere). El mensaje trae el método y el `use`;
   `larapack:fix relation-missing` los añade al trait si es seguro, y si lo
   salta, la razón dice por qué: entonces escríbelo tú en el trait.
+
+En la raíz de un proyecto con paquetes locales (`packages/*`, repositorios
+`path`), `verify` lee también el manifiesto de cada paquete: cada hallazgo
+dice su `package` (null, el núcleo) y `summary` trae una fila por paquete.
+`--package=<nombre>` acota a uno (o `app`, el núcleo).
 
 Y en **todos** los controladores, generados o no, con o sin manifiesto:
 

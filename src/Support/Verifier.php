@@ -53,9 +53,10 @@ final class Verifier
 
     /**
      * Las comprobaciones que dependen del manifiesto. Sin modelos registrados
-     * no tienen nada que mirar.
+     * no tienen nada que mirar. Son las que se corren, además, contra el
+     * manifiesto de cada paquete local (ProjectVerification).
      */
-    private const MANIFEST_CHECKS = [
+    public const MANIFEST_CHECKS = [
         'empty-manifest', 'missing-file', 'customised', 'inconsistent-entity', 'route-prefix',
         'route-not-declared', 'endpoint-missing', 'immutable-write', 'secret-exposed',
         'endpoint-tests-outdated', ...ContractDrift::CHECKS,
@@ -147,6 +148,13 @@ final class Verifier
             ];
         }
 
+        // Y uno cuyo laraimport no declara nada que generar no deja
+        // manifiesto: está como debe estar. El aviso queda para cuando hay
+        // algo declarado y nada registrado, o no hay laraimport.
+        if ($models === [] && $this->declaresNothing()) {
+            return [];
+        }
+
         if ($models === []) {
             return [[
                 'level' => self::WARNING,
@@ -174,6 +182,23 @@ final class Verifier
             // Lo que el laraimport de la raíz declara y el código no lleva.
             ...(new ContractDrift($this->manifest))->run($models),
         ];
+    }
+
+    /**
+     * El laraimport de la raíz existe, se lee y no declara ni un modelo, ni un
+     * pivote, ni un `controllers[]`: un paquete que sólo integra. Lo que no se
+     * puede leer no cuenta como vacío.
+     */
+    private function declaresNothing(): bool
+    {
+        $file = $this->manifest->root().'/laraimport.json';
+        $document = is_file($file) ? json_decode(Files::read($file), true) : null;
+
+        if (! is_array($document) || ($document['models'] ?? null) !== []) {
+            return false;
+        }
+
+        return ($document['pivots'] ?? []) === [] && ($document['controllers'] ?? []) === [];
     }
 
     /**
@@ -281,6 +306,10 @@ final class Verifier
             }
 
             foreach (array_diff($sharedByAllOthers ?? [], $components[$model]) as $missing) {
+                if ($this->providedByProject($model, $missing)) {
+                    continue;
+                }
+
                 $findings[] = [
                     'level' => self::WARNING,
                     'check' => 'inconsistent-entity',
@@ -292,6 +321,45 @@ final class Verifier
         }
 
         return $findings;
+    }
+
+    /**
+     * El componente no lo escribió LaraPack porque el proyecto ya lo tenía,
+     * justo donde el generador lo habría puesto: el `User` de Laravel trae su
+     * migración de `users` y su `UserFactory`, y el generador, a propósito,
+     * no los toca (la migración la salta con «no la generó LaraPack», la
+     * factory porque ya existe). Al modelo no le falta nada.
+     *
+     * No es una lista de nombres: se mira el archivo. Si desaparece, el
+     * componente falta de verdad y se avisa. Y sólo estos dos, que son los
+     * que el generador cede a un archivo que ya existe; los demás los escribe
+     * siempre.
+     */
+    private function providedByProject(string $model, string $component): bool
+    {
+        $root = $this->manifest->root();
+
+        return match ($component) {
+            'Factory' => is_file($root.'/database/factories/'.$model.'Factory.php'),
+            'Migration' => (glob($root.'/database/migrations/*_create_'.$this->tableOf($model).'_table.php') ?: []) !== [],
+            default => false,
+        };
+    }
+
+    /**
+     * La tabla del modelo: la de su `$table` si el modelo la declara (un
+     * laraimport con `table_prefix`), o la que deduce el generador.
+     */
+    private function tableOf(string $model): string
+    {
+        $file = $this->fileFromStub($model, 'Model/ModelTemplate.txt');
+        $php = $file === null ? null : $this->contentsOf($file);
+
+        if ($php !== null && preg_match('/protected\s+\$table\s*=\s*[\'"]([^\'"]+)[\'"]/', $php, $matches)) {
+            return $matches[1];
+        }
+
+        return TablePrefix::tableOf($model);
     }
 
     /**

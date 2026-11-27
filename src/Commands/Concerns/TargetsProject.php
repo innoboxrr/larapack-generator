@@ -18,6 +18,10 @@ use Symfony\Component\Console\Input\InputOption;
  * Para un agente eso es inaceptable — necesita poder apuntar al proyecto de
  * forma explícita y que el comando falle si no existe, en vez de escribir en
  * el sitio equivocado.
+ *
+ * Sin --root, la raíz sale del directorio de trabajo (ver ProjectRoot), y en
+ * los dos casos el comando falla si lo que queda es el propio generador sin
+ * manifiesto.
  */
 trait TargetsProject
 {
@@ -38,5 +42,10 @@ trait TargetsProject
         if ($root !== null && $root !== '') {
             ProjectRoot::set((string) $root);
         }
+
+        // Indicada o descubierta, tiene que ser un proyecto: el propio
+        // generador sin manifiesto no lo es, y seguir con él era el falso
+        // verde de `verify` sin --root.
+        ProjectRoot::ensureProject();
     }
 }
