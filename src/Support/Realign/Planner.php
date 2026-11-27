@@ -71,9 +71,19 @@ final class Planner
         };
 
         foreach (self::listOf($report, 'files') as $entry) {
-            if (is_string($entry['type'] ?? null)) {
-                $add($entry['type'], (string) $entry['scope'], null, ['file' => $entry]);
+            if (! is_string($entry['type'] ?? null)) {
+                continue;
             }
+
+            // Lo editado fuera de los huecos, por familia de plantilla: en
+            // expediente eran 256 archivos, y las 61 notificaciones de
+            // exportación tenían el mismo parche. Un paso con los 256 no lo
+            // termina nadie; uno por familia, sí.
+            $subject = $entry['type'] === 'edited-outside' && is_string($entry['stub'] ?? null)
+                ? strtok($entry['stub'], '/')
+                : null;
+
+            $add($entry['type'], (string) $entry['scope'], $subject === false ? null : $subject, ['file' => $entry]);
         }
 
         foreach (self::listOf($report, 'unmanaged') as $item) {
