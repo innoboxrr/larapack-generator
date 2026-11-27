@@ -1,5 +1,55 @@
 # Changelog
 
+## 9.2.0 (sin publicar)
+
+### Pruebas de mutación de lo que sostiene la garantía
+
+Que la suite pase por una línea no dice que compruebe lo que hace. Ahora se
+mide: [`infection.json5`](infection.json5) muta las ocho piezas de las que
+depende lo que LaraPack promete —`Verifier`, `ControllerShape`,
+`LegacySecurity`, `PhpOutline`, `HandRolledLock`, `Guard`, `LegacyFix` y
+`CiGate`— y el trabajo «Mutación» de la CI falla si el MSI baja de lo logrado.
+Cómo correrlo en local, en CONTRIBUTING («Las pruebas de mutación»); el MSI de
+cada pieza antes y después, y los mutantes equivalentes con su razón, en
+[`docs/mutacion.md`](docs/mutacion.md).
+
+MSI antes → después: `HandRolledLock` 53,7 → 97,7 %, `CiGate` 79,7 → 96,2 %,
+`Guard` 75,0 → 95,8 %, `ControllerShape` 77,4 → 95,6 %, `Verifier` 82,7 →
+93,9 %, `LegacySecurity` 74,5 → 93,8 %, `PhpOutline` 83,8 → 91,2 %,
+`LegacyFix` 72,5 → 89,2 %; las ocho juntas, 77,0 → 93,6 % (4287 mutantes, todos
+en código que la suite recorre). La CI exige 93. Las pruebas nuevas comparan
+mensajes enteros y casos límite, y convierten los avisos de PHP en excepciones
+como Laravel: un mutante que sólo deja un aviso también cuenta.
+
+Los mutantes que sobrevivían destaparon fallos, y se arreglan con su prueba:
+
+- **`PhpOutline` llamaba `&` a un método que devuelve por referencia**
+  (`public function &items()`). Desde PHP 8.1 el `&` es un token con nombre
+  (`T_AMPERSAND_NOT_FOLLOWED_BY_VAR_OR_VARARG`) y se comparaba con el carácter
+  suelto. ControllerShape lo leía como una acción llamada `&`, y la huella de
+  una excepción aprobada sobre ese método no nombraba el método.
+- **La línea de un `;` o un `(` tras un salto dentro de un espacio** era la de
+  la línea anterior. Afecta a la línea que citan los mensajes de la forma del
+  constructor.
+- **La guardia no veía `bash -ce '…'`**: sólo leía como orden el argumento de
+  un grupo de opciones que *acaba* en `c` (`-c`, `-ec`). `bash -ce` ejecuta el
+  texto igual.
+- **La guardia leía `<<<` como un heredoc.** Su segundo `<` abría un heredoc
+  con la cadena de delimitador, y las líneas siguientes —órdenes— se tomaban
+  por su cuerpo: `cat <<< x` y debajo `larapack:hand-rolled approve` pasaba.
+  Ahora `<<<` se salta entero, y la cadena que recibe una shell
+  (`bash <<< '…'`) se lee como órdenes, igual que su heredoc.
+- **`LegacySecurity` confundía `$Appends` con `$appends`**: las variables de
+  PHP distinguen mayúsculas, y bajar todo a minúsculas avisaba de un
+  setAppends() que recibía la variable limpia.
+- Código muerto: `PhpOutline::skipTo()`, que saltaba hasta el `;` de un
+  `use function` lo que `parseFile()` ya recorre sin registrar nada.
+
+Al actualizar: un método que devuelve por referencia y estaba aprobado en
+`.larapack/hand-rolled.lock` se aprobó como `Clase::&`. Ahora es
+`Clase::metodo`, con otra huella: la aprobación vieja sale como sobrante y el
+método vuelve a pedir la del dueño.
+
 ## 9.1.0
 
 Una menor: la CI pasa a ser la barrera de la arquitectura y las excepciones

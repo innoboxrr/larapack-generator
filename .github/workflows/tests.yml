@@ -70,3 +70,37 @@ jobs:
 
             - name: Análisis estático
               run: vendor/bin/phpstan analyse --no-progress --memory-limit=1G
+
+    # Las pruebas de mutación de las piezas que sostienen la garantía
+    # (infection.json5): que los tests comprueben lo que hacen, no sólo que lo
+    # recorran. Infection se instala aparte y no en require-dev: trae su propio
+    # php-parser y su Symfony, y sin composer.lock cambiaría lo que resuelve
+    # cada versión de la matriz. Composer comprueba la firma de lo que baja.
+    # Los umbrales son los logrados, redondeados hacia abajo: bajarlos para
+    # pasar no es una salida (CONTRIBUTING, «Las pruebas de mutación»).
+    mutation:
+        name: Mutación
+        runs-on: ubuntu-latest
+
+        steps:
+            - uses: actions/checkout@v5
+
+            - uses: shivammathur/setup-php@v2
+              with:
+                  php-version: '8.4'
+                  coverage: pcov
+
+            - name: Instalar dependencias
+              run: composer update --prefer-dist --no-interaction --no-progress
+
+            - name: Instalar Infection
+              run: |
+                  mkdir -p "$RUNNER_TEMP/infection"
+                  echo '{"config":{"allow-plugins":{"infection/extension-installer":false}}}' > "$RUNNER_TEMP/infection/composer.json"
+                  composer require --working-dir="$RUNNER_TEMP/infection" --no-interaction --no-progress infection/infection:0.31.9
+
+            - name: Pruebas de mutación
+              run: >-
+                  "$RUNNER_TEMP/infection/vendor/bin/infection"
+                  --threads=max --only-covering-test-cases --no-progress
+                  --min-msi=93 --min-covered-msi=93

@@ -1,0 +1,521 @@
+<?php
+
+namespace Innoboxrr\LarapackGenerator\Tests\Unit;
+
+use ErrorException;
+use Innoboxrr\LarapackGenerator\Support\ControllerShape;
+use Innoboxrr\LarapackGenerator\Support\HandRolledLock;
+use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\TestCase;
+
+/**
+ * ControllerShape caso a caso, sobre un proyecto mínimo: qué acepta un
+ * constructor, qué cuenta como delegar, qué closure de ruta se perdona, y el
+ * texto exacto de cada hallazgo.
+ *
+ * VerifyControllerShapeTest recorre el fixture con los casos de
+ * school-management por la orden. Aquí se fija cada regla por separado,
+ * incluidos los bordes que un cambio pequeño en la lectura de tokens movería
+ * sin que el fixture lo notara: un `new Repo($repo)` que no es una llamada,
+ * un `->can()` encadenado a `middleware()`, un `__Invoke` en otra caja.
+ *
+ * Los mensajes se comparan enteros: es lo que lee el agente que tiene que
+ * corregir el controlador, y lo que le dice qué no es suyo decidir.
+ *
+ * Con los avisos convertidos en excepciones, como bajo Artisan.
+ */
+final class ControllerShapeTest extends TestCase
+{
+    private int $errorReporting;
+
+    private string $root;
+
+    protected function setUp(): void
+    {
+        $this->root = sys_get_temp_dir().'/larapack-shape-'.bin2hex(random_bytes(6));
+        mkdir($this->root);
+        $this->root = (string) realpath($this->root);
+        file_put_contents($this->root.'/composer.json', json_encode(['autoload' => ['psr-4' => ['App\\' => 'app/']]]));
+        // Todos los avisos, como Laravel (error_reporting(-1)): la
+        // configuración de PHP de cada máquina no decide qué se ve.
+        $this->errorReporting = error_reporting(E_ALL);
+        set_error_handler(static function (int $level, string $message): bool {
+            // Lo silenciado con @ es parte del código probado, no un aviso.
+            if ((error_reporting() & $level) === 0) {
+                return false;
+            }
+
+            throw new ErrorException($message, 0, $level);
+        });
+    }
+
+    protected function tearDown(): void
+    {
+        restore_error_handler();
+        error_reporting($this->errorReporting);
+        $this->remove($this->root);
+    }
+
+    private function remove(string $path): void
+    {
+        if (is_dir($path) && ! is_link($path)) {
+            foreach (scandir($path) ?: [] as $entry) {
+                if ($entry !== '.' && $entry !== '..') {
+                    $this->remove("{$path}/{$entry}");
+                }
+            }
+
+            rmdir($path);
+        } elseif (file_exists($path) || is_link($path)) {
+            unlink($path);
+        }
+    }
+
+    private function put(string $relative, string $contents): void
+    {
+        $file = $this->root.'/'.$relative;
+
+        if (! is_dir(dirname($file))) {
+            mkdir(dirname($file), 0777, true);
+        }
+
+        file_put_contents($file, $contents);
+    }
+
+    /**
+     * Un controlador en app/Http/Controllers, con sus `use` habituales.
+     */
+    private function controller(string $name, string $body, string $namespace = 'App\Http\Controllers'): void
+    {
+        $this->put('app/'.str_replace(['App\\', '\\'], ['', '/'], $namespace)."/{$name}.php", "<?php\n\nnamespace {$namespace};\n\n"
+            ."use App\\Http\\Requests\\StoreRequest;\nuse Illuminate\\Http\\Request;\nuse Innoboxrr\\LarapackGenerator\\Attributes\\HandRolled;\n\n{$body}\n");
+    }
+
+    private function request(string $name = 'StoreRequest', string $body = "    public function handle() {}\n", string $extends = '\Illuminate\Foundation\Http\FormRequest'): void
+    {
+        $this->put("app/Http/Requests/{$name}.php", "<?php\n\nnamespace App\\Http\\Requests;\n\nclass {$name} extends {$extends}\n{\n{$body}}\n");
+    }
+
+    /**
+     * Un controlador con una sola acción con este cuerpo y estos parámetros.
+     */
+    private function action(string $body, string $params = 'StoreRequest $request', string $before = ''): void
+    {
+        $this->request();
+        $this->controller('PostController', "class PostController extends Controller\n{\n{$before}    public function store({$params})\n    {\n        {$body}\n    }\n}");
+    }
+
+    /**
+     * @return list<array{level: string, check: string, model: string|null, file: string|null, message: string}>
+     */
+    private function findings(?ControllerShape $shape = null): array
+    {
+        return ($shape ?? new ControllerShape($this->root))->run();
+    }
+
+    /**
+     * Los mensajes de un check, en orden.
+     *
+     * @return list<string>
+     */
+    private function messages(string $check, ?ControllerShape $shape = null): array
+    {
+        return array_values(array_column(array_filter($this->findings($shape), fn (array $f): bool => $f['check'] === $check), 'message'));
+    }
+
+    /**
+     * [nivel, check] de cada hallazgo.
+     *
+     * @return list<array{0: string, 1: string}>
+     */
+    private function kinds(): array
+    {
+        return array_map(fn (array $f): array => [$f['level'], $f['check']], $this->findings());
+    }
+
+    private function remedy(): string
+    {
+        return 'La acción es `return $request->handle();` con un FormRequest propio: authorize() autoriza, rules() valida y handle() hace el trabajo (o lo delega en la operación del modelo o en un soporte). '
+            .'Marcarla como escrita a mano (#[HandRolled]) no es un arreglo: es una excepción que sólo aprueba el dueño del proyecto, y verify la sigue señalando.';
+    }
+
+    // LA ACCIÓN
+
+    public function test_una_accion_que_delega_no_tiene_hallazgos(): void
+    {
+        $this->action('return $request->HANDLE();');
+
+        $this->assertSame([], $this->findings());
+    }
+
+    /**
+     * @return array<string, array{0: string, 1: string, 2?: string}>
+     */
+    public static function noDelegan(): array
+    {
+        return [
+            'cuerpo vacío' => ['', 'tiene el cuerpo vacío'],
+            'otra cosa' => ['return $request->validated();', 'hace algo más que `return $request->handle();`'],
+            'valida a mano, una vez aunque llame dos' => ['$request->validate([]); $request->validate([]); return 1;', 'valida en el controlador con validate()'],
+            'valida a mano en mayúsculas' => ['$request->VALIDATE([]); return 1;', 'valida en el controlador con validate()'],
+            'pasa una expresión a HANDLE()' => ['return $request->HANDLE($a . \'x\');', 'pasa a handle() algo que no es una variable: esa expresión es trabajo hecho en el controlador'],
+            'pasa una expresión a handle()' => ['return $request->handle($a . \'x\');', 'pasa a handle() algo que no es una variable: esa expresión es trabajo hecho en el controlador'],
+            'pasa una expresión con nombre' => ['return $request->handle(post: $this->post);', 'pasa a handle() algo que no es una variable: esa expresión es trabajo hecho en el controlador'],
+            'handle() del controlador' => ['return $this->handle();', 'pasa a handle() algo que no es una variable: esa expresión es trabajo hecho en el controlador'],
+            'no es un return' => ['echo $request->handle($x);', 'hace algo más que `return $request->handle();`'],
+            'recibe la base, sin tipo en otro' => ['return view(\'x\');', 'recibe Illuminate\Http\Request', 'Request $request, $id'],
+        ];
+    }
+
+    #[DataProvider('noDelegan')]
+    public function test_por_que_no_delega(string $body, string $reason, string $params = 'StoreRequest $request'): void
+    {
+        $this->action($body, $params);
+
+        $this->assertSame(["PostController::store() (línea 11) no delega: {$reason}. ".$this->remedy()], $this->messages('controller-shape'));
+    }
+
+    /**
+     * @return array<string, array{0: string, 1: string}>
+     */
+    public static function tipos(): array
+    {
+        return [
+            'sin tipo' => ['$request', 'no tipa $request con un FormRequest'],
+            'con un tipo del lenguaje' => ['array $request', 'no tipa $request con un FormRequest'],
+            'con la Request base' => ['Request $request', 'tipa $request con Illuminate\Http\Request, que no tiene handle()'],
+            'con un parámetro que no existe' => ['StoreRequest $other', 'llama a $request->handle(), y $request no es un parámetro de la acción'],
+        ];
+    }
+
+    #[DataProvider('tipos')]
+    public function test_la_request_en_la_que_delega(string $params, string $problem): void
+    {
+        $this->action('return $request->handle();', $params);
+
+        $this->assertSame(["PostController::store() (línea 11) {$problem}. ".$this->remedy()], $this->messages('controller-shape'));
+    }
+
+    public function test_que_metodo_es_una_accion(): void
+    {
+        $this->request();
+        $this->controller('PostController', <<<'PHP'
+        class PostController extends Controller
+        {
+            public function __Invoke(Request $request) { return 1; }
+
+            public static function boot() { return 1; }
+
+            public static function middleware(): array { return ['auth']; }
+
+            public function callAction($method, $parameters) { return 1; }
+
+            private static function helper() { return fn () => 1; }
+
+            public function __get($name) { return 1; }
+
+            abstract public function nothing();
+        }
+        PHP);
+
+        $this->assertSame(['PostController::__Invoke()', 'PostController::boot()'], array_map(
+            fn (string $message): string => explode(' ', $message)[0],
+            $this->messages('controller-shape')
+        ));
+    }
+
+    public function test_una_request_que_solo_cambia_de_caja_se_comprueba_una_vez(): void
+    {
+        $this->request('StoreRequest', "    public function rules() {}\n");
+        $this->controller('PostController', "class PostController\n{\n    public function a(StoreRequest \$r) { return \$r->handle(); }\n\n    public function b(\\App\\Http\\Requests\\storeRequest \$r) { return \$r->handle(); }\n}");
+
+        $this->assertSame([
+            'App\Http\Requests\StoreRequest no define handle(), y PostController::a() en app/Http/Controllers/PostController.php delega en él: la petición falla con BadMethodCallException. La operación va en su handle().',
+        ], $this->messages('request-handle'));
+    }
+
+    public function test_handle_se_busca_en_la_request_sus_traits_y_sus_padres(): void
+    {
+        $this->request('StoreRequest', "    public function HANDLE() {}\n");
+        $this->request('VendorRequest', '', '\Vendor\Package\BaseRequest');
+        $this->request('MixedRequest', "    use \\Vendor\\Concerns\\Handles;\n", 'StoreRequest');
+        $this->request('MissingRequest', '');
+        $this->controller('PostController', "class PostController\n{\n"
+            ."    public function a(StoreRequest \$r) { return \$r->handle(); }\n\n"
+            ."    public function b(\\App\\Http\\Requests\\VendorRequest \$r) { return \$r->handle(); }\n\n"
+            ."    public function c(\\App\\Http\\Requests\\MixedRequest \$r) { return \$r->handle(); }\n\n"
+            ."    public function d(\\App\\Http\\Requests\\MissingRequest \$r) { return \$r->handle(); }\n\n"
+            ."    public function e(\\App\\Http\\Requests\\GoneRequest \$r) { return \$r->handle(); }\n}");
+
+        $this->assertSame([
+            ['info', 'app/Http/Requests/VendorRequest.php', 'No se encontró en el código del proyecto dónde define handle() App\Http\Requests\VendorRequest (¿viene de vendor?), y PostController::b() delega en él: no se comprobó sin cargarlo.'],
+            ['error', 'app/Http/Requests/MissingRequest.php', 'App\Http\Requests\MissingRequest no define handle(), y PostController::d() en app/Http/Controllers/PostController.php delega en él: la petición falla con BadMethodCallException. La operación va en su handle().'],
+            ['error', 'app/Http/Controllers/PostController.php', 'PostController::e() delega en App\Http\Requests\GoneRequest, que no existe: su espacio de nombres es del proyecto y no está donde PSR-4 dice. Genérala (larapack:requests) o escríbela con su handle().'],
+        ], array_map(fn (array $f): array => [$f['level'], $f['file'], $f['message']], array_values(array_filter($this->findings(), fn (array $f): bool => $f['check'] === 'request-handle'))));
+    }
+
+    public function test_un_trait_antes_del_controlador_no_lo_esconde(): void
+    {
+        $this->request();
+        $this->controller('PostController', "trait Helps {}\n\nclass PostController\n{\n    public function index(Request \$request) { return 1; }\n}");
+
+        $this->assertCount(1, $this->messages('controller-shape'));
+    }
+
+    public function test_una_interfaz_antes_del_controlador_no_lo_esconde(): void
+    {
+        $this->request();
+        $this->controller('PostController', "interface Listing {}\n\nclass PostController implements Listing\n{\n    public function index(Request \$request) { return 1; }\n}");
+
+        $this->assertCount(1, $this->messages('controller-shape'));
+    }
+
+    // EL CONSTRUCTOR Y LAS PUERTAS LATERALES
+
+    /**
+     * @return array<string, array{0: string, 1: bool}>
+     */
+    public static function constructores(): array
+    {
+        return [
+            'asignar lo inyectado' => ['$this->repo = $repo;', true],
+            'asignar un new con argumentos' => ['$this->repo = new Repo($repo, [1, 2]);', true],
+            'asignar un literal entre paréntesis' => ['$this->x = $flag ? (1) : (2);', true],
+            'asignar algo que empieza por paréntesis' => ['$this->x = ($y);', true],
+            'parent::__construct con argumentos' => ['Parent::__Construct($repo, [1]);', true],
+            'middleware con only y except' => ['$this->Middleware([\'auth\', \'verified\'])->ONLY([\'index\'])->except(\'show\');', true],
+            'una llamada en la asignación' => ['$this->x = compute();', false],
+            'un new con una llamada dentro' => ['$this->x = new Foo(make());', false],
+            'una llamada sobre el resultado' => ['$this->x = ($factory)();', false],
+            'un closure asignado' => ['$this->resolver = function () { return 1; };', false],
+            'asignar a otro objeto' => ['$other->x = 1;', false],
+            'el constructor de otra clase' => ['Base::__construct($repo);', false],
+            'el propio constructor' => ['$this->__construct();', false],
+            'middleware de otro objeto' => ['$router->middleware(\'auth\');', false],
+            'middleware de la fachada' => ['Route::middleware(\'auth\');', false],
+            'otra llamada sobre $this' => ['$this->authorize(\'x\');', false],
+            'middleware con otra cadena' => ['$this->middleware(\'auth\')->can(\'x\');', false],
+            'middleware con algo detrás' => ['$this->middleware(\'auth\') . only(\'x\');', false],
+        ];
+    }
+
+    #[DataProvider('constructores')]
+    public function test_que_puede_hacer_un_constructor(string $statement, bool $allowed): void
+    {
+        $this->request();
+        $this->controller('PostController', "class PostController\n{\n    public function __construct(Repo \$repo)\n    {\n        {$statement}\n    }\n}");
+
+        $this->assertSame($allowed ? [] : [
+            'PostController::__construct() (línea 11) hace algo más que asignar propiedades, llamar a parent::__construct() o registrar middleware (línea 13): '
+            .'el constructor corre en cada acción y antes del middleware de la ruta, y lo que haga ahí es lógica que ninguna acción muestra. '
+            .'Inyecta las dependencias como propiedades promovidas y deja el trabajo en el handle() de la request.',
+        ], $this->messages('controller-shape'));
+    }
+
+    public function test_la_linea_de_la_sentencia_del_constructor(): void
+    {
+        $this->controller('PostController', "class PostController\n{\n    public function __construct()\n    {\n        \$this->x = 1;\n\n        compute\n            ();\n    }\n}");
+
+        $this->assertStringContainsString('registrar middleware (línea 15):', $this->messages('controller-shape')[0]);
+    }
+
+    public function test_las_puertas_laterales(): void
+    {
+        $this->controller('PostController', <<<'PHP'
+        class PostController
+        {
+            public function __Call($method, $parameters) {}
+
+            public static function middleware(): array
+            {
+                return [fn ($request, $next) => $next($request)];
+            }
+        }
+        PHP);
+
+        $this->assertSame([
+            'PostController::__Call() (línea 11) es __call: el router llega a él con cualquier nombre de acción que no exista (callAction), así que es una acción que no se ve al leer el controlador. '
+                .'Quítalo y declara cada acción como un método público que haga `return $request->handle();`.',
+            'PostController::middleware() (línea 13) registra un middleware en un closure: es lógica en el controlador que no se ve al leer sus acciones. '
+                .'Hazlo una clase de middleware y regístrala por su nombre o su alias.',
+        ], $this->messages('controller-shape'));
+    }
+
+    public function test_una_clase_excusada_no_cuenta_sus_puertas_laterales(): void
+    {
+        $this->controller('PostController', "#[HandRolled('webhook firmado')]\nclass PostController\n{\n    public function __call(\$m, \$p) {}\n}");
+
+        $this->assertSame([['warning', 'hand-rolled']], $this->kinds());
+    }
+
+    // LOS TRAITS DE HTTP/CONTROLLERS
+
+    public function test_un_trait_con_logica(): void
+    {
+        $this->controller('Concerns/Authorizes', <<<'PHP'
+        trait Authorizes
+        {
+            abstract protected function user();
+
+            public static function MIDDLEWARE() { return fn () => 1; }
+
+            public static function helper() { return 1; }
+
+            protected function check() { return 1; }
+
+            #[HandRolled('aprobado')]
+            protected function approved() { return 1; }
+        }
+        PHP, 'App\Http\Controllers\Concerns');
+        $this->controller('PostController', "class PostController\n{\n    use Concerns\\Authorizes;\n}");
+        $this->controller('PostController', "class PostController\n{\n    use \\App\\Http\\Controllers\\Concerns\\Authorizes;\n}", 'App\Http\Controllers\Admin');
+
+        $this->assertSame([
+            'El trait Authorizes (línea 9) vive en Http/Controllers y lleva lógica (helper(), check()), y lo usa PostController. '
+            .'Lo que comparten varios controladores no es del controlador: llévalo a una request base o a un trait en Http/Requests, o a un soporte, y deja las acciones en `return $request->handle();`.',
+        ], $this->messages('controller-concern'));
+    }
+
+    public function test_un_trait_que_no_usa_ningun_controlador(): void
+    {
+        $this->controller('Concerns/Authorizes', "trait Authorizes\n{\n    protected function check() { return 1; }\n}", 'App\Http\Controllers\Concerns');
+
+        $this->assertSame([
+            ['warning', 'El trait Authorizes (línea 9) vive en Http/Controllers y lleva lógica (check()), pero ningún controlador lo usa: está en el sitio equivocado. Muévelo a Http/Requests/Concerns o a un soporte; en Http/Controllers invita a usarlo desde un controlador.'],
+        ], array_map(fn (array $f): array => [$f['level'], $f['message']], $this->findings()));
+    }
+
+    // LAS RUTAS
+
+    public function test_los_closures_de_las_rutas(): void
+    {
+        $this->put('routes/web.php', <<<'PHP'
+        <?php
+
+        Route::get('/', function () { return VIEW('welcome'); });
+        Route::get('/a', fn () => view('a'));
+        Route::get('/b', function () { echo view('b'); });
+        Route::get('/c/{id}', function ($id) { return view('c'); });
+        Route::get('/d', function () { return view('d')->with('x', 1); });
+        Route::get('/e', function () { return response('ok'); });
+        PHP);
+        // Lo que no está en routes/ no se mira.
+        $this->put('app/Support/Router.php', "<?php\n\nRoute::get('/x', function () { return 1; });\n");
+
+        $this->assertSame([5, 6, 7, 8], array_map(
+            fn (string $message): int => (int) preg_replace('/^La ruta de la línea (\d+).*$/s', '$1', $message),
+            $this->messages('route-closure')
+        ));
+        $this->assertSame(
+            'La ruta de la línea 5 lleva su acción en un closure (get()): es una acción sin controlador, y nada de lo que verify comprueba en los controladores la alcanza. '
+            .'Llévala a un controlador cuya acción sea `return $request->handle();` con un FormRequest propio (o usa Route::view() si sólo pinta una vista).',
+            $this->messages('route-closure')[0]
+        );
+    }
+
+    // LAS EXCEPCIONES Y EL CANDADO
+
+    private function exceptions(): void
+    {
+        $this->request();
+        $this->controller('ZetaController', "class ZetaController\n{\n    #[HandRolled('firma en bruto')]\n    public function __invoke(Request \$request) { return 1; }\n}");
+        $this->controller('AlfaController', "#[HandRolled('webhook')]\nclass AlfaController\n{\n    public function __invoke(Request \$request) { return 1; }\n}");
+        $this->controller('SinRazonController', "class SinRazonController\n{\n    #[HandRolled('')]\n    public function __invoke(Request \$request) { return 1; }\n}");
+    }
+
+    public function test_las_excepciones_con_razon_ordenadas(): void
+    {
+        $this->exceptions();
+        $this->controller('MixController', "class MixController\n{\n    #[HandRolled('b')]\n    public function zz(Request \$request) { return 1; }\n\n    #[HandRolled('a')]\n    public function aa(Request \$request) { return 1; }\n}");
+        $shape = new ControllerShape($this->root);
+        $shape->run();
+
+        $this->assertSame([
+            'App\Http\Controllers\AlfaController',
+            'App\Http\Controllers\MixController::aa',
+            'App\Http\Controllers\MixController::zz',
+            'App\Http\Controllers\ZetaController::__invoke',
+        ], array_keys($shape->exceptions()));
+    }
+
+    public function test_los_mensajes_de_cada_estado_de_la_aprobacion(): void
+    {
+        $this->exceptions();
+        $shape = new ControllerShape($this->root);
+        $shape->run();
+        $exceptions = $shape->exceptions();
+
+        $notYours = 'Sólo el dueño del proyecto aprueba excepciones: devuelve la acción a `return $request->handle();` o pídele que la revise. No edites .larapack/hand-rolled.lock ni corras la aprobación.';
+
+        // Sin candado: aviso.
+        $this->assertSame([
+            'AlfaController (línea 9) escrito a mano a propósito: «webhook». Es una excepción al patrón que aprueba el dueño del proyecto; si no la aprobó, devuelve la acción a `return $request->handle();`.',
+            'SinRazonController::__invoke() (línea 11) lleva #[HandRolled] sin razón. La razón es obligatoria y tiene que ser una cadena literal: es lo que permite revisar la excepción sin leer el código. Sin ella no excusa nada.',
+            'ZetaController::__invoke() (línea 11) escrito a mano a propósito: «firma en bruto». Es una excepción al patrón que aprueba el dueño del proyecto; si no la aprobó, devuelve la acción a `return $request->handle();`.',
+        ], $this->messages('hand-rolled'));
+
+        // Con candado: aprobada, otra razón, sin huella, otro código, y lo que
+        // sobra.
+        HandRolledLock::write($this->root, [
+            'App\Http\Controllers\AlfaController' => ['reason' => 'webhook', 'fingerprint' => $exceptions['App\Http\Controllers\AlfaController']['fingerprint']],
+            'App\Http\Controllers\ZetaController::__invoke' => ['reason' => "otra\x1b[31m razón", 'fingerprint' => null],
+            'App\Http\Controllers\Zz' => ['reason' => 'r', 'fingerprint' => null],
+            'App\Http\Controllers\Aa' => ['reason' => 'r', 'fingerprint' => null],
+        ]);
+
+        $this->assertSame([
+            'AlfaController (línea 9) escrito a mano a propósito: «webhook». Aprobada por el dueño del proyecto en .larapack/hand-rolled.lock.',
+            'SinRazonController::__invoke() (línea 11) lleva #[HandRolled] sin razón. La razón es obligatoria y tiene que ser una cadena literal: es lo que permite revisar la excepción sin leer el código. Sin ella no excusa nada.',
+        ], $this->messages('hand-rolled'));
+        $this->assertSame([
+            "ZetaController::__invoke() (línea 11) cambió la razón de su #[HandRolled]: se aprobó «otra [31m razón» y ahora dice «firma en bruto». La aprobación era de la otra razón (App\\Http\\Controllers\\ZetaController::__invoke). {$notYours}",
+        ], $this->messages('hand-rolled-unapproved'));
+        $this->assertSame([
+            'Aprueba App\Http\Controllers\Aa, que ya no lleva #[HandRolled] en ningún controlador. El dueño del proyecto la retira con larapack:hand-rolled revoke.',
+            'Aprueba App\Http\Controllers\Zz, que ya no lleva #[HandRolled] en ningún controlador. El dueño del proyecto la retira con larapack:hand-rolled revoke.',
+        ], $this->messages('hand-rolled-stale'));
+
+        HandRolledLock::write($this->root, [
+            'App\Http\Controllers\AlfaController' => ['reason' => 'webhook', 'fingerprint' => 'sha256:'.str_repeat('0', 64)],
+            'App\Http\Controllers\ZetaController::__invoke' => ['reason' => 'firma en bruto', 'fingerprint' => null],
+        ]);
+
+        $this->assertSame([
+            "AlfaController (línea 9) cambió desde que se aprobó: el código aprobado ya no es el mismo (cambió sus métodos —uno nuevo también—, su padre o sus traits; la huella de .larapack/hand-rolled.lock no coincide). La aprobación era de aquel código (App\\Http\\Controllers\\AlfaController). {$notYours}",
+            "ZetaController::__invoke() (línea 11) está en .larapack/hand-rolled.lock sin la huella del código aprobado (App\\Http\\Controllers\\ZetaController::__invoke): la aprobación no dice qué código cubre, y no cuenta. {$notYours}",
+        ], $this->messages('hand-rolled-unapproved'));
+
+        HandRolledLock::write($this->root, [
+            'App\Http\Controllers\ZetaController::__invoke' => ['reason' => 'firma en bruto', 'fingerprint' => 'sha256:'.str_repeat('0', 64)],
+        ]);
+
+        $this->assertSame([
+            "AlfaController (línea 9) lleva #[HandRolled] («webhook») y no está aprobada en .larapack/hand-rolled.lock (App\\Http\\Controllers\\AlfaController). {$notYours}",
+            "ZetaController::__invoke() (línea 11) cambió desde que se aprobó: el código aprobado ya no es el mismo (cambió su firma o su cuerpo; la huella de .larapack/hand-rolled.lock no coincide). La aprobación era de aquel código (App\\Http\\Controllers\\ZetaController::__invoke). {$notYours}",
+        ], $this->messages('hand-rolled-unapproved'));
+    }
+
+    public function test_lo_que_sobra_en_un_candado_escrito_a_mano_sale_ordenado(): void
+    {
+        $this->put('.larapack/hand-rolled.lock', (string) json_encode([
+            ['target' => 'App\Zz', 'reason' => 'r', 'fingerprint' => null],
+            ['target' => 'App\Aa', 'reason' => 'r', 'fingerprint' => null],
+        ]));
+
+        $this->assertSame([
+            'Aprueba App\Aa, que ya no lleva #[HandRolled] en ningún controlador. El dueño del proyecto la retira con larapack:hand-rolled revoke.',
+            'Aprueba App\Zz, que ya no lleva #[HandRolled] en ningún controlador. El dueño del proyecto la retira con larapack:hand-rolled revoke.',
+        ], $this->messages('hand-rolled-stale'));
+    }
+
+    public function test_un_candado_ilegible_lo_dice_y_no_aprueba_nada(): void
+    {
+        $this->exceptions();
+        $this->put('.larapack/hand-rolled.lock', '{"target": "A"}');
+
+        $this->assertSame([
+            '.larapack/hand-rolled.lock no es una lista JSON de {"target", "reason", "fingerprint"}. Mientras no se corrija, ninguna excepción #[HandRolled] cuenta como aprobada. Lo mantiene el dueño del proyecto con larapack:hand-rolled.',
+        ], array_slice($this->messages('hand-rolled-unapproved'), 0, 1));
+        $this->assertSame([], $this->messages('hand-rolled-stale'));
+    }
+}
