@@ -555,7 +555,7 @@ final class LegacyFixTest extends TestCase
         try {
             $result = ProjectRoot::using($this->root, fn (): array => $fix->apply());
         } finally {
-            putenv('LARAPACK_PINT');
+            putenv('LARAPACK_PINT=off'); // lo de la suite: phpunit.xml.dist
         }
 
         $this->assertTrue($result['formatted']);
@@ -584,7 +584,7 @@ final class LegacyFixTest extends TestCase
         try {
             $result = ProjectRoot::using($this->root, fn (): array => $fix->apply());
         } finally {
-            putenv('LARAPACK_PINT');
+            putenv('LARAPACK_PINT=off'); // lo de la suite: phpunit.xml.dist
         }
 
         $this->assertSame(

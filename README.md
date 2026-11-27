@@ -1855,6 +1855,16 @@ LaraPack sale formateado y pasa ese análisis, así que un fallo ahí es algo qu
 escribió a mano: `vendor/bin/pint` lo formatea. LaraPack pasa el mismo control en
 su propia CI.
 
+**Con qué Pint se formatea lo generado.** Por orden: `LARAPACK_PINT` (una ruta, u
+`off` para no formatear a propósito), la del proyecto
+(`vendor/laravel/pint/builds/pint`) y la que trae el generador —desde 9.3.1
+`laravel/pint` es dependencia de LaraPack, así que con `builder` usado desde fuera
+y el proyecto sin `vendor/` también se formatea—. Siempre con el `pint.json` del
+proyecto si lo tiene; sin él, el preset `laravel`. El informe dice cuál se usó: en
+texto, una línea; con `--format=json`, `formatter: {source, pint, config,
+message}` junto a `formatted`. Si no hay ninguna, `formatted` es `null` y
+`formatter.source` es `none`, nunca un silencio.
+
 **La compilación del front** va sobre Vite 8, la de Laravel 13: el `package.json`
 del módulo pide `vite ^8`, y `@vitejs/plugin-vue ^6` o `@vitejs/plugin-react ^6`.
 

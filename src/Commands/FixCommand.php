@@ -4,6 +4,7 @@ namespace Innoboxrr\LarapackGenerator\Commands;
 
 use Innoboxrr\LarapackGenerator\Commands\Concerns\TargetsProject;
 use Innoboxrr\LarapackGenerator\Commands\Concerns\WritesJson;
+use Innoboxrr\LarapackGenerator\Support\Formatter;
 use Innoboxrr\LarapackGenerator\Support\LegacyFix;
 use Innoboxrr\LarapackGenerator\Support\LegacySecurity;
 use Innoboxrr\LarapackGenerator\Support\ProjectSources;
@@ -155,7 +156,7 @@ class FixCommand extends Command
         }
 
         if (! $dryRun && $formatted) {
-            $output->writeln('  Formateado con el Pint del proyecto.');
+            $output->writeln('  '.Formatter::resolve()['message']);
         }
 
         return $skipped === 0 ? Command::SUCCESS : Command::FAILURE;

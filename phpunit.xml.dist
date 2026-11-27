@@ -7,6 +7,16 @@
          failOnWarning="true"
          failOnRisky="true"
 >
+    <php>
+        <!--
+            La suite no formatea lo que genera: las instantáneas y las pruebas
+            comparan la salida de las plantillas, y Pint en cada generación la
+            haría varias veces más lenta. Sin esto, desde 9.3.1 se usaría la
+            Pint del generador. Las pruebas que formatean (y las de
+            FormatsWithoutProjectPintTest) la cambian y la devuelven a `off`.
+        -->
+        <env name="LARAPACK_PINT" value="off" force="true"/>
+    </php>
     <testsuites>
         <testsuite name="Unit">
             <directory>tests/Unit</directory>

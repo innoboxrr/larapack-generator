@@ -528,7 +528,7 @@ PHP;
         try {
             [$code, $report] = $this->fix();
         } finally {
-            putenv('LARAPACK_PINT');
+            putenv('LARAPACK_PINT=off'); // lo de la suite: phpunit.xml.dist
         }
 
         $this->assertSame(Command::SUCCESS, $code, $this->lastOutput);
@@ -555,7 +555,7 @@ PHP;
         try {
             [$code, $report] = $this->fix();
         } finally {
-            putenv('LARAPACK_PINT');
+            putenv('LARAPACK_PINT=off'); // lo de la suite: phpunit.xml.dist
         }
 
         $this->assertSame(Command::FAILURE, $code);

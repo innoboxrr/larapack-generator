@@ -80,7 +80,7 @@ final class GeneratedPackageTest extends TestCase
                 }
             }
         } finally {
-            putenv('LARAPACK_PINT');
+            putenv('LARAPACK_PINT=off'); // lo de la suite: phpunit.xml.dist
             ProjectRoot::set(null);
             Generation::reset();
             Declaration::reset();

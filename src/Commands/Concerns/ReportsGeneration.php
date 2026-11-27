@@ -60,11 +60,21 @@ trait ReportsGeneration
             new Manifest
         );
 
+        // Con qué Pint se formateó, o por qué no: nunca en silencio.
+        $formatter = Formatter::resolve();
+        $formatter = [
+            'source' => $formatter['source'],
+            'pint' => $formatter['path'],
+            'config' => $formatter['config'],
+            'message' => $formatter['message'],
+        ];
+
         if ($this->wantsJson($input)) {
             $this->writeJson($output, [
                 'ok' => true,
                 'dryRun' => Generation::isDryRun(),
                 'formatted' => $formatted,
+                'formatter' => $formatter,
                 'summary' => $summary,
                 'files' => array_map(fn (array $entry): array => [
                     'action' => $entry['action'],
@@ -102,8 +112,10 @@ trait ReportsGeneration
             $output->writeln('  <comment>Los conservados se editaron a mano; --force no los sobrescribe.</comment>');
         }
 
-        if ($formatted === null) {
-            $output->writeln('  <comment>Pint no está en el proyecto: lo generado queda sin formatear. composer require --dev laravel/pint</comment>');
+        if (! Generation::isDryRun() && $formatted !== 0) {
+            $output->writeln($formatted === null
+                ? '  <comment>'.$formatter['message'].'</comment>'
+                : '  '.$formatter['message']);
         }
     }
 

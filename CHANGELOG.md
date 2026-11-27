@@ -2,6 +2,37 @@
 
 ## 9.3.1 (sin publicar)
 
+### Lo generado se formatea aunque el proyecto no tenga Pint, y se dice con cuál
+
+**Qué pasaba.** El `Formatter` sólo buscaba la Pint del proyecto
+(`vendor/laravel/pint/builds/pint`). Con `builder` usado desde fuera —el
+generador clonado aparte y el proyecto sin `vendor/`—, `import --force` escribía
+sin formatear (`"formatted": null` en el JSON, y nada más que un aviso en texto).
+
+**A quién afectaba.** A school-management y a quien corra el generador contra
+un proyecto sin dependencias instaladas: unos 5 600 archivos que sólo diferían
+de lo regenerado en el formato de Pint, y que a partir del siguiente Pint del
+proyecto el manifiesto daba por editados a mano (`customised`), así que
+`--force` ya no los regeneraba nunca.
+
+**Cómo se corrige.** `Formatter::resolve()` elige, por orden, `LARAPACK_PINT`
+(una ruta, u `off` para no formatear a propósito), la Pint del proyecto y la
+que trae el generador (su `vendor/`, o el `vendor/` que lo contiene). Siempre con
+el `pint.json` del proyecto, pasado como `--config`; sin él, el preset laravel.
+`laravel/pint` pasa de `require-dev` a `require` del generador, así que la
+tiene también quien lo instala sin dependencias de desarrollo. El informe de
+generación lo dice: en texto, una línea con qué Pint y qué configuración; con
+`--format=json`, `formatter: {source, pint, config, message}` (`source`:
+`override`, `project`, `generator`, `none` o `disabled`). Si no hay ninguna,
+`formatted` es `null`, `source` es `none` y el mensaje dice qué instalar.
+`larapack:fix` usa la misma resolución.
+
+**Al actualizar.** Si lo regenerado con 9.3.0 o antes quedó sin formatear y el
+proyecto lo pasó después por Pint, esos archivos figuran como `customised`; no se
+arregla solo —el hash del manifiesto es el de lo que se escribió—. La suite del
+generador corre con `LARAPACK_PINT=off` (en `phpunit.xml.dist`), para que sus
+instantáneas sigan comparando la salida de las plantillas.
+
 ### El manifiesto se escribe una vez por corrida, de forma atómica
 
 **Qué pasaba.** `Manifest::record()` releía y reescribía `.larapack/manifest.json`
