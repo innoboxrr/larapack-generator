@@ -1,6 +1,6 @@
 # Changelog
 
-## 9.2.0 (sin publicar)
+## 9.2.0
 
 ### PHPStan en nivel 8, y lo que escondía
 
