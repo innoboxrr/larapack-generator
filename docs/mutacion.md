@@ -24,16 +24,19 @@ como no detectado: el MSI cuenta todo y el «covered MSI» sólo lo recorrido.
 | `HandRolledLock` | 140 | 97,86 % | 134 | 0 | 100,00 % | 100,00 % | 99,0 % | 1 |
 | `ControllerShape` | 676 | 95,27 % | 652 | 0 | 98,31 % | 98,31 % | 97,3 % | 6 |
 | `CiGate` | 443 | 95,94 % | 429 | 1 | 98,14 % | 98,36 % | 97,1 % | 4 |
-| `Verifier` | 486 | 93,42 % | 478 | 0 | 97,91 % | 97,91 % | 96,9 % | 4 |
+| `Verifier` | 486 | 93,42 % | 534 | 0 | 98,13 % | 98,13 % | 97,1 % | 5 |
 | `Guard` | 809 | 95,67 % | 799 | 1 | 97,62 % | 97,74 % | 96,6 % | 8 |
 | `PhpOutline` | 642 | 90,34 % | 604 | 0 | 97,02 % | 97,02 % | 96,0 % | 6 |
 | `LegacySecurity` | 375 | 92,80 % | 364 | 0 | 96,43 % | 96,43 % | 95,4 % | 3 |
 | `LegacyFix` | 790 | 89,87 % | 774 | 9 | 91,60 % | 92,68 % | 90,6 % | 7 |
-| **Las ocho** | **4361** | **93,37 %** | **4234** | **11** | **96,60 %** | **96,85 %** | **95,6 %** | |
+| **Las ocho** | **4361** | **93,37 %** | **4290** | **11** | **96,64 %** | **96,89 %** | **95,6 %** | |
 
 «9.2.0» es la versión publicada medida otra vez con la misma configuración de
 la CI (PHP 8.3, PHPUnit 12.5, Infection 0.31.9 con pcov y
-`--with-uncovered`): 4361 mutantes, 289 sin detectar. La 9.3.0 deja 144. La
+`--with-uncovered`): 4361 mutantes, 289 sin detectar. La 9.3.0 deja 144. En
+la 9.3.1, `Verifier` gana 56 mutantes (la raíz que sólo declara un paquete sin
+modelos, y la migración y la factory que el proyecto ya tenía) y sus pruebas
+los matan todos: siguen escapando los mismos 10, y su suelo sube a 97,1 %. La
 holgura es cuántos mutantes más pueden escapar en cada pieza sin que baje de
 su suelo; la imprime la propia comprobación.
 

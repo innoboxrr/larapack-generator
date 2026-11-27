@@ -79,6 +79,33 @@ final class PackageWithoutModelsTest extends TestCase
     }
 
     /**
+     * El aviso sigue para un laraimport que sí declara algo —un modelo, un
+     * pivote o un `controllers[]`— y no tiene nada registrado: lo declarado no
+     * se generó. Y para uno que no se puede leer, que no cuenta como vacío.
+     */
+    public function test_si_declara_algo_y_no_hay_nada_registrado_sigue_avisando(): void
+    {
+        $declarations = [
+            'un modelo' => ['models' => [['name' => 'Tag', 'props' => [['name' => 'name', 'type' => 'string']]]]],
+            'un pivote' => ['models' => [], 'pivots' => [['models' => ['Post', 'Tag']]]],
+            'un controller' => ['models' => [], 'controllers' => [['name' => 'Desk']]],
+            'sin la clave models' => ['pivots' => []],
+        ];
+
+        foreach ($declarations as $what => $document) {
+            file_put_contents($this->project->path.'/laraimport.json', json_encode($document));
+
+            $report = $this->json('larapack:verify', ['--strict' => true]);
+
+            $this->assertSame(['empty-manifest'], array_column($report['findings'], 'check'), $what);
+        }
+
+        file_put_contents($this->project->path.'/laraimport.json', '{"models": [');
+
+        $this->assertSame(['empty-manifest'], array_column($this->json('larapack:verify')['findings'], 'check'), 'ilegible');
+    }
+
+    /**
      * Con sus proveedores, que es como nace con `larapack:new`, lo registrado
      * se sigue comprobando.
      */
