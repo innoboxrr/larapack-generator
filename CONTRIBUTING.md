@@ -133,8 +133,15 @@ reutiliza en las siguientes: hace falta red una vez.
 ```
 vendor/bin/pint --test                                         # el formato (preset laravel)
 vendor/bin/pint                                                # y lo arregla
-vendor/bin/phpstan analyse --no-progress --memory-limit=1G     # Larastan, nivel 5 sobre src/
+vendor/bin/phpstan analyse --no-progress --memory-limit=1G     # Larastan, nivel 8 sobre src/
 ```
+
+PHPStan va sin baseline y sin `ignoreErrors`: un error se arregla. Si es un
+falso positivo del framework, se calla en su línea con
+`@phpstan-ignore <identificador>` y un comentario que diga por qué. Las formas
+de los arrays que cruzan clases se declaran una vez con `@phpstan-type` y se
+importan (`Finding` de `Verifier`, `ManifestData` de `Manifest`), en vez de
+repetir `array<string, mixed>`.
 
 Los dos corren en el trabajo `quality` de la CI, igual que en cada paquete que
 crea `larapack:new`. `tests/Fixtures` queda fuera de Pint a propósito: son

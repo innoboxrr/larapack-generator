@@ -1,5 +1,55 @@
 # Changelog
 
+## 9.2.0 (sin publicar)
+
+### PHPStan en nivel 8, y lo que escondía
+
+`phpstan.neon.dist` pasa del nivel 5 al 8 sobre `src/`, sin baseline ni
+`ignoreErrors`: los 442 errores que daba el nivel 8 sobre 9.1 se arreglaron
+uno a uno (335 del 6, casi todos tipos sin declarar en `src/Tools`; el resto,
+nulos y `false` sin comprobar). Cuatro eran fallos de verdad, y tienen su
+prueba en `StaticAnalysisRegressionTest`:
+
+- **Un `composer.json` que no es JSON válido se reescribía.** `json_decode()`
+  daba null, se le añadía la clave de los proveedores o del PSR-4 y se escribía
+  encima un archivo con sólo eso. Ahora `larapack:providers`, `larapack:factory`
+  y `larapack:test` fallan con un mensaje y no lo tocan.
+- **`larapack:test` borraba lo que hubiera en `autoload-dev`** si no traía
+  `psr-4`: la sección se sustituía entera. Ahora se añade la entrada.
+- **`larapack:factory` reventaba sin `autoload.psr-4`** (un TypeError de
+  `array_keys(null)`): leía la primera clave antes de comprobar que existía.
+- **Un modelo o un pivote que el laraimport no declara**, con el importador
+  activo, acababa en un TypeError sin contexto; ahora dice cuál falta.
+
+Y otros que no tenían forma de probarse desde fuera, pero eran frágiles: un
+archivo que no se podía leer, o una expresión regular que fallaba, se
+reescribía vacío; `larapack:fix` dejaba sin revertir el segundo de dos arreglos
+del mismo archivo; y `full-model`, `remove-full-model` y `providers`
+instanciaban las herramientas por reflexión y llamaban a `create()` sobre un
+`object`. Las herramientas de un modelo implementan ahora `ModelArtifact`, y
+las del paquete, `PackageArtifact`.
+
+Nada cambia en lo que se genera: las fotos y la suite siguen idénticas.
+
+**Por qué no el 9.** El nivel 9 da 606 errores, y casi todos vienen de lo
+mismo: el laraimport, `ecosystem.json` y las opciones de consola llegan como
+`mixed`, y el código los lee sabiendo que el esquema ya los validó. Subirlo de
+verdad es declarar la forma del documento validado (`@phpstan-type` por
+modelo, propiedad, relación y endpoint) en el único punto donde el esquema la
+garantiza; anotarlo línea a línea sería callarlo.
+
+`tests/` no entra en el análisis: en el nivel 5 da 41 errores y casi todos son
+clases que sólo existen en tiempo de ejecución —lo que el generador escribe en
+un proyecto temporal y luego se carga—, que habría que callar una a una.
+
+### Al actualizar
+
+Nada que hacer. Si extiendes las herramientas: los métodos de `Tool` llevan
+ahora tipos nativos, y una subclase que sobrescriba uno sin ellos
+(`processFileWithJson()`, `init()`…) no compila; `create()` de `EventsTool`,
+`RequestsTool` y `TestTool` devuelve `bool`, como las demás; y `get_namespace()`
+devuelve `''` en vez de nada cuando ningún PSR-4 apunta a `src/` o `app/`.
+
 ## 9.1.0
 
 Una menor: la CI pasa a ser la barrera de la arquitectura y las excepciones

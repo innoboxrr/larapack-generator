@@ -149,8 +149,9 @@ temprano discreparían.
 3. Por cada modelo, ya ordenado, ejecuta
    [`MakeFullModelCommand`](src/Commands/MakeFullModelCommand.php) anidado. La
    lista de herramientas es `MakeFullModelCommand::$commands`, y cada nombre se
-   resuelve por convención a `Tools\<Nombre>\<Nombre>Tool`. `--vue`, `--react` y
-   `metas` añaden la suya.
+   resuelve por convención a `Tools\<Nombre>\<Nombre>Tool`, que sólo se ejecuta
+   si implementa [`ModelArtifact`](src/Tools/ModelArtifact.php). `--vue`,
+   `--react` y `metas` añaden la suya.
 4. Los pivotes van a `PivotMigrationTool`; los `controllers[]`, a
    `ControllerTool`, `RouteTool`, `EndpointTool` y, con interfaz, sólo al
    contrato JS.
@@ -191,8 +192,11 @@ prefijo de las vistas de exportación (`Tool::init`).
 ## Las herramientas
 
 Una herramienta por pieza, en `src/Tools/<Área>/<Área>Tool.php`, todas sobre
-[`Tool`](src/Tools/Tool.php). Cada una expone `create(string $ModelName)` y
-`remove(string $ModelName)`, decide el destino y llama a `Tool::generate`. Es
+[`Tool`](src/Tools/Tool.php). Las de un modelo implementan
+[`ModelArtifact`](src/Tools/ModelArtifact.php) —`create(string $ModelName)` y
+`remove(string $ModelName)`, que devuelven si escribieron o quitaron algo—, y
+las del paquete, [`PackageArtifact`](src/Tools/PackageArtifact.php). Cada una
+decide el destino y llama a `Tool::generate`. Es
 el camino **principal**, no el único (los demás, en
 [la tabla de abajo](#lo-que-no-pasa-por-toolgenerate)), y es el único que da
 todas las garantías de una vez:
@@ -219,6 +223,12 @@ Una herramienta puede especializar un paso sin salirse del camino:
 `EndpointTool::applyBlocks` añade las condiciones de `Endpoints::FLAGS` a las
 del modelo, y `ControllerTool::applyEndpoints` saca de `auth:sanctum` los
 endpoints públicos. Siguen pasando por `generate()`, con todo lo demás.
+
+Lo que una herramienta reescribe lo lee con `Tool::contents`, que falla si no
+puede leer: con `file_get_contents()` suelto, un `false` acababa como `''` y el
+archivo quedaba vacío. Y `composer.json` sólo lo toca `Tool::editComposerJson`
+—los proveedores, el PSR-4 de factorías y el de tests—, que no escribe en una
+aplicación ni en una simulación, y no reescribe uno que no sea un objeto JSON.
 
 ### Lo que no pasa por `Tool::generate`
 

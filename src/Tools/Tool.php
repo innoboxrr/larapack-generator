@@ -469,7 +469,7 @@ class Tool
     /**
      * El contenido de un archivo que se va a reescribir.
      *
-     * self::contents() suelto devuelve false si no puede leer, y ese false
+     * file_get_contents() suelto devuelve false si no puede leer, y ese false
      * acababa como '' en el file_put_contents() de después: el archivo se
      * reescribía vacío. Aquí no se lee, se falla.
      */
