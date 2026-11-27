@@ -45,6 +45,7 @@ use RuntimeException;
  * @phpstan-import-type MethodOutline from PhpOutline
  * @phpstan-import-type AttributeOutline from PhpOutline
  * @phpstan-import-type ClosureOutline from PhpOutline
+ * @phpstan-import-type Finding from Verifier
  */
 final class ControllerShape
 {
@@ -143,7 +144,7 @@ final class ControllerShape
     }
 
     /**
-     * @return list<array{level: string, check: string, model: string|null, file: string|null, message: string}>
+     * @return list<Finding>
      */
     public function run(): array
     {
@@ -236,7 +237,7 @@ final class ControllerShape
      * Lee el candado. Uno ilegible es error y deja todo sin aprobar: volver
      * al comportamiento sin candado sería aprobar por un archivo roto.
      *
-     * @param  list<array<string, mixed>>  $findings
+     * @param  list<Finding>  $findings
      * @return bool si se pudo leer (o no existe)
      */
     private function loadLock(array &$findings): bool
@@ -260,7 +261,7 @@ final class ControllerShape
      * con --strict falla: un candado que aprueba lo que no existe ya no dice
      * qué se aprobó.
      *
-     * @param  list<array<string, mixed>>  $findings
+     * @param  list<Finding>  $findings
      */
     private function checkStale(array &$findings): void
     {
@@ -438,7 +439,7 @@ final class ControllerShape
      * Route::view() y no tiene dónde esconder lógica. Tampoco los closures de
      * group(), que agrupan rutas y no son una acción.
      *
-     * @param  list<array<string, mixed>>  $findings
+     * @param  list<Finding>  $findings
      */
     private function checkRouteClosures(array &$findings): void
     {
@@ -532,7 +533,7 @@ final class ControllerShape
      * controlador.
      *
      * @param  MethodOutline  $method
-     * @param  list<array<string, mixed>>  $findings
+     * @param  list<Finding>  $findings
      */
     private function delegatedRequest(array $method, string $where, string $file, array &$findings): ?string
     {
@@ -661,7 +662,7 @@ final class ControllerShape
      *
      * @param  ClassOutline  $trait
      * @param  list<string>  $users  los controladores que lo usan
-     * @param  list<array<string, mixed>>  $findings
+     * @param  list<Finding>  $findings
      */
     private function checkConcern(array $trait, array $users, bool $excused, string $file, array &$findings): void
     {
@@ -707,7 +708,7 @@ final class ControllerShape
      * request de vendor) no se puede comprobar sin cargarlo: se informa y no
      * se adivina.
      *
-     * @param  list<array<string, mixed>>  $findings
+     * @param  list<Finding>  $findings
      */
     private function checkRequestHandles(string $request, string $where, string $controller, array &$findings): void
     {
@@ -800,7 +801,7 @@ final class ControllerShape
      *
      * @param  list<AttributeOutline>  $attributes
      * @param  string  $target  `Clase` o `Clase::metodo`, con el nombre completo
-     * @param  list<array<string, mixed>>  $findings
+     * @param  list<Finding>  $findings
      * @param  Closure(): string  $fingerprint  la huella del código que excusa
      */
     private function handRolled(array $attributes, string $what, string $target, string $file, array &$findings, Closure $fingerprint): bool
@@ -835,7 +836,7 @@ final class ControllerShape
      * dueño aprueba— pero no se la ofrece al agente como arreglo: le dice que
      * no es suya.
      *
-     * @return array{level: string, check: string, model: string|null, file: string|null, message: string}
+     * @return Finding
      */
     private function approval(string $what, string $target, string $reason, string $fingerprint, int $line, string $file): array
     {
@@ -899,7 +900,7 @@ final class ControllerShape
     }
 
     /**
-     * @return array{level: string, check: string, model: string|null, file: string|null, message: string}
+     * @return Finding
      */
     private function finding(string $level, string $check, string $file, string $message): array
     {

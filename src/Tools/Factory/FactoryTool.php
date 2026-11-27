@@ -2,11 +2,11 @@
 
 namespace Innoboxrr\LarapackGenerator\Tools\Factory;
 
-use Illuminate\Support\Pluralizer;
-use Innoboxrr\LarapackGenerator\Support\Generation;
+use Innoboxrr\LarapackGenerator\Support\TablePrefix;
+use Innoboxrr\LarapackGenerator\Tools\ModelArtifact;
 use Innoboxrr\LarapackGenerator\Tools\Tool;
 
-class FactoryTool extends Tool
+class FactoryTool extends Tool implements ModelArtifact
 {
     protected string $factoryPath = '';
 
@@ -40,25 +40,10 @@ class FactoryTool extends Tool
 
     private function addDatabaseNamespaceToComposerJson(): static
     {
-        // Una simulación no escribe nada, tampoco composer.json.
-        if (app_dir_name() == 'src' && ! Generation::isDryRun()) {
-            $composerJsonPath = root_path().'/composer.json';
-            $composerJsonData = json_decode(file_get_contents($composerJsonPath), true);
-            $baseNamespace = array_keys($composerJsonData['autoload']['psr-4'])[0];
-            if (isset($composerJsonData['autoload']['psr-4'])) {
-                $composerJsonData['autoload']['psr-4'][$baseNamespace.'Database\\Factories\\'] = 'database/factories/';
-            } else {
-                $composerJsonData['autoload'] = [
-                    'psr-4' => [
-                        $baseNamespace.'Database\\Factories\\' => 'database/factories/',
-                    ],
-                ];
-            }
-            file_put_contents(
-                $composerJsonPath,
-                json_encode($composerJsonData, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)
-            );
-        }
+        // Leía la primera clave de `autoload.psr-4` antes de mirar si existía:
+        // sin ella, array_keys(null) reventaba y la rama que la creaba no
+        // corría nunca.
+        $this->addPsr4ToComposerJson('autoload', 'Database\\Factories\\', 'database/factories/');
 
         return $this;
     }
@@ -74,8 +59,8 @@ class FactoryTool extends Tool
 
     protected function processFileWithJson(string $factoryFile): void
     {
-        $model = $this->jsonModel();
-        $fileContent = file_get_contents($factoryFile);
+        $model = self::declaredEntry('models', $this->ModelName);
+        $fileContent = self::contents($factoryFile);
         // `payload` lo arma updatePayload() a partir de las metas: una factory
         // que lo inventara guardaría una copia que no corresponde a nada.
         $props = empty($model['metas'])
@@ -199,7 +184,7 @@ class FactoryTool extends Tool
     private function foreignKeyValue(array $prop): string
     {
         foreach (self::jsonEntries('models') as $model) {
-            $table = Pluralizer::plural(mb_strtolower(preg_replace('/(?<!^)[A-Z]/', '_$0', $model['name'])));
+            $table = TablePrefix::tableOf($model['name']);
 
             if ($table !== $prop['constraint']) {
                 continue;

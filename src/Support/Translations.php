@@ -135,7 +135,7 @@ final class Translations
             function (array $match): string {
                 $code = match (true) {
                     $match[1] !== null => hexdec($match[1]),
-                    $match[2] !== null => 0x10000 + ((hexdec($match[2]) - 0xD800) << 10) + (hexdec($match[3]) - 0xDC00),
+                    $match[2] !== null && $match[3] !== null => 0x10000 + ((hexdec($match[2]) - 0xD800) << 10) + (hexdec($match[3]) - 0xDC00),
                     $match[4] !== null => hexdec($match[4]),
                     $match[5] !== null => hexdec($match[5]),
                     default => null,

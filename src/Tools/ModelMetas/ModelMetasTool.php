@@ -3,9 +3,10 @@
 namespace Innoboxrr\LarapackGenerator\Tools\ModelMetas;
 
 use Innoboxrr\LarapackGenerator\Support\MigrationTimestamp;
+use Innoboxrr\LarapackGenerator\Tools\ModelArtifact;
 use Innoboxrr\LarapackGenerator\Tools\Tool;
 
-class ModelMetasTool extends Tool
+class ModelMetasTool extends Tool implements ModelArtifact
 {
     protected string $modelMetasPath = '';
 

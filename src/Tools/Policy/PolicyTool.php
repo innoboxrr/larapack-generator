@@ -3,9 +3,10 @@
 namespace Innoboxrr\LarapackGenerator\Tools\Policy;
 
 use Innoboxrr\LarapackGenerator\Support\Import\Endpoints;
+use Innoboxrr\LarapackGenerator\Tools\ModelArtifact;
 use Innoboxrr\LarapackGenerator\Tools\Tool;
 
-class PolicyTool extends Tool
+class PolicyTool extends Tool implements ModelArtifact
 {
     protected string $policyPath = '';
 

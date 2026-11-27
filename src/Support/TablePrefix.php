@@ -149,7 +149,11 @@ final class TablePrefix
         return Pluralizer::plural(self::singularOf($model));
     }
 
-    private static function singularOf(string $model): string
+    /**
+     * El nombre de un modelo en snake_case: `BlogPost` → `blog_post`. Es el
+     * singular de su tabla y el prefijo de su clave (`blog_post_id`).
+     */
+    public static function singularOf(string $model): string
     {
         return mb_strtolower((string) preg_replace('/(?<!^)[A-Z]/', '_$0', $model));
     }

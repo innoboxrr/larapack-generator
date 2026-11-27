@@ -2,9 +2,10 @@
 
 namespace Innoboxrr\LarapackGenerator\Tools\Controller;
 
+use Innoboxrr\LarapackGenerator\Tools\ModelArtifact;
 use Innoboxrr\LarapackGenerator\Tools\Tool;
 
-class ControllerTool extends Tool
+class ControllerTool extends Tool implements ModelArtifact
 {
     protected string $controllerPath = '';
 
@@ -103,7 +104,7 @@ class ControllerTool extends Tool
         file_put_contents($file, str_replace(
             "new Middleware('auth:sanctum'),",
             "new Middleware('auth:sanctum', except: [{$except}]),",
-            file_get_contents($file)
+            self::contents($file)
         ));
     }
 

@@ -8,6 +8,7 @@ use Innoboxrr\LarapackGenerator\Support\Generation;
 use Innoboxrr\LarapackGenerator\Support\Import\Actions;
 use Innoboxrr\LarapackGenerator\Support\Import\Endpoints;
 use Innoboxrr\LarapackGenerator\Support\Manifest;
+use Innoboxrr\LarapackGenerator\Tools\ModelArtifact;
 use Innoboxrr\LarapackGenerator\Tools\Tool;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
@@ -112,10 +113,9 @@ class MakeFullModelCommand extends Command
         }
 
         foreach ($commands as $command) {
-            $className = '\Innoboxrr\LarapackGenerator\Tools\\'.$command.'\\'.$command.'Tool';
-            if (class_exists($className)) {
-                $class = new \ReflectionClass($className);
-                ($class->newInstance())->create($modelName);
+            $className = 'Innoboxrr\LarapackGenerator\Tools\\'.$command.'\\'.$command.'Tool';
+            if (is_a($className, ModelArtifact::class, true)) {
+                (new $className)->create($modelName);
             }
         }
 
@@ -212,8 +212,10 @@ class MakeFullModelCommand extends Command
             }
         }
 
-        if ($immutable && array_intersect(Actions::MODIFY, $routes['only'] ?? []) !== []) {
-            return 'Un modelo inmutable no puede declarar '.implode(', ', array_intersect(Actions::MODIFY, $routes['only'])).'.';
+        $modifying = array_intersect(Actions::MODIFY, $routes['only'] ?? []);
+
+        if ($immutable && $modifying !== []) {
+            return 'Un modelo inmutable no puede declarar '.implode(', ', $modifying).'.';
         }
 
         Declaration::set(

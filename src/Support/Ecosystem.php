@@ -19,6 +19,8 @@ use UnexpectedValueException;
  * La regla vive en `ecosystem.json`, en un único sitio, y esta clase la
  * ejerce. Deliberadamente no intenta arreglar nada: informa, y el arreglo es
  * una decisión humana o un paso explícito de CI.
+ *
+ * @phpstan-type AuditFinding array{level: string, check: string, package: string, message: string}
  */
 final class Ecosystem
 {
@@ -31,9 +33,11 @@ final class Ecosystem
     /** @var array<string, mixed>|null */
     private ?array $rules = null;
 
-    public function __construct(private ?string $manifestPath = null)
+    private string $manifestPath;
+
+    public function __construct(?string $manifestPath = null)
     {
-        $this->manifestPath ??= dirname(__DIR__, 2).'/'.self::FILE;
+        $this->manifestPath = $manifestPath ?? dirname(__DIR__, 2).'/'.self::FILE;
     }
 
     /**
@@ -62,7 +66,7 @@ final class Ecosystem
      * Audita un directorio de paquete. Detecta por sí solo si es Composer,
      * npm o ambos, para no exigir un tipo que el paquete no es.
      *
-     * @return array<int, array{level: string, check: string, package: string, message: string}>
+     * @return list<AuditFinding>
      */
     public function audit(string $directory): array
     {
@@ -97,7 +101,7 @@ final class Ecosystem
 
     /**
      * @param  array<string, mixed>  $composer
-     * @return array<int, array<string, mixed>>
+     * @return list<AuditFinding>
      */
     private function auditComposer(string $directory, string $name, array $composer): array
     {
@@ -198,7 +202,7 @@ final class Ecosystem
      * no, el remedio es el job en la raíz, no un larapack.yml y un candado por
      * paquete.
      *
-     * @return array<int, array<string, mixed>>
+     * @return list<AuditFinding>
      */
     private function auditVerifyJob(string $directory, string $name, bool $requiresLarapack): array
     {
@@ -261,7 +265,7 @@ final class Ecosystem
 
     /**
      * @param  array<string, mixed>  $npm
-     * @return array<int, array<string, mixed>>
+     * @return list<AuditFinding>
      */
     private function auditNpm(string $directory, string $name, array $npm): array
     {
@@ -306,7 +310,7 @@ final class Ecosystem
     }
 
     /**
-     * @return array<int, array<string, mixed>>
+     * @return list<AuditFinding>
      */
     private function auditTests(string $directory, string $name): array
     {
@@ -327,7 +331,7 @@ final class Ecosystem
     }
 
     /**
-     * @return array<int, array<string, mixed>>
+     * @return list<AuditFinding>
      */
     private function auditWorkflows(string $directory, string $name, string $kind): array
     {
@@ -426,7 +430,7 @@ final class Ecosystem
      *            verdad eso que promete
      *   estrecha no la admite -> error, ahi si hay algo roto
      *
-     * @return array<int, array<string, mixed>>
+     * @return list<AuditFinding>
      */
     private function auditConstraint(string $check, string $package, string $dependency, string $declared, string $baseline): array
     {
@@ -451,7 +455,7 @@ final class Ecosystem
     }
 
     /**
-     * @return array{level: string, check: string, package: string, message: string}
+     * @return AuditFinding
      */
     private function finding(string $level, string $check, string $package, string $message): array
     {

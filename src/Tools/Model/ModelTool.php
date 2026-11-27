@@ -2,9 +2,10 @@
 
 namespace Innoboxrr\LarapackGenerator\Tools\Model;
 
+use Innoboxrr\LarapackGenerator\Tools\ModelArtifact;
 use Innoboxrr\LarapackGenerator\Tools\Tool;
 
-class ModelTool extends Tool
+class ModelTool extends Tool implements ModelArtifact
 {
     protected string $modelPath = '';
 
@@ -47,10 +48,10 @@ class ModelTool extends Tool
     protected function processFileWithJson(string $modelFile): void
     {
         // Recuperar la información del modelo
-        $model = $this->jsonModel();
+        $model = self::declaredEntry('models', $this->ModelName);
 
         // Recuperar el contenido del archivo del modelo
-        $fileContent = file_get_contents($modelFile);
+        $fileContent = self::contents($modelFile);
 
         // Obtener los valores para los diferentes secciones de la plantilla
         $authenticatable = ! empty($model['authenticatable']);

@@ -4,9 +4,10 @@ namespace Innoboxrr\LarapackGenerator\Tools\ModelTraits;
 
 use Innoboxrr\LarapackGenerator\Exceptions\MakerException;
 use Innoboxrr\LarapackGenerator\Support\Generation;
+use Innoboxrr\LarapackGenerator\Tools\ModelArtifact;
 use Innoboxrr\LarapackGenerator\Tools\Tool;
 
-class ModelTraitsTool extends Tool
+class ModelTraitsTool extends Tool implements ModelArtifact
 {
     protected string $modelTraitsPath = '';
 
@@ -274,7 +275,7 @@ class ModelTraitsTool extends Tool
         }
 
         // Cargar el contenido del archivo de plantilla
-        $fileContent = file_get_contents($traitFile);
+        $fileContent = self::contents($traitFile);
 
         // Unir los imports generados
         $importCode = implode("\n", $imports);

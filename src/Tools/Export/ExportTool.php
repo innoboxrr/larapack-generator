@@ -2,9 +2,10 @@
 
 namespace Innoboxrr\LarapackGenerator\Tools\Export;
 
+use Innoboxrr\LarapackGenerator\Tools\ModelArtifact;
 use Innoboxrr\LarapackGenerator\Tools\Tool;
 
-class ExportTool extends Tool
+class ExportTool extends Tool implements ModelArtifact
 {
     protected string $exportPath = '';
 

@@ -14,6 +14,12 @@ use Innoboxrr\LarapackGenerator\Support\Import\Actions;
  * El hash es el del contenido en el momento de generarlo: si cambia, el
  * archivo se ha personalizado, lo cual es legítimo y esperado. Lo que no es
  * legítimo es que falte.
+ *
+ * @phpstan-type FileEntry array{stub: string, hash: string}
+ * @phpstan-type Bucket array{namespace: string, files: array<string, FileEntry>}
+ * @phpstan-type StoredDeclaration array{actions?: array<int, string>, immutable?: bool, secret?: array<int, string>, endpoints?: array<int, array<string, mixed>>, controller?: bool}
+ * @phpstan-type ModelEntry array{namespace?: string, files?: array<string, FileEntry>, declaration?: StoredDeclaration}
+ * @phpstan-type ManifestData array{version: int, package: Bucket, models: array<string, ModelEntry>}
  */
 final class Manifest
 {
@@ -24,7 +30,7 @@ final class Manifest
     /**
      * El contenido congelado de una instantánea; null en un manifiesto vivo.
      *
-     * @var array<string, mixed>|null
+     * @var ManifestData|null
      */
     private ?array $frozen = null;
 
@@ -60,7 +66,7 @@ final class Manifest
     ];
 
     /**
-     * @return array{version: int, package: array{namespace: string, files: array<string, array{stub: string, hash: string}>}, models: array<string, array{namespace: string, files: array<string, array{stub: string, hash: string}>, declaration?: array{actions?: array<int, string>, immutable?: bool, secret?: array<int, string>, endpoints?: array<int, array<string, mixed>>, controller?: bool}}>}
+     * @return ManifestData
      */
     public function read(): array
     {
@@ -72,7 +78,7 @@ final class Manifest
             return self::EMPTY;
         }
 
-        $decoded = json_decode(file_get_contents($this->path()), true);
+        $decoded = json_decode((string) file_get_contents($this->path()), true);
 
         if (! is_array($decoded) || ! isset($decoded['models'])) {
             return self::EMPTY;
@@ -289,13 +295,18 @@ final class Manifest
     /**
      * Los dos contenedores del manifiesto: el del paquete y el de cada modelo.
      *
-     * @return array<int, array{namespace: string, files: array<string, array{stub: string, hash: string}>}>
+     * @return list<Bucket>
      */
     private function buckets(): array
     {
         $manifest = $this->read();
 
-        return [$manifest['package'], ...array_values($manifest['models'])];
+        // Un modelo del que sólo se anotó la declaración —declare() antes de
+        // registrar ningún archivo— no trae `namespace` ni `files`.
+        return [$manifest['package'], ...array_map(
+            fn (array $entry): array => ['namespace' => $entry['namespace'] ?? '', 'files' => $entry['files'] ?? []],
+            array_values($manifest['models'])
+        )];
     }
 
     /**
@@ -316,7 +327,7 @@ final class Manifest
     {
         // Se normalizan los finales de línea: el mismo contenido no debe
         // parecer modificado por haber pasado por git en Windows.
-        return hash('sha256', str_replace("\r\n", "\n", file_get_contents($file)));
+        return hash('sha256', str_replace("\r\n", "\n", (string) file_get_contents($file)));
     }
 
     private function relative(string $file): string
@@ -341,7 +352,7 @@ final class Manifest
     }
 
     /**
-     * @param  array<string, mixed>  $manifest
+     * @param  ManifestData  $manifest
      */
     private function write(array $manifest): void
     {

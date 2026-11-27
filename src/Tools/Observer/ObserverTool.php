@@ -2,9 +2,10 @@
 
 namespace Innoboxrr\LarapackGenerator\Tools\Observer;
 
+use Innoboxrr\LarapackGenerator\Tools\ModelArtifact;
 use Innoboxrr\LarapackGenerator\Tools\Tool;
 
-class ObserverTool extends Tool
+class ObserverTool extends Tool implements ModelArtifact
 {
     protected string $observerPath = '';
 

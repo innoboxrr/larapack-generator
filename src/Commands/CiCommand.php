@@ -76,7 +76,7 @@ class CiCommand extends Command
         }
 
         try {
-            $runsOn = CiGate::runsOn(array_map('strval', (array) $input->getOption('runs-on')));
+            $runsOn = CiGate::runsOn(array_values(array_map('strval', (array) $input->getOption('runs-on'))));
         } catch (UnexpectedValueException $e) {
             $output->writeln('<error>'.OutputFormatter::escape($e->getMessage()).'</error>');
 

@@ -3,6 +3,7 @@
 namespace Innoboxrr\LarapackGenerator\Commands;
 
 use Innoboxrr\LarapackGenerator\Commands\Concerns\TargetsProject;
+use Innoboxrr\LarapackGenerator\Tools\ModelArtifact;
 use Innoboxrr\LarapackGenerator\Tools\Tool;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
@@ -79,10 +80,9 @@ class RemoveFullModelCommand extends Command
         // Se iteraba $this->commands en vez de $commands, asi que --vue nunca
         // llegaba a borrar el modulo generado.
         foreach ($commands as $command) {
-            $className = '\Innoboxrr\LarapackGenerator\Tools\\'.$command.'\\'.$command.'Tool';
-            if (class_exists($className)) {
-                $class = new \ReflectionClass($className);
-                ($class->newInstance())->remove($modelName);
+            $className = 'Innoboxrr\LarapackGenerator\Tools\\'.$command.'\\'.$command.'Tool';
+            if (is_a($className, ModelArtifact::class, true)) {
+                (new $className)->remove($modelName);
             }
         }
 

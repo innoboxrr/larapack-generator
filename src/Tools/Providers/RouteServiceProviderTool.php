@@ -2,9 +2,10 @@
 
 namespace Innoboxrr\LarapackGenerator\Tools\Providers;
 
+use Innoboxrr\LarapackGenerator\Tools\PackageArtifact;
 use Innoboxrr\LarapackGenerator\Tools\Tool;
 
-class RouteServiceProviderTool extends Tool
+class RouteServiceProviderTool extends Tool implements PackageArtifact
 {
     protected string $routeServiceProviderPath = '';
 

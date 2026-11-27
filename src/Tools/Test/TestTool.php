@@ -4,9 +4,10 @@ namespace Innoboxrr\LarapackGenerator\Tools\Test;
 
 use Innoboxrr\LarapackGenerator\Exceptions\MakerException;
 use Innoboxrr\LarapackGenerator\Support\Generation;
+use Innoboxrr\LarapackGenerator\Tools\ModelArtifact;
 use Innoboxrr\LarapackGenerator\Tools\Tool;
 
-class TestTool extends Tool
+class TestTool extends Tool implements ModelArtifact
 {
     protected string $testPath = '';
 
@@ -52,10 +53,10 @@ class TestTool extends Tool
 
     }
 
-    public function create(string $ModelName): void
+    public function create(string $ModelName): bool
     {
 
-        $this->init($ModelName)
+        return $this->init($ModelName)
             ->setTestPath()
             ->setTestCasePath()
             ->setTestUnitPath()
@@ -183,7 +184,7 @@ class TestTool extends Tool
                 file_put_contents($phpunitFile, str_replace(
                     '__SOURCE_DIR__',
                     app_dir_name(),
-                    file_get_contents($phpunitFile)
+                    self::contents($phpunitFile)
                 ));
 
             }
@@ -196,43 +197,11 @@ class TestTool extends Tool
 
     private function addTestNamespaceToComposerJson(): static
     {
-
-        // Una simulación no escribe nada, tampoco composer.json.
-        if (app_dir_name() == 'src' && ! Generation::isDryRun()) {
-
-            $composerJsonPath = root_path().'/composer.json';
-
-            $composerJsonData = json_decode(file_get_contents($composerJsonPath), true);
-
-            $baseNamespace = array_keys($composerJsonData['autoload']['psr-4'])[0];
-
-            if (isset($composerJsonData['autoload-dev']['psr-4'])) {
-
-                $composerJsonData['autoload-dev']['psr-4'][$baseNamespace.'Tests\\'] = 'tests/';
-
-            } else {
-
-                $composerJsonData['autoload-dev'] = [
-
-                    'psr-4' => [
-
-                        $baseNamespace.'Tests\\' => 'tests/',
-
-                    ],
-
-                ];
-
-            }
-
-            file_put_contents(
-                $composerJsonPath,
-                json_encode($composerJsonData, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)
-            );
-
-        }
+        // Sin `autoload-dev.psr-4`, la sección se reescribía entera y se
+        // perdía lo que tuviera (un classmap, unos files): ahora se añade.
+        $this->addPsr4ToComposerJson('autoload-dev', 'Tests\\', 'tests/');
 
         return $this;
-
     }
 
     private function createFeatureTest(): bool

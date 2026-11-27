@@ -33,6 +33,8 @@ namespace Innoboxrr\LarapackGenerator\Support;
  * @phpstan-import-type Token from PhpOutline
  *
  * @phpstan-type Debt array{check: string, file: string, class: string, fqcn: string, line: int, method: string|null, extends: string|null, traits: list<string>}
+ *
+ * @phpstan-import-type Finding from Verifier
  */
 final class LegacySecurity
 {
@@ -77,7 +79,7 @@ final class LegacySecurity
     }
 
     /**
-     * @return list<array{level: string, check: string, model: string|null, file: string|null, message: string}>
+     * @return list<Finding>
      */
     public function run(): array
     {
@@ -98,7 +100,7 @@ final class LegacySecurity
 
     /**
      * @param  Debt  $debt
-     * @return array{level: string, check: string, model: string|null, file: string|null, message: string}
+     * @return Finding
      */
     private function finding(array $debt, string $message): array
     {

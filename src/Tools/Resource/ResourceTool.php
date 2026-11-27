@@ -4,9 +4,10 @@ namespace Innoboxrr\LarapackGenerator\Tools\Resource;
 
 use Innoboxrr\LarapackGenerator\Support\Import\Endpoints;
 use Innoboxrr\LarapackGenerator\Support\Translations;
+use Innoboxrr\LarapackGenerator\Tools\ModelArtifact;
 use Innoboxrr\LarapackGenerator\Tools\Tool;
 
-class ResourceTool extends Tool
+class ResourceTool extends Tool implements ModelArtifact
 {
     protected string $resourcePath = '';
 

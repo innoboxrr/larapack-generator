@@ -3,9 +3,10 @@
 namespace Innoboxrr\LarapackGenerator\Tools\Route;
 
 use Innoboxrr\LarapackGenerator\Support\Import\Endpoints;
+use Innoboxrr\LarapackGenerator\Tools\ModelArtifact;
 use Innoboxrr\LarapackGenerator\Tools\Tool;
 
-class RouteTool extends Tool
+class RouteTool extends Tool implements ModelArtifact
 {
     protected string $apiRoutepath = '';
 

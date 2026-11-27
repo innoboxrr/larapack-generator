@@ -2,9 +2,10 @@
 
 namespace Innoboxrr\LarapackGenerator\Tools\Events;
 
+use Innoboxrr\LarapackGenerator\Tools\ModelArtifact;
 use Innoboxrr\LarapackGenerator\Tools\Tool;
 
-class EventsTool extends Tool
+class EventsTool extends Tool implements ModelArtifact
 {
     private string $eventsPath = '';
 
@@ -84,9 +85,9 @@ class EventsTool extends Tool
         return $this;
     }
 
-    public function create(string $ModelName): void
+    public function create(string $ModelName): bool
     {
-        $this->init($ModelName)
+        return $this->init($ModelName)
             ->setEventsPath()
             ->setEventsTemplatePath()
             ->setMainEventsPath()
@@ -95,18 +96,22 @@ class EventsTool extends Tool
             ->createEvents();
     }
 
-    private function createEvents(): void
+    private function createEvents(): bool
     {
+        $written = false;
+
         foreach ($this->events as $event => $listeners) {
             if (! $this->declares(lcfirst(substr($event, 0, -strlen('Event'))))) {
                 continue;
             }
 
-            $this->createEvent($event);
+            $written = $this->createEvent($event) || $written;
             foreach ($listeners as $listener) {
-                $this->createListener($event, $listener);
+                $written = $this->createListener($event, $listener) || $written;
             }
         }
+
+        return $written;
     }
 
     private function createEvent(string $eventName): bool

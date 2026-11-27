@@ -2,9 +2,10 @@
 
 namespace Innoboxrr\LarapackGenerator\Tools\Providers;
 
+use Innoboxrr\LarapackGenerator\Tools\PackageArtifact;
 use Innoboxrr\LarapackGenerator\Tools\Tool;
 
-class AppServiceProviderTool extends Tool
+class AppServiceProviderTool extends Tool implements PackageArtifact
 {
     protected string $appServiceProviderPath = '';
 

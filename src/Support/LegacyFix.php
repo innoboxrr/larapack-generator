@@ -55,6 +55,8 @@ use RuntimeException;
  *
  * @phpstan-type Fixed array{file: string, diff?: string}
  * @phpstan-type Skipped array{file: string, reason: string}
+ * @phpstan-type MethodWithBody array{start: int, open: int, close: int, params: list<string>}
+ * @phpstan-type Method MethodWithBody|array{start: int, open: null, close: null, params: list<string>}
  * @phpstan-type CheckReport array{fixed: list<Fixed>, skipped: list<Skipped>, unchanged: int, admin_path_missing?: list<AdminPathMissing>, managed_filter_unresolved?: list<FilterUnresolved>, appendable_proposals?: Proposals}
  */
 final class LegacyFix
@@ -290,9 +292,10 @@ final class LegacyFix
         }
 
         foreach ($report as $check => $entry) {
-            foreach ($entry['fixed'] as $index => $fixed) {
-                $report[$check]['fixed'][$index]['diff'] = $diffs[$fixed['file']] ?? '';
-            }
+            $report[$check]['fixed'] = array_map(
+                fn (array $fixed): array => [...$fixed, 'diff' => $diffs[$fixed['file']] ?? ''],
+                $entry['fixed']
+            );
         }
 
         return $report;
@@ -359,7 +362,7 @@ final class LegacyFix
      */
     private function fixIndex(string $code, array $debt): string
     {
-        $tokens = PhpToken::tokenize($code);
+        $tokens = self::tokenize($code);
         [$open, $close, $classIndent] = $this->classBody($tokens, $code, $debt['class']);
         $methods = $this->methods($tokens, $open, $close);
         $method = $methods[strtolower('prepareForValidation')] ?? null;
@@ -447,7 +450,7 @@ final class LegacyFix
      */
     private function fixAppends(string $code, array $debt): string
     {
-        $tokens = PhpToken::tokenize($code);
+        $tokens = self::tokenize($code);
         [$open, $close, $classIndent] = $this->classBody($tokens, $code, $debt['class']);
         $methods = $this->methods($tokens, $open, $close);
         $method = $methods[strtolower((string) $debt['method'])] ?? null;
@@ -500,7 +503,7 @@ final class LegacyFix
      * petición.
      *
      * @param  list<PhpToken>  $tokens
-     * @param  array{start: int, open: int|null, close: int|null, params: list<string>}  $method
+     * @param  MethodWithBody  $method
      * @return array{0: int, 1: int, 2: string}
      */
     private function appendsStatement(array $tokens, int $call, array $method): array
@@ -509,7 +512,9 @@ final class LegacyFix
         $i = $call;
 
         for ($n = 0; $n < 4; $n++) {
-            $i = $this->previous($tokens, $i);
+            // Sin token anterior la cadena ya no es `$this->resource->`; seguir
+            // preguntando por el anterior de null era un TypeError.
+            $i = $i === null ? null : $this->previous($tokens, $i);
             $chain[] = $i === null ? null : $tokens[$i];
         }
 
@@ -643,7 +648,7 @@ final class LegacyFix
      */
     private function declareAppendable(string $code, array $debt, string $classIndent): string
     {
-        $tokens = PhpToken::tokenize($code);
+        $tokens = self::tokenize($code);
         [$open, $close] = $this->classBody($tokens, $code, $debt['class']);
         $depth = 0;
 
@@ -671,6 +676,17 @@ final class LegacyFix
     }
 
     // TOKENS
+
+    /**
+     * Los tokens del código, como lista: los índices son posiciones y todo lo
+     * de abajo avanza y retrocede por ellos.
+     *
+     * @return list<PhpToken>
+     */
+    private static function tokenize(string $code): array
+    {
+        return array_values(PhpToken::tokenize($code));
+    }
 
     /**
      * La llave de apertura y de cierre del cuerpo de la clase, y la sangría
@@ -723,7 +739,7 @@ final class LegacyFix
      * cuerpo (null si es abstracto) y sus parámetros.
      *
      * @param  list<PhpToken>  $tokens
-     * @return array<string, array{start: int, open: int|null, close: int|null, params: list<string>}>
+     * @return array<string, Method>
      */
     private function methods(array $tokens, int $open, int $close): array
     {
@@ -789,7 +805,11 @@ final class LegacyFix
             $bodyOpen = $tokens[$j]->text === '{' ? $j : null;
             $bodyClose = $bodyOpen === null ? null : $this->matching($tokens, $bodyOpen);
 
-            $methods[strtolower($tokens[$name]->text)] ??= ['start' => $start, 'open' => $bodyOpen, 'close' => $bodyClose, 'params' => $params];
+            // Las dos llaves o ninguna (abstracto): así lo dice el tipo, y quien
+            // comprueba `open` sabe que `close` también está.
+            $methods[strtolower($tokens[$name]->text)] ??= $bodyOpen === null || $bodyClose === null
+                ? ['start' => $start, 'open' => null, 'close' => null, 'params' => $params]
+                : ['start' => $start, 'open' => $bodyOpen, 'close' => $bodyClose, 'params' => $params];
             $i = $bodyClose ?? $j;
             $start = null;
         }
@@ -798,8 +818,8 @@ final class LegacyFix
     }
 
     /**
-     * @param  array<string, array{start: int, open: int|null, close: int|null, params: list<string>}>  $methods
-     * @return array{start: int, open: int|null, close: int|null, params: list<string>}
+     * @param  array<string, Method>  $methods
+     * @return Method
      */
     private function firstMethod(array $methods): array
     {
@@ -1019,12 +1039,19 @@ final class LegacyFix
         $relative = $this->security->project()->relative($file);
 
         foreach ($this->report as $check => $entry) {
-            foreach ($entry['fixed'] as $index => $fixed) {
-                if ($fixed['file'] === $relative) {
-                    unset($this->report[$check]['fixed'][$index]);
-                    $this->report[$check]['fixed'] = array_values($this->report[$check]['fixed']);
-                    $this->skip($check, $file, $reason);
-                }
+            // Se filtra la lista entera de una vez. Quitar por índice dentro
+            // del bucle, reindexando cada vez, dejaba el segundo de dos
+            // arreglos del mismo archivo: su índice ya no era el suyo.
+            $kept = array_values(array_filter($entry['fixed'], fn (array $fixed): bool => $fixed['file'] !== $relative));
+
+            if (count($kept) === count($entry['fixed'])) {
+                continue;
+            }
+
+            $this->report[$check]['fixed'] = $kept;
+
+            for ($n = count($entry['fixed']) - count($kept); $n > 0; $n--) {
+                $this->skip($check, $file, $reason);
             }
         }
 

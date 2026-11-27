@@ -2,8 +2,8 @@
 
 namespace Innoboxrr\LarapackGenerator\Support\Import;
 
-use Illuminate\Support\Pluralizer;
 use Innoboxrr\LarapackGenerator\Exceptions\MakerException;
+use Innoboxrr\LarapackGenerator\Support\TablePrefix;
 
 /**
  * Un laraimport ya validado y normalizado.
@@ -33,7 +33,7 @@ final class ImportDocument
             ]]];
         }
 
-        $decoded = json_decode(file_get_contents($path), true);
+        $decoded = json_decode((string) file_get_contents($path), true);
 
         if (! is_array($decoded)) {
             return ['document' => null, 'errors' => [[
@@ -270,7 +270,7 @@ final class ImportDocument
 
         foreach ($models as $model) {
             $byName[$model['name']] = $model;
-            $byTable[Pluralizer::plural(self::snake($model['name']))] = $model['name'];
+            $byTable[TablePrefix::tableOf($model['name'])] = $model['name'];
         }
 
         $sorted = [];
@@ -376,10 +376,5 @@ final class ImportDocument
     public function toArray(): array
     {
         return $this->data;
-    }
-
-    private static function snake(string $value): string
-    {
-        return mb_strtolower(preg_replace('/(?<!^)[A-Z]/', '_$0', $value));
     }
 }

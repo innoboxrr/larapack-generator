@@ -87,15 +87,15 @@ class PivotMigrationTool extends Tool
 
     private function replaceMigrationData(string $migrationFile): void
     {
-        $content = file_get_contents($migrationFile);
+        $content = self::contents($migrationFile);
         $content = str_replace('migration_name', TablePrefix::table($this->migrationName), $content);
         file_put_contents($migrationFile, $content);
     }
 
     protected function processFileWithJson(string $migrationFile): void
     {
-        $pivot = self::jsonEntry('pivots', $this->migrationName);
-        $fileContent = file_get_contents(filename: $migrationFile);
+        $pivot = self::declaredEntry('pivots', $this->migrationName);
+        $fileContent = self::contents($migrationFile);
         $columnsSchema = $this->generateMigrationColumns($pivot['props']);
         $updatedFileContent = str_replace('//EDIT//', $columnsSchema, $fileContent);
         file_put_contents($migrationFile, $updatedFileContent);

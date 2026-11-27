@@ -3,9 +3,10 @@
 namespace Innoboxrr\LarapackGenerator\Tools\ExportNotification;
 
 use Innoboxrr\LarapackGenerator\Support\Translations;
+use Innoboxrr\LarapackGenerator\Tools\ModelArtifact;
 use Innoboxrr\LarapackGenerator\Tools\Tool;
 
-class ExportNotificationTool extends Tool
+class ExportNotificationTool extends Tool implements ModelArtifact
 {
     protected string $exportNotificationPath = '';
 

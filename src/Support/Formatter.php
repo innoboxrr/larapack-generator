@@ -80,7 +80,7 @@ final class Formatter
      * Pint no tumba la generación: lo generado ya está escrito y es correcto,
      * sólo queda sin formatear, y la CI del paquete lo dirá.
      *
-     * @param  array<int, string>  $command
+     * @param  list<string>  $command
      */
     private static function run(array $command): void
     {

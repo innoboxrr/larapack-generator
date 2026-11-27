@@ -2,9 +2,10 @@
 
 namespace Innoboxrr\LarapackGenerator\Tools\Filters;
 
+use Innoboxrr\LarapackGenerator\Tools\ModelArtifact;
 use Innoboxrr\LarapackGenerator\Tools\Tool;
 
-class FiltersTool extends Tool
+class FiltersTool extends Tool implements ModelArtifact
 {
     protected string $filtersPath = '';
 

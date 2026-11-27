@@ -2,9 +2,10 @@
 
 namespace Innoboxrr\LarapackGenerator\Tools\Excel;
 
+use Innoboxrr\LarapackGenerator\Tools\ModelArtifact;
 use Innoboxrr\LarapackGenerator\Tools\Tool;
 
-class ExcelTool extends Tool
+class ExcelTool extends Tool implements ModelArtifact
 {
     protected string $excelPath = '';
 

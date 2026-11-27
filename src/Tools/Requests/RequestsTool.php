@@ -2,9 +2,11 @@
 
 namespace Innoboxrr\LarapackGenerator\Tools\Requests;
 
+use Innoboxrr\LarapackGenerator\Exceptions\MakerException;
+use Innoboxrr\LarapackGenerator\Tools\ModelArtifact;
 use Innoboxrr\LarapackGenerator\Tools\Tool;
 
-class RequestsTool extends Tool
+class RequestsTool extends Tool implements ModelArtifact
 {
     protected string $requestPath = '';
 
@@ -60,20 +62,24 @@ class RequestsTool extends Tool
         return $this->generate($this->requestsTemplatePath.'/'.$requestName.'.txt', $requestFile);
     }
 
-    public function create(string $ModelName): void
+    public function create(string $ModelName): bool
     {
         $this->init($ModelName)
             ->setRequestPath()
             ->setRequestsTemplatePath()
             ->setMainRequestsPath();
 
+        $written = false;
+
         foreach ($this->requests as $request) {
             if (! $this->declares(lcfirst(substr($request, 0, -strlen('Request'))))) {
                 continue;
             }
 
-            $this->createRequest($request);
+            $written = $this->createRequest($request) || $written;
         }
+
+        return $written;
     }
 
     public function remove(string $ModelName): bool
@@ -148,7 +154,7 @@ class RequestsTool extends Tool
 
         $rules = isset($requestData['rules']) && is_array($requestData['rules']) ? $requestData['rules'] : [];
 
-        $fileContent = file_get_contents($filePath);
+        $fileContent = self::contents($filePath);
 
         // El stub de Update trae la regla del identificador por defecto, para
         // que el archivo sea correcto aunque nadie lo importe. Si el JSON
@@ -161,7 +167,7 @@ class RequestsTool extends Tool
                 '/^[ \t]*'.preg_quote("'{$idKey}' => 'required|numeric',", '/').'\R/m',
                 '',
                 $fileContent
-            );
+            ) ?? throw MakerException::rewriteFailed($filePath);
         }
 
         file_put_contents($filePath, str_replace(

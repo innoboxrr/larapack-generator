@@ -2,9 +2,10 @@
 
 namespace Innoboxrr\LarapackGenerator\Tools\Config;
 
+use Innoboxrr\LarapackGenerator\Tools\PackageArtifact;
 use Innoboxrr\LarapackGenerator\Tools\Tool;
 
-class ConfigTool extends Tool
+class ConfigTool extends Tool implements PackageArtifact
 {
     protected string $configPath = '';
 

@@ -2,8 +2,8 @@
 
 namespace Innoboxrr\LarapackGenerator\Support\Import;
 
-use Illuminate\Support\Pluralizer;
 use Innoboxrr\LarapackGenerator\Support\Manifest;
+use Innoboxrr\LarapackGenerator\Support\TablePrefix;
 
 /**
  * Comprobaciones que el esquema no puede expresar porque miran a varias partes
@@ -12,6 +12,8 @@ use Innoboxrr\LarapackGenerator\Support\Manifest;
  * Un JSON Schema valida la forma de cada pieza; esto valida que las piezas
  * encajen entre sí: que una clave foránea apunte a algo que exista, que una
  * relación pueda resolverse, que no haya nombres repetidos.
+ *
+ * @phpstan-type Finding array{level: string, path: string, message: string}
  */
 final class SemanticValidator
 {
@@ -30,7 +32,7 @@ final class SemanticValidator
      * @param  array<string, mixed>  $raw  Tal como se escribió. Hace falta para
      *                                     distinguir un valor declarado de uno
      *                                     puesto por omisión.
-     * @return array<int, array{level: string, path: string, message: string}>
+     * @return list<Finding>
      */
     public static function validate(array $document, array $raw = []): array
     {
@@ -65,7 +67,7 @@ final class SemanticValidator
      *
      * @param  array<int, array<string, mixed>>  $models
      * @param  array<int, array<string, mixed>>  $controllers
-     * @return array<int, array<string, mixed>>
+     * @return list<Finding>
      */
     private static function endpoints(array $models, array $controllers): array
     {
@@ -105,7 +107,7 @@ final class SemanticValidator
     /**
      * @param  array<string, mixed>  $owner  El modelo o el controlador.
      * @param  array<int, string>|null  $actions  Las acciones CRUD que quedan; null si no es un modelo.
-     * @return array<int, array<string, mixed>>
+     * @return list<Finding>
      */
     private static function endpointsOf(array $owner, string $path, ?array $actions): array
     {
@@ -226,7 +228,7 @@ final class SemanticValidator
      *
      * @param  array<string, mixed>  $owner
      * @param  string|null  $idParameter  El parámetro numérico; null en un controllers[].
-     * @return array<int, array<string, mixed>>
+     * @return list<Finding>
      */
     private static function openFirstSegments(array $owner, string $path, ?string $idParameter): array
     {
@@ -293,7 +295,7 @@ final class SemanticValidator
      * @param  array<string, mixed>  $endpoint
      * @param  array<int, string>  $actions
      * @param  array<string, array{0: string, 1: bool, 2: string}>  $abilities
-     * @return array<int, array<string, mixed>>
+     * @return list<Finding>
      */
     private static function endpointAbility(array $model, array $endpoint, string $at, array $actions, array &$abilities): array
     {
@@ -372,7 +374,7 @@ final class SemanticValidator
      *
      * @param  array<int, array<string, mixed>>  $models
      * @param  array<int, array<string, mixed>>  $pivots
-     * @return array<int, array<string, mixed>>
+     * @return list<Finding>
      */
     private static function referentialActions(array $models, array $pivots): array
     {
@@ -418,7 +420,7 @@ final class SemanticValidator
      * existe, y el error sale en producción con un SQLSTATE, no aquí.
      *
      * @param  array<string, mixed>  $document
-     * @return array<int, array<string, mixed>>
+     * @return list<Finding>
      */
     private static function prefixedRules(array $document): array
     {
@@ -471,7 +473,7 @@ final class SemanticValidator
      * contraseña. Sin ellos el modelo se genera, pero nadie puede usarlo.
      *
      * @param  array<int, array<string, mixed>>  $models
-     * @return array<int, array{level: string, path: string, message: string}>
+     * @return list<Finding>
      */
     private static function authenticatable(array $models): array
     {
@@ -511,7 +513,7 @@ final class SemanticValidator
      * un controlador sin modelo es la forma de convertirlo.
      *
      * @param  array<string, mixed>  $document
-     * @return array<int, array{level: string, path: string, message: string}>
+     * @return list<Finding>
      */
     public static function againstManifest(array $document, Manifest $manifest): array
     {
@@ -537,7 +539,7 @@ final class SemanticValidator
      * atender es como se deja de leer la lista entera.
      *
      * @param  array<string, mixed>  $document
-     * @return array<int, array{level: string, path: string, message: string}>
+     * @return list<Finding>
      */
     public static function interface(array $document): array
     {
@@ -599,7 +601,7 @@ final class SemanticValidator
      * La coherencia entre las acciones que quedan.
      *
      * @param  array<int, array<string, mixed>>  $models
-     * @return array<int, array<string, mixed>>
+     * @return list<Finding>
      */
     private static function routes(array $models): array
     {
@@ -693,7 +695,7 @@ final class SemanticValidator
      * o una secreta dejarían la ficha, las migas y la pestaña sin nombre.
      *
      * @param  array<int, array<string, mixed>>  $models
-     * @return array<int, array<string, mixed>>
+     * @return list<Finding>
      */
     private static function display(array $models): array
     {
@@ -744,7 +746,7 @@ final class SemanticValidator
      *
      * @param  array<int, array<string, mixed>>  $models
      * @param  array<int, mixed>  $raw
-     * @return array<int, array<string, mixed>>
+     * @return list<Finding>
      */
     private static function metas(array $models, array $raw): array
     {
@@ -805,7 +807,7 @@ final class SemanticValidator
      *
      * @param  array<int, array<string, mixed>>  $models
      * @param  array<int, mixed>  $raw
-     * @return array<int, array<string, mixed>>
+     * @return list<Finding>
      */
     private static function secrets(array $models, array $raw): array
     {
@@ -836,7 +838,7 @@ final class SemanticValidator
 
     /**
      * @param  array<int, array<string, mixed>>  $models
-     * @return array<int, array<string, mixed>>
+     * @return list<Finding>
      */
     private static function duplicateModels(array $models): array
     {
@@ -862,7 +864,7 @@ final class SemanticValidator
 
     /**
      * @param  array<int, array<string, mixed>>  $models
-     * @return array<int, array<string, mixed>>
+     * @return list<Finding>
      */
     private static function duplicateProps(array $models): array
     {
@@ -889,7 +891,7 @@ final class SemanticValidator
 
     /**
      * @param  array<int, array<string, mixed>>  $pivots
-     * @return array<int, array<string, mixed>>
+     * @return list<Finding>
      */
     private static function duplicatePivots(array $pivots): array
     {
@@ -918,7 +920,7 @@ final class SemanticValidator
      *
      * @param  array<int, array<string, mixed>>  $models
      * @param  array<int, array<string, mixed>>  $pivots
-     * @return array<int, array<string, mixed>>
+     * @return list<Finding>
      */
     private static function foreignKeys(array $models, array $pivots): array
     {
@@ -975,7 +977,7 @@ final class SemanticValidator
 
     /**
      * @param  array<string, array<int, string>>  $edges
-     * @return array<int, array<string, mixed>>
+     * @return list<Finding>
      */
     private static function cycles(array $edges): array
     {
@@ -988,7 +990,15 @@ final class SemanticValidator
             }
 
             if (($state[$node] ?? null) === 'visiting') {
-                $cycle = array_slice($path, array_search($node, $path, true));
+                // 'visiting' quiere decir que está en el camino: se marca al
+                // entrar y se cambia a 'done' al salir.
+                $start = array_search($node, $path, true);
+
+                if (! is_int($start)) {
+                    throw new \LogicException("{$node} está a medio visitar y no está en el camino.");
+                }
+
+                $cycle = array_slice($path, $start);
 
                 $findings[] = [
                     'level' => self::ERROR,
@@ -1019,7 +1029,7 @@ final class SemanticValidator
 
     /**
      * @param  array<int, array<string, mixed>>  $models
-     * @return array<int, array<string, mixed>>
+     * @return list<Finding>
      */
     private static function relations(array $models): array
     {
@@ -1052,7 +1062,7 @@ final class SemanticValidator
      * nombre mal escrito.
      *
      * @param  array<int, array<string, mixed>>  $models
-     * @return array<int, array<string, mixed>>
+     * @return list<Finding>
      */
     private static function ruleFields(array $models): array
     {
@@ -1098,7 +1108,7 @@ final class SemanticValidator
 
     /**
      * @param  array<int, array<string, mixed>>  $models
-     * @return array<int, array<string, mixed>>
+     * @return list<Finding>
      */
     private static function enums(array $models): array
     {
@@ -1126,14 +1136,18 @@ final class SemanticValidator
         return $findings;
     }
 
+    /**
+     * La misma regla que el generador y que TablePrefix: se lee de ahí para
+     * que las tres copias que había no puedan divergir.
+     */
     private static function tableOf(string $model): string
     {
-        return Pluralizer::plural(self::snake($model));
+        return TablePrefix::tableOf($model);
     }
 
     private static function snake(string $value): string
     {
-        return mb_strtolower(preg_replace('/(?<!^)[A-Z]/', '_$0', $value));
+        return TablePrefix::singularOf($value);
     }
 
     private static function isKnownExternalTable(string $table): bool

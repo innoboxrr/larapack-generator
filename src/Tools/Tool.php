@@ -169,6 +169,22 @@ class Tool
         return self::jsonEntry('models', $this->ModelName);
     }
 
+    /**
+     * La entrada que el post-proceso del importador tiene que encontrar: el
+     * modelo que se está generando o el pivote que se está migrando.
+     *
+     * Sin ella, cada herramienta seguía con null y reventaba más abajo con un
+     * TypeError que no decía qué faltaba en el laraimport.
+     *
+     * @param  'models'|'pivots'  $key
+     * @return array<string, mixed>
+     */
+    protected static function declaredEntry(string $key, string $name): array
+    {
+        return self::jsonEntry($key, $name)
+            ?? throw MakerException::notDeclared($key === 'models' ? 'el modelo' : 'el pivote', $name);
+    }
+
     protected function processFileWithJson(string $fileToProcess): void {}
 
     // INIT
@@ -360,7 +376,7 @@ class Tool
 
     protected function replaceData(string $file): void
     {
-        file_put_contents($file, $this->replaceTokens(file_get_contents($file)));
+        file_put_contents($file, $this->replaceTokens(self::contents($file)));
 
         // Toda copia de un stub pasa por aquí, también las que no usan
         // generate(): así se formatea todo lo generado.
@@ -372,24 +388,100 @@ class Tool
      */
     public function addProvidersToComposerJson(array $providers): void
     {
-        // Una simulacion no escribe nada, tampoco composer.json.
-        if (app_dir_name() == 'src' && ! Generation::isDryRun()) {
-            $composerJsonPath = root_path().'/composer.json';
-            $composerJsonData = json_decode(file_get_contents($composerJsonPath), true);
-            if (! isset($composerJsonData['extra']['laravel']['providers'])) {
-                $composerJsonData['extra']['laravel']['providers'] = [];
-            }
+        $this->editComposerJson(function (array $composer) use ($providers): array {
+            $extra = self::arrayAt($composer, 'extra');
+            $laravel = self::arrayAt($extra, 'laravel');
+
             // Sin quitar repetidos, volver a ejecutar larapack:providers
             // declaraba cada proveedor otra vez y Laravel lo registraba dos.
-            $composerJsonData['extra']['laravel']['providers'] = array_values(array_unique(array_merge(
-                $composerJsonData['extra']['laravel']['providers'],
-                $providers
-            )));
-            file_put_contents(
-                $composerJsonPath,
-                json_encode($composerJsonData, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)
-            );
+            $laravel['providers'] = array_values(array_unique(array_merge(self::arrayAt($laravel, 'providers'), $providers)));
+            $extra['laravel'] = $laravel;
+            $composer['extra'] = $extra;
+
+            return $composer;
+        });
+    }
+
+    /**
+     * Añade una entrada PSR-4 bajo el namespace del paquete: el primero que
+     * declara `autoload.psr-4`, como siempre. Lo demás de la sección se queda
+     * como estaba.
+     *
+     * @param  'autoload'|'autoload-dev'  $section
+     */
+    protected function addPsr4ToComposerJson(string $section, string $suffix, string $directory): void
+    {
+        $this->editComposerJson(function (array $composer) use ($section, $suffix, $directory): array {
+            $base = (string) (array_key_first(self::arrayAt($composer, 'autoload', 'psr-4')) ?? $this->namespace);
+
+            $entries = self::arrayAt($composer, $section);
+            $psr4 = self::arrayAt($entries, 'psr-4');
+            $psr4[$base.$suffix] = $directory;
+            $entries['psr-4'] = $psr4;
+            $composer[$section] = $entries;
+
+            return $composer;
+        });
+    }
+
+    /**
+     * Lee, cambia y vuelve a escribir composer.json, sólo en un paquete y nunca
+     * en una simulación.
+     *
+     * Un composer.json que no es un objeto JSON no se toca: antes json_decode()
+     * devolvía null, se le añadía la clave que tocaba y se escribía encima un
+     * archivo con esa clave y nada más.
+     *
+     * @param  callable(array<mixed>): array<mixed>  $edit
+     */
+    protected function editComposerJson(callable $edit): void
+    {
+        if (app_dir_name() != 'src' || Generation::isDryRun()) {
+            return;
         }
+
+        $path = root_path().'/composer.json';
+        $composer = json_decode(self::contents($path), true);
+
+        if (! is_array($composer)) {
+            throw MakerException::invalidComposerJson($path, json_last_error_msg());
+        }
+
+        file_put_contents($path, json_encode($edit($composer), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+    }
+
+    /**
+     * El array que cuelga de esas claves, o uno vacío si falta alguna o no es
+     * un array.
+     *
+     * @param  array<mixed>  $data
+     * @return array<mixed>
+     */
+    protected static function arrayAt(array $data, string ...$keys): array
+    {
+        foreach ($keys as $key) {
+            $data = is_array($data[$key] ?? null) ? $data[$key] : [];
+        }
+
+        return $data;
+    }
+
+    /**
+     * El contenido de un archivo que se va a reescribir.
+     *
+     * self::contents() suelto devuelve false si no puede leer, y ese false
+     * acababa como '' en el file_put_contents() de después: el archivo se
+     * reescribía vacío. Aquí no se lee, se falla.
+     */
+    protected static function contents(string $file): string
+    {
+        $content = file_get_contents($file);
+
+        if ($content === false) {
+            throw MakerException::readFailed($file);
+        }
+
+        return $content;
     }
 
     // GENERACION
@@ -641,7 +733,7 @@ class Tool
      */
     protected function applyEndpoints(string $file): void
     {
-        $content = file_get_contents($file);
+        $content = self::contents($file);
 
         if (! str_contains($content, '//ENDPOINT_')) {
             return;
@@ -662,7 +754,7 @@ class Tool
                 ));
             },
             $content
-        );
+        ) ?? throw MakerException::rewriteFailed($file);
 
         file_put_contents($file, $content);
     }
@@ -687,7 +779,7 @@ class Tool
      */
     protected function applyBlocks(string $file): void
     {
-        $content = file_get_contents($file);
+        $content = self::contents($file);
 
         if (! str_contains($content, '@larapack:')) {
             return;
