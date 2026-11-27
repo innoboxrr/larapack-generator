@@ -642,6 +642,44 @@ fuera de `.larapack/realign/` salvo `--allow-dirty`, pasa `--dry-run` y las
 devuelve un [`OperationResult`](src/Support/Realign/Operations/OperationResult.php)
 con `fixed`, `skipped` y `unchanged`, como `fix`.
 
+Las dos que escriben código o manifiesto no se fían del informe:
+[`ScopeReference`](src/Support/Realign/Operations/ScopeReference.php) les da lo
+regenerado ahora (de la caché) y la misma `ScopeClassifier`, y cada una vuelve
+a clasificar cada archivo justo antes de tocarlo.
+
+- [`AdoptOperation`](src/Support/Realign/Operations/AdoptOperation.php)
+  (`adopt`, `relink`, `prune`, `untracked-edited`) sólo escribe el
+  manifiesto, con las primitivas del v2 (`Manifest::refresh`,
+  `Manifest::adopt`, `Manifest::relink`, `Manifest::drop`,
+  `Manifest::move`, `Manifest::stamp`), dentro de un `Manifest::batch`.
+- [`ApplyOperation`](src/Support/Realign/Operations/ApplyOperation.php) reparte
+  por tipo de paso y delega los de adopt. Cada corrección vive en
+  `src/Support/Realign/Apply/`:
+  [`EndpointTests`](src/Support/Realign/Apply/EndpointTests.php) (pruebas que
+  faltan, copiadas de lo regenerado),
+  [`ConcernMove`](src/Support/Realign/Apply/ConcernMove.php) (un trait a
+  `Http/Requests/Concerns`, referencias por tokens),
+  [`ForeignKeyPins`](src/Support/Realign/Apply/ForeignKeyPins.php) (detecta en
+  el diagnóstico y escribe con
+  [`JsonEdit`](src/Support/Realign/Apply/JsonEdit.php), que edita el JSON en
+  su sitio), sobre [`PhpMembers`](src/Support/Realign/Apply/PhpMembers.php)
+  (métodos e importaciones con sus posiciones). `fix` reusa `LegacyFix` y
+  `model-lists` reusa `ModelRegions`: no hay dos implementaciones de la misma
+  corrección.
+- Todo lo que escribe va por
+  [`Changes`](src/Support/Realign/Apply/Changes.php): los archivos de un
+  cambio se escriben juntos, se pasan por Pint si se pide y, si uno no
+  parsea, se devuelven todos a como estaban.
+
+**Para añadir una corrección determinista**: el tipo en `StepTypes` (categoría
+`deterministic`, `run` = `larapack:realign apply {id}`, su riesgo y, si salta
+cosas, su playbook para lo saltado), el tipo en `ApplyOperation::handles` y su
+rama en `ApplyOperation::run`, la pieza en `Apply/` si hace falta, y su prueba
+con un proyecto generado de verdad (`tests/Feature/RealignApplyTest.php`). Si
+la detecta el diagnóstico y no `verify` (como `pin-foreign-keys`), va además en
+`Diagnosis::run` (la sección `contract` del informe), en `Planner::build` y con
+su `done_when` en `DoneWhen`.
+
 **El estado** ([`RealignState`](src/Support/Realign/RealignState.php)) es
 `report.json` y `plan.json`, con `RealignState::FORMAT_VERSION`, escritos de
 forma atómica; la caché queda fuera de git por el `.gitignore` del directorio.

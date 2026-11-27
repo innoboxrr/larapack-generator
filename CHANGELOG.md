@@ -75,6 +75,76 @@ Cuadra con los informes de viabilidad: los 983 saltos de versión y los 596 de
 proveedores y configuración de school-management salen exactos, y los 1 914
 de expediente que sólo eran formato, también.
 
+### `larapack:realign adopt` y `apply`: adoptar y corregir sin reconstruir
+
+Las dos operaciones que escriben lo determinista. La guía de cada una —qué
+hace, qué nunca hace, cuándo salta y su riesgo— está en
+[docs/realign/README.md](docs/realign/README.md#las-operaciones-que-escriben).
+
+```bash
+larapack:realign adopt [<id>…] [--dry-run]
+larapack:realign apply <id>… [--dry-run]
+larapack:realign apply --deterministic [--dry-run]
+```
+
+- **`adopt` sólo escribe el manifiesto**, nunca el contenido de un archivo, y
+  vuelve a clasificar cada archivo antes de anotarlo. `adopt`: lo que ya es lo
+  regenerado se vuelve a anotar con su hash y la versión (conservando que lo
+  generó el generador) o se registra como `adopted`. `relink`: lo renombrado,
+  también una migración con otra fecha. `prune`: lo que ya no existe; lo que
+  le quede en disco a un modelo retirado pasa a quien lo genera hoy (o a lo que
+  no es de ninguna entidad) y el modelo se olvida. `untracked-edited`, si se
+  decidió: lo escrito a mano en la ruta de uno generado se adopta con el hash
+  de lo regenerado, así `--force` no lo sobrescribe jamás. Y en cada ámbito,
+  la versión en lo heredado de un manifiesto v1 que sigue siendo, sin editar,
+  lo que generaría hoy el contrato.
+- **`apply`** hace los pasos deterministas que reescriben, uno a uno o todos
+  con `--deterministic` (sin ids hay que pedirlo así): `regenerate` copia de lo
+  regenerado lo que nadie editó o nunca se generó —un `import --force` acotado
+  a lo seguro: nunca un archivo editado, nunca una migración, nunca un modelo
+  sin importar—; `missing` restaura si se decidió; `fix` reusa
+  `larapack:fix`, una corrida por comprobación para todos sus paquetes;
+  `endpoint-tests` añade a cada `<Modelo>EndpointsTest` las pruebas de la
+  plantilla actual con sus auxiliares y sus `use`, sin tocar lo escrito a mano
+  (en vez de borrar, importar y volver a pegar); `controller-concern` mueve a
+  `Http/Requests/Concerns` los traits de `Http/Controllers/Concerns` que sólo
+  usan requests y reescribe sus nombres por tokens en todo el proyecto;
+  `model-lists` completa las listas del modelo (ModelRegions, sólo añade);
+  `pin-foreign-keys` escribe en el contrato el `on_delete`/`on_update` que
+  hacen las migraciones donde el contrato calla (la cascada de 7.x), editando
+  el JSON en su sitio, para que un salto de versión no cambie lo que se borra
+  en producción. Cada cambio se escribe entero o se deshace si un PHP no
+  parsea; un paso que revienta se salta y los demás siguen.
+- `endpoint-tests`, `controller-concern` (el aviso: sólo lo usan requests) y
+  `model-lists` pasan de guiados a deterministas, con su playbook para lo que
+  la orden salte (`next` lo da en `how.fallback`). Un `controller-concern` que
+  usa un controlador es `controller-shape`. Nuevo paso `pin-foreign-keys`,
+  detectado por el diagnóstico (sección `contract` del informe), con su
+  `done_when` `foreign-keys`.
+- **Las guías «Al actualizar» de 7.x a 9.x**, convertidas en pasos: la tabla
+  está en la guía. Lo único que no se automatiza es borrar las alteraciones
+  vacías de 9.x: saber si se migraron pide la base de producción.
+- `check` de un paso `verify` sólo cuenta los hallazgos de su tipo (el `fix`
+  del fallback de la SPA está hecho aunque en `routes/web.php` quede otro
+  closure, que es una decisión). Una migración renombrada ya no sale como
+  `missing` al comprobar su `relink`.
+
+Ensayado sobre copias, con `apply --deterministic` dos veces (después de la
+primera, lo que `fix` deja igual a lo regenerado sale como `adopt`):
+
+| | school-management (82 ámbitos) | expediente (7.x) |
+|---|---|---|
+| Primera pasada | 5 843 cambios en 578 s (3 640 adoptados, 983 regenerados, 691 tests completados, 447 `fix`, 19 traits movidos, 14 modelos, 47 ámbitos con la versión anotada), 0 saltados | 2 272 cambios en 47 s (1 914 adoptados, 94 olvidados, 38 regenerados, 140 `fix`, 70 tests, 14 modelos, 56 llaves fijadas), 3 saltados (closures que no son el de la SPA: una decisión) |
+| Segunda pasada | 608 (449 adoptados, 158 regenerados) | 140 adoptados |
+| `customised` en `verify` | 6 571 → 2 978 | 2 520 → 396 |
+| `edited_outside` | 404 → 207 | 247 → 178 |
+| Cumplen (de los clasificados) | 16 921 → 21 757 de 22 844 | 1 185 → 3 228 de 3 456 |
+| Avisos y errores de `verify` | 1 975 → 20 (9 `missing-file`, 4 `controller-shape`, 4 `route-closure`, 3 `route-not-declared`) | 699 → 380 (377 `controller-shape`, 3 `route-closure`) |
+| Lo que queda | 24 pasos `edited-outside`, 4 `controller-shape`, 1 `declared-routes` y 77 decisiones | 6 `edited-outside`, 77 `controller-shape` y 5 decisiones |
+
+Ningún PHP escrito dejó de parsear. brandai no tiene contrato: no hay nada que
+adoptar ni regenerar hasta inferirlo (`infer`).
+
 ### El manifiesto pasa a la versión 2
 
 Cada archivo dice qué versión del generador lo escribió (`generator`) y, si se

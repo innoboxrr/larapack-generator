@@ -472,14 +472,18 @@ de una edición.
 
 **Con contrato y manifiesto al día** (school-management). El caso fácil: casi
 todo es `identical` o `format_only` con el hash viejo (`adopt`), deuda de
-`fix` y huecos editados. Lo guiado es poco y concreto.
+`fix` y huecos editados. Lo guiado es poco y concreto. En la copia ensayada,
+dos pasadas de `apply --deterministic` (unos 10 minutos) dejaron 20 avisos de
+`verify` de 1 975 y 207 archivos editados fuera de sus huecos de 404.
 
 **Con contrato, de una versión vieja y con mucha deuda de controladores a mano**
 (expediente, 7.x). Muchos `adopt` (el proyecto pasaba Pint después de cada
 import y el manifiesto guardaba el hash de antes), `prune` de lo retirado,
 `fix`, una familia de `edited-outside` por plantilla, cientos de
 `controller-shape` (uno por controlador) y las decisiones de los modelos y
-controladores a mano.
+controladores a mano. `apply --deterministic` paga todo lo mecánico —también
+fija en el contrato la cascada de 56 llaves de 7.x— y deja lo que de verdad
+es trabajo: los 377 hallazgos `controller-shape` de 77 controladores.
 
 **Sin contrato** (brandai). No hay con qué comparar: el diagnóstico lo dice
 (`no-contract`) y lista el código HTTP y de modelos. El camino es inferir el
