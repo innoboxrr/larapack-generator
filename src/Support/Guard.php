@@ -264,7 +264,9 @@ final class Guard
                 }
 
                 $invoked = $invoked || self::namesHandRolled($word);
-                $nested = $eval || preg_match('/^-[a-z]*c$/i', $words[$index - 1] ?? '') === 1;
+                // `-c` puede ir en cualquier punto del grupo de opciones:
+                // `bash -ce '…'` ejecuta el texto igual que `bash -ec '…'`.
+                $nested = $eval || preg_match('/^-[a-z]*c[a-z]*$/i', $words[$index - 1] ?? '') === 1;
 
                 if ($nested && $depth < 3) {
                     $approves = self::shellScan($word, $depth + 1, $locks) || $approves;
@@ -380,6 +382,9 @@ final class Guard
         $head = null;
         // Si la palabra que viene es el destino de una redirección de salida.
         $redirect = false;
+        // Si la palabra que viene es la cadena de un `<<<`: si la recibe una
+        // shell (`bash <<< '…'`), son órdenes, como el cuerpo de un heredoc.
+        $hereString = false;
         $length = strlen($line);
 
         for ($i = 0; $i < $length; $i++) {
@@ -428,6 +433,11 @@ final class Guard
                         $redirect = false;
                     }
 
+                    if ($hereString) {
+                        self::hereString($word, $head, $scripts);
+                        $hereString = false;
+                    }
+
                     $word = null;
                 }
 
@@ -440,8 +450,14 @@ final class Guard
                     $words = [];
                 }
 
-                // `<<` abre un heredoc (`<<<` es otra cosa: una cadena).
-                if ($char === '<' && ($line[$i + 1] ?? '') === '<' && ($line[$i + 2] ?? '') !== '<') {
+                // `<<` abre un heredoc; `<<<` es otra cosa —una cadena— y se
+                // salta entero. Si no, su segundo `<` abría un heredoc con la
+                // cadena de delimitador y las líneas siguientes, que son
+                // órdenes, se leían como su cuerpo.
+                if ($char === '<' && substr($line, $i + 1, 2) === '<<') {
+                    $i += 2;
+                    $hereString = true;
+                } elseif ($char === '<' && ($line[$i + 1] ?? '') === '<') {
                     [$delimiter, $strip, $i] = self::heredocDelimiter($line, $i + 2);
 
                     if ($delimiter !== null) {
@@ -468,6 +484,10 @@ final class Guard
             if ($redirect) {
                 $redirects[] = $word;
             }
+
+            if ($hereString) {
+                self::hereString($word, $head, $scripts);
+            }
         }
 
         if ($words !== []) {
@@ -475,6 +495,18 @@ final class Guard
         }
 
         return $commands;
+    }
+
+    /**
+     * La cadena de un `<<<` es un guion si la recibe una shell.
+     *
+     * @param  list<string>  $scripts
+     */
+    private static function hereString(string $word, ?string $head, array &$scripts): void
+    {
+        if ($head !== null && in_array(basename(str_replace('\\', '/', $head)), self::SHELLS, true)) {
+            $scripts[] = $word;
+        }
     }
 
     /**
