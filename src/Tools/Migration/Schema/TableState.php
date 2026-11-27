@@ -78,6 +78,23 @@ final class TableState
      */
     public array $files = [];
 
+    /**
+     * Los índices de la tabla (9.4.0): los de `$table->index()` y los de un
+     * modificador de columna (`->unique()`), con el nombre que les pone
+     * Laravel si no lo declaran y el archivo que los puso.
+     *
+     * @var list<array{type: string, columns: list<string>, name: string, origin: string}>
+     */
+    public array $indexes = [];
+
+    /**
+     * Por qué no se sabe qué índices tiene: uno con columnas que no se leen,
+     * o uno que se pone o se quita dentro de un `if`.
+     *
+     * @var list<string>
+     */
+    public array $indexOpaque = [];
+
     public ?string $creator = null;
 
     public bool $exists = false;
@@ -110,6 +127,67 @@ final class TableState
         }
 
         return null;
+    }
+
+    /**
+     * El nombre que Laravel le pone a un índice que no lo declara
+     * (Blueprint::createIndexName): tabla, columnas y tipo en minúsculas.
+     *
+     * @param  list<string>  $columns
+     */
+    public function defaultIndexName(string $type, array $columns): string
+    {
+        return str_replace(['-', '.'], '_', strtolower($this->name.'_'.implode('_', $columns).'_'.$type));
+    }
+
+    /**
+     * Si ya hay un índice del tipo y con esas columnas (en ese orden), o con
+     * ese nombre. Un `unique` cuenta como índice normal: ya sirve a las mismas
+     * consultas, y añadir otro normal sobre las mismas columnas no aporta.
+     *
+     * @param  list<string>  $columns
+     */
+    public function hasIndex(string $type, array $columns, ?string $name = null): bool
+    {
+        foreach ($this->indexes as $index) {
+            if ($name !== null && $index['name'] === $name) {
+                return true;
+            }
+
+            if ($index['columns'] === $columns && ($index['type'] === $type || ($type === 'index' && in_array($index['type'], ['unique', 'primary'], true)))) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @param  list<string>  $columns
+     */
+    public function addIndex(string $type, array $columns, ?string $name, string $file): void
+    {
+        $this->indexes[] = ['type' => $type, 'columns' => $columns, 'name' => $name ?? $this->defaultIndexName($type, $columns), 'origin' => $file];
+    }
+
+    /**
+     * Quita un índice por su nombre o, sin nombre, por sus columnas.
+     *
+     * @param  list<string>|null  $columns
+     */
+    public function dropIndex(string $type, ?string $name, ?array $columns): void
+    {
+        $name ??= $columns === null ? null : $this->defaultIndexName($type, $columns);
+
+        $this->indexes = array_values(array_filter($this->indexes, fn (array $index): bool => $index['name'] !== $name));
+    }
+
+    /**
+     * Al quitar una columna, la base quita los índices que la llevan.
+     */
+    public function dropIndexesOf(string $column): void
+    {
+        $this->indexes = array_values(array_filter($this->indexes, fn (array $index): bool => ! in_array($column, $index['columns'], true)));
     }
 
     public function markUncertain(string $column, string $file): void

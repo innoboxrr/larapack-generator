@@ -3,6 +3,7 @@
 namespace Innoboxrr\LarapackGenerator\Support;
 
 use Innoboxrr\LarapackGenerator\Support\Import\ImportDocument;
+use Innoboxrr\LarapackGenerator\Support\Import\Relations;
 
 /**
  * Lo que el laraimport declara y el código ya no lleva, aunque no se haya
@@ -118,15 +119,15 @@ final class ContractDrift
                     continue;
                 }
 
-                $related = (string) $relation['related'];
+                $related = Relations::hasRelated($relation) ? (string) $relation['related'] : null;
                 $relatedNamespace = rtrim((string) ($relation['namespace'] ?? $namespace.'\\Models'), '\\');
 
                 $missing[] = [
                     'model' => $model,
                     'trait' => $trait,
                     'name' => $name,
-                    'method' => "    public function {$name}()\n    {\n        return \$this->{$relation['type']}({$related}::class);\n    }",
-                    'use' => $related === $model ? null : "use {$relatedNamespace}\\{$related};",
+                    'method' => "    public function {$name}()\n    {\n        return ".Relations::call($relation).";\n    }",
+                    'use' => $related === null || $related === $model ? null : "use {$relatedNamespace}\\{$related};",
                 ];
             }
         }

@@ -38,6 +38,28 @@ final class SchemaHistory
         return $files;
     }
 
+    /**
+     * Las tablas que crea alguna migración del directorio y siguen existiendo
+     * al final, en el orden en que se crean (9.4.0, para inferir el contrato).
+     *
+     * @return list<string>
+     */
+    public function tables(): array
+    {
+        $this->readings ??= array_map(fn (string $file): MigrationReading => MigrationReader::read($file), $this->files());
+        $names = [];
+
+        foreach ($this->readings as $reading) {
+            foreach ($reading->operations as $operation) {
+                if (($operation['kind'] ?? null) === 'create' && is_string($operation['table'] ?? null) && ! in_array($operation['table'], $names, true)) {
+                    $names[] = $operation['table'];
+                }
+            }
+        }
+
+        return array_values(array_filter($names, fn (string $name): bool => $this->table($name)->exists));
+    }
+
     public function table(string $name): TableState
     {
         if (isset($this->tables[$name])) {
@@ -150,6 +172,8 @@ final class SchemaHistory
             $state->columns = [];
             $state->origin = [];
             $state->foreignOrigin = [];
+            $state->indexes = [];
+            $state->indexOpaque = [];
 
             return;
         }
@@ -160,6 +184,8 @@ final class SchemaHistory
             $state->columns = [];
             $state->origin = [];
             $state->foreignOrigin = [];
+            $state->indexes = [];
+            $state->indexOpaque = [];
         }
 
         if ($opaque !== null) {
@@ -211,7 +237,65 @@ final class SchemaHistory
 
                     $state->columns[$column->name] = $column;
                     $state->origin[$column->name] = $file;
+
+                    // `->unique()` o `->index()` sobre la columna es un índice
+                    // de la tabla, igual que `$table->unique('x')`. En un
+                    // `->change()` no crean uno nuevo: Laravel lo intentaría.
+                    if ($statement['kind'] === 'add') {
+                        foreach ($column->extras as [$modifier, $arguments]) {
+                            if (in_array($modifier, ['index', 'unique', 'primary', 'fullText', 'fulltext', 'spatialIndex'], true)) {
+                                $indexName = isset($arguments[0]) && $arguments[0]->isString() ? (string) $arguments[0]->value : null;
+
+                                if ($conditional) {
+                                    $state->indexOpaque[] = basename($file).": ->{$modifier}() de {$column->name} dentro de un if";
+                                } else {
+                                    $state->addIndex(MigrationReader::indexType($modifier), [$column->name], $indexName, $file);
+                                }
+                            }
+                        }
+                    }
                 }
+
+                return;
+
+            case 'index':
+                $columns = array_values(array_filter(is_array($statement['index_columns'] ?? null) ? $statement['index_columns'] : [], 'is_string'));
+                $type = is_string($statement['type'] ?? null) ? $statement['type'] : 'index';
+                $indexName = is_string($statement['name'] ?? null) ? $statement['name'] : null;
+
+                if ($conditional) {
+                    $state->indexOpaque[] = basename($file).': un índice dentro de un if';
+                } else {
+                    $state->addIndex($type, $columns, $indexName, $file);
+                }
+
+                return;
+
+            case 'dropIndex':
+                $columns = is_array($statement['index_columns'] ?? null) ? array_values(array_filter($statement['index_columns'], 'is_string')) : null;
+
+                if ($conditional) {
+                    $state->indexOpaque[] = basename($file).': un índice que se quita dentro de un if';
+                } else {
+                    $state->dropIndex(is_string($statement['type'] ?? null) ? $statement['type'] : 'index', is_string($statement['name'] ?? null) ? $statement['name'] : null, $columns);
+                }
+
+                return;
+
+            case 'renameIndex':
+                $from = is_string($statement['index_from'] ?? null) ? $statement['index_from'] : '';
+                $to = is_string($statement['index_to'] ?? null) ? $statement['index_to'] : '';
+
+                foreach ($state->indexes as $position => $index) {
+                    if ($index['name'] === $from) {
+                        $state->indexes[$position]['name'] = $to;
+                    }
+                }
+
+                return;
+
+            case 'indexOpaque':
+                $state->indexOpaque[] = basename($file).': '.(is_string($statement['why'] ?? null) ? $statement['why'] : 'un índice que no se lee');
 
                 return;
 
@@ -222,6 +306,7 @@ final class SchemaHistory
                     }
 
                     unset($state->columns[$name], $state->origin[$name], $state->foreignOrigin[$name]);
+                    $state->dropIndexesOf($name);
                 }
 
                 return;
@@ -242,6 +327,11 @@ final class SchemaHistory
 
                 $state->columns[$to] = new ColumnDefinition($to, $column->method, $column->args, $column->nullable, $column->default, $column->unsigned, $column->foreign, $column->extras);
                 $state->origin[$to] = $file;
+
+                // El índice sigue a la columna (conserva su nombre).
+                foreach ($state->indexes as $position => $index) {
+                    $state->indexes[$position]['columns'] = array_map(fn (string $c): string => $c === $from ? $to : $c, $index['columns']);
+                }
 
                 return;
 

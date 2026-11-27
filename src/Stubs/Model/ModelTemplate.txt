@@ -55,11 +55,19 @@ class PascalCaseModelName extends Model
         PascalCaseModelNameOperations,
         PascalCaseModelNameMutators;
 
-    // @larapack:if table_prefix
+    // @larapack:if table_prefix&!declared_table
     /**
      * El laraimport declara `table_prefix`, así que la tabla no se deduce del
      * nombre de la clase: la clase se llama como el dominio y la tabla lleva el
      * prefijo del paquete.
+     */
+    protected $table = 'table_name';
+
+    // @larapack:endif
+    // @larapack:if declared_table
+    /**
+     * El laraimport declara la tabla del modelo (`table`): es la que ya tenía
+     * cuando se adoptó, y no lleva prefijo.
      */
     protected $table = 'table_name';
 

@@ -3,7 +3,6 @@
 namespace Innoboxrr\LarapackGenerator\Support\Import;
 
 use Innoboxrr\LarapackGenerator\Exceptions\MakerException;
-use Innoboxrr\LarapackGenerator\Support\TablePrefix;
 
 /**
  * Un laraimport ya validado y normalizado.
@@ -176,7 +175,9 @@ final class ImportDocument
 
         foreach ($document['models'] as $index => $model) {
             foreach ($model['load_relations'] as $position => $relation) {
-                if (! empty($relation['namespace'])) {
+                // Un morphTo sin `related` no nombra un modelo: no hay
+                // namespace que resolver.
+                if (! empty($relation['namespace']) || ! Relations::hasRelated($relation)) {
                     continue;
                 }
 
@@ -299,7 +300,7 @@ final class ImportDocument
 
         foreach ($models as $model) {
             $byName[$model['name']] = $model;
-            $byTable[TablePrefix::tableOf($model['name'])] = $model['name'];
+            $byTable[SemanticValidator::tableFor($model)] = $model['name'];
         }
 
         $sorted = [];
