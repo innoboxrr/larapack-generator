@@ -107,7 +107,10 @@ final class RealignAdoptTest extends TestCase
             $manifest['models']['Retired'] = ['namespace' => 'Acme\\Blog\\', 'files' => [
                 'src/Models/Retired.php' => ['stub' => 'Model/ModelTemplate.txt', 'hash' => 'x'],
                 'src/Policies/RetiredPolicy.php' => ['stub' => 'Policy/PolicyTemplate.txt', 'hash' => 'y'],
+                // Lo compartido que registró el retirado y hoy genera otro.
+                self::POLICY => $manifest['models']['Post']['files'][self::POLICY],
             ]];
+            unset($manifest['models']['Post']['files'][self::POLICY]);
 
             return $manifest;
         });
@@ -118,6 +121,7 @@ final class RealignAdoptTest extends TestCase
 
         // Sin el modelo vacío, verify no lo ve como una entidad a la que le falta todo.
         $this->assertNotContains('Retired', $this->manifest()->models());
+        $this->assertSame('Post', $this->manifest()->entryOf(self::POLICY)['model'] ?? null);
         $this->runCommand('larapack:verify', ['--root' => $this->project->path, '--format' => 'json']);
         $this->assertSame([], array_values(array_filter(
             json_decode($this->lastOutput, true)['findings'],

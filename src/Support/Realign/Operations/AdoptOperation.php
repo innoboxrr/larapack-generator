@@ -147,7 +147,7 @@ final class AdoptOperation implements RealignOperation
                 is_file($absolute) => $result->skipped($file, 'Vuelve a estar en disco: no se olvida.', $extra),
                 ! $entry['tracked'] => $result->unchanged($file, 'El manifiesto ya no lo registra.', $extra),
                 $entry['class'] === FileClass::MISSING && in_array($entry['cause'] ?? null, self::PRUNABLE, true) => $this->write($context, $result, $file, $extra,
-                    fn (): bool => $this->drop($manifest, $absolute, ($entry['cause'] ?? null) === 'retired' ? (string) $entry['model'] : null),
+                    fn (): bool => $this->drop($manifest, $reference, $absolute, $entry['cause'] === 'retired' ? (string) $entry['model'] : null),
                     "Se olvida en el manifiesto: {$entry['reason']}."),
                 default => $result->skipped($file, "No se olvida: {$now}. El contrato lo sigue pidiendo; es una decisión (`missing`).", $extra),
             },
@@ -162,15 +162,30 @@ final class AdoptOperation implements RealignOperation
     }
 
     /**
-     * Olvida un archivo y, si era el último de un modelo que ya no está en el
-     * contrato, el modelo entero: un modelo sin archivos en el manifiesto es
-     * para `verify` una entidad a la que le falta todo (inconsistent-entity).
+     * Olvida un archivo y, si es de un modelo que ya no está en el contrato,
+     * pasa lo que le queda y hoy genera otro (el módulo compartido de la
+     * interfaz, que registra el último modelo que se generó) a ese dueño; sin
+     * archivos, olvida el modelo entero. Un modelo retirado que conserva
+     * algunos archivos es para `verify` una entidad a la que le falta todo lo
+     * demás (inconsistent-entity).
      */
-    private function drop(Manifest $manifest, string $absolute, ?string $retiredModel): bool
+    private function drop(Manifest $manifest, ScopeReference $reference, string $absolute, ?string $retiredModel): bool
     {
         $dropped = $manifest->drop($absolute);
 
-        if ($dropped && $retiredModel !== null && $retiredModel !== '' && $manifest->filesFor($retiredModel) === []) {
+        if (! $dropped || $retiredModel === null || $retiredModel === '') {
+            return $dropped;
+        }
+
+        foreach (array_keys($manifest->filesFor($retiredModel)) as $relative) {
+            $owner = $reference->producedBy((string) $relative);
+
+            if ($owner !== null && $owner['model'] !== $retiredModel && is_file($reference->scope['root'].'/'.$relative)) {
+                $manifest->move($reference->scope['root'].'/'.$relative, $owner['model'], $owner['namespace']);
+            }
+        }
+
+        if ($manifest->filesFor($retiredModel) === []) {
             $manifest->forget($retiredModel);
         }
 

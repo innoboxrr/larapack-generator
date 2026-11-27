@@ -344,6 +344,38 @@ final class Manifest
     }
 
     /**
+     * Pasa el registro de un archivo a otro dueño (un modelo, o el paquete
+     * con ''), con su stub, su hash, su versión y su estado. Es lo que
+     * corresponde al módulo de la interfaz que registró un modelo que se
+     * retiró del contrato y que hoy genera otro.
+     *
+     * @return bool si estaba registrado
+     */
+    public function move(string $file, string $model, string $namespace): bool
+    {
+        $manifest = $this->read();
+        $relative = $this->relative($file);
+        $entry = $manifest['package']['files'][$relative] ?? null;
+        unset($manifest['package']['files'][$relative]);
+
+        foreach ($manifest['models'] as $owner => $bucket) {
+            if (isset($bucket['files'][$relative])) {
+                $entry ??= $bucket['files'][$relative];
+                unset($manifest['models'][$owner]['files'][$relative]);
+            }
+        }
+
+        if ($entry === null) {
+            return false;
+        }
+
+        $this->put($manifest, $model, $namespace, $file, $entry);
+        $this->write($manifest);
+
+        return true;
+    }
+
+    /**
      * El namespace con el que se registran los archivos de un modelo (o del
      * paquete, con ''), o null si el manifiesto no lo conoce.
      */
