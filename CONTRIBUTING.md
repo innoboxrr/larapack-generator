@@ -267,12 +267,13 @@ composer require --working-dir=../infection infection/infection:0.31.9
 php -m | grep -E -i 'pcov|xdebug'      # hace falta un driver de cobertura; pcov es el rápido
 ../infection/vendor/bin/infection --threads=max --only-covering-test-cases --with-uncovered
 ../infection/vendor/bin/infection --threads=max --only-covering-test-cases --with-uncovered --filter=src/Support/Guard.php --show-mutations
-php -d memory_limit=2G .github/scripts/mutation-floors.php .infection/infection.json .github/mutation-floors.json
+php -d memory_limit=2G .github/scripts/mutation-floors.php .infection/infection.json .github/mutation-floors.json .github/mutation-survivors.json
 ```
 
 La primera orden mide todo (unos veinte minutos con cuatro núcleos); la segunda,
 una pieza, con cada mutante superviviente en pantalla; la tercera compara cada
-pieza con su suelo. El detalle queda en `.infection/` (fuera de git):
+pieza con su suelo y lista los mutantes que escapan y no están en el catálogo
+de los conocidos. El detalle queda en `.infection/` (fuera de git):
 `infection.log` con el diff de cada superviviente y `infection.json` para
 leerlo con un script.
 
@@ -295,9 +296,22 @@ propia configuración, y a mano desde Actions. Tiene dos barreras:
   se muta un archivo sin suelo: una pieza nueva en `infection.json5` entra con
   el suyo.
 
-Los umbrales y los suelos son lo logrado, redondeado hacia abajo. Si una pieza
-sube, su suelo sube en el mismo cambio; lo que se baje de ahí no entra. Con un
-mutante que sobrevive hay tres salidas, y sólo tres:
+Los umbrales y los suelos son **lo logrado, redondeado hacia abajo a la
+décima, menos un punto**: ni más margen —quitar las pruebas de una pieza tiene
+que ponerla en rojo— ni menos —un arreglo que añade un par de mutantes
+equivalentes no debería—. El porqué y lo que ese punto vale en mutantes de
+cada pieza, en [`docs/mutacion.md`](docs/mutacion.md#los-suelos-y-su-margen).
+Si una pieza sube, su suelo sube en el mismo cambio, con la misma regla; un
+suelo no baja nunca para que algo pase.
+
+Cuando la CI sale en rojo, el paso «El suelo de cada pieza» dice qué pieza
+bajó, cuántos puntos y cuántos mutantes detectados le faltan, y lista cada
+mutante que escapó y no está en el catálogo de los conocidos
+([`.github/mutation-survivors.json`](.github/mutation-survivors.json)), con su
+`archivo:línea`, el mutador y la línea que quita y la que pone. Ésos son los
+del PR. Infection deja además su informe (`infection.log`) como artefacto
+`mutacion` de la corrida. Con un mutante que sobrevive hay tres salidas, y
+sólo tres:
 
 1. **Falta un test.** Se escribe el que comprueba el comportamiento que el
    mutante cambia —el mensaje entero, el segundo de dos hallazgos, el caso con
@@ -306,8 +320,13 @@ mutante que sobrevive hay tres salidas, y sólo tres:
    la 9.2.0 el método que devuelve por referencia, el `bash -ce` de la guardia
    y el `<<<` que escondía las órdenes siguientes.
 3. **Es equivalente**: ningún test puede distinguirlo porque el programa hace
-   lo mismo. Se apunta en [`docs/mutacion.md`](docs/mutacion.md) con su razón.
-   No se baja el umbral ni se excluye en bloque.
+   lo mismo. Se apunta en [`docs/mutacion.md`](docs/mutacion.md) con su razón,
+   y entra en el catálogo regenerándolo desde la corrida:
+   `php -d memory_limit=2G .github/scripts/mutation-floors.php --write-catalog .infection/infection.json .github/mutation-survivors.json`.
+   No se baja el umbral ni se excluye en bloque. Antes de apuntarlo, mira si
+   es una idea repetida que se puede escribir una vez: así salieron en la
+   9.3.0 [`PhpOutline::is`](src/Support/PhpOutline.php) y las lecturas con
+   `Files::read()` (ver `docs/mutacion.md`).
 
 ## Cómo se escribe aquí
 

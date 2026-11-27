@@ -269,4 +269,45 @@ final class MutationFloorsTest extends TestCase
         $this->assertSame(2, $code);
         $this->assertSame($this->root."/no-existe.json: no existe o no es JSON.\n", $stderr);
     }
+
+    /**
+     * Los suelos, el catálogo y el workflow van juntos: las piezas de
+     * infection.json5, cada una con su suelo; el catálogo, de esas piezas; y
+     * el paso de la CI, con los dos.
+     */
+    public function test_los_archivos_de_la_ci_van_juntos(): void
+    {
+        $root = dirname(__DIR__, 2);
+        $floors = json_decode((string) file_get_contents($root.'/.github/mutation-floors.json'), true);
+        $catalog = json_decode((string) file_get_contents($root.'/.github/mutation-survivors.json'), true);
+        $workflow = (string) file_get_contents($root.'/.github/workflows/mutation.yml');
+
+        preg_match('/\(\?:([A-Za-z|]+)\)/', (string) file_get_contents($root.'/infection.json5'), $pieces);
+        $measured = explode('|', $pieces[1] ?? '');
+        sort($measured);
+
+        $this->assertIsArray($floors);
+        $this->assertSame($measured, array_keys($floors));
+
+        // La política: lo logrado a la décima, menos un punto. A la décima.
+        foreach ($floors as $piece => $floor) {
+            $this->assertSame(round($floor, 1), (float) $floor, $piece);
+        }
+
+        $this->assertIsArray($catalog);
+        $this->assertSame([], array_diff(array_keys($catalog), $measured));
+
+        foreach ($catalog as $piece => $entries) {
+            foreach ($entries as $entry) {
+                $this->assertIsString($entry['mutator'], $piece);
+                $this->assertIsString($entry['removed'], $piece);
+                $this->assertIsString($entry['added'], $piece);
+            }
+        }
+
+        $this->assertStringContainsString(
+            'mutation-floors.php .infection/infection.json .github/mutation-floors.json .github/mutation-survivors.json',
+            $workflow
+        );
+    }
 }
