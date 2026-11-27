@@ -714,7 +714,8 @@ cambia algo que ve quien usa el generador.
 8. Si vive en una de las piezas de `infection.json5`, corre su mutación
    ([CONTRIBUTING](CONTRIBUTING.md#las-pruebas-de-mutación)): el trabajo
    «Mutación» de la CI no deja bajar el MSI de las ocho juntas ni el de cada
-   una por debajo de su suelo (`.github/mutation-floors.json`).
+   una por debajo de su suelo (`.github/mutation-floors.json`), y lista los
+   mutantes que escapan y no están en `.github/mutation-survivors.json`.
 
 ### Una opción o un comando
 

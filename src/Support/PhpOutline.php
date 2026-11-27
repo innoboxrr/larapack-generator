@@ -95,7 +95,26 @@ final class PhpOutline
 
     public static function ofFile(string $path): self
     {
-        return new self((string) file_get_contents($path));
+        return new self(Files::read($path));
+    }
+
+    /**
+     * Si un token es de alguna de esas clases: un `T_*` o, para los de un
+     * carácter, el propio carácter (`'('`, `';'`). `null` —un token que no
+     * existe, al final de un archivo a medio escribir— no es de ninguna.
+     *
+     * Toda comparación del tipo de un token pasa por aquí. Un token de un
+     * carácter se guarda como `[c, c, línea]`, así que mirar su tipo
+     * (`$token[0]`) o su texto (`$token[1]`) daba lo mismo, y repartida por
+     * cada pieza esa comparación eran unas sesenta mutaciones que ninguna
+     * prueba podía distinguir. Aquí es una, y se distingue: un `T_*` no es
+     * nunca el texto de un token.
+     *
+     * @param  Token|null  $token
+     */
+    public static function is(?array $token, int|string ...$kinds): bool
+    {
+        return $token !== null && in_array($token[0], $kinds, true);
     }
 
     /**
@@ -128,7 +147,7 @@ final class PhpOutline
     public static function stringArgument(?array $args, int $position, string $name): ?string
     {
         foreach (self::splitTopLevel($args ?? []) as $index => $argument) {
-            $named = count($argument) > 2 && $argument[1][0] === ':' && $argument[0][0] === T_STRING;
+            $named = count($argument) > 2 && self::is($argument[1], ':') && $argument[0][0] === T_STRING;
 
             if ($named && $argument[0][1] !== $name) {
                 continue;
@@ -160,9 +179,9 @@ final class PhpOutline
         foreach ($tokens as $token) {
             if (self::opens($token)) {
                 $depth++;
-            } elseif (in_array($token[0], [')', ']', '}'], true)) {
+            } elseif (self::is($token, ')', ']', '}')) {
                 $depth--;
-            } elseif ($token[0] === $separator && $depth === 0) {
+            } elseif ($depth === 0 && self::is($token, $separator)) {
                 $parts[] = $current;
                 $current = [];
 
@@ -199,8 +218,8 @@ final class PhpOutline
 
             // Por el texto y no por el tipo: tras `::`, `match` llega como
             // T_MATCH, no como T_STRING.
-            if ($this->tokens[$index + 1][0] !== '('
-                || ! in_array($this->tokens[$index - 1][0], [T_DOUBLE_COLON, T_OBJECT_OPERATOR, T_NULLSAFE_OBJECT_OPERATOR], true)
+            if (! self::is($this->tokens[$index + 1], '(')
+                || ! self::is($this->tokens[$index - 1], T_DOUBLE_COLON, T_OBJECT_OPERATOR, T_NULLSAFE_OBJECT_OPERATOR)
                 || ! in_array(strtolower($token[1]), $names, true)
             ) {
                 continue;
@@ -208,7 +227,7 @@ final class PhpOutline
 
             foreach (self::splitTopLevel(self::enclosed($this->tokens, $index + 1)) as $argument) {
                 // Un argumento con nombre: `action: function () {}`.
-                if (count($argument) > 2 && $argument[0][0] === T_STRING && $argument[1][0] === ':') {
+                if (count($argument) > 2 && $argument[0][0] === T_STRING && self::is($argument[1], ':')) {
                     $argument = array_slice($argument, 2);
                 }
 
@@ -244,7 +263,7 @@ final class PhpOutline
                 if ($depth++ === 0) {
                     continue;
                 }
-            } elseif (in_array($token[0], [')', ']', '}'], true) && --$depth === 0) {
+            } elseif (self::is($token, ')', ']', '}') && --$depth === 0) {
                 break;
             }
 
@@ -276,7 +295,7 @@ final class PhpOutline
         $open = 1;
         $count = count($argument);
 
-        while ($open < $count && $argument[$open][0] !== '(') {
+        while ($open < $count && ! self::is($argument[$open], '(')) {
             $open++;
         }
 
@@ -289,12 +308,12 @@ final class PhpOutline
             $token = $argument[$index];
 
             if (self::opens($token)) {
-                if ($depth === 0 && $token[0] === '{' && $kind === T_FUNCTION) {
+                if ($depth === 0 && self::is($token, '{') && $kind === T_FUNCTION) {
                     return ['line' => $argument[0][2], 'arrow' => false, 'params' => $params, 'body' => self::enclosed($argument, $index)];
                 }
 
                 $depth++;
-            } elseif (in_array($token[0], [')', ']', '}'], true)) {
+            } elseif (self::is($token, ')', ']', '}')) {
                 $depth--;
             } elseif ($depth === 0 && $token[0] === T_DOUBLE_ARROW && $kind === T_FN) {
                 return ['line' => $argument[0][2], 'arrow' => true, 'params' => $params, 'body' => array_slice($argument, $index + 1)];
@@ -318,7 +337,7 @@ final class PhpOutline
 
         foreach ($tokens as $index => $token) {
             if ($index % 2 === 1) {
-                if ($token[0] !== '.') {
+                if (! self::is($token, '.')) {
                     return null;
                 }
 
@@ -344,7 +363,7 @@ final class PhpOutline
      */
     private static function opens(array $token): bool
     {
-        return in_array($token[0], ['(', '[', '{', T_CURLY_OPEN, T_DOLLAR_OPEN_CURLY_BRACES, T_ATTRIBUTE], true);
+        return self::is($token, '(', '[', '{', T_CURLY_OPEN, T_DOLLAR_OPEN_CURLY_BRACES, T_ATTRIBUTE);
     }
 
     /**
@@ -352,7 +371,7 @@ final class PhpOutline
      */
     private static function isName(array $token): bool
     {
-        return in_array($token[0], [T_STRING, T_NAME_QUALIFIED, T_NAME_FULLY_QUALIFIED, T_NAME_RELATIVE], true);
+        return self::is($token, T_STRING, T_NAME_QUALIFIED, T_NAME_FULLY_QUALIFIED, T_NAME_RELATIVE);
     }
 
     private function parseFile(): void
@@ -364,14 +383,14 @@ final class PhpOutline
             $token = $this->tokens[$this->i];
 
             switch (true) {
-                case $token[0] === T_NAMESPACE && ($this->isNameAt($this->i + 1) || ($this->tokens[$this->i + 1][0] ?? null) === '{'):
+                case $token[0] === T_NAMESPACE && ($this->isNameAt($this->i + 1) || self::is($this->tokens[$this->i + 1] ?? null, '{')):
                     $this->namespace = $this->isNameAt($this->i + 1) ? ltrim($this->tokens[++$this->i][1], '\\') : '';
                     $this->uses = [];
                     $this->i++;
 
                     // `namespace Foo { ... }`: la llave abre el espacio de
                     // nombres, no un bloque que haya que saltarse.
-                    if (($this->tokens[$this->i][0] ?? null) === '{') {
+                    if (self::is($this->tokens[$this->i] ?? null, '{')) {
                         $this->i++;
                     }
                     break;
@@ -384,9 +403,10 @@ final class PhpOutline
                     $attributes = [...$attributes, ...$this->parseAttributes()];
                     break;
 
-                case in_array($token[0], [T_CLASS, T_INTERFACE, T_TRAIT, T_ENUM], true)
-                    && ! in_array($this->tokens[$this->i - 1][0] ?? null, [T_DOUBLE_COLON, T_NEW], true)
+                case self::is($token, T_CLASS, T_INTERFACE, T_TRAIT, T_ENUM)
                     && ($this->tokens[$this->i + 1][0] ?? null) === T_STRING:
+                    // `Post::class` y `new class (…)` también son T_CLASS,
+                    // pero lo que los sigue nunca es un nombre.
                     $this->parseClass($attributes);
                     $attributes = [];
                     break;
@@ -396,7 +416,7 @@ final class PhpOutline
                     $attributes = [];
                     break;
 
-                case $token[0] === ';':
+                case self::is($token, ';'):
                     $attributes = [];
                     $this->i++;
                     break;
@@ -421,7 +441,7 @@ final class PhpOutline
         $this->i++;
 
         // `function () use ($x)` fuera de una clase: no importa nada.
-        if (($this->tokens[$this->i][0] ?? null) === '(') {
+        if (self::is($this->tokens[$this->i] ?? null, '(')) {
             return;
         }
 
@@ -436,7 +456,7 @@ final class PhpOutline
         while ($this->i < $count) {
             $token = $this->tokens[$this->i];
 
-            if ($token[0] === ';') {
+            if (self::is($token, ';')) {
                 $this->i++;
 
                 return;
@@ -451,7 +471,7 @@ final class PhpOutline
             $name = ltrim($token[1], '\\');
             $this->i++;
 
-            if (($this->tokens[$this->i][0] ?? null) === T_NS_SEPARATOR && ($this->tokens[$this->i + 1][0] ?? null) === '{') {
+            if (($this->tokens[$this->i][0] ?? null) === T_NS_SEPARATOR && self::is($this->tokens[$this->i + 1] ?? null, '{')) {
                 $this->i += 2;
                 $this->parseGroupImport($name);
 
@@ -466,7 +486,7 @@ final class PhpOutline
     {
         $count = count($this->tokens);
 
-        while ($this->i < $count && $this->tokens[$this->i][0] !== '}') {
+        while ($this->i < $count && ! self::is($this->tokens[$this->i], '}')) {
             $token = $this->tokens[$this->i];
             $this->i++;
 
@@ -510,7 +530,7 @@ final class PhpOutline
         while ($this->i < $count) {
             $token = $this->tokens[$this->i];
 
-            if ($token[0] === ']') {
+            if (self::is($token, ']')) {
                 $this->i++;
 
                 break;
@@ -523,7 +543,7 @@ final class PhpOutline
             }
 
             $this->i++;
-            $args = ($this->tokens[$this->i][0] ?? null) === '(' ? $this->balanced() : null;
+            $args = self::is($this->tokens[$this->i] ?? null, '(') ? $this->balanced() : null;
 
             $attributes[] = ['name' => $this->resolve($token[1]), 'line' => $token[2], 'args' => $args];
         }
@@ -551,7 +571,7 @@ final class PhpOutline
         $count = count($this->tokens);
         $this->i += 2;
 
-        while ($this->i < $count && $this->tokens[$this->i][0] !== '{') {
+        while ($this->i < $count && ! self::is($this->tokens[$this->i], '{')) {
             if ($this->tokens[$this->i][0] === T_EXTENDS && $kind === 'class' && $this->isNameAt($this->i + 1)) {
                 $extends = $this->resolve($this->tokens[$this->i + 1][1]);
             }
@@ -591,7 +611,7 @@ final class PhpOutline
             $token = $this->tokens[$this->i];
 
             switch (true) {
-                case $token[0] === '}':
+                case self::is($token, '}'):
                     $this->i++;
 
                     return [$methods, $traits];
@@ -599,7 +619,7 @@ final class PhpOutline
                 case $token[0] === T_USE:
                     $this->i++;
 
-                    while ($this->i < $count && ! in_array($this->tokens[$this->i][0], [';', '{'], true)) {
+                    while ($this->i < $count && ! self::is($this->tokens[$this->i], ';', '{')) {
                         if (self::isName($this->tokens[$this->i])) {
                             $traits[] = $this->resolve($this->tokens[$this->i][1]);
                         }
@@ -609,7 +629,7 @@ final class PhpOutline
 
                     // Las adaptaciones (`{ a insteadof b; }`) no cambian qué
                     // traits se usan.
-                    ($this->tokens[$this->i][0] ?? null) === '{' ? $this->balanced() : $this->i++;
+                    self::is($this->tokens[$this->i] ?? null, '{') ? $this->balanced() : $this->i++;
                     break;
 
                 case $token[0] === T_ATTRIBUTE:
@@ -642,7 +662,7 @@ final class PhpOutline
                     $modifiers = [];
                     break;
 
-                case $token[0] === ';':
+                case self::is($token, ';'):
                     $attributes = [];
                     $modifiers = [];
                     $this->i++;
@@ -678,7 +698,7 @@ final class PhpOutline
         }
 
         // Un closure en el valor por defecto de una propiedad: no es un método.
-        if (($this->tokens[$this->i][0] ?? null) === '(') {
+        if (self::is($this->tokens[$this->i] ?? null, '(')) {
             return null;
         }
 
@@ -686,10 +706,10 @@ final class PhpOutline
         $this->i++;
         $signatureStart = $this->i;
 
-        $params = ($this->tokens[$this->i][0] ?? null) === '(' ? $this->parseParams($this->balanced()) : [];
+        $params = self::is($this->tokens[$this->i] ?? null, '(') ? $this->parseParams($this->balanced()) : [];
         $count = count($this->tokens);
 
-        while ($this->i < $count && ! in_array($this->tokens[$this->i][0], ['{', ';'], true)) {
+        while ($this->i < $count && ! self::is($this->tokens[$this->i], '{', ';')) {
             $this->i++;
         }
 
@@ -700,13 +720,14 @@ final class PhpOutline
 
         $body = null;
 
-        if (($this->tokens[$this->i][0] ?? null) === '{') {
+        if (self::is($this->tokens[$this->i] ?? null, '{')) {
             $body = $this->balanced();
         } else {
             $this->i++;
         }
 
-        $visibility = array_values(array_intersect($modifiers, ['public', 'protected', 'private']))[0] ?? 'public';
+        // Sin modificador, como `public`.
+        $visibility = array_values(array_intersect($modifiers, ['protected', 'private']))[0] ?? 'public';
 
         return [
             'name' => $name,
@@ -737,7 +758,7 @@ final class PhpOutline
                 // Los atributos de un parámetro no son parte de su tipo.
                 if (self::opens($token)) {
                     $depth++;
-                } elseif (in_array($token[0], [')', ']', '}'], true)) {
+                } elseif (self::is($token, ')', ']', '}')) {
                     $depth--;
                 } elseif ($depth > 0) {
                     continue;
@@ -761,7 +782,7 @@ final class PhpOutline
     private function parameter(string $name, array $type): array
     {
         $raw = implode('', array_column($type, 1));
-        $names = array_values(array_filter($type, fn (array $token): bool => $token[0] !== '?'));
+        $names = array_values(array_filter($type, fn (array $token): bool => ! self::is($token, '?')));
 
         // Sólo un nombre, opcionalmente anulable. Una unión o una intersección
         // no dicen con qué clase trabaja la acción.
@@ -814,7 +835,7 @@ final class PhpOutline
                 if ($depth++ === 0) {
                     continue;
                 }
-            } elseif (in_array($token[0], [')', ']', '}'], true) && --$depth === 0) {
+            } elseif (self::is($token, ')', ']', '}') && --$depth === 0) {
                 break;
             }
 

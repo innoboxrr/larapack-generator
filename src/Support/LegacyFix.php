@@ -2,6 +2,7 @@
 
 namespace Innoboxrr\LarapackGenerator\Support;
 
+use Innoboxrr\LarapackGenerator\Exceptions\MakerException;
 use ParseError;
 use PhpToken;
 use RuntimeException;
@@ -194,7 +195,9 @@ final class LegacyFix
 
         foreach ($byFile as $file => $debts) {
             $check = $debts[0]['check'];
-            $original = (string) file_get_contents($file);
+            // Uno que no se puede leer para el arreglo entero, con su nombre:
+            // no es una forma que no se reconoce.
+            $original = Files::read($file);
             $code = $original;
 
             try {
@@ -340,10 +343,13 @@ final class LegacyFix
             // parseando pase lo que pase: si no, se devuelve el original.
             foreach ($this->fixes as $file => $code) {
                 try {
-                    self::assertParses((string) file_get_contents($file));
-                } catch (RuntimeException $e) {
+                    self::assertParses(Files::read($file));
+                } catch (RuntimeException) {
                     file_put_contents($file, $this->originals[$file]);
                     $this->revert($file, 'Después de formatearlo no parseaba, y se devolvió el original.');
+                } catch (MakerException) {
+                    file_put_contents($file, $this->originals[$file]);
+                    $this->revert($file, 'Después de formatearlo no se podía leer, y se devolvió el original.');
                 }
             }
         }
@@ -404,7 +410,7 @@ final class LegacyFix
         }
 
         $first = $this->firstMethod($methods);
-        $indent = $this->indentOf($code, $tokens[$first['start']]->pos);
+        $indent = $this->indentOf($code, $tokens[$first]->pos);
         $inner = $indent.$this->unit($indent, $classIndent);
         $body = $inherited === null
             ? self::MANAGED_LINES
@@ -416,7 +422,7 @@ final class LegacyFix
             .self::indent($body, $inner)."\n"
             .$indent."}\n\n";
 
-        $at = $this->lineStart($code, $tokens[$first['start']]->pos);
+        $at = $this->lineStart($code, $tokens[$first]->pos);
 
         return substr($code, 0, $at).$method.substr($code, $at);
     }
@@ -453,7 +459,7 @@ final class LegacyFix
         $tokens = self::tokenize($code);
         [$open, $close, $classIndent] = $this->classBody($tokens, $code, $debt['class']);
         $methods = $this->methods($tokens, $open, $close);
-        $method = $methods[strtolower((string) $debt['method'])] ?? null;
+        $method = $methods[strtolower($debt['method'] ?? '')] ?? null;
 
         if ($method === null || $method['open'] === null) {
             throw new RuntimeException("No se encontró el cuerpo de {$debt['class']}::{$debt['method']}().");
@@ -669,8 +675,8 @@ final class LegacyFix
         }
 
         $first = $this->firstMethod($this->methods($tokens, $open, $close));
-        $indent = $this->indentOf($code, $tokens[$first['start']]->pos);
-        $at = $this->lineStart($code, $tokens[$first['start']]->pos);
+        $indent = $this->indentOf($code, $tokens[$first]->pos);
+        $at = $this->lineStart($code, $tokens[$first]->pos);
 
         return substr($code, 0, $at).self::indent(self::APPENDABLE_LINES, $indent)."\n\n".substr($code, $at);
     }
@@ -704,12 +710,11 @@ final class LegacyFix
                 continue;
             }
 
-            $before = $this->previous($tokens, $index);
+            // `Post::class` y `new class (…)` también son T_CLASS, pero lo que
+            // los sigue nunca es un nombre: sólo `class Nombre` lo es.
             $after = $this->next($tokens, $index);
 
-            if (($before !== null && in_array($tokens[$before]->id, [T_DOUBLE_COLON, T_NEW], true))
-                || $after === null || $tokens[$after]->id !== T_STRING || strcasecmp($tokens[$after]->text, $name) !== 0
-            ) {
+            if ($after === null || $tokens[$after]->id !== T_STRING || strcasecmp($tokens[$after]->text, $name) !== 0) {
                 continue;
             }
 
@@ -818,24 +823,21 @@ final class LegacyFix
     }
 
     /**
+     * El primer token del primer método: delante de él se inserta.
+     *
      * @param  array<string, Method>  $methods
-     * @return Method
      */
-    private function firstMethod(array $methods): array
+    private function firstMethod(array $methods): int
     {
-        if ($methods === []) {
+        // methods() los recoge en el orden del archivo: el primero es el de
+        // más arriba.
+        $first = reset($methods);
+
+        if ($first === false) {
             throw new RuntimeException('La clase no tiene métodos delante de los que insertar.');
         }
 
-        $first = null;
-
-        foreach ($methods as $method) {
-            if ($first === null || $method['start'] < $first['start']) {
-                $first = $method;
-            }
-        }
-
-        return $first;
+        return $first['start'];
     }
 
     /**
@@ -972,9 +974,9 @@ final class LegacyFix
     private function indentOf(string $code, int $pos): string
     {
         $start = $this->lineStart($code, $pos);
-        $line = substr($code, $start, $pos - $start);
 
-        return substr($line, 0, strspn($line, " \t"));
+        // $pos es el de un token que no es espacio: la sangría acaba antes.
+        return substr($code, $start, strspn($code, " \t", $start));
     }
 
     /**

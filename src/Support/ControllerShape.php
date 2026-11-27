@@ -151,7 +151,7 @@ final class ControllerShape
         $findings = [];
         $requests = [];
         $this->declared = [];
-        $lockReadable = $this->loadLock($findings);
+        $this->loadLock($findings);
         $files = $this->project->files('/Http/Controllers/');
 
         // Qué controladores usa cada trait: decide si un trait de
@@ -226,9 +226,8 @@ final class ControllerShape
 
         $this->checkRouteClosures($findings);
 
-        if ($lockReadable) {
-            $this->checkStale($findings);
-        }
+        // Con un candado ilegible no hay nada aprobado, y nada que sobre.
+        $this->checkStale($findings);
 
         return $findings;
     }
@@ -238,20 +237,15 @@ final class ControllerShape
      * al comportamiento sin candado sería aprobar por un archivo roto.
      *
      * @param  list<Finding>  $findings
-     * @return bool si se pudo leer (o no existe)
      */
-    private function loadLock(array &$findings): bool
+    private function loadLock(array &$findings): void
     {
         try {
             $this->approved = HandRolledLock::read($this->root);
-
-            return true;
         } catch (RuntimeException $e) {
             $this->approved = [];
             $findings[] = $this->finding(Verifier::ERROR, self::HAND_ROLLED_UNAPPROVED, HandRolledLock::PATH,
                 self::sanitise($e->getMessage()).' Mientras no se corrija, ninguna excepción #[HandRolled] cuenta como aprobada. Lo mantiene el dueño del proyecto con larapack:hand-rolled.');
-
-            return false;
         }
     }
 
@@ -338,7 +332,7 @@ final class ControllerShape
             && $statement[0][1] === '$this'
             && $statement[1][0] === T_OBJECT_OPERATOR
             && $statement[2][0] === T_STRING
-            && $statement[3][0] === '='
+            && PhpOutline::is($statement[3], '=')
         ) {
             return ! $this->callsSomething(array_slice($statement, 4));
         }
@@ -348,7 +342,7 @@ final class ControllerShape
             && strtolower($statement[0][1]) === 'parent'
             && $statement[1][0] === T_DOUBLE_COLON
             && strtolower($statement[2][1]) === '__construct'
-            && $statement[3][0] === '('
+            && PhpOutline::is($statement[3], '(')
         ) {
             return $this->onlyCalls(array_slice($statement, 3), []);
         }
@@ -358,7 +352,7 @@ final class ControllerShape
             && $statement[0][1] === '$this'
             && $statement[1][0] === T_OBJECT_OPERATOR
             && strtolower($statement[2][1]) === 'middleware'
-            && $statement[3][0] === '('
+            && PhpOutline::is($statement[3], '(')
         ) {
             return $this->onlyCalls(array_slice($statement, 3), ['only', 'except']);
         }
@@ -381,14 +375,14 @@ final class ControllerShape
         for ($index = 0; $index < $count; $index++) {
             $token = $tokens[$index];
 
-            if (in_array($token[0], ['(', '[', '{'], true)) {
+            if (PhpOutline::is($token, '(', '[', '{')) {
                 $depth++;
-            } elseif (in_array($token[0], [')', ']', '}'], true)) {
+            } elseif (PhpOutline::is($token, ')', ']', '}')) {
                 $depth--;
             } elseif ($depth === 0) {
                 if ($token[0] !== T_OBJECT_OPERATOR
                     || ! in_array(strtolower($tokens[$index + 1][1] ?? ''), $chain, true)
-                    || ($tokens[$index + 2][0] ?? null) !== '('
+                    || ! PhpOutline::is($tokens[$index + 2] ?? null, '(')
                 ) {
                     return false;
                 }
@@ -409,7 +403,7 @@ final class ControllerShape
     private function callsSomething(array $tokens): bool
     {
         foreach ($tokens as $index => $token) {
-            if ($token[0] !== '(' || $index === 0) {
+            if (! PhpOutline::is($token, '(') || $index === 0) {
                 continue;
             }
 
@@ -464,7 +458,7 @@ final class ControllerShape
         $body = $closure['body'];
 
         if (! $closure['arrow']) {
-            if (($body[0][0] ?? null) !== T_RETURN || ($body[count($body) - 1][0] ?? null) !== ';') {
+            if (($body[0][0] ?? null) !== T_RETURN || ! PhpOutline::is($body[count($body) - 1] ?? null, ';')) {
                 return false;
             }
 
@@ -474,9 +468,9 @@ final class ControllerShape
         return $closure['params'] === []
             && count($body) === 4
             && $body[0][0] === T_STRING && strtolower($body[0][1]) === 'view'
-            && $body[1][0] === '('
+            && PhpOutline::is($body[1], '(')
             && $body[2][0] === T_CONSTANT_ENCAPSED_STRING
-            && $body[3][0] === ')';
+            && PhpOutline::is($body[3], ')');
     }
 
     /**
@@ -486,13 +480,11 @@ final class ControllerShape
     {
         $files = [];
 
+        // Un directorio que no existe no tiene archivos.
         foreach ($this->project->roots() as $root) {
-            if (is_dir($root.'/routes')) {
-                $files = [...$files, ...$this->project->phpFiles($root.'/routes')];
-            }
+            $files = [...$files, ...$this->project->phpFiles($root.'/routes')];
         }
 
-        $files = array_values($files);
         sort($files);
 
         return $files;
@@ -578,16 +570,16 @@ final class ControllerShape
             || $body[1][0] !== T_VARIABLE
             || $body[2][0] !== T_OBJECT_OPERATOR
             || strtolower($body[3][1]) !== 'handle'
-            || $body[4][0] !== '('
-            || $body[$count - 2][0] !== ')'
-            || $body[$count - 1][0] !== ';'
+            || ! PhpOutline::is($body[4], '(')
+            || ! PhpOutline::is($body[$count - 2], ')')
+            || ! PhpOutline::is($body[$count - 1], ';')
             || $body[1][1] === '$this'
         ) {
             return null;
         }
 
         foreach (PhpOutline::splitTopLevel(array_slice($body, 5, $count - 7)) as $argument) {
-            $named = count($argument) === 3 && $argument[0][0] === T_STRING && $argument[1][0] === ':';
+            $named = count($argument) === 3 && $argument[0][0] === T_STRING && PhpOutline::is($argument[1], ':');
             $value = $named ? [$argument[2]] : $argument;
 
             if (count($value) !== 1 || $value[0][0] !== T_VARIABLE) {
@@ -616,12 +608,12 @@ final class ControllerShape
 
         $body = $method['body'] ?? [];
 
-        if (($body[0][0] ?? null) === T_RETURN && strtolower($body[3][1] ?? '') === 'handle' && ($body[4][0] ?? null) === '(') {
+        if (($body[0][0] ?? null) === T_RETURN && strtolower($body[3][1] ?? '') === 'handle' && PhpOutline::is($body[4] ?? null, '(')) {
             $reasons[] = 'pasa a handle() algo que no es una variable: esa expresión es trabajo hecho en el controlador';
         }
 
         foreach ($body as $index => $token) {
-            if ($token[0] === T_STRING && strtolower($token[1]) === 'validate' && ($body[$index + 1][0] ?? null) === '(') {
+            if ($token[0] === T_STRING && strtolower($token[1]) === 'validate' && PhpOutline::is($body[$index + 1] ?? null, '(')) {
                 $reasons[] = 'valida en el controlador con validate()';
 
                 break;

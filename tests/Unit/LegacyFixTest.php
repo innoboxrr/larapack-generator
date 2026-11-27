@@ -442,6 +442,51 @@ final class LegacyFixTest extends TestCase
         $this->assertStringContainsString("            ]);\n        }\n\n        public function handle()", $code);
     }
 
+    public function test_un_padre_con_prepare_for_validation_privado_no_se_tapa(): void
+    {
+        // Privado, el del padre no se hereda ni se puede llamar con parent::;
+        // añadir uno en la hija cambiaría a qué se llama. No se adivina.
+        $this->put(self::INDEX, "<?php\n\nnamespace App\\Http\\Requests\\Post;\n\nuse Illuminate\\Foundation\\Http\\FormRequest;\nuse Innoboxrr\\SearchSurge\\Search\\Builder;\n\n"
+            ."class BaseIndex extends FormRequest\n{\n    private function prepareForValidation()\n    {\n    }\n}\n\n"
+            ."class IndexRequest extends BaseIndex\n{\n    public function handle()\n    {\n        return (new Builder())->get(Post::class, \$this->all());\n    }\n}\n");
+
+        $this->assertSame(
+            'Hereda de App\\Http\\Requests\\Post\\BaseIndex, que no se ve entero en el proyecto: no se sabe qué prepareForValidation() taparía.',
+            $this->fix(self::INDEX)[0]
+        );
+    }
+
+    /**
+     * Una clase sangrada con tabuladores y sus miembros con un tabulador y
+     * cuatro espacios: el nivel de más son los espacios, y va detrás de la
+     * sangría del miembro, no delante.
+     */
+    public function test_la_sangria_mezclada_se_extiende_por_detras(): void
+    {
+        $class = fn (string $members): string => "<?php\n\nnamespace App\\Http\\Requests\\Post {\n\n\tuse Innoboxrr\\SearchSurge\\Search\\Builder;\n\n"
+            ."\tclass IndexRequest extends \\Illuminate\\Foundation\\Http\\FormRequest\n\t{\n{$members}\t    public function handle()\n\t    {\n\t        return new Builder();\n\t    }\n\t}\n}\n";
+
+        $this->put(self::INDEX, $class(''));
+        [$skipped, $code] = $this->fix(self::INDEX);
+        $this->assertNull($skipped);
+        $this->assertStringContainsString("\t{\n\t    protected function prepareForValidation(): void\n\t    {\n\t        // La restricción", $code);
+
+        $this->put(self::INDEX, $class("\t    protected function prepareForValidation()\n\t    {\n\t        //\n\t    }\n\n"));
+        [$skipped, $code] = $this->fix(self::INDEX);
+        $this->assertNull($skipped);
+        $this->assertStringContainsString("\t    protected function prepareForValidation()\n\t    {\n\t        // La restricción", $code);
+    }
+
+    public function test_un_appends_pegado_a_la_llave_tambien_se_ve(): void
+    {
+        // Sin espacio detrás de la llave, el primer token del cuerpo ya es
+        // código: también se mira.
+        $this->put(self::RESOURCE, "<?php\n\nnamespace App\\Http\\Resources;\n\nuse Illuminate\\Http\\Request;\nuse Illuminate\\Http\\Resources\\Json\\JsonResource;\n\n"
+            ."class PostResource extends JsonResource\n{\n    public function toArray(Request \$request): array\n    {\$appends = [];\n        \$this->resource->setAppends(\$request->get('appends'));\n\n        return parent::toArray(\$request);\n    }\n}\n");
+
+        $this->assertSame('PostResource::toArray() ya usa $appends: el bloque de la plantilla la pisaría.', $this->fix(self::RESOURCE)[0]);
+    }
+
     // ALCANCE
 
     public function test_path_acota_por_directorio_entero(): void
@@ -522,6 +567,31 @@ final class LegacyFixTest extends TestCase
         $this->assertSame($before, file_get_contents($this->root.'/'.self::RESOURCE));
         $this->assertSame([['file' => self::INDEX]], $result['report'][LegacySecurity::INDEX_MANAGED]['fixed']);
         $this->assertStringContainsString("'managed' => true", (string) file_get_contents($this->root.'/'.self::INDEX));
+    }
+
+    public function test_lo_que_pint_deja_sin_poder_leer_se_devuelve(): void
+    {
+        $this->resource("\$this->resource->setAppends(\$request->get('appends'));");
+        $before = (string) file_get_contents($this->root.'/'.self::RESOURCE);
+        // Un Pint de mentira que se lleva el archivo.
+        $pint = $this->root.'/pint.php';
+        file_put_contents($pint, "<?php\nforeach (array_slice(\$argv, 1) as \$file) {\n    if (str_ends_with(\$file, 'PostResource.php')) {\n        unlink(\$file);\n    }\n}\n");
+
+        $fix = new LegacyFix($this->root, [LegacySecurity::RESOURCE_APPENDS]);
+        $fix->plan();
+        putenv('LARAPACK_PINT='.$pint);
+
+        try {
+            $result = ProjectRoot::using($this->root, fn (): array => $fix->apply());
+        } finally {
+            putenv('LARAPACK_PINT');
+        }
+
+        $this->assertSame(
+            [['file' => self::RESOURCE, 'reason' => 'Después de formatearlo no se podía leer, y se devolvió el original.']],
+            $result['report'][LegacySecurity::RESOURCE_APPENDS]['skipped']
+        );
+        $this->assertSame($before, file_get_contents($this->root.'/'.self::RESOURCE));
     }
 
     /**

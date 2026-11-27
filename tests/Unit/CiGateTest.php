@@ -346,6 +346,8 @@ final class CiGateTest extends TestCase
             'un require sin cota es como no tenerlo' => [['require' => ['php' => '*']], null, '8.3'],
             'un require en blanco también' => [['require' => ['php' => '  ']], null, '8.3'],
             'un require ilegible también' => [['require' => ['php' => 'no es una versión']], null, '8.3'],
+            // Composer pide una cadena; un número no se lee como «8.4».
+            'un require que no es una cadena también' => [['require' => ['php' => 8.4]], null, '8.3'],
             'un lock a medio escribir no tumba nada' => [['require' => ['php' => '^8.2']], ['packages' => 'roto', 'packages-dev' => 'roto'], '8.2'],
         ];
     }

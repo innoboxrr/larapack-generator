@@ -62,6 +62,62 @@ En GitHub Enterprise Server el id de la app de Actions no es 15368: hay que
 cambiar o quitar `integration_id` antes de importar. `BranchProtection` y los
 clientes de la API no están todavía en el conjunto que mide Infection.
 
+### Mutación: del 93,4 % al 96,6 %, con margen explícito y un informe accionable
+
+El trabajo «Mutación» dejaba poco margen: las ocho piezas juntas en 93,38 %
+frente a un mínimo de 93, y `Verifier` en 93,31 % con un suelo de 93, a un
+mutante. Medido otra vez sobre la 9.2.0 con la configuración de la CI: 4361
+mutantes, 289 sin detectar. Ahora: 4234, 144 sin detectar, **96,60 %**
+(96,85 % de lo recorrido), y cada pieza a dos puntos o más de su suelo
+anterior. Las cifras por pieza, en [docs/mutacion.md](docs/mutacion.md).
+
+- **Pruebas de lo que se ve**, no de detalles internos: nombres que no son
+  identificadores en un manifiesto editado a mano (con un `(` en el nombre de
+  un endpoint o de un secreto, `verify` dejaba un aviso de `preg_match()`, y
+  bajo Artisan un aviso es una excepción), un modelo sin `$hidden`, `showcase`
+  frente a `show`, un espacio de nombres con «Ñ» en el prefijo de rutas, un
+  contrato que falta delante de otro, `cat <<` al final de una orden, el
+  directorio de trabajo de la guardia por un enlace, `#[HandRolled]` detrás
+  de otro atributo y en un trait entero, un padre con
+  `prepareForValidation()` privado, `{$appends` pegado a la llave, la sangría
+  mezclada de tabuladores y espacios, lo que `fix` revisa acotado al paquete,
+  una herencia en círculo, `'managed' =>` al final del archivo, un tipo
+  `namespace\Tipo`, la línea de un closure partido en dos.
+- **Equivalentes que eran una idea repetida, escrita una vez.**
+  `PhpOutline::is()` concentra la comparación del tipo de un token, que
+  estaba en 59 sitios donde `$token[0]` y `$token[1]` daban lo mismo; las
+  lecturas de archivos pasan por `Files::read()`; y salen guardas que no
+  guardaban nada (la lista, en docs/mutacion.md).
+- **Cambios de comportamiento, cada uno con su prueba:**
+  - Un archivo que existe y no se puede leer ya no se toma por vacío:
+    `verify`, `ci` y `fix` fallan diciendo cuál. Después de Pint, uno que ya
+    no se puede leer se devuelve como estaba («Después de formatearlo no se
+    podía leer, y se devolvió el original.»).
+  - La guardia lee como `-c` cualquier opción que empiece por `-…c` (`-c1`
+    incluido). Un falso positivo posible; nunca uno negativo.
+  - En el mensaje de la guardia, un `check` o un `message` que no es texto
+    sale como `error` y vacío, no como «Array».
+- **Los suelos tienen margen, y está escrito:** lo logrado, redondeado hacia
+  abajo a la décima, menos un punto; también `--min-msi=95.6` y
+  `--min-covered-msi=95.8`. Lo que ese punto vale en mutantes (de uno en
+  `HandRolledLock` a ocho en `Guard`) lo imprime la comprobación. **No
+  cubre** quitar una prueba que mate menos mutantes que esa holgura: en una
+  pieza grande, eso pasa por debajo del suelo. Se ve igual, en el informe.
+- **Un PR rojo dice qué hacer.** `mutation-floors.php` imprime la holgura de
+  cada pieza y, con el catálogo de supervivientes conocidos
+  (`.github/mutation-survivors.json`, regenerable con `--write-catalog`),
+  cada mutante que escapó y no estaba, con `archivo:línea`, el mutador y la
+  línea que quita y la que pone; también en verde. El informe de Infection
+  queda como artefacto de la corrida.
+- **Lo que no se cerró:** 144 supervivientes, casi todos equivalentes,
+  apuntados por familias. Los que no lo son —el orden y los duplicados de lo
+  que `fix` pasa a la auditoría, código que no es PHP en `LegacyFix`, un
+  closure en el valor de una propiedad en `PhpOutline`— están en la lista de
+  docs/mutacion.md, como tests que faltan. Y el MSI depende algo de la
+  máquina: lo que agota los 30 s cuenta como detectado, y en dos corridas del
+  mismo código `LegacySecurity` pasó de 98,08 % a 96,43 %. Los suelos salen
+  de la más baja.
+
 ## 9.2.0
 
 ### PHPStan en nivel 8, y lo que escondía
