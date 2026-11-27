@@ -1,6 +1,6 @@
 # Changelog
 
-## 9.3.0 (sin publicar)
+## 9.3.0
 
 ### La rama protegida: guiada hasta el final, y comprobada en cada corrida
 
