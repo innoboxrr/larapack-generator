@@ -39,6 +39,15 @@ Los mutantes que sobrevivían destaparon fallos, y se arreglan con su prueba:
   por su cuerpo: `cat <<< x` y debajo `larapack:hand-rolled approve` pasaba.
   Ahora `<<<` se salta entero, y la cadena que recibe una shell
   (`bash <<< '…'`) se lee como órdenes, igual que su heredoc.
+- **La guardia dejaba pasar lo que no terminaba de leer.** Lee hasta tres
+  shells dentro de la orden (`bash -c`, `eval`, un heredoc que recibe una
+  shell); más adentro no leía nada y lo daba por bueno, así que
+  `larapack:hand-rolled approve` dentro de cuatro `bash -c` pasaba. Una prueba
+  de mutación lo fijaba como si fuera lo esperado. Ahora falla cerrado: lo que
+  no se termina de leer cuenta como una aprobación y se bloquea. Al hook sólo
+  llegan las órdenes que nombran `approve`, `revoke` o `hand-rolled`, así que
+  lo único que se bloquea de más son cuatro shells anidadas que además nombran
+  una de esas palabras.
 - **`LegacySecurity` confundía `$Appends` con `$appends`**: las variables de
   PHP distinguen mayúsculas, y bajar todo a minúsculas avisaba de un
   setAppends() que recibía la variable limpia.

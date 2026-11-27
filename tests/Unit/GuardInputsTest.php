@@ -189,14 +189,41 @@ final class GuardInputsTest extends TestCase
     {
         $tee = 'tee '.self::LOCK;
 
+        // Hasta tres se leen: lo que escribe y lo que aprueba, y lo que no
+        // aprueba no se bloquea.
         $this->assertSame([self::LOCK], $this->writes($this->nested($tee, 3)));
-        $this->assertSame([], $this->writes($this->nested($tee, 4)));
         $this->assertTrue($this->approves($this->nested('larapack:hand-rolled approve', 3)));
-        $this->assertFalse($this->approves($this->nested('larapack:hand-rolled approve', 4)));
+        $this->assertFalse($this->approves($this->nested('larapack:hand-rolled list', 3)));
+        $this->assertFalse($this->approves($this->nested($tee, 3)));
 
         $heredoc = fn (string $body): string => "bash <<EOF\n{$body}\nEOF";
         $this->assertTrue($this->approves($heredoc($heredoc($heredoc('larapack:hand-rolled approve')))));
-        $this->assertFalse($this->approves($heredoc($heredoc($heredoc($heredoc('larapack:hand-rolled approve'))))));
+        $this->assertFalse($this->approves($heredoc($heredoc($heredoc('larapack:hand-rolled list')))));
+    }
+
+    /**
+     * Más adentro no se lee, y antes se daba por bueno: cuatro `bash -c`
+     * alrededor de la aprobación pasaban. Ahora falla cerrado: lo que no se
+     * termina de leer cuenta como aprobación, sea lo que sea, y la guardia lo
+     * bloquea. Una shell vacía no ejecuta nada.
+     */
+    public function test_mas_de_tres_niveles_de_shell_falla_cerrado(): void
+    {
+        $heredoc = fn (string $body): string => "bash <<EOF\n{$body}\nEOF";
+
+        $this->assertTrue($this->approves($this->nested('larapack:hand-rolled approve', 4)));
+        $this->assertTrue($this->approves($this->nested('tee '.self::LOCK, 4)));
+        $this->assertTrue($this->approves($this->nested('larapack:hand-rolled list', 4)));
+        $this->assertTrue($this->approves($this->nested('larapack:hand-rolled approve', 7)));
+        $this->assertTrue($this->approves($heredoc($heredoc($heredoc($heredoc('larapack:hand-rolled approve'))))));
+        $this->assertTrue($this->approves($this->nested('eval larapack:hand-rolled approve', 3)));
+
+        // Lo que no lee no lo inventa: ningún candado con nombre.
+        $this->assertSame([], $this->writes($this->nested('tee '.self::LOCK, 4)));
+
+        $this->assertFalse($this->approves($this->nested("bash -c ''", 3)));
+        $this->assertFalse($this->approves($this->nested("bash -c '  '", 3)));
+        $this->assertFalse($this->approves($heredoc($heredoc($heredoc("bash <<EOF\n\nEOF")))));
     }
 
     // LA APROBACIÓN

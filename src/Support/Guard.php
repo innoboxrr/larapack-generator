@@ -52,6 +52,12 @@ final class Guard
     private const SHELLS = ['bash', 'sh', 'zsh', 'dash', 'ksh'];
 
     /**
+     * Cuántas shells dentro de la orden se leen; más adentro, falla cerrado
+     * (shellScan()).
+     */
+    private const MAX_SHELL_DEPTH = 3;
+
+    /**
      * Lo que va delante de la orden de verdad sin cambiar qué orden es:
      * `sudo tee …` escribe igual que `tee …`.
      */
@@ -233,6 +239,15 @@ final class Guard
      * Recorre una orden de shell: devuelve si aprueba o retira una excepción,
      * y añade a `$locks` cada candado que escribe (tal como se escribió).
      *
+     * Lee hasta tres shells dentro de la orden (`bash -c`, `eval`, un heredoc
+     * que recibe una shell). Lo que haya más adentro no se lee, y antes se
+     * daba por bueno: `larapack:hand-rolled approve` dentro de cuatro `bash -c`
+     * pasaba. Ahora falla cerrado: una orden que no se termina de leer cuenta
+     * como si aprobara, y se bloquea. Al hook sólo llegan las órdenes con
+     * `approve`, `revoke` o `hand-rolled` (AgentHooks::preCommand()), así que
+     * lo que esto bloquea de más son cuatro shells anidadas que además nombran
+     * una de esas palabras.
+     *
      * @param  list<string>  $locks
      */
     private static function shellScan(string $command, int $depth, array &$locks): bool
@@ -249,8 +264,8 @@ final class Guard
         }
 
         // Un heredoc que se le pasa a una shell (`bash <<EOF`) sí son órdenes.
-        foreach ($depth < 3 ? $scripts : [] as $script) {
-            $approves = self::shellScan($script, $depth + 1, $locks) || $approves;
+        foreach ($scripts as $script) {
+            $approves = self::nestedScan($script, $depth, $locks) || $approves;
         }
 
         foreach ($commands as $words) {
@@ -268,13 +283,29 @@ final class Guard
                 // `bash -ce '…'` ejecuta el texto igual que `bash -ec '…'`.
                 $nested = $eval || preg_match('/^-[a-z]*c[a-z]*$/i', $words[$index - 1] ?? '') === 1;
 
-                if ($nested && $depth < 3) {
-                    $approves = self::shellScan($word, $depth + 1, $locks) || $approves;
+                if ($nested) {
+                    $approves = self::nestedScan($word, $depth, $locks) || $approves;
                 }
             }
         }
 
         return $approves;
+    }
+
+    /**
+     * Una orden dentro de otra, que está en la profundidad `$depth`. Pasado
+     * el límite no se lee y cuenta como aprobación (shellScan()); vacía no
+     * ejecuta nada.
+     *
+     * @param  list<string>  $locks
+     */
+    private static function nestedScan(string $script, int $depth, array &$locks): bool
+    {
+        if ($depth < self::MAX_SHELL_DEPTH) {
+            return self::shellScan($script, $depth + 1, $locks);
+        }
+
+        return trim($script) !== '';
     }
 
     /**

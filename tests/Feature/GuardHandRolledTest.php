@@ -89,6 +89,9 @@ final class GuardHandRolledTest extends TestCase
             "php artisan larapack:hand-\\\nrolled revoke X",
             "php artisan larapack:hand-rolled \"appr\\\nove\" --all",
             "php artisan l:h appr''ove --all",
+            // Cuatro shells anidadas: la guardia no lee tan adentro, y lo que
+            // no lee lo bloquea (Guard::shellScan()).
+            "bash -c 'bash -c \"bash -c \\\"bash -c php\\\\ artisan\\\\ larapack:hand-rolled\\\\ approve\\\"\"'",
         ];
     }
 
