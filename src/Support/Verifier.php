@@ -147,6 +147,13 @@ final class Verifier
             ];
         }
 
+        // Y uno cuyo laraimport no declara nada que generar no deja
+        // manifiesto: está como debe estar. El aviso queda para cuando hay
+        // algo declarado y nada registrado, o no hay laraimport.
+        if ($models === [] && $this->declaresNothing()) {
+            return [];
+        }
+
         if ($models === []) {
             return [[
                 'level' => self::WARNING,
@@ -172,6 +179,23 @@ final class Verifier
             ...$this->checkSecrets($models),
             ...$this->checkEndpointTests($models),
         ];
+    }
+
+    /**
+     * El laraimport de la raíz existe, se lee y no declara ni un modelo, ni un
+     * pivote, ni un `controllers[]`: un paquete que sólo integra. Lo que no se
+     * puede leer no cuenta como vacío.
+     */
+    private function declaresNothing(): bool
+    {
+        $file = $this->manifest->root().'/laraimport.json';
+        $document = is_file($file) ? json_decode(Files::read($file), true) : null;
+
+        if (! is_array($document) || ($document['models'] ?? null) !== []) {
+            return false;
+        }
+
+        return ($document['pivots'] ?? []) === [] && ($document['controllers'] ?? []) === [];
     }
 
     /**
