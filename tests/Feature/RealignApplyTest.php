@@ -132,6 +132,13 @@ final class RealignApplyTest extends TestCase
         $this->assertSame('deterministic', $this->step($id)['category']);
         $this->assertSame('larapack:realign apply endpoint-tests@.', $this->step($id)['command']);
 
+        // next da la orden y, para lo que salte, el playbook rellenado.
+        $next = $this->realign('next');
+        $this->assertSame($id, $next['step']['id']);
+        $this->assertTrue($next['how']['available']);
+        $this->assertSame('endpoint-tests', $next['how']['fallback']['playbook']);
+        $this->assertStringContainsString('larapack:realign apply endpoint-tests@. --dry-run', $next['how']['fallback']['instructions']);
+
         $this->realign('apply', ['targets' => [$id]]);
 
         $content = $this->project->read(self::TEST);
