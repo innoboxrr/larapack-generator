@@ -609,9 +609,13 @@ final class MigrationReader
                 : 'renameColumn() con nombres que no se leen',
             'foreign' => $this->foreign($args, $calls),
             'dropForeign' => $this->dropForeign($first),
-            'index', 'unique', 'primary', 'fullText', 'fulltext', 'spatialIndex', 'rawIndex', 'dropIndex', 'dropUnique',
-            'dropPrimary', 'dropFullText', 'dropSpatialIndex', 'renameIndex', 'engine', 'charset', 'collation', 'comment',
-            'temporary', 'dropIndexIfExists', 'dropUniqueIfExists' => ['kind' => 'ignore'],
+            'index', 'unique', 'primary', 'fullText', 'fulltext', 'spatialIndex' => $this->index($method, $args),
+            'rawIndex' => ['kind' => 'index', 'type' => 'raw', 'index_columns' => [], 'name' => isset($args[1]) && $args[1]->isString() ? (string) $args[1]->value : null],
+            'dropIndex', 'dropUnique', 'dropPrimary', 'dropFullText', 'dropSpatialIndex', 'dropIndexIfExists', 'dropUniqueIfExists' => $this->dropIndex($method, $first),
+            'renameIndex' => isset($args[1]) && $name !== null && $args[1]->isString()
+                ? ['kind' => 'renameIndex', 'index_from' => $name, 'index_to' => (string) $args[1]->value]
+                : ['kind' => 'indexOpaque', 'why' => 'renameIndex() con nombres que no se leen'],
+            'engine', 'charset', 'collation', 'comment', 'temporary' => ['kind' => 'ignore'],
             default => $name !== null ? ['kind' => 'uncertain', 'names' => [$name]] : "{$method}(), que no se sabe qué columnas toca",
         };
     }
@@ -774,6 +778,59 @@ final class MigrationReader
         $index = isset($args[1]) && $args[1]->isString() ? (string) $args[1]->value : null;
 
         return ['kind' => 'foreign', 'column' => $names[0], 'foreign' => $foreign->with(name: $index)];
+    }
+
+    /**
+     * El tipo de índice tal como lo nombra Laravel en el nombre por omisión.
+     */
+    public static function indexType(string $method): string
+    {
+        return match (strtolower(preg_replace('/^drop/', '', $method) ?? $method)) {
+            'unique', 'uniqueifexists' => 'unique',
+            'primary' => 'primary',
+            'fulltext' => 'fulltext',
+            'spatialindex' => 'spatialindex',
+            default => 'index',
+        };
+    }
+
+    /**
+     * `$table->index(['a', 'b'], 'nombre')`: un índice de la tabla (9.4.0).
+     * Antes se ignoraba: no cambia columnas. Ahora se guarda, para que el
+     * generador no añada uno que ya existe y el inferidor lo pueda declarar.
+     *
+     * @param  list<Value>  $args
+     * @return array<string, mixed>
+     */
+    private function index(string $method, array $args): array
+    {
+        $columns = isset($args[0]) ? $this->names($args[0]) : null;
+
+        if ($columns === null || $columns === []) {
+            return ['kind' => 'indexOpaque', 'why' => "{$method}() con columnas que no se leen"];
+        }
+
+        $name = isset($args[1]) && $args[1]->isString() ? (string) $args[1]->value : null;
+
+        return ['kind' => 'index', 'type' => self::indexType($method), 'index_columns' => $columns, 'name' => $name];
+    }
+
+    /**
+     * `dropIndex('nombre')` o `dropIndex(['a', 'b'])`.
+     *
+     * @return array<string, mixed>
+     */
+    private function dropIndex(string $method, ?Value $argument): array
+    {
+        if ($argument?->isString()) {
+            return ['kind' => 'dropIndex', 'type' => self::indexType($method), 'name' => (string) $argument->value, 'index_columns' => null];
+        }
+
+        $columns = $argument === null ? null : $this->names($argument);
+
+        return $columns === null
+            ? ['kind' => 'indexOpaque', 'why' => "{$method}() con un índice que no se lee"]
+            : ['kind' => 'dropIndex', 'type' => self::indexType($method), 'name' => null, 'index_columns' => $columns];
     }
 
     /**

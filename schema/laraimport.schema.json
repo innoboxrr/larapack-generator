@@ -49,6 +49,15 @@
                     "$ref": "#/$defs/pascalCase",
                     "description": "Nombre de la clase del modelo, en PascalCase y singular. Todo lo demás se deriva de aquí."
                 },
+                "table": {
+                    "$ref": "#/$defs/snakeCase",
+                    "description": "La tabla, tal cual, cuando no es la que se deduce del nombre (el plural en snake_case). Existe para ADOPTAR un modelo que ya tiene su tabla (`protected $table = 'legacy_people'`): no se le aplica table_prefix, va al $table del modelo, a Schema::create y al nombre de la migración, y una foreignId de otro modelo la nombra igual en `constraint`. Sin la clave, la tabla se deduce como siempre."
+                },
+                "indexes": {
+                    "type": "array",
+                    "items": { "$ref": "#/$defs/index" },
+                    "description": "Índices de la tabla, simples o compuestos, normales o únicos. Van en la migración de creación detrás de las columnas y, en una tabla que ya existe, en una alteración con los que falten: nunca se quita un índice que no esté aquí. Una foreignId ya lleva el suyo; no hace falta declararlo."
+                },
                 "props": {
                     "type": "array",
                     "minItems": 1,
@@ -83,7 +92,7 @@
                 "load_counts": {
                     "type": "array",
                     "default": [],
-                    "items": { "$ref": "#/$defs/snakeCase" },
+                    "items": { "type": "string", "pattern": "^[a-z][A-Za-z0-9_]*$", "minLength": 1 },
                     "description": "Relaciones cuyo conteo puede pedirse con withCount."
                 },
                 "requests": {
@@ -154,6 +163,28 @@
                 "default": {
                     "type": ["string", "number", "boolean", "null"],
                     "default": null
+                },
+                "length": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 65535,
+                    "description": "Longitud de una columna string o char: $table->string('code', 20). Sin ella, la de Laravel (255 en string). Sólo vale en string y char."
+                },
+                "precision": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 65,
+                    "description": "Dígitos en total de una columna decimal: $table->decimal('amount', 16, 4). Sin ella, la de Laravel (8). Sólo vale en decimal."
+                },
+                "scale": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 30,
+                    "description": "Dígitos tras el punto de una columna decimal. Exige precision y no puede pasarla. Sin ella, la de Laravel (2)."
+                },
+                "use_current": {
+                    "type": "boolean",
+                    "description": "La base pone la hora actual al insertar: ->useCurrent(). Sólo en timestamp, timestampTz, dateTime y dateTimeTz, y no junto a un default."
                 },
                 "on_delete": {
                     "enum": ["cascade", "restrict", "set null", "no action"],
@@ -236,18 +267,22 @@
         "relation": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["type", "related", "name"],
+            "required": ["type", "name"],
+            "if": { "properties": { "type": { "const": "morphTo" } }, "required": ["type"] },
+            "else": { "required": ["related"] },
             "properties": {
                 "type": {
                     "enum": ["belongsTo", "hasOne", "hasMany", "belongsToMany", "morphTo", "morphOne", "morphMany", "morphToMany"]
                 },
                 "related": {
                     "$ref": "#/$defs/pascalCase",
-                    "description": "Modelo relacionado. Si está definido en este mismo archivo, su namespace se resuelve solo."
+                    "description": "Modelo relacionado. Si está definido en este mismo archivo, su namespace se resuelve solo. Obligatorio salvo en morphTo, que no apunta a un modelo: lo dicen las columnas <name>_type y <name>_id de cada fila."
                 },
                 "name": {
-                    "$ref": "#/$defs/snakeCase",
-                    "description": "Nombre del método de relación."
+                    "type": "string",
+                    "pattern": "^[a-z][A-Za-z0-9_]*$",
+                    "minLength": 1,
+                    "description": "Nombre del método de relación, en snake_case o camelCase (practitionerLocations): es el nombre del método en PHP, y uno que ya existe se conserva tal cual."
                 },
                 "namespace": {
                     "type": "string",
@@ -329,8 +364,13 @@
                 },
                 "uri": {
                     "type": "string",
-                    "pattern": "^(?:[a-z0-9]+(?:-[a-z0-9]+)*|\\{[a-z][a-z0-9_]*\\??\\})(?:/(?:[a-z0-9]+(?:-[a-z0-9]+)*|\\{[a-z][a-z0-9_]*\\??\\}))*$",
-                    "description": "Relativa al prefijo del archivo de rutas, como las CRUD: segmentos en kebab o {parametro}, sin barra inicial ni '..'. Por omisión, el nombre en kebab: importRoster -> import-roster, importCSV -> import-csv. Si empieza por un parámetro que no es {<modelo>_id} de un endpoint de registro, casa con cualquier segmento y tapa a los endpoints del mismo verbo declarados después."
+                    "pattern": "^(?:[A-Za-z0-9_](?:[A-Za-z0-9_.-]*[A-Za-z0-9_-])?|\\{[A-Za-z_][A-Za-z0-9_]*\\??\\})(?:/(?:[A-Za-z0-9_](?:[A-Za-z0-9_.-]*[A-Za-z0-9_-])?|\\{[A-Za-z_][A-Za-z0-9_]*\\??\\}))*$",
+                    "description": "Relativa al prefijo del archivo de rutas, como las CRUD: segmentos literales o {parametro}, sin barra inicial, sin '.' ni '..' como segmento. Por omisión, el nombre en kebab: importRoster -> import-roster, importCSV -> import-csv. Para CONSERVAR una URI que ya usa el front se declara tal cual, aunque no esté en kebab (encounter_metric/save, {campaignId}). Si empieza por un parámetro que no es {<modelo>_id} de un endpoint de registro, casa con cualquier segmento y tapa a los endpoints del mismo verbo declarados después."
+                },
+                "route_name": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z_][A-Za-z0-9_]*(?:[.:-][A-Za-z0-9_]+)*$",
+                    "description": "El nombre de la ruta, relativo al grupo del archivo (api.<namespace>.<archivo>.), como los CRUD. Por omisión se deriva del nombre (importRoster -> import.roster). Se declara para CONSERVAR un nombre que ya llama el front: route('api.app.clinic.lienzo') se conserva en un controllers[] Clinic con route_name 'lienzo'. Lo que va antes del último grupo no se puede elegir aquí: sale del nombre del archivo de rutas."
                 },
                 "target": {
                     "enum": ["record", "collection"],
@@ -386,8 +426,13 @@
                 },
                 "uri": {
                     "type": "string",
-                    "pattern": "^(?:[a-z0-9]+(?:-[a-z0-9]+)*|\\{[a-z][a-z0-9_]*\\??\\})(?:/(?:[a-z0-9]+(?:-[a-z0-9]+)*|\\{[a-z][a-z0-9_]*\\??\\}))*$",
-                    "description": "Relativa al prefijo del archivo de rutas, como las CRUD: segmentos en kebab o {parametro}, sin barra inicial ni '..'. Por omisión, el nombre en kebab: importRoster -> import-roster, importCSV -> import-csv. Si empieza por un parámetro que no es {<modelo>_id} de un endpoint de registro, casa con cualquier segmento y tapa a los endpoints del mismo verbo declarados después."
+                    "pattern": "^(?:[A-Za-z0-9_](?:[A-Za-z0-9_.-]*[A-Za-z0-9_-])?|\\{[A-Za-z_][A-Za-z0-9_]*\\??\\})(?:/(?:[A-Za-z0-9_](?:[A-Za-z0-9_.-]*[A-Za-z0-9_-])?|\\{[A-Za-z_][A-Za-z0-9_]*\\??\\}))*$",
+                    "description": "Relativa al prefijo del archivo de rutas, como las CRUD: segmentos literales o {parametro}, sin barra inicial, sin '.' ni '..' como segmento. Por omisión, el nombre en kebab: importRoster -> import-roster, importCSV -> import-csv. Para CONSERVAR una URI que ya usa el front se declara tal cual, aunque no esté en kebab (encounter_metric/save, {campaignId}). Si empieza por un parámetro que no es {<modelo>_id} de un endpoint de registro, casa con cualquier segmento y tapa a los endpoints del mismo verbo declarados después."
+                },
+                "route_name": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z_][A-Za-z0-9_]*(?:[.:-][A-Za-z0-9_]+)*$",
+                    "description": "El nombre de la ruta, relativo al grupo del archivo (api.<namespace>.<archivo>.), como los CRUD. Por omisión se deriva del nombre (importRoster -> import.roster). Se declara para CONSERVAR un nombre que ya llama el front: route('api.app.clinic.lienzo') se conserva en un controllers[] Clinic con route_name 'lienzo'. Lo que va antes del último grupo no se puede elegir aquí: sale del nombre del archivo de rutas."
                 },
                 "ability": {
                     "type": "string",
@@ -409,6 +454,30 @@
                     "uniqueItems": true,
                     "items": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_.\\-]*(?::[A-Za-z0-9_.,|\\-]+)?$" },
                     "description": "Middleware de la ruta además del grupo api, por ejemplo throttle:6,1 o signed."
+                }
+            }
+        },
+        "index": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["columns"],
+            "properties": {
+                "columns": {
+                    "type": "array",
+                    "minItems": 1,
+                    "uniqueItems": true,
+                    "items": { "$ref": "#/$defs/snakeCase" },
+                    "description": "Las columnas del índice, en el orden en que van: en uno compuesto, el orden decide qué consultas lo usan. Pueden ser props del modelo o las de la plantilla (id, created_at, updated_at, deleted_at)."
+                },
+                "unique": {
+                    "type": "boolean",
+                    "description": "Índice único: la base rechaza dos filas con los mismos valores. Por omisión, false."
+                },
+                "name": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+                    "maxLength": 64,
+                    "description": "El nombre del índice en la base. Sin él, el que pone Laravel (<tabla>_<columnas>_index o _unique). Declarar el que ya existe es lo que hace que adoptar una tabla no cree otro igual."
                 }
             }
         },

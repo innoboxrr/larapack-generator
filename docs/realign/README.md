@@ -295,7 +295,7 @@ Las de `#[HandRolled]` no van aquí: tienen su candado
 |---|---|---|
 | `adopt` | Pone el manifiesto al día con lo que hay: adopta, vuelve a enlazar, olvida. | `adopt`, `relink`, `prune`, `untracked-edited` |
 | `apply` | Ejecuta los pasos deterministas que reescriben código o el contrato (uno a uno, o todos con `--deterministic`). | `regenerate`, `missing` (restaurar), `fix`, `endpoint-tests`, `controller-concern`, `model-lists`, `pin-foreign-keys`, y los de `adopt` |
-| `infer` | Infiere el contrato desde el código. | `no-contract`, `unmanaged-models`, `unmanaged-http` |
+| `infer` | Infiere el contrato desde el código: un `laraimport.inferred.json` borrador con su informe. Guía: [infer.md](infer.md). | `no-contract`, `unmanaged-models`, `unmanaged-http` |
 | `except` | Registra una excepción aprobada con su razón. | las decisiones con opción «dejarlo así» |
 
 ```bash
@@ -487,7 +487,7 @@ es trabajo: los 377 hallazgos `controller-shape` de 77 controladores.
 
 **Sin contrato** (brandai). No hay con qué comparar: el diagnóstico lo dice
 (`no-contract`) y lista el código HTTP y de modelos. El camino es inferir el
-contrato (`infer`) o dejar el proyecto fuera de LaraPack y quedarse con
+contrato (`infer`, ver [infer.md](infer.md)) o dejar el proyecto fuera de LaraPack y quedarse con
 `verify` como guardia de la forma de los controladores.
 
 ## Limitaciones y riesgos
@@ -563,7 +563,11 @@ contrato (`infer`) o dejar el proyecto fuera de LaraPack y quedarse con
    - `guided`: sigue `how.instructions` al pie de la letra.
    - `decision`: **no decidas tú**. Presenta `how.options` a quien tenga
      autoridad y, cuando decida, `larapack:realign decide <id> <opción>
-     --note="…"`.
+     --note="…"`. Para `no-contract`, `unmanaged-models` y `unmanaged-http`
+     puedes preparar el material de la decisión sin decidir nada:
+     `larapack:realign infer <id>` escribe un borrador
+     (`laraimport.inferred.json`) y su informe, y no toca el código ni el
+     contrato ([infer.md](infer.md)).
 4. `larapack:realign check <id> --format=json`. Si `done` es false, resuelve
    `remaining` y vuelve a comprobar.
 5. Comitea el paso (un commit por paso) y vuelve al 2.

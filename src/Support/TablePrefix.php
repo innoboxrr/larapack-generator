@@ -57,6 +57,15 @@ final class TablePrefix
     private static array $own = [];
 
     /**
+     * Las tablas que un modelo declara tal cual con `table` (9.4.0), por
+     * nombre de modelo. No llevan prefijo: existen para adoptar una tabla que
+     * ya tiene su nombre.
+     *
+     * @var array<string, string>
+     */
+    private static array $explicit = [];
+
+    /**
      * Toma el prefijo y las tablas propias del documento ya normalizado.
      *
      * @param  array<string, mixed>  $document
@@ -66,13 +75,21 @@ final class TablePrefix
         self::set(is_string($document['table_prefix'] ?? null) ? $document['table_prefix'] : '');
 
         $own = [];
+        self::$explicit = [];
 
         foreach ($document['models'] ?? [] as $model) {
             if (! isset($model['name'])) {
                 continue;
             }
 
-            $own[] = self::tableOf((string) $model['name']);
+            if (is_string($model['table'] ?? null) && $model['table'] !== '') {
+                // Una tabla declarada se nombra tal cual también en el
+                // `constraint` que le apunta: no es «propia» a efectos de
+                // prefijo.
+                self::$explicit[(string) $model['name']] = $model['table'];
+            } else {
+                $own[] = self::tableOf((string) $model['name']);
+            }
 
             // Las metas son una tabla más, y una clave ajena puede apuntarle.
             $own[] = self::singularOf((string) $model['name']).'_metas';
@@ -115,6 +132,24 @@ final class TablePrefix
     {
         self::$prefix = '';
         self::$own = [];
+        self::$explicit = [];
+    }
+
+    /**
+     * La tabla que el modelo declara con `table`, o null si se deduce.
+     */
+    public static function explicit(string $model): ?string
+    {
+        return self::$explicit[$model] ?? null;
+    }
+
+    /**
+     * La tabla real de un modelo de este contrato: la declarada, o la deducida
+     * con el prefijo.
+     */
+    public static function realTableOf(string $model): string
+    {
+        return self::$explicit[$model] ?? self::table(self::tableOf($model));
     }
 
     /**

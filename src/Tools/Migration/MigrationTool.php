@@ -379,11 +379,116 @@ class MigrationTool extends Tool implements ModelArtifact
         }
 
         $steps = array_values(array_filter(
-            [...$dropForeign, ...$add, ...$change, ...$addForeign, ...$drop],
+            [...$dropForeign, ...$add, ...$change, ...$addForeign, ...$this->indexPlan($model, $state), ...$drop],
             fn (array $step): bool => $step[0] !== []
         ));
 
         return ['steps' => $steps, 'after' => $after];
+    }
+
+    /**
+     * Los índices que el laraimport declara y la tabla todavía no tiene.
+     *
+     * Sólo se AÑADEN: un índice que está en la tabla y no en el laraimport no
+     * se quita, porque casi siempre lo puso una persona (o una versión que no
+     * sabía declararlos) y quitarlo cambia el rendimiento —o la unicidad— de
+     * una base viva sin que nadie lo haya pedido.
+     *
+     * @param  array<string, mixed>  $model
+     * @return list<array{0: list<string>, 1: list<string>}>
+     */
+    private function indexPlan(array $model, TableState $state): array
+    {
+        $declared = (array) ($model['indexes'] ?? []);
+
+        if ($declared === []) {
+            return [];
+        }
+
+        if ($state->indexOpaque !== []) {
+            $this->notices[] = 'no se pueden leer los índices de '.$this->tableName().' ('.implode('; ', array_unique($state->indexOpaque)).'): no se añade ninguno';
+
+            return [];
+        }
+
+        $steps = [];
+
+        foreach ($declared as $index) {
+            $columns = array_values(array_map('strval', (array) $index['columns']));
+            $type = ! empty($index['unique']) ? 'unique' : 'index';
+
+            if ($state->hasIndex($type, $columns, isset($index['name']) ? (string) $index['name'] : null)) {
+                continue;
+            }
+
+            foreach ($columns as $column) {
+                if ($state->doubtAbout($column) !== null) {
+                    $this->notices[] = 'el índice sobre '.implode(', ', $columns).' nombra una columna que no se puede leer; no se añade';
+
+                    continue 2;
+                }
+            }
+
+            $steps[] = [[self::indexStatement($index)], [self::dropIndexStatement($index)]];
+        }
+
+        return $steps;
+    }
+
+    /**
+     * `$table->unique('email');`, `$table->index(['a', 'b'], 'nombre');`.
+     *
+     * @param  array<string, mixed>  $index
+     */
+    public static function indexStatement(array $index): string
+    {
+        $columns = array_values(array_map('strval', (array) $index['columns']));
+        $method = ! empty($index['unique']) ? 'unique' : 'index';
+        $arguments = [count($columns) === 1 ? self::phpString($columns[0]) : '['.implode(', ', array_map(fn (string $column): string => self::phpString($column), $columns)).']'];
+
+        if (isset($index['name'])) {
+            $arguments[] = self::phpString((string) $index['name']);
+        }
+
+        return '$table->'.$method.'('.implode(', ', $arguments).');';
+    }
+
+    /**
+     * Lo que deshace indexStatement() en el `down()`: por su nombre si lo
+     * tiene, o por sus columnas (Laravel deduce el mismo nombre que puso).
+     *
+     * @param  array<string, mixed>  $index
+     */
+    private static function dropIndexStatement(array $index): string
+    {
+        $method = ! empty($index['unique']) ? 'dropUnique' : 'dropIndex';
+        $argument = isset($index['name'])
+            ? self::phpString((string) $index['name'])
+            : '['.implode(', ', array_map(fn (string $column): string => self::phpString($column), array_values(array_map('strval', (array) $index['columns'])))).']';
+
+        return '$table->'.$method.'('.$argument.');';
+    }
+
+    /**
+     * Los argumentos que van detrás del nombre de la columna: la longitud de
+     * un string, la precisión y la escala de un decimal (9.4.0). Lo que el
+     * laraimport no declara no se escribe, y Laravel pone lo suyo: así una
+     * prop sin medidas sale como antes.
+     *
+     * @param  array<string, mixed>  $prop
+     * @return list<string>
+     */
+    public static function columnArguments(array $prop): array
+    {
+        if (isset($prop['length']) && in_array($prop['type'], ['string', 'char'], true)) {
+            return [(string) (int) $prop['length']];
+        }
+
+        if (isset($prop['precision']) && $prop['type'] === 'decimal') {
+            return [(string) (int) $prop['precision'], (string) (int) ($prop['scale'] ?? 2)];
+        }
+
+        return [];
     }
 
     /**
@@ -502,7 +607,7 @@ class MigrationTool extends Tool implements ModelArtifact
         }
 
         foreach (self::jsonEntries('models') as $model) {
-            if (is_string($model['name'] ?? null) && TablePrefix::table(TablePrefix::tableOf($model['name'])) === $table) {
+            if (is_string($model['name'] ?? null) && TablePrefix::realTableOf($model['name']) === $table) {
                 return false;
             }
         }
@@ -709,6 +814,12 @@ class MigrationTool extends Tool implements ModelArtifact
         $model = self::declaredEntry('models', $this->ModelName);
         $fileContent = self::contents($migrationFile);
         $columnsSchema = $this->generateMigrationColumns($model['props']);
+
+        // Los índices declarados (9.4.0) van detrás de las columnas, dentro
+        // del mismo Schema::create. Sin `indexes`, la migración sale igual.
+        foreach ((array) ($model['indexes'] ?? []) as $index) {
+            $columnsSchema .= "\n            ".self::indexStatement($index);
+        }
         $updatedFileContent = str_replace('//EDIT//', $columnsSchema, $fileContent);
         file_put_contents($migrationFile, $updatedFileContent);
     }
@@ -739,7 +850,8 @@ class MigrationTool extends Tool implements ModelArtifact
      */
     private function getColumnDefinition(array $prop, bool $withForeign = true): string
     {
-        $column = "\$table->{$prop['type']}('{$prop['name']}')";
+        $arguments = self::columnArguments($prop);
+        $column = "\$table->{$prop['type']}('{$prop['name']}'".($arguments === [] ? '' : ', '.implode(', ', $arguments)).')';
 
         if ($prop['nullable']) {
             $column .= '->nullable()';
@@ -750,6 +862,10 @@ class MigrationTool extends Tool implements ModelArtifact
             $default = self::defaultLiteral($prop['default'], $prop['type']);
 
             $column .= "->default({$default})";
+        }
+
+        if (! empty($prop['use_current'])) {
+            $column .= '->useCurrent()';
         }
 
         if ($withForeign && $prop['type'] === 'foreignId' && ! is_null($prop['constraint'])) {

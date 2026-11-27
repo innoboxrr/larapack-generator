@@ -101,7 +101,7 @@ final class Endpoints
             'name' => $name,
             'method' => (string) $endpoint['method'],
             'uri' => self::uri($endpoint),
-            'route' => self::routeName($name),
+            'route' => self::declaredRouteName($endpoint),
             'request' => self::requestClass($name),
             'target' => $model ? (string) ($endpoint['target'] ?? 'record') : null,
             'ability' => $model ? (string) ($endpoint['ability'] ?? $name) : (isset($endpoint['ability']) ? (string) $endpoint['ability'] : null),
@@ -137,6 +137,20 @@ final class Endpoints
         return isset($endpoint['uri']) && $endpoint['uri'] !== ''
             ? (string) $endpoint['uri']
             : self::kebab((string) $endpoint['name']);
+    }
+
+    /**
+     * El nombre de ruta de un endpoint: el que declara `route_name`, o el que
+     * se deriva de su nombre. Declararlo es lo que permite CONSERVAR el nombre
+     * de una ruta escrita a mano que el front ya llama.
+     *
+     * @param  array<string, mixed>  $endpoint
+     */
+    public static function declaredRouteName(array $endpoint): string
+    {
+        return isset($endpoint['route_name']) && is_string($endpoint['route_name']) && $endpoint['route_name'] !== ''
+            ? $endpoint['route_name']
+            : self::routeName((string) $endpoint['name']);
     }
 
     /**
@@ -225,7 +239,7 @@ final class Endpoints
      */
     public static function parameters(string $uri): array
     {
-        preg_match_all('/\{([a-z][a-z0-9_]*)\??\}/', $uri, $matches);
+        preg_match_all('/\{([A-Za-z_][A-Za-z0-9_]*)\??\}/', $uri, $matches);
 
         return $matches[1];
     }
@@ -252,7 +266,7 @@ final class Endpoints
         foreach (explode('/', $uri) as $position => $segment) {
             $slash = $position === 0 ? '' : '/';
 
-            if (preg_match('/^\{([a-z][a-z0-9_]*)(\??)\}$/', $segment, $parameter)) {
+            if (preg_match('/^\{([A-Za-z_][A-Za-z0-9_]*)(\??)\}$/', $segment, $parameter)) {
                 $value = $parameter[1] === $numeric ? '[0-9]+' : '[^/]+';
                 $regex .= $parameter[2] === '?' ? "(?:{$slash}{$value})?" : $slash.$value;
 

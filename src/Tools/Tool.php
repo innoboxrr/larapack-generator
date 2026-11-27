@@ -330,7 +330,7 @@ class Tool
             // Separarlos es lo que impide que `table_prefix` se cuele donde no
             // nombra una tabla.
             'table_name_metas' => TablePrefix::table($this->snake_case_model_name.'_metas'),
-            'table_name' => TablePrefix::table($this->plural_snake_case_model_name),
+            'table_name' => $this->tableName(),
             // PLURALES
             'pluralModelName' => $this->pluralModelName,
             'plural_snake_case_model_name' => $this->plural_snake_case_model_name,
@@ -605,7 +605,10 @@ class Tool
      */
     protected function tableName(): string
     {
-        return TablePrefix::table($this->plural_snake_case_model_name);
+        // La que el modelo declara con `table` (9.4.0) manda: es la que ya
+        // tenía la tabla al adoptarla, y no lleva prefijo.
+        return TablePrefix::explicit($this->ModelName)
+            ?? TablePrefix::table($this->plural_snake_case_model_name);
     }
 
     /**

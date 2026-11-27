@@ -4,6 +4,7 @@ namespace Innoboxrr\LarapackGenerator\Tools\ModelTraits;
 
 use Innoboxrr\LarapackGenerator\Exceptions\MakerException;
 use Innoboxrr\LarapackGenerator\Support\Generation;
+use Innoboxrr\LarapackGenerator\Support\Import\Relations;
 use Innoboxrr\LarapackGenerator\Tools\ModelArtifact;
 use Innoboxrr\LarapackGenerator\Tools\Tool;
 
@@ -242,8 +243,7 @@ class ModelTraitsTool extends Tool implements ModelArtifact
 
         // Iterar a través de las relaciones
         foreach ($relations as $relation) {
-            $relationType = $relation['type'];   // belongsTo, hasMany, etc.
-            $relatedModel = $relation['related']; // Modelo relacionado (por ejemplo, User)
+            $relatedModel = Relations::hasRelated($relation) ? (string) $relation['related'] : null; // Modelo relacionado (por ejemplo, User); null en un morphTo
             $relationName = $relation['name'];   // Nombre de la relación (por ejemplo, user)
             // El documento resuelve el namespace: null significa que el modelo
             // relacionado se declara en este mismo laraimport, es decir que vive
@@ -257,8 +257,13 @@ class ModelTraitsTool extends Tool implements ModelArtifact
             // Generar el código de la relación
             $relationsCode .= "    public function {$relationName}()\n";
             $relationsCode .= "    {\n";
-            $relationsCode .= "        return \$this->{$relationType}({$relatedModel}::class);\n";
+            $relationsCode .= '        return '.Relations::call($relation).";\n";
             $relationsCode .= "    }\n\n";
+
+            // Un morphTo no nombra ningún modelo: no hay nada que importar.
+            if ($relatedModel === null) {
+                continue;
+            }
 
             // Agregar el import del modelo relacionado, si aún no está en la lista
             $importStatement = "use {$relatedNamespace}\\{$relatedModel};";
