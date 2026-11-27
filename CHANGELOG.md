@@ -1,5 +1,67 @@
 # Changelog
 
+## 9.3.0 (sin publicar)
+
+### La rama protegida: guiada hasta el final, y comprobada en cada corrida
+
+La puerta de `larapack:ci` sólo vale si la rama **exige** el check «LaraPack
+verify». Sin eso, el workflow corre, sale en rojo y el PR se fusiona igual. La
+9.2 imprimía una orden de `gh` y ahí se quedaba: nada decía si el dueño la
+había corrido. Proteger la rama sigue siendo del dueño —cambia quién puede
+fusionar, y eso no lo decide un comando ni un agente—, pero ahora queda a un
+paso y se comprueba.
+
+- **`larapack:ci` escribe `.github/rulesets/larapack-verify.json`**, un ruleset
+  de GitHub en el formato de exportación (el mismo que acepta
+  `POST repos/{o}/{r}/rulesets`), para *Settings → Rules → Rulesets → New
+  ruleset → Import a ruleset*. Va contra `~DEFAULT_BRANCH` y exige el check
+  **fijado a GitHub Actions** (`integration_id` 15368: un estado con ese nombre
+  publicado con otro token no cuenta, cosa que la orden clásica no impedía),
+  un PR con la revisión de los dueños de código que se descarta si después se
+  empuja otra cosa, y que nadie borre ni reescriba la rama. Sin
+  `bypass_actors`; con `--no-enforce-admins`, el papel de administrador va ahí.
+  El workflow y el ruleset se escriben juntos o ninguno: si uno difiere y no
+  hay `--force`, no se toca nada.
+- **La guía, paso a paso**: en la web con el ruleset (la recomendada), con
+  `gh api --method POST … --input` (y `PUT …/rulesets/ID` para actualizarlo),
+  o con la protección clásica de antes; lo que cuesta cada una, que en un
+  repositorio privado de una cuenta Free GitHub no aplica ninguna, y cómo
+  comprobarlo.
+- **`larapack:ci --check`** pregunta a GitHub si la rama por defecto exige el
+  check, sin escribir nada: exige (0), protegida sin exigirlo (1), sin
+  protección (1) o **no se pudo saber (2), que nunca se da por protegida**.
+  Lee las reglas de los rulesets (`GET repos/{o}/{r}/rules/branches/{rama}`,
+  que basta con leer el repositorio, y trae también los de la organización) y
+  la protección clásica, y enumera lo que deja abierta una rama que sí lo
+  exige: un check sin fijar a una app, alguien con bypass, la cuenta que
+  pregunta pudiendo saltárselo, la clásica sin los administradores, nadie que
+  revise el candado. Lo que sólo ve un administrador queda «sin comprobar».
+  Pregunta con `GH_TOKEN`/`GITHUB_TOKEN` (`GITHUB_API_URL`, `HTTPS_PROXY`) o, si
+  no hay, con `gh`; el repositorio, de `--repo`, `origin` o
+  `GITHUB_REPOSITORY`. `--format=txt|json|github`. Sin dependencias nuevas:
+  `file_get_contents` con un contexto de flujo, o `gh api --include`.
+- **El workflow lo comprueba en cada corrida.** `larapack.yml` y el job
+  `verify` de los paquetes nuevos llevan `permissions: contents: read` y un
+  último paso, `larapack:ci --check --format=github` con el token del job:
+  mientras la rama no exija el check deja un `::warning` y, en el resumen del
+  job, los pasos con el ruleset entero (un paquete nuevo no lo tiene escrito).
+  No falla el job —`continue-on-error`: el check exigido es éste, y sería
+  circular— y corre aunque `verify` falle.
+- **`larapack:verify` no lo mira, a propósito.** Es la puerta y corre sin red;
+  si dependiera de GitHub, un corte o un token sin permisos la pondrían en
+  rojo, y con `--strict` una rama aún sin proteger fallaría siempre, incluido
+  el PR que la protege.
+
+**Al actualizar:** el `larapack.yml` generado cambia (los permisos y el último
+paso). `larapack:ci` lo enseña como «difiere»; `larapack:ci --force` lo
+regenera y crea el ruleset. Si lo editaste a mano, revisa el diff antes.
+
+**Lo que queda, dicho:** el paso del workflow avisa, no bloquea; un dueño que
+ignora el aviso tiene la puerta abierta, y eso no lo arregla ningún paquete.
+En GitHub Enterprise Server el id de la app de Actions no es 15368: hay que
+cambiar o quitar `integration_id` antes de importar. `BranchProtection` y los
+clientes de la API no están todavía en el conjunto que mide Infection.
+
 ## 9.2.0
 
 ### PHPStan en nivel 8, y lo que escondía

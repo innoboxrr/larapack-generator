@@ -160,10 +160,11 @@ checkout**:
 5. `migrate` en SQLite, `route:json`, `npm install` y `npm run build`.
 6. `php artisan test`, contando por archivo que cada test generado se ejecutó
    (incluidos los de autorización de la 9.1) y que ninguno se salta.
-7. `verify --strict --format=json`, `larapack:ci --dry-run` y la guardia de los
-   hooks con el `artisan` de la aplicación. Estas tres se corren todas aunque
-   falle una. `verify` tiene que salir **limpio**: no hay hallazgos esperados
-   ni excepciones, porque un rojo conocido tapa al siguiente.
+7. `verify --strict --format=json`, `larapack:ci --dry-run` (y `--check`, que
+   sólo lee) y la guardia de los hooks con el `artisan` de la aplicación. Estas
+   tres se corren todas aunque falle una. `verify` tiene que salir **limpio**:
+   no hay hallazgos esperados ni excepciones, porque un rojo conocido tapa al
+   siguiente.
 
 Si un paso falla, el script dice qué paquete y por qué: el choque que cita
 Composer, los paquetes de `vendor/innoboxrr/` que aparecen en la traza, el

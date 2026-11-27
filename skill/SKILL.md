@@ -761,6 +761,8 @@ valor)`, que va a `bulk.update` con sólo ese campo.
 - **Añadir `#[HandRolled]` para que `verify` pase.** La excepción la decide el
   dueño del proyecto, no tú. Tampoco la apruebas: `.larapack/hand-rolled.lock` y
   `larapack:hand-rolled approve` son suyos, y la CI exige `verify --strict`.
+  Proteger la rama, tampoco: es del dueño. `larapack:ci --check` sólo lee y
+  dice si la rama ya exige el check; si no, enséñale lo que imprime.
 - **Rellenar todas las claves del JSON.** Declara lo que decides; el resto son
   defaults del esquema.
 - **Generar todas las acciones y borrar las que sobran.** Declara `routes` o

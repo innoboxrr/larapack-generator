@@ -121,6 +121,10 @@ final class CiGateTest extends TestCase
             verify:
                 name: LaraPack verify
                 runs-on: ubuntu-latest
+                # Sólo lectura: verify no escribe nada, y el último paso sólo lee
+                # las reglas de la rama.
+                permissions:
+                    contents: read
 
                 steps:
                     - uses: actions/checkout@v5
@@ -136,6 +140,17 @@ final class CiGateTest extends TestCase
 
                     - name: Contrato de LaraPack
                       run: php vendor/bin/builder larapack:verify --strict --format=json
+
+                    # La puerta sólo vale si la rama exige este check, y eso lo decide el
+                    # dueño en GitHub (larapack:ci imprime cómo). Aquí se comprueba en cada
+                    # corrida y, si no lo exige, se avisa con los pasos en el resumen. No
+                    # falla el job: el check exigido es éste, y sería circular.
+                    - name: La rama exige este check
+                      if: ${{ !cancelled() }}
+                      continue-on-error: true
+                      env:
+                          GH_TOKEN: ${{ github.token }}
+                      run: php vendor/bin/builder larapack:ci --check --format=github
 
         YAML, CiGate::workflow($this->root, null));
     }
@@ -167,6 +182,10 @@ final class CiGateTest extends TestCase
             verify:
                 name: LaraPack verify
                 runs-on: [self-hosted, linux]
+                # Sólo lectura: verify no escribe nada, y el último paso sólo lee
+                # las reglas de la rama.
+                permissions:
+                    contents: read
 
                 steps:
                     - uses: actions/checkout@v5
@@ -187,6 +206,17 @@ final class CiGateTest extends TestCase
 
                     - name: Contrato de LaraPack
                       run: php artisan larapack:verify --strict --format=json
+
+                    # La puerta sólo vale si la rama exige este check, y eso lo decide el
+                    # dueño en GitHub (larapack:ci imprime cómo). Aquí se comprueba en cada
+                    # corrida y, si no lo exige, se avisa con los pasos en el resumen. No
+                    # falla el job: el check exigido es éste, y sería circular.
+                    - name: La rama exige este check
+                      if: ${{ !cancelled() }}
+                      continue-on-error: true
+                      env:
+                          GH_TOKEN: ${{ github.token }}
+                      run: php artisan larapack:ci --check --format=github
 
         YAML, CiGate::workflow($this->root, 'release/2.x', ['self-hosted', 'linux']));
     }

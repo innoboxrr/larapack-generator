@@ -1790,9 +1790,12 @@ php artisan larapack:ci --owner=@organizacion/arquitectura
 - Crea `.github/workflows/larapack.yml` con el job «LaraPack verify» (Artisan
   en una aplicación, el builder en un paquete; el PHP de `config.platform.php`
   o el mínimo con el que se instala `composer.lock`; las `ext-*` de
-  `composer.json`; `pull_request` y `push` a la rama por defecto de `origin`).
-  No edita otros workflows, y si el suyo difiere no lo pisa sin `--force` ni
-  escribe nada más.
+  `composer.json`; `pull_request` y `push` a la rama por defecto de `origin`;
+  `permissions: contents: read`). Su último paso comprueba que la rama exija el
+  check (abajo).
+- Crea `.github/rulesets/larapack-verify.json`, el ruleset para importar en
+  GitHub. El workflow y el ruleset van juntos: si uno de los dos difiere, no
+  pisa ninguno sin `--force` ni escribe nada más. No edita otros workflows.
 - `--runs-on` (repetible, o una lista JSON) pone el job en tus runners; sin él,
   `ubuntu-latest`, y si otros workflows corren en otro sitio te lo propone. En un
   monorepo donde `verify` tarda minutos, el runner alojado los cobra en cada PR,
@@ -1801,18 +1804,95 @@ php artisan larapack:ci --owner=@organizacion/arquitectura
   fusiona en el CODEOWNERS que GitHub ya lee `/.larapack/hand-rolled.lock`, el
   workflow y el propio CODEOWNERS, sin duplicar ni tocar líneas ajenas. Sin
   `--owner` no inventa un dueño.
-- Imprime lo que no puede hacer: proteger la rama con
-  `gh api --method PUT 'repos/{dueño}/{repo}/branches/{rama}/protection'` y los
-  campos exactos. Nunca la ejecuta. PUT sustituye la protección entera: si ya
-  exige otros checks, se añaden a la orden.
+- Imprime, paso a paso, lo que no puede hacer: proteger la rama. Nunca lo
+  ejecuta —cambia quién puede fusionar, y eso lo decide el dueño—.
 
-**La puerta sólo vale si nadie entra por fuera de ella.** La orden pide
-`enforce_admins=true`: con `false`, un push directo a la rama con una cuenta de
-administrador —un orquestador que sube a `master` el SHA ya verificado con la
-cuenta del dueño— se salta `verify --strict` y la revisión del candado. El
-precio es que GitHub no deja aprobar un PR propio: los PR del agente salen de
-una cuenta que no sea la del único dueño de código. `--no-enforce-admins` deja
-`false`, con aviso.
+**Proteger la rama: lo hace el dueño, una vez.** Sin esto, el workflow corre,
+sale en rojo y el PR se fusiona igual. Una de tres vías:
+
+1. **En la web, importando el ruleset** (la recomendada):
+   `https://github.com/{dueño}/{repo}/settings/rules` → *New ruleset* →
+   *Import a ruleset* → `.github/rulesets/larapack-verify.json` → revisar →
+   *Create*. El ruleset se aplica a `~DEFAULT_BRANCH` (sigue a la rama por
+   defecto aunque se renombre) y exige:
+   - el check «LaraPack verify» **fijado a GitHub Actions** (`integration_id`
+     15368): un estado con ese nombre publicado con cualquier token con
+     `statuses: write` no cuenta;
+   - un PR con la revisión de los dueños de código, que se descarta si después
+     se empuja otra cosa (`dismiss_stale_reviews_on_push`): no se aprueba el
+     candado y luego se cambia;
+   - que nadie borre ni reescriba la rama (`deletion`, `non_fast_forward`);
+   - sin `bypass_actors`: en un ruleset, ni un administrador se lo salta.
+2. **Con la CLI de GitHub**, el mismo archivo:
+   ```
+   gh api --method POST 'repos/{dueño}/{repo}/rulesets' --input '.github/rulesets/larapack-verify.json'
+   ```
+   Si ya lo importaste y cambió, `--method PUT 'repos/{dueño}/{repo}/rulesets/ID'`
+   con el mismo `--input` (el ID lo da `--check`).
+3. **Con la protección clásica de ramas**: `larapack:ci` imprime la orden
+   `gh api --method PUT 'repos/{dueño}/{repo}/branches/{rama}/protection'` con
+   los campos exactos. PUT sustituye la protección entera: si ya exige otros
+   checks, se añaden a la orden. No fija de qué app llega el check: por eso el
+   ruleset va primero.
+
+En un repositorio privado de una cuenta Free, GitHub no aplica ni rulesets ni
+protección de ramas: hace falta Pro, Team o Enterprise. En GitHub Enterprise
+Server el id de la app de Actions es otro: cambia o quita `integration_id`
+antes de importar, o el check exigido no se cumple nunca.
+
+**Comprobar que quedó: `larapack:ci --check`.** Sólo lee —ni el proyecto ni
+GitHub— y dice una de cuatro cosas:
+
+```
+php artisan larapack:ci --check                    # o --format=json
+php artisan larapack:ci --check --repo=acme/notes --branch=main
+```
+
+| Dice | Sale con |
+|---|---|
+| Exige «LaraPack verify» (con lo que quede abierto: un check sin fijar a Actions, alguien con bypass, nadie que revise el candado) | 0 |
+| Protegida, pero no exige el check | 1 |
+| Sin protección ni reglas | 1 |
+| No se pudo saber (sin token, sin red, sin permiso) — **nunca** se da por protegida | 2 |
+
+Pregunta con `GH_TOKEN` o `GITHUB_TOKEN` (y `GITHUB_API_URL`, `HTTPS_PROXY`) si
+están en el entorno, y si no, con `gh` y su sesión. El repositorio sale de
+`--repo`, del remoto `origin` o de `GITHUB_REPOSITORY`; la rama, de `--branch`
+o de la rama por defecto que dice GitHub. Lee las reglas de los rulesets
+(`GET repos/{o}/{r}/rules/branches/{rama}`, que basta con leer el repositorio:
+también las de la organización) y la protección clásica
+(`GET repos/{o}/{r}/branches/{rama}`). Lo que sólo ve un administrador —quién
+tiene bypass, si la clásica exige la revisión de los dueños— lo dice como «sin
+comprobar», no como hueco ni como cerrado. Los rulesets en modo *evaluate* no
+aplican, y GitHub no los devuelve.
+
+**El workflow lo comprueba en cada corrida.** El último paso de «LaraPack
+verify» corre `larapack:ci --check --format=github` con el `GITHUB_TOKEN` del
+job: mientras la rama no exija el check, deja un `::warning` en la corrida y en
+el PR, y en el resumen del job los pasos con el ruleset entero. No falla el job
+(`continue-on-error`): el check exigido es éste, y que su verde dependiera de la
+protección sería circular. Los paquetes nuevos (`larapack:new`) traen el mismo
+paso. Si tu `larapack.yml` es de 9.2 o anterior, `larapack:ci --force` lo
+regenera con él (revisa el diff: es tuyo si lo editaste).
+
+**`larapack:verify` no lo mira, a propósito.** `verify` es la puerta y corre sin
+red: en la CI, en el hook y en local. Si dependiera de lo que responde GitHub,
+un corte de red o un token sin permisos la pondrían en rojo, y `--strict` sobre
+una rama todavía sin proteger fallaría siempre —también el PR que la protege—.
+Lo que tiene que estar en GitHub lo dice `--check`, y lo repite cada corrida.
+
+**La puerta sólo vale si nadie entra por fuera de ella.** El ruleset va sin
+`bypass_actors`, y la orden clásica pide `enforce_admins=true`: si no, un push
+directo a la rama con una cuenta de administrador —un orquestador que sube a
+`master` el SHA ya verificado con la cuenta del dueño— se salta
+`verify --strict` y la revisión del candado. El precio es que GitHub no deja
+aprobar un PR propio: los PR del agente salen de una cuenta que no sea la del
+único dueño de código. `--no-enforce-admins` pone el papel de administrador en
+`bypass_actors` y deja `enforce_admins=false`, con aviso.
+
+**Lo que esto no cierra.** El paso del workflow avisa, no bloquea: un dueño que
+ignora el aviso tiene una puerta abierta. Y la guardia en vivo es de Claude
+Code; con otros agentes, la puerta es la rama protegida.
 
 `larapack:audit` avisa con `verify-job` si la CI de un paquete que genera con
 LaraPack (su `.larapack/manifest.json` registra modelos o archivos del paquete,
@@ -2512,7 +2592,8 @@ larapack:audit                   Comprueba la línea base del ecosistema.
 larapack:skill                   Instala las instrucciones para un agente; con --hooks, la guardia.
 larapack:guard                   Hook para agentes: comprueba el archivo recién editado.
 larapack:hand-rolled             Lista, aprueba o retira las excepciones #[HandRolled] (el dueño).
-larapack:ci                      Crea el workflow «LaraPack verify» y, con --owner, CODEOWNERS.
+larapack:ci                      Crea el workflow «LaraPack verify», el ruleset para la rama y, con --owner, CODEOWNERS;
+                                 con --check, dice si la rama exige el check.
 
 larapack:full-model              Crea un entorno completo de modelo.
 larapack:remove-full-model       Elimina todas las entidades de un modelo.

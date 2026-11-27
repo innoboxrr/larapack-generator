@@ -87,6 +87,10 @@ final class CiGate
             '    verify:',
             '        name: '.self::JOB,
             '        runs-on: '.self::runsOnYaml($runsOn),
+            '        # Sólo lectura: verify no escribe nada, y el último paso sólo lee',
+            '        # las reglas de la rama.',
+            '        permissions:',
+            '            contents: read',
             '',
             '        steps:',
             '            - uses: actions/checkout@v5',
@@ -115,7 +119,39 @@ final class CiGate
             '',
             '            - name: Contrato de LaraPack',
             "              run: {$binary} larapack:verify --strict --format=json",
+            '',
+            ...self::protectionStep($binary),
         ])."\n";
+    }
+
+    /**
+     * El último paso del job: si la rama por defecto exige este check.
+     *
+     * La puerta sólo vale si la rama la exige, y eso lo decide el dueño en
+     * GitHub. Aquí se comprueba en cada corrida con el token del job —leer
+     * las reglas de la rama no pide más que `contents: read`— y, mientras no
+     * la exija, se avisa con un `::warning` y los pasos en el resumen.
+     *
+     * No falla el job (`continue-on-error`): el check que se exige es éste, y
+     * que su verde dependiera de la protección sería circular. Corre también
+     * si verify falló (`!cancelled()`): es cuando más importa saberlo.
+     *
+     * @return list<string>
+     */
+    private static function protectionStep(string $binary): array
+    {
+        return [
+            '            # La puerta sólo vale si la rama exige este check, y eso lo decide el',
+            '            # dueño en GitHub (larapack:ci imprime cómo). Aquí se comprueba en cada',
+            '            # corrida y, si no lo exige, se avisa con los pasos en el resumen. No',
+            '            # falla el job: el check exigido es éste, y sería circular.',
+            '            - name: La rama exige este check',
+            '              if: ${{ !cancelled() }}',
+            '              continue-on-error: true',
+            '              env:',
+            '                  GH_TOKEN: ${{ github.token }}',
+            "              run: {$binary} larapack:ci --check --format=github",
+        ];
     }
 
     /**
