@@ -127,6 +127,22 @@ final class GitHooksTest extends TestCase
         $this->assertSame('foreign', GitHooks::status($this->project->path)['hooks']['pre-commit']);
     }
 
+    public function test_un_hook_del_proyecto_cuenta_como_encadenado_solo_si_llama_al_de_larapack(): void
+    {
+        // Mencionar la carpeta no es llamarlo: con esto, git nunca corre la guardia.
+        $this->project->write('.githooks/pre-commit', "#!/bin/sh\n# antes: .githooks/pre-commit\nrun-parts .githooks/pre-commit.d\n");
+        GitHooks::install($this->project->path);
+        chmod($this->project->path.'/.githooks/pre-commit', 0755);
+
+        $this->assertSame('foreign', GitHooks::status($this->project->path)['hooks']['pre-commit']);
+        $this->assertFalse(GitHooks::status($this->project->path)['active']);
+
+        $this->project->write('.githooks/pre-commit', "#!/bin/sh\nsh .githooks/larapack-pre-commit \"$@\" || exit $?\necho propio\n");
+        chmod($this->project->path.'/.githooks/pre-commit', 0755);
+
+        $this->assertSame('chained', GitHooks::status($this->project->path)['hooks']['pre-commit']);
+    }
+
     public function test_sin_repositorio_escribe_los_scripts_y_dice_como_activarlos(): void
     {
         $project = new HookProject(false);

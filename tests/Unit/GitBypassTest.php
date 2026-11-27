@@ -54,6 +54,10 @@ final class GitBypassTest extends TestCase
             'opción global sin valor delante' => ['git --no-pager commit -n', 'git commit --no-verify'],
             '-n tras -a' => ['git commit -a -n', 'git commit --no-verify'],
             '-n tras -m con el valor pegado' => ['git commit -mwip -n', 'git commit --no-verify'],
+            'GIT_CONFIG_KEY en el entorno' => ['GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.hooksPath GIT_CONFIG_VALUE_0=/dev/null git commit -m x', 'GIT_CONFIG_* core.hooksPath'],
+            'GIT_CONFIG_PARAMETERS en el entorno' => ["GIT_CONFIG_PARAMETERS=\"'core.hooksPath=/dev/null'\" git commit -m x", 'GIT_CONFIG_* core.hooksPath'],
+            'commit-tree' => ['git commit-tree HEAD^{tree} -p HEAD -m x', 'git commit-tree'],
+            '-c alias' => ['git -c alias.x=commit x --no-verify -m y', 'git -c alias.*'],
             'tres shells anidadas' => ['bash -c "bash -c \\"bash -c \'git commit -n\'\\""', 'git commit --no-verify'],
         ];
     }
@@ -70,6 +74,7 @@ final class GitBypassTest extends TestCase
     public static function harmless(): array
     {
         return [
+            'GIT_CONFIG de otra clave' => ['GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=user.name GIT_CONFIG_VALUE_0=x git commit -m x'],
             'commit normal' => ['git commit -m wip'],
             'el mensaje dice -n' => ['git commit -m "-n no es una opción aquí"'],
             '-mn es el mensaje «n»' => ['git commit -mn'],

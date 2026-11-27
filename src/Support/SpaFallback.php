@@ -313,6 +313,36 @@ PHP;
 
         $at = strlen($open->text);
 
+        // Un `declare(...)` tiene que ser la primera sentencia del archivo:
+        // un `use` delante de él parsea, pero PHP lo rechaza al compilar y
+        // la aplicación entera deja de cargar. El `use` va detrás.
+        $count = count($tokens);
+
+        for ($index = 1; $index < $count; $index++) {
+            $token = $tokens[$index];
+
+            if (in_array($token->id, [T_WHITESPACE, T_COMMENT, T_DOC_COMMENT], true)) {
+                continue;
+            }
+
+            if ($token->id !== T_DECLARE) {
+                break;
+            }
+
+            while ($index < $count && $tokens[$index]->text !== ';') {
+                $index++;
+            }
+
+            $semicolon = $tokens[$index] ?? null;
+            $newline = $semicolon === null ? false : strpos($code, "\n", $semicolon->pos);
+
+            if ($semicolon === null || $newline === false || trim(substr($code, $semicolon->pos + 1, $newline - $semicolon->pos - 1)) !== '') {
+                throw new RuntimeException('Un `declare` que comparte su línea con más código.');
+            }
+
+            $at = $newline + 1;
+        }
+
         return [$at, $at, "\n".$line];
     }
 

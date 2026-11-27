@@ -121,6 +121,31 @@ PHP;
      * El `use` de un trait dentro de una clase del archivo no es un import:
      * el de SpaController no se pone a su lado.
      */
+    public function test_sin_imports_el_use_va_detras_del_declare(): void
+    {
+        // Un `use` delante de `declare(strict_types=1)` parsea, pero PHP lo
+        // rechaza al compilar: la aplicación entera dejaría de cargar.
+        $fixed = SpaFallback::rewrite("<?php\n\n// rutas\ndeclare(strict_types=1);\n\n".self::FALLBACK."\n");
+
+        $this->assertStringStartsWith("<?php\n\n// rutas\ndeclare(strict_types=1);\n\nuse App\\Http\\Controllers\\SpaController;\n", $fixed);
+        $this->assertStringContainsString('Route::fallback(SpaController::class);', $fixed);
+
+        $file = tempnam(sys_get_temp_dir(), 'spa');
+        file_put_contents($file, $fixed);
+        exec(escapeshellarg(PHP_BINARY).' -l '.escapeshellarg($file).' 2>&1', $output, $status);
+        unlink($file);
+
+        $this->assertSame(0, $status, implode("\n", $output));
+    }
+
+    public function test_un_declare_que_comparte_linea_no_se_toca(): void
+    {
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('declare');
+
+        SpaFallback::rewrite("<?php\n\ndeclare(strict_types=1); \$x = 1;\n\n".self::FALLBACK."\n");
+    }
+
     public function test_el_use_de_un_trait_no_es_un_import(): void
     {
         // Sin importar Route (vale el alias global) y con un import que va

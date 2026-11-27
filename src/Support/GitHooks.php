@@ -503,7 +503,9 @@ final class GitHooks
 
             $hooks[$hook] = match (true) {
                 $contents === null => 'missing',
-                ! str_contains($contents, self::SIGNATURE) && ! (str_contains($contents, self::DIRECTORY.'/') && str_contains($contents, $hook)) => 'foreign',
+                // Encadenado es que llame al de LaraPack por su nombre; que
+                // mencione la carpeta en un comentario no lo es.
+                ! str_contains($contents, self::SIGNATURE) && ! str_contains($contents, self::DIRECTORY.'/larapack-'.$hook) => 'foreign',
                 PHP_OS_FAMILY !== 'Windows' && ! is_executable($file) => 'not-executable',
                 str_contains($contents, self::SIGNATURE) => 'ours',
                 default => 'chained',

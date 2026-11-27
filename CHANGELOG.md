@@ -247,6 +247,20 @@ no entra en el alcance de Infection ni tiene suelo: medido aparte da 93 %, y
 los mutantes que sobreviven son equivalentes o comprobaciones defensivas; meterlo
 ahora movería el umbral global, que ya va justo.
 
+### Lo que encontró la revisión antes de publicar
+
+- **`larapack:fix route-closure` y `declare(strict_types=1)`.** En un `routes/web.php` sin ningún `use` y con
+  `declare` al principio, el `use` de SpaController quedaba delante del `declare`. El archivo parsea, pero PHP lo
+  rechaza al compilar y la aplicación deja de cargar. Ahora va detrás del `declare`; un `declare` que comparte línea
+  con más código se salta con su razón. La prueba compila el resultado con `php -l`.
+- **La guardia frena tres formas más de saltarse los hooks de git:** `core.hooksPath` dado por el entorno
+  (`GIT_CONFIG_KEY_<n>` y `GIT_CONFIG_PARAMETERS`), `git commit-tree`, que crea un commit sin pasar por ningún hook,
+  y un alias definido en la misma orden (`git -c alias.x=…`), cuyo contenido no se puede leer.
+  **Límite, dicho:** un alias de la configuración de git (`git ci --no-verify`) o una orden armada con variables de
+  la shell (`k=core.hooks; git config ${k}Path …`) no se leen; ahí la barrera es la CI.
+- **`larapack:guard --doctor`** ya no da por encadenado un hook del proyecto que sólo menciona la carpeta
+  `.githooks/` (un comentario, un `run-parts`): tiene que llamar a `.githooks/larapack-<hook>`.
+
 ## 9.2.0
 
 ### PHPStan en nivel 8, y lo que escondía

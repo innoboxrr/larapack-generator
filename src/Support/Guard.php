@@ -272,13 +272,31 @@ final class Guard
     private static function gitBypass(array $words): ?string
     {
         $index = 0;
+        $environment = [];
 
         while (isset($words[$index]) && (preg_match('/^[A-Za-z_][A-Za-z0-9_]*=/', $words[$index]) === 1 || in_array($words[$index], self::WRAPPERS, true))) {
+            if (str_contains($words[$index], '=')) {
+                $environment[] = $words[$index];
+            }
+
             $index++;
         }
 
         if (! in_array(strtolower(basename(str_replace('\\', '/', $words[$index] ?? ''))), ['git', 'git.exe'], true)) {
             return null;
+        }
+
+        // Git también lee configuración del entorno: `GIT_CONFIG_KEY_0=
+        // core.hooksPath` o `GIT_CONFIG_PARAMETERS="'core.hooksPath=…'"`
+        // valen lo mismo que `-c core.hooksPath=…`.
+        foreach ($environment as $assignment) {
+            [$variable, $value] = explode('=', $assignment, 2);
+
+            if ((preg_match('/^GIT_CONFIG_KEY_\d+$/', $variable) === 1 && self::namesHooksPath(trim($value, '\'"')))
+                || ($variable === 'GIT_CONFIG_PARAMETERS' && stripos($value, 'core.hookspath') !== false)
+            ) {
+                return 'GIT_CONFIG_* core.hooksPath';
+            }
         }
 
         // Las opciones globales van antes del subcomando, y algunas llevan su
@@ -292,6 +310,10 @@ final class Guard
                 $arguments[] = $word;
             } elseif ($pending === 'config' && self::namesHooksPath($word)) {
                 return 'git -c core.hooksPath';
+            } elseif ($pending === 'config' && preg_match('/^alias\./i', $word) === 1) {
+                // Un alias definido en la misma orden puede ser cualquier
+                // cosa, `commit --no-verify` incluido: no se puede leer.
+                return 'git -c alias.*';
             } elseif ($pending !== null) {
                 $pending = null;
             } elseif (in_array($word, ['-c', '--config-env'], true)) {
@@ -314,6 +336,8 @@ final class Guard
             'commit' => $noVerify !== [] || self::shortNoVerify($options) ? 'git commit --no-verify' : null,
             'merge' => $noVerify !== [] ? 'git merge --no-verify' : null,
             'push' => $noVerify !== [] ? 'git push --no-verify' : null,
+            // La fontanería que crea un commit sin pasar por ningún hook.
+            'commit-tree' => 'git commit-tree',
             'config' => self::setsHooksPath($arguments) ? 'git config core.hooksPath' : null,
             default => null,
         };
