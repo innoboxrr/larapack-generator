@@ -237,7 +237,7 @@ final class HandRolledLockFormatTest extends TestCase
         // longitud, T/F para los booleanos y N para null: `a` `bc` y `ab` `c`
         // no se confunden.
         $method = [
-            'name' => 'Run', 'line' => 1, 'visibility' => 'public', 'static' => true, 'params' => [],
+            'name' => 'Run', 'line' => 1, 'visibility' => 'public', 'static' => true, 'byRef' => false, 'params' => [],
             'attributes' => [['name' => 'App\A', 'line' => 1, 'args' => [[T_LNUMBER, '7', 1]]]],
             'signature' => [['(', '(', 1], [')', ')', 1]],
             'body' => null,
@@ -253,6 +253,14 @@ final class HandRolledLockFormatTest extends TestCase
 
         $this->assertSame(
             'sha256:'.hash('sha256', '[2:s3:run[5:s6:publicF[1:[2:s5:app\a[1:s1:7]]][2:s1:(s1:)][0:]]]'),
+            HandRolledLock::methodFingerprint($method)
+        );
+
+        // Por referencia, el `&` delante de la firma, como en el código.
+        $method['byRef'] = true;
+
+        $this->assertSame(
+            'sha256:'.hash('sha256', '[2:s3:run[5:s6:publicF[1:[2:s5:app\a[1:s1:7]]][3:s1:&s1:(s1:)][0:]]]'),
             HandRolledLock::methodFingerprint($method)
         );
     }
@@ -290,6 +298,7 @@ final class HandRolledLockFormatTest extends TestCase
             'visibilidad' => 'public static function verify(): bool { return true; }',
             'static' => 'protected function verify(): bool { return true; }',
             'firma' => 'protected static function verify(): ?bool { return true; }',
+            'por referencia' => 'protected static function &verify(): bool { return true; }',
             'cuerpo' => 'protected static function verify(): bool { return false; }',
             'atributo' => '#[\App\Attributes\Cached] protected static function verify(): bool { return true; }',
             'argumento de atributo' => '#[\\App\\Attributes\\Cached(5)] protected static function verify(): bool { return true; }',

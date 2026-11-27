@@ -1315,8 +1315,9 @@ php artisan larapack:hand-rolled revoke 'App\Http\Controllers\Integrations\Inbou
 
 Guarda el objetivo (`Clase` o `Clase::metodo`, con el nombre completo), la
 razón y la huella del código —sha256 de los tokens, sin espacios ni
-comentarios: de un método, su firma y su cuerpo; de una clase, todos sus
-métodos, su padre y sus traits—, ordenado y estable. Cambiar la razón o el
+comentarios: de un método, su firma (con el `&` si devuelve por referencia) y
+su cuerpo; de una clase, todos sus métodos, su padre y sus traits—, ordenado y
+estable. Cambiar la razón o el
 código invalida la aprobación: a una clase aprobada no se le añade una acción
 sin que el dueño la vuelva a aprobar, y ese diff del candado es el que revisa.
 `approve` recalcula la huella; sin nada que aprobar, `approve --all` no crea un

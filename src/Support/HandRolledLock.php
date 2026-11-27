@@ -191,11 +191,18 @@ final class HandRolledLock
     {
         // PHP no distingue mayúsculas en el nombre de un método: `Store` y
         // `store` son la misma acción.
+        //
+        // El `&` de un método que devuelve por referencia va delante de la
+        // firma, como en el código: `function &items()` y `function items()`
+        // no son lo mismo, y aprobar uno no aprueba el otro. Sólo cuando está,
+        // para que la huella de los demás métodos no cambie.
+        $signature = self::texts($method['signature']);
+
         return [strtolower($method['name']), [
             $method['visibility'],
             $method['static'],
             self::attributes($method['attributes']),
-            self::texts($method['signature']),
+            $method['byRef'] ? ['&', ...$signature] : $signature,
             $method['body'] === null ? null : self::texts($method['body']),
         ]];
     }

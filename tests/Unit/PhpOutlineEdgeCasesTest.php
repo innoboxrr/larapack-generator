@@ -68,6 +68,8 @@ final class PhpOutlineEdgeCasesTest extends TestCase
         $class = $this->only("<?php class A {\n    public function &items(): array { return \$this->items; }\n    public static function &shared() {}\n}");
 
         $this->assertSame(['items', 'shared'], array_column($class['methods'], 'name'));
+        $this->assertSame([true, true], array_column($class['methods'], 'byRef'));
+        $this->assertFalse($this->only('<?php class A { public function items() {} }')['methods'][0]['byRef']);
     }
 
     public function test_extends_solo_es_el_padre_de_una_clase(): void

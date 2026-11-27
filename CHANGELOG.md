@@ -27,7 +27,11 @@ Los mutantes que sobrevivían destaparon fallos, y se arreglan con su prueba:
   (`public function &items()`). Desde PHP 8.1 el `&` es un token con nombre
   (`T_AMPERSAND_NOT_FOLLOWED_BY_VAR_OR_VARARG`) y se comparaba con el carácter
   suelto. ControllerShape lo leía como una acción llamada `&`, y la huella de
-  una excepción aprobada sobre ese método no nombraba el método.
+  una excepción aprobada sobre ese método no nombraba el método. El `&` no se
+  pierde: el esquema del método lo apunta (`byRef`) y la huella lo pone
+  delante de la firma, como en el código, así que pasar un método aprobado a
+  devolver por referencia (o al revés) deja la aprobación sin efecto. La
+  huella de los métodos sin `&` no cambia.
 - **La línea de un `;` o un `(` tras un salto dentro de un espacio** era la de
   la línea anterior. Afecta a la línea que citan los mensajes de la forma del
   constructor.
