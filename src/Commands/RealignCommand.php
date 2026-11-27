@@ -41,6 +41,7 @@ use Symfony\Component\Console\Output\OutputInterface;
  *     next       el siguiente paso con todo lo necesario para hacerlo
  *     check <id> comprueba su done_when y lo marca hecho, o dice qué falta
  *     decide <id> <opción>  registra una decisión
+ *     playbook [<nombre>]   los playbooks del paquete, o uno sin rellenar
  *
  * Las que escriben (adopt, apply, infer, except) tienen --dry-run, exigen el
  * árbol git limpio salvo --allow-dirty e informan fixed/skipped/unchanged
@@ -51,7 +52,7 @@ class RealignCommand extends Command
     use TargetsProject;
     use WritesJson;
 
-    private const READS = ['diagnose', 'plan', 'status', 'next', 'check', 'decide', 'help'];
+    private const READS = ['diagnose', 'plan', 'status', 'next', 'check', 'decide', 'playbook', 'help'];
 
     /**
      * Las opciones que acepta cada acción además de --root y --format. Una
@@ -65,6 +66,7 @@ class RealignCommand extends Command
         'next' => ['package'],
         'check' => [],
         'decide' => ['note'],
+        'playbook' => [],
         'help' => [],
         'write' => ['package', 'dry-run', 'allow-dirty', 'option'],
         'apply' => ['package', 'dry-run', 'allow-dirty', 'option', 'deterministic'],
@@ -75,9 +77,9 @@ class RealignCommand extends Command
         $this->addRootOption();
 
         $this->setName('larapack:realign')
-            ->setDescription('Realinea con el contrato un proyecto que se desvió: diagnose, plan, status, next, check, decide y las operaciones adopt, apply, infer y except')
-            ->addArgument('action', InputArgument::OPTIONAL, 'diagnose, plan, status, next, check, decide, adopt, apply, infer, except o help', 'help')
-            ->addArgument('targets', InputArgument::OPTIONAL | InputArgument::IS_ARRAY, 'check: el id del paso; decide: el id y la opción; adopt/apply/infer/except: ids de paso (vacío, todos los que sepa hacer)')
+            ->setDescription('Realinea con el contrato un proyecto que se desvió: diagnose, plan, status, next, check, decide, playbook y las operaciones adopt, apply, infer y except')
+            ->addArgument('action', InputArgument::OPTIONAL, 'diagnose, plan, status, next, check, decide, playbook, adopt, apply, infer, except o help', 'help')
+            ->addArgument('targets', InputArgument::OPTIONAL | InputArgument::IS_ARRAY, 'check: el id del paso; decide: el id y la opción; playbook: su nombre; adopt/apply/infer/except: ids de paso (vacío, todos los que sepa hacer)')
             ->addOption('format', null, InputOption::VALUE_REQUIRED, 'Formato de salida: txt o json', 'txt')
             ->addOption('package', null, InputOption::VALUE_REQUIRED | InputOption::VALUE_IS_ARRAY, 'Sólo este paquete local (directorio, ruta o nombre de Composer), o `app` para el núcleo. Repetible')
             ->addOption('jobs', null, InputOption::VALUE_REQUIRED, 'diagnose: cuántas regeneraciones a la vez', '4')
@@ -119,6 +121,7 @@ class RealignCommand extends Command
                 'next' => $this->next($input, $output, $root),
                 'check' => $this->check($input, $output, $root, $targets),
                 'decide' => $this->decide($input, $output, $root, $targets),
+                'playbook' => $this->playbook($input, $output, $targets),
                 default => $this->write($input, $output, $root, $action, $targets),
             };
         } catch (RuntimeException $e) {
@@ -158,6 +161,7 @@ class RealignCommand extends Command
             'next' => 'El siguiente paso, con todo lo necesario para hacerlo sin contexto.',
             'check' => 'Comprueba el done_when de un paso y lo marca hecho, o dice qué falta.',
             'decide' => 'Registra la opción elegida en un paso de decisión.',
+            'playbook' => 'Lista los playbooks del paquete, o imprime uno sin rellenar con sus marcadores explicados.',
         ];
 
         foreach (Operations::ACTIONS as $operation) {
@@ -346,8 +350,9 @@ class RealignCommand extends Command
         $how = match ($step['category']) {
             Category::GUIDED => ['playbook' => Playbooks::resolve((string) ($step['playbook'] ?? Playbooks::GENERIC)), 'instructions' => Playbooks::render($step)],
             Category::DECISION => is_array($step['decision'] ?? null)
-                ? ['decided' => $step['decision'], 'then' => $this->optionOf($step, (string) ($step['decision']['option'] ?? ''))['run'] ?? null]
-                : ['options' => $step['options'] ?? [], 'decide' => 'larapack:realign decide '.$step['id'].' <opción> --note="por qué"'],
+                ? $this->decided($step)
+                : ['options' => $step['options'] ?? [], 'decide' => 'larapack:realign decide '.$step['id'].' <opción> --note="por qué"']
+                    + $this->instructions($step, is_string($step['playbook'] ?? null) ? $step['playbook'] : null),
             default => ['command' => $step['command'] ?? null, 'available' => $this->commandAvailable((string) ($step['command'] ?? ''))]
                 // Lo que la orden salte se hace a mano: el playbook del tipo.
                 + (isset($step['playbook']) ? ['fallback' => ['playbook' => Playbooks::resolve((string) $step['playbook']), 'instructions' => Playbooks::render($step)]] : []),
@@ -380,6 +385,10 @@ class RealignCommand extends Command
                 }
 
                 $output->writeln("\n  Decide con: ".$how['decide']);
+            }
+
+            if (isset($how['instructions'])) {
+                $output->writeln("\n".OutputFormatter::escape((string) $how['instructions']));
             }
 
             $this->writeFiles($output, $step);
@@ -494,6 +503,83 @@ class RealignCommand extends Command
 
         $output->writeln("  Decidido en {$id}: <info>{$option['key']}</info> — ".OutputFormatter::escape((string) $option['consequences']));
         $output->writeln($then === null ? '  Hazlo como dice la opción, y después: larapack:realign check '.$id : "  Ahora: {$then}\n  Y después: larapack:realign check {$id}");
+
+        return Command::SUCCESS;
+    }
+
+    /**
+     * Lo que dice `next` de una decisión ya tomada: la orden de la opción y,
+     * si la opción tiene playbook, sus instrucciones rellenadas.
+     *
+     * @param  array<string, mixed>  $step
+     * @return array<string, mixed>
+     */
+    private function decided(array $step): array
+    {
+        $option = $this->optionOf($step, (string) ($step['decision']['option'] ?? ''));
+
+        return ['decided' => $step['decision'], 'then' => $option['run'] ?? null]
+            + $this->instructions($step, is_string($option['playbook'] ?? null) ? $option['playbook'] : null);
+    }
+
+    /**
+     * @param  array<string, mixed>  $step
+     * @return array{playbook?: string, instructions?: string}
+     */
+    private function instructions(array $step, ?string $playbook): array
+    {
+        if ($playbook === null) {
+            return [];
+        }
+
+        return ['playbook' => Playbooks::resolve($playbook), 'instructions' => Playbooks::render($step, $playbook)];
+    }
+
+    /**
+     * @param  list<string>  $targets
+     */
+    private function playbook(InputInterface $input, OutputInterface $output, array $targets): int
+    {
+        if (count($targets) > 1) {
+            return $this->reportFailure($input, $output, 'playbook recibe a lo sumo un nombre: larapack:realign playbook [<nombre>].');
+        }
+
+        if ($targets === []) {
+            $list = [];
+
+            foreach (Playbooks::names() as $name) {
+                $first = strtok(Playbooks::describe($name), "\n");
+                $list[$name] = trim(ltrim($first === false ? '' : $first, '# '));
+            }
+
+            if ($this->wantsJson($input)) {
+                $this->writeJson($output, ['format_version' => RealignState::FORMAT_VERSION, 'ok' => true, 'action' => 'playbook', 'playbooks' => $list]);
+
+                return Command::SUCCESS;
+            }
+
+            foreach ($list as $name => $title) {
+                $output->writeln(sprintf('  %-32s %s', $name, OutputFormatter::escape($title)));
+            }
+
+            $output->writeln("\n  Uno entero: larapack:realign playbook <nombre>. Rellenado con lo de un paso, lo da larapack:realign next.");
+
+            return Command::SUCCESS;
+        }
+
+        if (! Playbooks::exists($targets[0])) {
+            return $this->reportFailure($input, $output, "No hay un playbook {$targets[0]}.", 'Hay: '.implode(', ', Playbooks::names()).'.');
+        }
+
+        $text = Playbooks::describe($targets[0]);
+
+        if ($this->wantsJson($input)) {
+            $this->writeJson($output, ['format_version' => RealignState::FORMAT_VERSION, 'ok' => true, 'action' => 'playbook', 'name' => $targets[0], 'instructions' => $text]);
+
+            return Command::SUCCESS;
+        }
+
+        $output->writeln(OutputFormatter::escape($text));
 
         return Command::SUCCESS;
     }

@@ -609,8 +609,17 @@ nueva se enchufa sin registrar un comando. Cada acción declara qué opciones us
 4. Los hallazgos de `ProjectVerification` reciben su paso con
    `StepTypes::forFinding`.
 5. [`Exceptions`](src/Support/Realign/Exceptions.php) lee las excepciones
-   aprobadas (`.larapack/realign/exceptions.json`): lo que cubren no se vuelve
-   a proponer.
+   aprobadas: lo que cubren no se vuelve a proponer. Se piden en
+   `.larapack/realign/exceptions.json` (la operación `except`, que puede
+   correr un agente) y se aprueban en el candado de `#[HandRolled]`
+   (`.larapack/hand-rolled.lock`, con `larapack:hand-rolled approve`), así que
+   la guardia, el hook de git y CODEOWNERS ya las protegen. Cada una nombra
+   lo que cubre con un objetivo y guarda su huella
+   ([`ExceptionTargets`](src/Support/Realign/ExceptionTargets.php)): un
+   closure por su llamada y su URI, un archivo por sus tokens. Las respetan
+   `ProjectVerification` y `Guard::findings` (lo cubierto baja a `info`) y
+   `ControllerShape`, que nombra cada closure. La guía:
+   [docs/realign/exceptions.md](docs/realign/exceptions.md).
 
 **El plan** ([`Planner`](src/Support/Realign/Planner.php)) agrupa por tipo de
 paso y ámbito —por archivo en `controller-shape`, por familia de plantilla en
@@ -629,8 +638,11 @@ paso no lo marca hecho; sólo esto.
 
 **`next`** rellena el playbook de un paso guiado con
 [`Playbooks`](src/Support/Realign/Playbooks.php)
-(`resources/realign/playbooks/<tipo>.md`, `generic.md` si no hay). Un marcador
-desconocido es un error: una instrucción a medias es peor que ninguna.
+(`resources/realign/playbooks/<tipo>.md`, `generic.md` si no hay), con sus
+anexos (`Playbooks::annexesFor`); el de una decisión mientras no se decide, y
+el de la opción elegida después. Un marcador desconocido es un error: una
+instrucción a medias es peor que ninguna. La guía:
+[docs/realign/guided.md](docs/realign/guided.md).
 
 **Las operaciones que escriben** implementan
 [`RealignOperation`](src/Support/Realign/Operations/RealignOperation.php) y
@@ -946,8 +958,10 @@ cambia algo que ve quien usa el generador.
   `Planner::doneWhen`. `RealignCatalogTest` comprueba que no falte nada y que
   [docs/realign/README.md](docs/realign/README.md) lo nombre.
 - **Un playbook**: `resources/realign/playbooks/<tipo>.md`, con los
-  marcadores de `Playbooks::PLACEHOLDERS`; el tipo apunta a él con
-  `playbook`. Uno que use un marcador que no existe falla la prueba.
+  marcadores de `Playbooks::PLACEHOLDERS`; el tipo, la decisión o la opción
+  apunta a él con `playbook`, y un anexo, desde `Playbooks::annexesFor`. Su
+  nombre va en [docs/realign/guided.md](docs/realign/guided.md). Uno que use un
+  marcador que no existe, o que se nombre y no exista, falla la prueba.
 - **Una operación que escribe** (`adopt`, `apply`, `infer`, `except`): la
   clase `src/Support/Realign/Operations/<Acción>Operation.php` que implemente
   [`RealignOperation`](src/Support/Realign/Operations/RealignOperation.php).

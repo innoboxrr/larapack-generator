@@ -35,6 +35,13 @@ sus comprobaciones.
 - [Limitaciones y riesgos](#limitaciones-y-riesgos)
 - [Para un agente: la receta](#para-un-agente-la-receta)
 
+Guías de cada parte:
+
+- [Los pasos guiados y los playbooks](guided.md): cómo se hace a mano lo que
+  no es determinista, con las instrucciones del paquete.
+- [Gestionar excepciones](exceptions.md): pedir, aprobar, caducar y verificar
+  lo que se deja como está a propósito.
+
 ## El modelo mental
 
 LaraPack genera el código de un proyecto desde su contrato (`laraimport.json`)
@@ -236,7 +243,12 @@ hacerlo **sin contexto**: qué es, su riesgo, sus archivos y hallazgos, y
   decidió, qué falta para cumplirlo.
 
 Los playbooks están en `resources/realign/playbooks/` del paquete. Un tipo sin
-playbook propio usa `generic.md`, y `next` lo dice en `how.playbook`.
+playbook propio usa `generic.md`, y `next` lo dice en `how.playbook`. Un paso
+puede llevar además **anexos** (`step.annexes`: el controlador que valida con
+`validate()` recibe `validate-to-rules`); una decisión, su playbook para
+pensarla; y una opción ya decidida, el suyo para hacerla. Todos y cómo se
+añade uno: [guided.md](guided.md). `larapack:realign playbook [<nombre>]` los
+lista o imprime uno sin rellenar.
 
 ## Comprobar que un paso está hecho
 
@@ -257,7 +269,11 @@ elemento por elemento, y termina con código distinto de cero. Hacer un paso
 | `foreign-keys` | El `laraimport.json` del ámbito declara `on_delete`/`on_update` en cada una de sus columnas (`columns`). El valor que declare es suyo: lo que había que resolver era que callaba. |
 | `decision` | Hay una decisión registrada. |
 
-Una decisión, además de su comprobación, necesita estar decidida.
+Una decisión, además de su comprobación, necesita estar decidida. Y si la
+opción elegida deja algo como está (su orden es `larapack:realign except`),
+además, cada excepción que pidió tiene que estar **aprobada por el dueño**
+([exceptions.md](exceptions.md)): mientras no, `check` dice cuál falta y a
+quién le toca.
 
 ## Las decisiones y las excepciones
 
@@ -269,25 +285,16 @@ Registra la opción en el plan (con la nota y la hora) y dice qué hacer para
 cumplirla: la orden de la opción, si la tiene. Decidir no es hacer: el paso
 sigue pendiente hasta que su `done_when` pasa.
 
-**Las excepciones aprobadas** viven en `.larapack/realign/exceptions.json` y
-las escribe la operación `except`. El diagnóstico no vuelve a proponer lo que
-cubren. El formato:
-
-```json
-{
-  "format_version": 1,
-  "exceptions": [
-    {"type": "unmanaged-http", "scope": ".", "file": "app/Http/Controllers/HookController.php",
-     "check": null, "reason": "Firma sobre el cuerpo en bruto.", "approved_by": "…", "at": "…"}
-  ]
-}
-```
-
-Una excepción casa si coinciden todas las claves que trae (`type`, `scope`,
-`file`, `check`); una sin `file` cubre todo lo de ese tipo en ese ámbito. **Sin
-`reason` no cuenta**, ni una que no acote por tipo, archivo o comprobación.
-Las de `#[HandRolled]` no van aquí: tienen su candado
-(`.larapack/hand-rolled.lock`).
+**Las excepciones.** Lo que se decide dejar como está y no puede llevar
+`#[HandRolled]` —un closure de ruta legítimo, código que se queda fuera del
+contrato, un archivo borrado adrede, un hallazgo que se acepta— se **pide** con
+`larapack:realign except <id> --option reason="…"` (lo puede hacer un agente;
+queda en `.larapack/realign/exceptions.json` y no cubre nada) y lo **aprueba el
+dueño** con `larapack:hand-rolled approve`, en el mismo candado que
+`#[HandRolled]` (`.larapack/hand-rolled.lock`), con la huella de lo que cubre:
+si ese código cambia, deja de cubrirlo. Una aprobada no la vuelve a proponer el
+diagnóstico, y verify la lista como `info`. Todo el proceso, sus formatos, sus
+límites y por qué un agente no puede aprobar: [exceptions.md](exceptions.md).
 
 ## Las operaciones que escriben
 
@@ -296,7 +303,7 @@ Las de `#[HandRolled]` no van aquí: tienen su candado
 | `adopt` | Pone el manifiesto al día con lo que hay: adopta, vuelve a enlazar, olvida. | `adopt`, `relink`, `prune`, `untracked-edited` |
 | `apply` | Ejecuta los pasos deterministas que reescriben código o el contrato (uno a uno, o todos con `--deterministic`). | `regenerate`, `missing` (restaurar), `fix`, `endpoint-tests`, `controller-concern`, `model-lists`, `pin-foreign-keys`, y los de `adopt` |
 | `infer` | Infiere el contrato desde el código: un `laraimport.inferred.json` borrador con su informe. Guía: [infer.md](infer.md). | `no-contract`, `unmanaged-models`, `unmanaged-http` |
-| `except` | Registra una excepción aprobada con su razón. | las decisiones con opción «dejarlo así» |
+| `except` | **Pide** una excepción por cada elemento del paso, con su razón (`--option reason=…`) y su huella; la aprueba el dueño con `larapack:hand-rolled approve` ([exceptions.md](exceptions.md)). | `route-closure`, `unmanaged-http`, `unmanaged-models`, `untracked-edited`, `missing`, `no-contract`, `inconsistent-entity` y los hallazgos aceptados (`fix`, `declared-routes`, `security`, `edited-outside`, `model-lists`, `endpoint-tests`, `verify-other`) |
 
 ```bash
 larapack:realign <acción> [<id>…] [--package=…] [--dry-run] [--allow-dirty] [--option clave=valor]
@@ -423,7 +430,7 @@ guiado o decisión, con su razón.
 .larapack/realign/
   report.json        el último diagnóstico (versionable)
   plan.json          los pasos, su estado y su historia (versionable)
-  exceptions.json    las excepciones aprobadas (versionable)
+  exceptions.json    las excepciones pedidas, sin aprobar (versionable; ver exceptions.md)
   .gitignore         deja fuera cache/
   cache/             lo regenerado para comparar (no se versiona)
 ```
@@ -546,6 +553,11 @@ contrato (`infer`, ver [infer.md](infer.md)) o dejar el proyecto fuera de LaraPa
 - **Una pasada no deja todo**: lo que `fix` deja igual a lo regenerado sale
   como `adopt` en la siguiente. Diagnostica y planifica otra vez después de
   `apply --deterministic`.
+  antes y después; el playbook lo pide ([guided.md](guided.md#riesgos-de-los-pasos-guiados)).
+- **Una excepción aprobada deja de vigilarse** mientras su código no cambie, y
+  la primera crea `.larapack/hand-rolled.lock` si no existía (con lo que un
+  `#[HandRolled]` sin aprobar pasa a ser error). Sus límites:
+  [exceptions.md](exceptions.md#limitaciones-y-riesgos).
 
 ## Para un agente: la receta
 
@@ -560,14 +572,19 @@ contrato (`infer`, ver [infer.md](infer.md)) o dejar el proyecto fuera de LaraPa
      `how.fallback.instructions`. Para ir más rápido, `apply --deterministic`
      hace todos los deterministas de una vez; después, `diagnose` y `plan`
      otra vez.
-   - `guided`: sigue `how.instructions` al pie de la letra.
-   - `decision`: **no decidas tú**. Presenta `how.options` a quien tenga
+   - `guided`: sigue `how.instructions` al pie de la letra (el playbook del
+     tipo y sus anexos), con las pruebas antes y después.
+   - `decision`: **no decidas tú**. Presenta `how.options` —y
+     `how.instructions` si trae el playbook de la decisión— a quien tenga
      autoridad y, cuando decida, `larapack:realign decide <id> <opción>
-     --note="…"`. Para `no-contract`, `unmanaged-models` y `unmanaged-http`
-     puedes preparar el material de la decisión sin decidir nada:
-     `larapack:realign infer <id>` escribe un borrador
-     (`laraimport.inferred.json`) y su informe, y no toca el código ni el
-     contrato ([infer.md](infer.md)).
+     --note="…"`. Decidido, `next` da lo que sigue (`how.then` y, si la
+     opción lo trae, su playbook). Si lo decidido es dejarlo como está,
+     pide la excepción (`larapack:realign except <id> --option reason="…"`)
+     y **no la apruebes**: díselo al dueño (`larapack:hand-rolled approve`).
+     Para `no-contract`, `unmanaged-models` y `unmanaged-http` puedes preparar
+     el material de la decisión sin decidir nada: `larapack:realign infer <id>`
+     escribe un borrador (`laraimport.inferred.json`) y su informe, y no toca
+     el código ni el contrato ([infer.md](infer.md)).
 4. `larapack:realign check <id> --format=json`. Si `done` es false, resuelve
    `remaining` y vuelve a comprobar.
 5. Comitea el paso (un commit por paso) y vuelve al 2.

@@ -77,7 +77,64 @@ final class DoneWhen
             array_unshift($remaining, 'Falta decidir: larapack:realign decide '.($step['id'] ?? '<id>').' <opción>.');
         }
 
+        $remaining = [...$remaining, ...$this->exceptionsOf($step, $remaining !== [])];
+
         return ['done' => $remaining === [], 'remaining' => $remaining, 'kind' => $kind];
+    }
+
+    /**
+     * Lo que falta de las excepciones del paso.
+     *
+     * Si se decidió dejarlo como está (una opción cuya orden es
+     * `larapack:realign except`), el paso no está hecho hasta que el dueño
+     * del proyecto apruebe cada excepción que se pidió: decidir y pedir lo
+     * puede cualquiera; aprobar, no. Sin ninguna pedida, falta pedirla.
+     *
+     * En cualquier otro paso que todavía no pasa, las que esperan aprobación
+     * se nombran, para que se sepa a quién le toca.
+     *
+     * @param  array<string, mixed>  $step
+     * @return list<string>
+     */
+    private function exceptionsOf(array $step, bool $failing): array
+    {
+        $id = (string) ($step['id'] ?? '');
+        $exceptions = new Exceptions($this->state);
+        $requests = array_filter($exceptions->requests(), fn (array $request): bool => $request['step'] === $id);
+        $chosen = null;
+
+        foreach ((array) ($step['options'] ?? []) as $option) {
+            if (is_array($option) && ($option['key'] ?? null) === ($step['decision']['option'] ?? false)) {
+                $chosen = $option;
+            }
+        }
+
+        $excepting = is_array($chosen) && str_starts_with((string) ($chosen['run'] ?? ''), 'larapack:realign except');
+
+        if (! $excepting && ! $failing) {
+            return [];
+        }
+
+        if ($excepting && $requests === []) {
+            return ["Se decidió dejarlo como está y falta pedir la excepción: larapack:realign except {$id} --option reason=\"por qué\"."];
+        }
+
+        $remaining = [];
+
+        foreach ($requests as $target => $request) {
+            $status = $exceptions->status($target);
+
+            if ($status !== Exceptions::APPROVED) {
+                $remaining[] = match ($status) {
+                    Exceptions::UNAPPROVED => "{$target}: excepción solicitada y sin aprobar. La aprueba el dueño del proyecto (larapack:hand-rolled approve), no un agente.",
+                    Exceptions::REASON_CHANGED => "{$target}: se aprobó con otra razón que la que se pide ahora; el dueño la vuelve a aprobar.",
+                    Exceptions::CODE_CHANGED => "{$target}: se aprobó sobre otro código; el dueño la vuelve a aprobar si sigue valiendo.",
+                    default => "{$target}: lo aprobado ya no existe; el dueño la retira (larapack:hand-rolled revoke).",
+                };
+            }
+        }
+
+        return $remaining;
     }
 
     /**
@@ -110,7 +167,7 @@ final class DoneWhen
         $remaining = [];
 
         foreach ($verification->run($checks)['findings'] as $finding) {
-            if ($finding['level'] === Verifier::INFO || ($files !== [] && ! in_array($finding['file'], $files, true))) {
+            if ($finding['level'] === Verifier::INFO || ($files !== [] && ! $this->concerns($finding, $files))) {
                 continue;
             }
 
@@ -129,6 +186,34 @@ final class DoneWhen
         }
 
         return $remaining;
+    }
+
+    /**
+     * Si un hallazgo es de estos archivos. El de `request-handle` está en la
+     * request, que el plan no conoce (el paso es del controlador): es de
+     * ellos si su mensaje nombra el controlador. Sin esto, un controlador que
+     * pasa a delegar en una request sin handle() daría el paso por hecho.
+     *
+     * @param  array{check: string, file: string|null, message: string}  $finding
+     * @param  list<string>  $files
+     */
+    private function concerns(array $finding, array $files): bool
+    {
+        if (in_array($finding['file'], $files, true)) {
+            return true;
+        }
+
+        if ($finding['check'] !== 'request-handle') {
+            return false;
+        }
+
+        foreach ($files as $file) {
+            if (str_contains($finding['message'], ' en '.$file.' ')) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

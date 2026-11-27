@@ -4,6 +4,7 @@ namespace Innoboxrr\LarapackGenerator\Support;
 
 use Closure;
 use Innoboxrr\LarapackGenerator\Attributes\HandRolled;
+use Innoboxrr\LarapackGenerator\Support\Realign\ExceptionTargets;
 use RuntimeException;
 
 /**
@@ -113,6 +114,15 @@ final class ControllerShape
     private array $declared = [];
 
     /**
+     * Los closures de rutas que se evaluaron, por su objetivo de excepción
+     * del realineamiento (ExceptionTargets): lo aprobado que no está aquí
+     * sobra.
+     *
+     * @var array<string, true>
+     */
+    private array $closures = [];
+
+    /**
      * @var array<string, list<ClassOutline>>
      */
     private array $outlines = [];
@@ -151,6 +161,7 @@ final class ControllerShape
         $findings = [];
         $requests = [];
         $this->declared = [];
+        $this->closures = [];
         $this->loadLock($findings);
         $files = $this->project->files('/Http/Controllers/');
 
@@ -259,12 +270,19 @@ final class ControllerShape
      */
     private function checkStale(array &$findings): void
     {
-        $stale = array_diff_key($this->approved ?? [], $this->declared);
+        // Las excepciones del realineamiento que no son de un closure las
+        // juzga ProjectVerification, que ve todos los hallazgos.
+        $stale = array_filter(
+            array_diff_key($this->approved ?? [], $this->declared, $this->closures),
+            fn (string|int $target): bool => ! ExceptionTargets::isRealign((string) $target) || str_starts_with((string) $target, ExceptionTargets::PREFIX.'route-closure:'),
+            ARRAY_FILTER_USE_KEY
+        );
         ksort($stale, SORT_STRING);
 
         foreach (array_keys($stale) as $target) {
-            $findings[] = $this->finding(Verifier::WARNING, self::HAND_ROLLED_STALE, HandRolledLock::PATH,
-                'Aprueba '.self::sanitise((string) $target).', que ya no lleva #[HandRolled] en ningún controlador. El dueño del proyecto la retira con larapack:hand-rolled revoke.');
+            $findings[] = $this->finding(Verifier::WARNING, self::HAND_ROLLED_STALE, HandRolledLock::PATH, ExceptionTargets::isRealign((string) $target)
+                ? 'Aprueba la excepción '.self::sanitise((string) $target).', y esa ruta ya no lleva su acción en un closure (o cambió de URI). El dueño del proyecto la retira con larapack:hand-rolled revoke.'
+                : 'Aprueba '.self::sanitise((string) $target).', que ya no lleva #[HandRolled] en ningún controlador. El dueño del proyecto la retira con larapack:hand-rolled revoke.');
         }
     }
 
@@ -436,8 +454,33 @@ final class ControllerShape
     private function checkRouteClosures(array &$findings): void
     {
         foreach ($this->routeClosures() as $file => $closures) {
+            $relative = $this->project->relative($file);
+            $named = [];
+
+            // El nombre y la huella con que se aprueba cada closure como
+            // excepción del realineamiento (ExceptionTargets), por su línea.
+            foreach ($closures === [] ? [] : ExceptionTargets::routeClosures($relative, (string) file_get_contents($file)) as $exception) {
+                $named[$exception['call'].'@'.$exception['line']] = $exception;
+                $this->closures[$exception['target']] = true;
+            }
+
             foreach ($closures as ['closure' => $closure, 'spa' => $spa]) {
-                $findings[] = $this->finding(Verifier::WARNING, self::ROUTE_CLOSURE, $this->project->relative($file), self::routeClosureMessage($closure, $spa));
+                $message = self::routeClosureMessage($closure, $spa);
+                $exception = $named[strtolower($closure['call']).'@'.$closure['line']] ?? null;
+                $approved = $exception === null ? null : ($this->approved[$exception['target']] ?? null);
+
+                if ($exception !== null && $approved !== null && $approved['fingerprint'] === $exception['fingerprint']) {
+                    $findings[] = $this->finding(Verifier::INFO, self::ROUTE_CLOSURE, $relative,
+                        "La ruta de la línea {$closure['line']} lleva su acción en un closure ({$closure['call']}()), escrito así a propósito: «".self::sanitise($approved['reason']).'». Excepción aprobada por el dueño del proyecto en '.HandRolledLock::PATH." ({$exception['target']}).");
+
+                    continue;
+                }
+
+                if ($exception !== null && $approved !== null) {
+                    $message .= " La excepción aprobada {$exception['target']} era de otro código: el closure cambió y ya no lo cubre. El dueño del proyecto la vuelve a aprobar (larapack:hand-rolled approve) o la ruta se lleva a un controlador.";
+                }
+
+                $findings[] = $this->finding(Verifier::WARNING, self::ROUTE_CLOSURE, $relative, $message);
             }
         }
     }

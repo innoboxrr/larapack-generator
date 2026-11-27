@@ -2,6 +2,8 @@
 
 namespace Innoboxrr\LarapackGenerator\Support;
 
+use Innoboxrr\LarapackGenerator\Support\Realign\Exceptions;
+
 /**
  * La guía de LaraPack convertida en algo que se ejecuta.
  *
@@ -1021,7 +1023,11 @@ final class Guard
      */
     public static function findings(string $root, array $only = []): array
     {
-        return ProjectRoot::using($root, fn (): array => (new Verifier(new Manifest($root)))->run($only));
+        // Lo que cubre una excepción del realineamiento aprobada por el dueño
+        // no retiene al agente: pasa a info, como en verify.
+        return Exceptions::forRoot($root)->applyTo(
+            ProjectRoot::using($root, fn (): array => (new Verifier(new Manifest($root)))->run($only))
+        );
     }
 
     /**

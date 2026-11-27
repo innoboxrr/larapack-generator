@@ -50,8 +50,8 @@ larapack:realign adopt|apply|infer|except [<id>…] [--dry-run] [--allow-dirty] 
   implementación lo dicen. Lo común lo hace el núcleo: árbol git limpio (salvo
   `--allow-dirty`), `--dry-run`, pasos que la operación sabe hacer y no
   bloqueados, informe `fixed`/`skipped`/`unchanged` e historia del paso.
-- **Las excepciones aprobadas** (`.larapack/realign/exceptions.json`, con
-  razón obligatoria) dejan de proponerse.
+- **Las excepciones aprobadas** dejan de proponerse (ver «Excepciones del
+  realineamiento», abajo).
 - Toda salida `--format=json` y los archivos de estado llevan
   `format_version` (1).
 
@@ -254,6 +254,91 @@ nombres que no siguen el prefijo de LaraPack.
   de las claves nuevas. Lo único que cambia en un proyecto existente es que
   un `import` ya no vuelve a crear un pivote o unas metas que crea otra
   migración (antes habría fallado en `migrate`).
+
+### Excepciones del realineamiento: pedir, aprobar, caducar
+
+Lo que no puede llevar `#[HandRolled]` —los closures de rutas legítimos (la
+raíz de la SPA según el Host, `/csp-report`, `/ci/test-health`, el `OPTIONS`
+del CORS de xAPI), un controlador o un modelo que se deja fuera del contrato,
+un archivo generado borrado adrede, un hallazgo que se acepta— tiene ahora el
+mismo mecanismo que los atributos: **quien pide no aprueba**. La guía:
+[docs/realign/exceptions.md](docs/realign/exceptions.md).
+
+```bash
+larapack:realign except <paso> --option reason="…"     # pide (también un agente)
+larapack:hand-rolled list                              # el dueño las lee
+larapack:hand-rolled approve "routes/web.php#post('/csp-report')"   # y las aprueba
+```
+
+- **`except`** pide una excepción por cada elemento del paso, con un
+  objetivo exacto (`realign:<tipo>[/<comprobación>]:<archivo>[#<sujeto>]`;
+  un closure se nombra por su llamada y su URI) y la huella de lo que cubre.
+  Escribe `.larapack/realign/exceptions.json` y nada más: pedir no cubre
+  nada. `--dry-run`, árbol limpio e informe como toda operación.
+- **La aprueba el dueño con `larapack:hand-rolled approve`, en el mismo
+  candado** (`.larapack/hand-rolled.lock`, mismo formato). Así la protegen,
+  sin una línea más, la guardia de los agentes (no pueden correr `approve`
+  ni escribir el candado), el hook de git que pregunta en la terminal y
+  CODEOWNERS. `list` dice el estado de cada una (`unapproved`, `approved`,
+  `reason-changed`, `code-changed`, `stale`); `approve` acepta el final del
+  objetivo; `revoke` la retira.
+- **Caduca cuando cambia lo que cubre**: el cuerpo, los parámetros o la URI
+  de un closure (moverlo, reformatearlo o comentarlo, no); los tokens de un
+  archivo; la ausencia de lo que se aprobó que no estuviera (un ámbito que
+  vuelve a tener `laraimport.json`); la frase de verify de una entidad.
+- **verify la respeta y la lista**: lo cubierto baja a `info` («Excepción
+  aprobada por el dueño del proyecto…»), lo caducado vuelve con su nivel y lo
+  dice, y una aprobada que ya no cubre nada es `hand-rolled-stale` (con
+  `--strict` falla). La salida JSON trae `exceptions`. `larapack:guard` y el
+  `check` de los pasos la respetan igual; el diagnóstico no vuelve a proponer
+  lo cubierto (tampoco un ámbito sin contrato aprobado fuera de LaraPack).
+- **`check` de una decisión que eligió dejarlo así** no pasa hasta que el
+  dueño aprueba cada excepción pedida, y dice cuál falta y a quién le toca.
+
+### Pasos guiados: los playbooks del paquete
+
+Cada trabajo mecánico tiene sus instrucciones en el paquete, y `next` las da
+rellenadas con lo de ese paso. La guía: [docs/realign/guided.md](docs/realign/guided.md).
+
+- **`controller-to-request`** (antes `controller-shape`): objetivo,
+  precondiciones, pasos exactos, qué no hacer, el **403 antes que 422** que
+  pasó en school-management y la prueba antes y después.
+- **Anexos** que el plan añade por lo que dice verify: `validate-to-rules`
+  (valida con `validate()`) y `raw-request-to-formrequest` (recibe
+  `Illuminate\Http\Request`; los parámetros escalares de la ruta pasan a
+  `$this->route()`).
+- **De una opción**, una vez decidida: `closure-to-controller` (el
+  `refactor` de un closure) y `declare-handwritten-controller` (declarar en
+  `endpoints`/`controllers[]` lo que conserva su nombre de ruta y su URI).
+- **De una decisión**, para pensarla antes: `decide-hand-rolled`,
+  `decide-route-closure`, `decide-unmanaged-http`, `decide-adopt-model`,
+  `decide-package-without-models` y `decide-foreign-keys` (`cascade` frente a
+  `restrict`).
+- `declared-routes` y `security`, para los tipos guiados que caían en el
+  genérico.
+- **`larapack:realign playbook [<nombre>]`** los lista o imprime uno con cada
+  marcador explicado.
+- **`larapack:verify --path`** (repetible) acota a archivos o directorios. El
+  verify de cada playbook va acotado al paso (`--check=… --path=…`).
+- **Un controlador está hecho cuando delega y su request tiene `handle()`**:
+  el `done_when` de `controller-shape` mira también `request-handle`, aunque
+  el hallazgo esté en la request.
+
+Ensayado sobre copias, sin tocar los originales:
+
+| | expediente | brandai | school-management |
+|---|---|---|---|
+| Closures de rutas nombrados como excepción | 4 de 4 (`/ci/test-health`, `/csp-report`, `/app-shell`; el `fallback()` es de `larapack:fix`) | 63 de 63, ninguno saltado | 4 de 4 (lectura de sus rutas) |
+| Pedidas, aprobadas y `verify --strict --check=route-closure` | 3 → 0 errores, 1 aviso: el `fallback()` | `--dry-run` | — |
+| Pasos `controller-shape` con anexos | 77: 64 `validate-to-rules`, 71 `raw-request-to-formrequest` | 196: 60 y 158 | — |
+
+- **Al actualizar.** La primera aprobación crea `.larapack/hand-rolled.lock`
+  si no existía, y desde entonces un `#[HandRolled]` sin aprobar es error. Un
+  verify anterior a 9.4.0 ve las aprobaciones `realign:` como sobrantes
+  (`hand-rolled-stale`): todo el equipo y CI, en 9.4.0 antes de aprobar la
+  primera. La forma de `.larapack/realign/exceptions.json` cambió respecto a
+  la del núcleo (era `exceptions`, ahora `requests` con su objetivo), que
+  ninguna versión publicada escribía.
 
 ## 9.3.1
 

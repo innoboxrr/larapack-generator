@@ -1500,6 +1500,7 @@ dependencia: su manifiesto no se lee.
 php artisan larapack:verify --package=school-library        # sólo ese (directorio, ruta o nombre de Composer)
 php artisan larapack:verify --package=app                   # sólo el núcleo
 php artisan larapack:verify --no-packages                   # sin los manifiestos de los paquetes, como antes de 9.3.1
+php artisan larapack:verify --path=app/Http/Controllers/X.php   # sólo lo de ese archivo o directorio (9.4.0)
 ```
 
 La salida de texto termina con una línea por paquete; la JSON trae `summary`,
@@ -2800,7 +2801,7 @@ larapack:fix                     Corrige index-managed y resource-appends, el fa
 larapack:audit                   Comprueba la línea base del ecosistema.
 larapack:skill                   Instala las instrucciones para un agente; con --hooks, la guardia.
 larapack:guard                   Hook para agentes: comprueba el archivo recién editado.
-larapack:hand-rolled             Lista, aprueba o retira las excepciones #[HandRolled] (el dueño).
+larapack:hand-rolled             Lista, aprueba o retira las excepciones #[HandRolled] y las del realineamiento (el dueño).
 larapack:ci                      Crea el workflow «LaraPack verify», el ruleset para la rama y, con --owner, CODEOWNERS;
                                  con --check, dice si la rama exige el check.
 larapack:realign                 Realinea con el contrato un proyecto que se desvió: diagnose, plan, status, next, check,
