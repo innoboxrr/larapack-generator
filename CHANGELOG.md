@@ -1,5 +1,424 @@
 # Changelog
 
+## 9.3.1
+
+### Migraciones: se leen todas antes de escribir ninguna
+
+Los cinco defectos de migraciones que encontró el análisis de viabilidad sobre
+school-management, expediente y brandai. Cada uno tiene su prueba con
+migraciones reales de esas aplicaciones, copiadas tal cual a
+`tests/Fixtures/migrations` (`tests/EndToEnd/MigrationHistoryTest.php`, que
+levanta la base con `migrate:fresh` y comprueba que el segundo
+`import --force` no escribe nada, y `tests/Unit/MigrationReaderTest.php`).
+
+El esquema actual de una tabla lo calcula ahora `SchemaHistory` con TODAS las
+migraciones del directorio, leídas con el tokenizador de PHP
+(`MigrationReader`), y cada columna se compara por lo que significa
+(`ColumnDefinition`), no por cómo se escribió. Medido en simulación sobre
+copias de las tres aplicaciones (`import --force --dry-run`, la 9.3.0 contra
+esta):
+
+| | 9.3.0 | 9.3.1 |
+|---|---|---|
+| school-management (raíz) | 91 alteraciones (89 vacías, 2 de nada) y 37 creaciones reescritas | 0 alteraciones; 5 creaciones regeneradas, sin otra migración y sin cambios |
+| school-management (paquetes) | 6 alteraciones y 499 creaciones reescritas | 0 alteraciones; 8 regeneradas como arriba |
+| expediente | 33 alteraciones vacías | 1 alteración, real: `reference_standards.version` valía `'1'` y el laraimport dice `'1.0'` (D3) |
+
+Leídas sin error 2 237 migraciones de las tres aplicaciones; en el 4,7 % de
+las tablas (61 de 1 294) alguna migración no se puede leer con seguridad, y
+sobre ellas no se escribe nada.
+
+#### D1. Reescribía la migración de creación de una tabla ya alterada
+
+- **Qué pasaba.** Cuando las alteraciones ya cubrían el laraimport, `alter()`
+  no tenía nada que escribir y `create()` caía en `generate()`, que con
+  `--force` reescribía la creación CON las columnas que habían añadido las
+  alteraciones. Una base nueva las añadía dos veces: `migrate:fresh` moría con
+  «duplicate column».
+- **A quién.** A todo proyecto que hubiera alterado una tabla y regenerara con
+  `--force`: 50 tablas en school-management (`regulatory_authorities.state_code`,
+  `official_catalog_versions`, `inbound_webhooks.headers`, `ai_chunks.embedding`…).
+  También `larapack:migration --force` y `larapack:model --force`.
+- **Cómo se corrige.** Una creación que ya existe **nunca** se reescribe si
+  cualquier otra migración toca su tabla. Si el esquema ya coincide, no se
+  escribe nada: el informe la da por `skipped` y dice cuántas migraciones la
+  tocan. Tampoco se reescribe si hay algo que se conserva (una llave en
+  `cascade`, una columna escrita a mano). Y una tabla que ya crea otra
+  migración, con otro nombre, no recibe una segunda creación.
+- **Al actualizar.** Si ya reescribiste creaciones con 9.3.0, corre
+  `php artisan migrate:fresh` en una base de prueba: lo que reviente con
+  «duplicate column» es una creación reescrita. Quita de ella las columnas que
+  añaden sus alteraciones (están en la alteración: la base de producción las
+  tiene). Lo regenerado de aquí en adelante ya no lo hace.
+
+#### D2. Sólo leía las alteraciones con nombre de LaraPack
+
+- **Qué pasaba.** El esquema actual salía de la creación y de los
+  `*_alter_<tabla>_table.php`. Una migración escrita a mano con otro nombre
+  quedaba fuera, y el generador volvía a añadir lo que ella ya añadía
+  (school-site: `site_media.php` añade `cover_file`). Y leía las columnas con
+  una expresión regular de una línea: `string('x', 500)`, una llave repartida
+  en cinco líneas o `index('x')` se leían mal o como columnas.
+- **A quién.** A quien escribe migraciones a mano junto a las generadas:
+  school-management (322 de 1 176), expediente (las `hasColumn()`), brandai.
+- **Cómo se corrige.** Se leen todas las migraciones que tocan la tabla
+  (`Schema::create/table('<tabla>')`, con prefijo), en el orden de `migrate`, y
+  sólo lo que hace `up()` y sus métodos auxiliares. Lo que no se lee con
+  seguridad no se adivina:
+  - una columna en un bucle, la tabla en una variable con un cuerpo que no se
+    lee, `Schema::rename` o SQL que crea o renombra tablas dejan la tabla
+    **opaca**: no se escribe ninguna alteración y el informe nombra el archivo;
+  - SQL crudo (`DB::statement`) que cambia columnas las deja **inciertas**: si
+    se lee, las que nombra; si se arma en el momento, todas las que el archivo
+    escribe. Un SQL que sólo añade CHECK, índices o disparadores no cuenta;
+  - un `if` con `Schema::hasColumn`/`hasTable` cuenta como hecho; cualquier
+    otro, incierto;
+  - SQL armado que pone o quita llaves deja sin comparar las llaves de las
+    tablas que nombra el archivo.
+
+  Sobre lo incierto nunca se escribe un `dropColumn` ni un `add`, y lo que una
+  persona escribió —una columna o una llave de una migración que LaraPack no
+  generó— no se cambia ni se quita: se avisa.
+- **Al actualizar.** Nada. El informe trae ahora razones nuevas en los
+  `skipped`; léelas: lo que dicen que no se hizo es una decisión tuya.
+
+#### D3. Un `default` deshecho o escrito sin comillas valía otra cosa
+
+- **Qué pasaba.** Dos caras del mismo fallo. El `down()` de una alteración
+  copiaba el texto de la migración vieja: la 9.0 escribía `->default(01)` para
+  el `'01'` del laraimport, y `01` es el octal 1, así que el `down()` de
+  school-payroll quedaba `->default(02)`, que se lee como un número sobre una
+  columna de texto. Y en el `up()`, una cadena con forma de número decimal iba
+  sin comillas en cualquier columna: el `'1.50'` de una columna de texto
+  llegaba como el número 1.5 y la base guardaba `'1.5'` (expediente:
+  `reference_standards.version`, `'1.0'` guardado como `'1'`).
+- **A quién.** A columnas de texto con un `default` numérico; a proyectos que
+  vienen de la 9.0.
+- **Cómo se corrige.** El `default` se escribe según la columna
+  (`Tool::defaultLiteral`, en modelo y pivote): en una numérica, los números
+  sin comillas, como siempre; en una de texto, todo lo que no es booleano entre
+  comillas. El `down()` ya no copia texto: escribe el valor que de verdad
+  tenía la columna, `->default('1')` en vez de `->default(01)`. Y la
+  comparación es por lo que guarda la base, así que `->default(5)` y
+  `->default('5')` son lo mismo: el primer import no escribe alteraciones por
+  la forma del literal.
+- **Al actualizar.** El primer `import` escribe la alteración que corrige las
+  columnas de texto cuyo `default` se perdía (`'1.0'` que valía `'1'`).
+  Revísala y migra. Una creación sin otras migraciones que se regenere con
+  `--force` cambia `->default(5)` por `->default('5')` en columnas de texto:
+  la base no cambia.
+
+#### D4. Alteraciones vacías por `cascade` frente a `restrict`
+
+- **Qué pasaba.** Desde 8.0 las llaves salen `restrict` por omisión y las de
+  7.x dicen `onDelete('cascade')`. `alter()` comparaba texto y escribía una
+  alteración vacía con «escribe el cambio a mano» por cada una: 89 en
+  school-management, 33 en expediente. Y cuando la llave sí cambiaba, tampoco
+  la escribía: dejaba el comentario.
+- **A quién.** A todo proyecto generado con 7.x.
+- **Cómo se corrige.** La llave se compara por lo que hace (tabla, columna y
+  acciones efectivas, `no action` = `restrict`) y da igual cómo se escribió:
+  `foreignId()->constrained()` y `unsignedBigInteger()` más
+  `foreign()->references()->on()` son la misma, en cualquier orden de
+  modificadores. Lo que el laraimport no declara no lo pide cambiar: una acción
+  que no escribe se conserva, y el informe sugiere declararla
+  (`"on_delete": "cascade"`). Si declara otra, la alteración quita la llave y la
+  vuelve a crear (`dropForeign` + `foreign()`), con su `down()`. Nunca se
+  escribe una migración vacía. Para eso el laraimport normalizado sabe qué
+  acciones se escribieron (`declared_actions`): el esquema rellena las demás
+  con `restrict`.
+- **Al actualizar.** Borra las alteraciones vacías que dejó la 9.x (sólo con
+  comentarios «escribe el cambio a mano») si no se han migrado; si ya están en
+  producción, no hacen nada y pueden quedarse. Decide la semántica de cada
+  llave: declara `on_delete`/`on_update` para conservar la cascada, o
+  `restrict` para cambiarla, y el siguiente import escribe la alteración.
+
+#### D5. La llave hacia una tabla que se crea después
+
+- **Qué pasaba.** Al añadir una llave a un modelo existente, 7.x reescribía la
+  creación con la llave dentro sin mirar el orden: `create_practitioners_table`
+  corre antes que `create_specialties_table` y una base nueva moría con «1824
+  Failed to open the referenced table» (expediente). Y un ciclo de llaves
+  (brandai: `sites` ↔ `registered_domains`) no tenía arreglo: el validador lo
+  rechazaba siempre.
+- **A quién.** A llaves nuevas entre tablas que ya existen, a tablas creadas
+  en el orden contrario y a los ciclos.
+- **Cómo se corrige.** La llave nueva va en una alteración fechada después de
+  la última migración de la tabla y de la creación de la tabla a la que apunta
+  (también si ésta está fechada en el futuro). En una creación nueva, una
+  llave hacia una tabla de este laraimport que todavía no existe se escribe sin
+  `constrained()`, y la llave va en `<fecha>_add_foreign_keys_to_<tabla>_table.php`,
+  después de todas las creaciones de la importación. Un ciclo con alguna llave
+  nullable ya no es un error: es un aviso, y se resuelve así. Sin ninguna
+  nullable sigue siendo error, ahora diciendo por qué (no se podría insertar la
+  primera fila).
+- **Al actualizar.** Nada. Si tenías un ciclo y lo partiste a mano, puedes
+  declararlo entero y quitar el apaño.
+
+#### Lo que queda, dicho
+
+- Una creación **editada a mano** sigue sin leerse para escribir su alteración
+  (`preserved`), como en 9.3.0.
+- Las columnas que añadió una versión de LaraPack **sin manifiesto** cuentan
+  como escritas a mano: no se cambian ni se quitan solas.
+- Del SQL armado en el momento se dejan fuera los nombres que escribe el
+  archivo; un nombre de columna armado a trozos (`"{$x}_key"`) no se ve. El
+  informe lo avisa cuando escribe una alteración sobre esa tabla.
+- `migrate:fresh` se comprueba en SQLite, no en MySQL: el orden de las llaves
+  se comprueba por las fechas de los archivos, no por el error 1824.
+
+### Una relación añadida al contrato después se detecta, y se añade al trait
+
+**Qué pasaba.** El trait de relaciones (`Models/Traits/Relations/<Modelo>Relations.php`)
+se escribe una sola vez: es un hueco del proyecto. Una relación añadida después
+a `load_relations` no aparecía nunca —ni con `--force`—, y nada lo decía.
+
+**A quién afectaba.** A cualquier proyecto que amplía su contrato. Expediente lo
+documenta como una trampa («borra el trait para que se regenere», lo que rompe
+el autoload si se borran varios) y acabó escribiéndolas a mano, como
+`Location::practitioner_locations()`.
+
+**Cómo se corrige.** El trait sigue sin sobrescribirse. `verify` gana
+`relation-missing` (aviso): contra el `laraimport.json` de la raíz, una relación
+que ni el modelo ni sus traits (`Models/Traits/*/<Modelo>*.php`) definen, con el
+método y el `use` exactos en el mensaje. Y `larapack:fix relation-missing` los
+añade al final del trait ([`RelationFix`](src/Support/RelationFix.php)) cuando
+es seguro de forma determinista: un único trait en el archivo, nadie define ya
+ese nombre y el nombre corto del modelo relacionado no está importado para otra
+clase. Si no, `skipped` con la razón. Con `--dry-run`, el diff.
+
+**Al actualizar.** `verify` puede empezar a avisar `relation-missing` en
+relaciones que llevaban tiempo declaradas y sin escribir; `larapack:fix
+relation-missing --dry-run` enseña qué añadiría. Una relación que el proyecto
+escribió en otro sitio —un trait que no sigue el nombre `<Modelo>*.php`, un
+trait de otro paquete— sale como que falta: muévela al modelo o a sus traits, o
+retírala del contrato si ya no la quieres declarar.
+
+### Un modelo editado a mano recibe las columnas nuevas en sus listas
+
+**Qué pasaba.** Con `--force`, un modelo editado a mano se conservaba entero
+(«conservado … (editado a mano)»), y con él sus listas: al añadir una columna al
+laraimport, `$fillable`, `$creatable`, `$updatable`, `$export_cols` y `casts()`
+se quedaban sin ella, sin aviso. `verify` tampoco lo veía: no lee el laraimport.
+
+**A quién afectaba.** A todo proyecto que edita sus modelos (traits propios,
+`booted()`, un `$table`): en school-management, 30 modelos desfasados —en
+`app/Models/ExternalIdentity.php` la columna `shared` no se convertía a booleano
+y no se exportaba; `ChargeLine::$export_cols` sin `discount_id`,
+`scholarship_award_id` ni `late_fee_rule_id`—; expediente lo documentaba como
+una trampa y lo resolvía a mano en cinco sitios por columna.
+
+**Cómo se corrige.** Las listas salen de un solo sitio,
+[`ModelLists`](src/Support/ModelLists.php), que usan el generador, la
+corrección y `verify`. Con `larapack:import --force`, un modelo conservado
+pasa por [`ModelRegions`](src/Support/ModelRegions.php): sobre tokens localiza
+cada región —la propiedad declarada una sola vez con `= [ … ];`, o `casts()`
+cuyo cuerpo es sólo `return [ … ];` (o `$casts`)— y **añade** lo que falta al
+final, con la forma que ya tiene la lista (en la misma línea, una por línea, o
+en una línea propia si está vacía). Nada más del archivo cambia, byte a byte.
+Nunca quita una entrada ni cambia un cast que existe con otro valor (pudo
+decidirlo una persona). Lo que no reconoce con certeza —la región no existe,
+está dos veces, lleva una constante, un spread o `array()`— no lo toca y lo
+devuelve con la orden manual exacta. El informe lo dice: el motivo del
+`conservado` nombra las regiones completadas; en JSON, `regions: [{file,
+added, skipped: [{region, reason, manual}], dryRun}]`; con `--dry-run`, lo que
+se completaría. `verify` gana `model-lists-outdated` (aviso), que compara el
+modelo con el `laraimport.json` de la raíz **sin regenerar**: lo que falta, con
+la orden; lo que sobra o un cast distinto, como info.
+
+Las reglas de las Requests (`rules()` de Create y Update) **no** se tocan: el
+generador las escribe una vez desde `requests[]` y no les deja marca de región,
+y el contrato de esos proyectos las trata como un hueco del proyecto.
+
+**Al actualizar.** `verify` puede empezar a avisar `model-lists-outdated` en
+modelos que llevaban tiempo desfasados (y con `--strict` falla): corre
+`larapack:import --force` (o `--dry-run` antes) y revisa los `skipped`. Un
+`larapack:full-model` suelto sigue sin leer el laraimport —regenera el modelo
+con las listas vacías—; ahora `verify` lo dice.
+
+### Lo generado se formatea aunque el proyecto no tenga Pint, y se dice con cuál
+
+**Qué pasaba.** El `Formatter` sólo buscaba la Pint del proyecto
+(`vendor/laravel/pint/builds/pint`). Con `builder` usado desde fuera —el
+generador clonado aparte y el proyecto sin `vendor/`—, `import --force` escribía
+sin formatear (`"formatted": null` en el JSON, y nada más que un aviso en texto).
+
+**A quién afectaba.** A school-management y a quien corra el generador contra
+un proyecto sin dependencias instaladas: unos 5 600 archivos que sólo diferían
+de lo regenerado en el formato de Pint, y que a partir del siguiente Pint del
+proyecto el manifiesto daba por editados a mano (`customised`), así que
+`--force` ya no los regeneraba nunca.
+
+**Cómo se corrige.** `Formatter::resolve()` elige, por orden, `LARAPACK_PINT`
+(una ruta, u `off` para no formatear a propósito), la Pint del proyecto y la
+que trae el generador (su `vendor/`, o el `vendor/` que lo contiene). Siempre con
+el `pint.json` del proyecto, pasado como `--config`; sin él, el preset laravel.
+`laravel/pint` pasa de `require-dev` a `require` del generador, así que la
+tiene también quien lo instala sin dependencias de desarrollo. El informe de
+generación lo dice: en texto, una línea con qué Pint y qué configuración; con
+`--format=json`, `formatter: {source, pint, config, message}` (`source`:
+`override`, `project`, `generator`, `none` o `disabled`). Si no hay ninguna,
+`formatted` es `null`, `source` es `none` y el mensaje dice qué instalar.
+`larapack:fix` usa la misma resolución.
+
+**Al actualizar.** Si lo regenerado con 9.3.0 o antes quedó sin formatear y el
+proyecto lo pasó después por Pint, esos archivos figuran como `customised`; no se
+arregla solo —el hash del manifiesto es el de lo que se escribió—. La suite del
+generador corre con `LARAPACK_PINT=off` (en `phpunit.xml.dist`), para que sus
+instantáneas sigan comparando la salida de las plantillas.
+
+### El manifiesto se escribe una vez por corrida, de forma atómica
+
+**Qué pasaba.** `Manifest::record()` releía y reescribía `.larapack/manifest.json`
+entero tras cada archivo generado: un `larapack:import` de tres modelos lo
+escribía 103 veces. Era cuadrático y, en Windows, chocaba con el bloqueo de
+archivos (`file_put_contents(.../.larapack/manifest.json): Failed to open stream:
+Permission denied`) en un modelo distinto en cada corrida, sin converger.
+
+**A quién afectaba.** A cualquier proyecto grande, y sobre todo en Windows: en
+expediente (1 MB, 71 modelos, 3 969 archivos) el import ya no terminaba y el
+proyecto pasó a escribir a mano lo que el generador habría tocado.
+
+**Cómo se corrige.** `Manifest::batch()` abre una corrida: todas las instancias
+leen y anotan sobre una copia en memoria (por ruta), y se escribe una sola vez
+al salir —en un `finally`, así que un fallo a mitad conserva lo registrado
+hasta entonces; si además falla la escritura, el error original queda como
+`getPrevious()`—. `larapack:import` y `larapack:full-model` corren dentro de una.
+La escritura es atómica (temporal junto al manifiesto y `rename()` encima) y
+reintenta un bloqueo pasajero seis veces con espera creciente (~0,8 s en total).
+Si no cede, el manifiesto anterior queda intacto, el temporal **no se borra** y
+el error dice dónde está para moverlo a mano. `Manifest::diskWrites()` cuenta las
+escrituras del proceso, para diagnosticar.
+
+**Al actualizar.** Nada que hacer. Si un import anterior murió con «Permission
+denied», el manifiesto puede no conocer archivos que sí se generaron: `verify`
+los da por `customised`; regenerar con `--force` esos archivos (o borrarlos y
+volver a importar) los vuelve a registrar.
+
+### `verify` sin `--root` ya no mide el propio generador
+
+**Qué pasaba.** Sin `--root`, la raíz se descubría subiendo desde donde está
+instalado el generador hasta un `vendor/autoload.php`. Con el `builder` de un
+clon —o con un `vendor/bin/builder` que lleva a un clon por un repositorio
+`path` con enlace simbólico— ese directorio es el propio generador, que tiene
+su vendor. `larapack:verify` corrido así desde el proyecto medía el generador y
+devolvía `ok: true` con un solo aviso, `empty-manifest`: un falso verde. Lo
+mismo valía para cualquier comando con `--root`, también para los generadores.
+
+**A quién afectaba.** A quien corre el `builder` de un clon del generador, o
+tiene el generador enlazado por un repositorio `path`, sin pasar `--root`. En
+school-management el análisis de viabilidad lo encontró así.
+
+**Cómo se corrige.** La raíz sale del directorio de trabajo: subiendo desde él,
+el primer directorio con un `laraimport.json`, un `.larapack/manifest.json` o
+un `composer.json` que requiere `innoboxrr/larapack-generator` (en `require` o
+`require-dev`). Si no hay ninguno, la de siempre. Y todo comando con `--root`
+(los de `TargetsProject`: los generadores, `import`, `validate`, `verify`,
+`fix`, `ci`, `hand-rolled`, `skill`, `remove-full-model`) falla si la raíz
+—indicada o descubierta— es el propio generador sin manifiesto ni laraimport,
+diciendo qué buscó y que se le pase `--root`. Un `.larapack/` sin manifiesto
+no cuenta como marca: uno así, con sólo un candado de `#[HandRolled]`, puede
+quedar en `/` por un comando lanzado desde ahí y volvería «el proyecto» a todo
+lo que cuelga de él.
+
+**Al actualizar.** Nada que hacer si ya pasabas `--root` o corrías el comando
+desde el proyecto con el generador instalado por Composer. Si un script corría
+el `builder` desde un directorio que no es un proyecto y se fiaba de que
+«saliera bien», ahora falla: pásale `--root=<proyecto>`. Desde un subdirectorio
+del proyecto, o desde el de un paquete local, ahora se mide ese proyecto o ese
+paquete.
+
+### `verify` en la raíz lee los manifiestos de los paquetes locales
+
+**Qué pasaba.** Un proyecto con paquetes locales tiene un manifiesto en la raíz
+y otro en cada paquete (`packages/<p>/.larapack/manifest.json`). `verify` en la
+raíz recorría el código de todos —controller-shape mira `packages/*`— pero sólo
+leía el manifiesto de la raíz: un archivo generado que faltaba en un paquete,
+o una request sin acción declarada, no salía.
+
+**A quién afectaba.** A los proyectos con paquetes locales generados con
+LaraPack. En school-management hubo que correr `verify` 81 veces, una por
+paquete con su `--root`, y así salieron dos `missing-file` y tres
+`route-not-declared` que la raíz no veía.
+
+**Cómo se corrige.** Desde la raíz, además de lo de siempre, se corren las
+comprobaciones del manifiesto (`missing-file`, `customised`,
+`inconsistent-entity`, `route-prefix`, `route-not-declared`,
+`endpoint-missing`, `immutable-write`, `secret-exposed`,
+`endpoint-tests-outdated`) contra el manifiesto de cada paquete local que lo
+tenga: los repositorios `path` del `composer.json` y `packages/*`, sólo los que
+están dentro de la raíz (un `path` que apunta fuera es una dependencia). Las
+del código no se repiten. En el JSON, cada hallazgo lleva `package` —su nombre
+de Composer, o `null` si es del núcleo— y la ruta relativa a la raíz del
+proyecto (`packages/billing/src/...`); el informe trae `summary`, una fila por
+raíz (`package`, `path`, `manifest`, `errors`, `warnings`, `info`), cuyos
+totales suman los de arriba. La salida de texto antepone `[paquete]` a cada
+hallazgo de un paquete y termina con una línea por paquete. `--package`
+(repetible) acota a uno —por su directorio, su ruta o su nombre de Composer— o
+a `app`, el núcleo; uno que no existe falla diciendo los que hay.
+`--no-packages` no lee sus manifiestos, como antes. Una raíz sin laraimport que
+sólo agrupa paquetes no avisa de `empty-manifest` si se midió alguno. El
+formato es compatible: sólo se añaden `package` y `summary`.
+
+**Al actualizar.** `verify` en la raíz puede salir en rojo donde antes salía en
+verde: son errores que ya estaban en los paquetes. Para la CI que corre
+`verify --strict` en la raíz, o se arreglan, o se mide como antes con
+`--no-packages` mientras tanto (y se dice por qué). Si la CI de cada paquete ya
+corre su propio `verify`, sigue igual.
+
+### Un paquete sin modelos es un laraimport válido
+
+**Qué pasaba.** El esquema de 9.x exigía al menos un modelo (`minItems: 1`).
+Un paquete que sólo integra —una pasarela de pago, un PAC, una terminal— nace
+con `"models": []`, y `validate` lo rechazaba con «Array should have at least
+1 items, 0 found»; `import` tampoco corría.
+
+**A quién afectaba.** A los paquetes de integración. En school-management, a
+doce: `school-pac-*` (4), `school-pay-*` (6) y `school-tpv-*` (2).
+
+**Cómo se corrige.** `models` sigue siendo obligatoria, pero puede ir vacía.
+`validate` acepta el archivo, `import` no genera nada de modelos y sale con 0,
+y `verify` no avisa de `empty-manifest` cuando el laraimport de la raíz no
+declara ni modelos, ni pivotes, ni `controllers` (si los declara y no hay
+nada registrado, sigue avisando). Con sus proveedores registrados, se siguen
+comprobando como antes.
+
+**Al actualizar.** Nada. Si quitaste el laraimport de un paquete así para que
+la CI pasara, puedes volver a ponerlo.
+
+### `inconsistent-entity` ya no señala el `User` de Laravel
+
+**Qué pasaba.** El `User` de una aplicación usa la migración de `users` y la
+`UserFactory` que trae Laravel, y el generador, a propósito, no las toca (la
+migración la salta con «no la generó LaraPack», la factory porque ya existe).
+El modelo quedaba en el manifiesto sin `Migration` ni `Factory`, y
+`inconsistent-entity` avisaba de que «no tiene componente Migration y todas las
+demás entidades sí». Un falso positivo que había que aprender a ignorar.
+
+**A quién afectaba.** A toda aplicación con un `User` en el laraimport. En
+school-management eran los dos únicos avisos de esa comprobación.
+
+**Cómo se corrige.** Un componente que falta en el manifiesto pero existe donde
+el generador lo habría escrito cuenta como presente: la factory en
+`database/factories/<Modelo>Factory.php` y la migración de creación en
+`database/migrations/*_create_<tabla>_table.php`, con la tabla del `$table` del
+modelo si lo declara (`table_prefix`). No es una lista de nombres: se mira el
+archivo, y si desaparece el aviso vuelve. Sólo esos dos componentes, que son
+los que el generador cede a un archivo que ya existe.
+
+**Al actualizar.** Nada: los avisos desaparecen solos.
+
+### Lo que encontró la revisión antes de publicar
+
+- **Una llave hacia una tabla del mismo segundo.** Para decidir si la llave de una creación nueva podía ir dentro,
+  se comparaba sólo la fecha de las dos migraciones. `migrate` ordena por el nombre entero: con la misma fecha,
+  `create_categories` corre antes que `create_posts`, y la llave iba dentro de una creación que corre antes que su
+  tabla (MySQL: «Failed to open the referenced table»). Ahora se compara el nombre, como `migrate`.
+- **Las listas con tipo.** `protected array $fillable = [...]` no se encontraba, y el modelo conservado no recibía
+  sus columnas nuevas aunque la lista existía. Ahora se salta el tipo (`array`, `?array`, `array|null`).
+- **Otra conexión.** `Schema::connection('otra')->table('posts', …)` se sumaba a la tabla `posts` de la conexión
+  de la aplicación. Ahora esa tabla queda sin leer, con el archivo nombrado, y no se escribe nada sobre ella.
+
 ## 9.3.0
 
 ### La rama protegida: guiada hasta el final, y comprobada en cada corrida

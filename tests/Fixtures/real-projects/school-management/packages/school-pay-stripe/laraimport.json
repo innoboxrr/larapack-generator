@@ -1,0 +1,6 @@
+{
+    "$schema": "../../.larapack/laraimport.schema.json",
+    "version": 1,
+    "models": [],
+    "pivots": []
+}

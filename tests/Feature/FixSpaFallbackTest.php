@@ -528,7 +528,7 @@ PHP;
         try {
             [$code, $report] = $this->fix();
         } finally {
-            putenv('LARAPACK_PINT');
+            putenv('LARAPACK_PINT=off'); // lo de la suite: phpunit.xml.dist
         }
 
         $this->assertSame(Command::SUCCESS, $code, $this->lastOutput);
@@ -555,7 +555,7 @@ PHP;
         try {
             [$code, $report] = $this->fix();
         } finally {
-            putenv('LARAPACK_PINT');
+            putenv('LARAPACK_PINT=off'); // lo de la suite: phpunit.xml.dist
         }
 
         $this->assertSame(Command::FAILURE, $code);
@@ -586,6 +586,6 @@ PHP;
     public function test_una_correccion_desconocida_lista_route_closure(): void
     {
         $this->assertSame(Command::FAILURE, $this->runCommand('larapack:fix', ['checks' => ['route-closures']]));
-        $this->assertStringContainsString('Disponibles: index-managed, resource-appends, route-closure.', $this->lastOutput);
+        $this->assertStringContainsString('Disponibles: index-managed, resource-appends, route-closure, relation-missing.', $this->lastOutput);
     }
 }

@@ -60,6 +60,13 @@ class MakeFullModelCommand extends Command
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
+        // El manifiesto se anota en memoria y se escribe una vez al terminar,
+        // también si algo falla a mitad (Manifest::batch).
+        return Manifest::batch(fn (): int => $this->generate($input, $output));
+    }
+
+    private function generate(InputInterface $input, OutputInterface $output): int
+    {
         // Llamado desde larapack:import, las opciones y el registro son los del
         // importador. Reiniciarlos aquí apagaba --dry-run y --force en cada
         // modelo: la simulación escribía todo y --force no forzaba nada.

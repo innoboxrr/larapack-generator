@@ -24,8 +24,8 @@
         },
         "models": {
             "type": "array",
-            "minItems": 1,
-            "items": { "$ref": "#/$defs/model" }
+            "items": { "$ref": "#/$defs/model" },
+            "description": "Los modelos del paquete. Puede ir vacía: un paquete que sólo integra (una pasarela de pago, un PAC, una terminal) no declara ninguno y tiene sólo sus proveedores y su config. Lo obligatorio es la clave, no que traiga algo."
         },
         "pivots": {
             "type": "array",

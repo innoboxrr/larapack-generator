@@ -108,10 +108,15 @@ En Artisan no se registran porque `make:model`, `make:policy`, `make:factory` y
 Casi todos aceptan `--root=<ruta>` para decir sobre qué proyecto se trabaja; no
 lo tienen `larapack:new` (recibe el directorio como argumento),
 `larapack:schema` ni `larapack:audit` (recibe la ruta como argumento). Sin esa
-opción la raíz se descubre subiendo directorios desde el paquete hasta dar con
-un `vendor/autoload.php`: dentro de una aplicación o de un paquete que lo tenga
-instalado eso da la raíz correcta; con el binario sobre un clon del propio
-generador, da el generador. Los generadores aceptan además `--force` y
+opción la raíz sale del directorio de trabajo: subiendo desde él, el primer
+directorio con un `laraimport.json`, un `.larapack/manifest.json` o un
+`composer.json` que requiere `innoboxrr/larapack-generator`; si no hay ninguno,
+el de siempre, subiendo desde el paquete hasta un `vendor/autoload.php`. Si lo
+que queda es el propio generador sin manifiesto —el `builder` de un clon, o un
+`vendor/bin/builder` que lleva a uno por un repositorio `path` con enlace
+simbólico, ejecutados fuera de un proyecto—, el comando falla y lo dice, con o
+sin `--root`: antes `verify` medía el generador y salía en verde (9.3.1). Los
+generadores aceptan además `--force` y
 `--dry-run`. `--format=json` lo aceptan todos salvo `larapack:schema` (que ya
 emite JSON), `larapack:skill`, `larapack:guard` (que es un hook) y
 `larapack:remove-full-model`.
@@ -504,7 +509,8 @@ enums cerrados; `form: true` obliga a declarar `form_component`; `foreignId`
 obliga a declarar `constraint`.
 
 **Coherencia**, mirando el documento entero: modelos o columnas repetidos, ciclos
-de claves foráneas (que no tienen orden de migración posible), claves foráneas a
+de claves foráneas (con una llave nullable se avisa y la llave va en una
+migración aparte; sin ninguna, no se podría insertar la primera fila), claves foráneas a
 sí mismo no anulables, reglas sobre campos que no son columnas, relaciones que no
 resuelven contra ningún modelo, `UpdateRequest` sin la regla del identificador
 del que dependen `authorize()` y `handle()`, `only` junto a `except`, un modelo
@@ -520,7 +526,9 @@ que un archivo incompleto no deja el proyecto a medio generar.
 
 Sólo `models[].name`, `props[].name` y `props[].type` son obligatorios. Todo lo
 demás tiene un valor por defecto que el esquema declara, así que el archivo sólo
-dice lo que se decide de verdad:
+dice lo que se decide de verdad. `models` puede ir vacía —`"models": []`—: un
+paquete que sólo integra (una pasarela, un PAC) no declara ninguno; `validate`
+lo acepta, `import` no genera nada y `verify` no avisa (9.3.1):
 
 ```json
 {
@@ -1251,17 +1259,35 @@ respeta igual: el generador no toca lo que no escribió él.
 
 **Cambiar las columnas de una tabla que ya existe.** Una base migrada no vuelve a
 correr la migración de creación, así que reescribirla no serviría de nada. Al
-reimportar, LaraPack compara las columnas del laraimport con lo que ya dejaron
-las migraciones de la tabla —la de creación y las alteraciones anteriores— y
-escribe `<fecha>_alter_<tabla>_table.php` con lo que se añade, se cambia
-(`->change()`) y se quita, y su `down()` para deshacerlo. La migración de
-creación no se toca. Sin cambios no se escribe nada, y con `--dry-run` sólo se
-dice.
+reimportar, LaraPack lee **todas** las migraciones del directorio que tocan la
+tabla —la de creación, sus alteraciones y las que escribió una persona, se
+llamen como se llamen— y escribe `<fecha>_alter_<tabla>_table.php` con lo que
+se añade, se cambia (`->change()`) o se quita, y su `down()` para deshacerlo.
+Sin cambios no se escribe nada, y con `--dry-run` sólo se dice. Las reglas
+(9.3.1):
 
-Dos casos se dejan a mano, y la migración o el informe lo dicen: cambiar una
-llave foránea —sería quitarla y crearla otra vez, con sus datos— y una migración
-de creación editada, porque lo escrito fuera del laraimport no se puede leer con
-seguridad y adivinar acabaría quitando una columna que existe.
+- **La migración de creación no se reescribe** si cualquier otra migración toca
+  su tabla, ni con `--force`: una base nueva correría las dos y la columna saldría
+  duplicada. El informe la da por omitida y dice por qué.
+- **Se compara lo que significa la columna**, no cómo se escribió: `foreignId()`
+  y `unsignedBigInteger()` más `foreign()` son la misma; `->default(5)` y
+  `->default('5')`, también. Lo que el laraimport no sabe expresar —una
+  longitud, un `comment()`— se conserva al cambiar la columna.
+- **Lo que el laraimport no declara no lo pide cambiar.** Una llave de 7.x en
+  cascada y un laraimport sin `on_delete` se dejan como están, y el informe
+  sugiere declararlo. Si declara otra acción, la llave se quita y se vuelve a
+  crear en la alteración.
+- **Lo que escribió una persona no se deshace.** Una columna o una llave que puso
+  una migración que LaraPack no generó no se cambia ni se quita; se avisa.
+- **Lo que no se lee con seguridad no se adivina**: una columna en un bucle, la
+  tabla en una variable, SQL crudo que cambia columnas. No se escribe nada sobre
+  eso —nunca un `dropColumn` ni un `add` a ciegas— y el informe nombra el archivo.
+- **Una llave hacia una tabla que se crea después** —o un ciclo, con alguna de sus
+  llaves nullable— no va dentro de la creación: va en una migración aparte,
+  `<fecha>_add_foreign_keys_to_<tabla>_table.php`, fechada después de las dos.
+
+Sigue dejándose a mano una migración de creación editada, porque lo escrito
+fuera del laraimport en ella no se puede leer con seguridad.
 
 El manifiesto debe versionarse con el proyecto.
 
@@ -1282,13 +1308,15 @@ Contra el manifiesto:
 | --- | --- | --- |
 | `missing-file` | error | Algo que se generó y ya no está. |
 | `customised` | info | Editado a mano; no se podrá regenerar sin perderlo. |
-| `inconsistent-entity` | aviso | Una entidad sin un componente que tienen todas las que declararon su misma forma. |
+| `inconsistent-entity` | aviso | Una entidad sin un componente que tienen todas las que declararon su misma forma. Una migración de creación o una factory que el proyecto ya tenía donde el generador las habría escrito —la de `users` y la `UserFactory` de Laravel, que el generador no toca— cuentan como presentes. |
 | `route-prefix` | error | El `API_ROUTE_PREFIX` del módulo JS —el de un modelo o el de un `controllers[]`— dejó de cuadrar con el `->as()` del RouteServiceProvider. |
 | `route-not-declared` | error | Una ruta (con o sin nombre), un método del controlador, un request o una vista de una acción o un endpoint que el modelo no declara. Distingue lo escrito a mano de lo que generó LaraPack para algo que ya no está en el laraimport. |
 | `endpoint-missing` | error | A un endpoint declarado le falta una pieza: su método, su ruta, su request, su habilidad, su operación o, con interfaz, su función en el contrato JS. El mensaje dice qué escribir. |
 | `immutable-write` | error | Un camino de escritura en un modelo `immutable`, o su modelo sin la guarda que rechaza modificaciones. |
 | `secret-exposed` | error | Una columna `secret` fuera de `$hidden`, en la exportación, en el Resource o en la tabla. |
 | `endpoint-tests-outdated` | aviso | Un `<Modelo>EndpointsTest` sin alguna de las pruebas que cierran la autorización (`test_…_cada_accion_requiere_sesion`, `…_cada_accion_pregunta_a_la_politica` y, si hay listado, `…_index_pasa_por_su_managed_filter`): se generó antes de 9.1. Ese test no se regenera ni está en el manifiesto, así que no se reescribe: el mensaje dice cómo traerlas. |
+| `relation-missing` | aviso | Contra el mismo `laraimport.json`: una relación de `load_relations` que ni el modelo ni sus traits (`Models/Traits/*/<Modelo>*.php`) definen. El trait de relaciones se escribe una sola vez y es del proyecto, así que no la recibe al reimportar. El mensaje trae el método y el `use` exactos; `larapack:fix relation-missing` los añade al trait si es seguro. |
+| `model-lists-outdated` | aviso (info si sólo sobra o difiere) | Contra el `laraimport.json` de la raíz, sin regenerar: a `$fillable`, `$hidden`, `$creatable`, `$updatable`, `$export_cols`, `$loadable_relations`, `$loadable_counts` o `casts()` del modelo le falta lo que el contrato declara —típico de un modelo editado a mano tras añadir una columna—. `larapack:import --force` lo completa sin tocar el resto del modelo. Lo que sobra o un cast con otro valor sale como info y no se cambia solo. |
 
 Sobre todo el código, lo haya generado LaraPack o no, en la raíz y en los
 paquetes locales (repositorios `path` y `packages/*`), y aunque no haya
@@ -1455,6 +1483,26 @@ y la publicación») y, para los agentes, la guardia.
 `--check=<nombre>` se repite para correr varias; un nombre que no existe falla
 en vez de dar un verde falso.
 
+**Con paquetes locales** (los repositorios `path` del `composer.json` y
+`packages/*`), `verify` en la raíz lee además el manifiesto de cada uno que lo
+tenga (`packages/<p>/.larapack/manifest.json`) y le pasa las comprobaciones
+del manifiesto, contra su propia raíz; las del código ya cubren todo el
+proyecto. Cada hallazgo lleva `package` —el nombre de Composer del paquete, o
+`null` si es del núcleo— y la ruta relativa a la raíz del proyecto. Un
+repositorio `path` que apunta fuera de la raíz (`../contracts`) es una
+dependencia: su manifiesto no se lee.
+
+```
+php artisan larapack:verify --package=school-library        # sólo ese (directorio, ruta o nombre de Composer)
+php artisan larapack:verify --package=app                   # sólo el núcleo
+php artisan larapack:verify --no-packages                   # sin los manifiestos de los paquetes, como antes de 9.3.1
+```
+
+La salida de texto termina con una línea por paquete; la JSON trae `summary`,
+una fila por raíz medida (`package`, `path`, `manifest`, `errors`, `warnings`,
+`info`), y sus totales suman los del informe. Con `--root=packages/<p>` se mide
+ese paquete solo, con las rutas relativas a él.
+
 Devuelve un código distinto de cero si hay errores, así que sirve como puerta en
 la CI. La salida en JSON está pensada para que un agente lea qué corregir:
 
@@ -1469,8 +1517,12 @@ la CI. La salida en JSON está pensada para que un agente lea qué corregir:
       "check": "missing-file",
       "model": "Post",
       "file": "src/Policies/PostPolicy.php",
-      "message": "Se generó pero ya no existe. Regenéralo con --force o retíralo del manifiesto."
+      "message": "Se generó pero ya no existe. Regenéralo con --force o retíralo del manifiesto.",
+      "package": null
     }
+  ],
+  "summary": [
+    { "package": null, "path": ".", "manifest": true, "errors": 1, "warnings": 0, "info": 0 }
   ]
 }
 ```
@@ -1521,6 +1573,24 @@ framework de UI.
 
 Los dos paquetes de formularios exportan los mismos 37 nombres, así que el
 `form_component` del `laraimport` vale igual para los dos.
+
+
+**Las relaciones que el contrato declara y el trait no tiene** (`relation-missing`):
+
+```
+php artisan larapack:fix relation-missing --dry-run
+php artisan larapack:fix relation-missing
+```
+
+El trait de relaciones (`Models/Traits/Relations/<Modelo>Relations.php`) es un
+hueco del proyecto: se escribe una vez y no se regenera. Esto le **añade** al
+final el método que escribiría el generador —`public function <nombre>()` con
+`return $this-><tipo>(<Relacionado>::class);`— y su `use` detrás del último
+import, sin tocar nada más. Sólo si es seguro: el archivo tiene un único trait,
+nadie define ya ese nombre (ni el modelo ni ninguno de sus traits) y el nombre
+corto del modelo relacionado no está importado para otra clase; si no, `skipped`
+con la razón, y el mensaje de `verify` trae el código para hacerlo a mano. Lee
+el `laraimport.json` de la raíz de cada proyecto o paquete con manifiesto.
 
 ### Cómo se usa
 
@@ -1854,6 +1924,16 @@ corre `vendor/bin/pint --test` y `vendor/bin/phpstan analyse`. Lo que genera
 LaraPack sale formateado y pasa ese análisis, así que un fallo ahí es algo que se
 escribió a mano: `vendor/bin/pint` lo formatea. LaraPack pasa el mismo control en
 su propia CI.
+
+**Con qué Pint se formatea lo generado.** Por orden: `LARAPACK_PINT` (una ruta, u
+`off` para no formatear a propósito), la del proyecto
+(`vendor/laravel/pint/builds/pint`) y la que trae el generador —desde 9.3.1
+`laravel/pint` es dependencia de LaraPack, así que con `builder` usado desde fuera
+y el proyecto sin `vendor/` también se formatea—. Siempre con el `pint.json` del
+proyecto si lo tiene; sin él, el preset `laravel`. El informe dice cuál se usó: en
+texto, una línea; con `--format=json`, `formatter: {source, pint, config,
+message}` junto a `formatted`. Si no hay ninguna, `formatted` es `null` y
+`formatter.source` es `none`, nunca un silencio.
 
 **La compilación del front** va sobre Vite 8, la de Laravel 13: el `package.json`
 del módulo pide `vite ^8`, y `@vitejs/plugin-vue ^6` o `@vitejs/plugin-react ^6`.
@@ -2564,8 +2644,9 @@ No cambia el contrato ni lo que se genera en PHP.
 
 Las claves ajenas salen con `restrict` en vez de `cascade` (los pivotes siguen en
 `cascade`), y `table_prefix` es nuevo y opcional. **Las tablas que ya existen no
-se tocan**: el generador reutiliza su migración de creación y, si una clave
-ajena cambió, deja un comentario para escribir la alteración a mano. Si tu
+se tocan**: el generador reutiliza su migración de creación y, desde 9.3.1, una
+clave ajena en `cascade` que el laraimport no declara se conserva (antes dejaba
+una alteración vacía con un comentario). Si tu
 proyecto dependía de la cascada en tablas nuevas, decláralo con
 `"on_delete": "cascade"`. Ver [Las claves ajenas](#las-claves-ajenas-restrict-por-omisión).
 
@@ -2710,7 +2791,8 @@ larapack:import                  Genera varios modelos desde un laraimport.
 larapack:validate                Valida un laraimport sin generar nada.
 larapack:schema                  Emite el esquema del laraimport.
 larapack:verify                  Busca desviaciones respecto al manifiesto y en los controladores.
-larapack:fix                     Corrige index-managed y resource-appends, y el fallback de la SPA de laravel-setup <= 7.2.0.
+larapack:fix                     Corrige index-managed y resource-appends, el fallback de la SPA de laravel-setup <= 7.2.0
+                                 y las relaciones del laraimport que faltan en el trait (relation-missing).
 larapack:audit                   Comprueba la línea base del ecosistema.
 larapack:skill                   Instala las instrucciones para un agente; con --hooks, la guardia.
 larapack:guard                   Hook para agentes: comprueba el archivo recién editado.

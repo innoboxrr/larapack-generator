@@ -1,0 +1,35 @@
+<?php
+
+namespace App\Models\Traits\Relations;
+
+use App\Models\Clinic;
+use App\Models\PractitionerLocation;
+use App\Models\Schedule;
+
+// use \Znck\Eloquent\Traits\BelongsToThrough; // Docs: https://github.com/staudenmeir/belongs-to-through
+// use \Staudenmeir\EloquentHasManyDeep\HasRelationships; // Docs: https://github.com/staudenmeir/eloquent-has-many-deep
+
+trait LocationRelations
+{
+    public function clinic()
+    {
+        return $this->belongsTo(Clinic::class);
+    }
+
+    /**
+     * Los médicos que atienden aquí.
+     *
+     * Escritas a mano en vez de declaradas en el contrato porque este trait se
+     * genera UNA vez y después se conserva —es el hueco previsto para esto— y
+     * borrarlo para regenerarlo rompe el autoload de los modelos que lo usan.
+     */
+    public function practitioner_locations()
+    {
+        return $this->hasMany(PractitionerLocation::class);
+    }
+
+    public function schedules()
+    {
+        return $this->hasMany(Schedule::class);
+    }
+}

@@ -355,9 +355,17 @@ final class LegacyFixTest extends TestCase
     public function test_formatea_solo_si_escribio_algo_y_hay_pint(): void
     {
         // Con Pint (el de este repositorio) y nada que arreglar: no formatea.
-        $fix = new LegacyFix($this->root, [LegacySecurity::RESOURCE_APPENDS]);
-        $fix->plan();
-        $this->assertFalse($fix->apply()['formatted']);
+        // La suite corre con LARAPACK_PINT=off (phpunit.xml.dist): aquí se le
+        // da una de verdad.
+        putenv('LARAPACK_PINT='.dirname(__DIR__, 2).'/vendor/laravel/pint/builds/pint');
+
+        try {
+            $fix = new LegacyFix($this->root, [LegacySecurity::RESOURCE_APPENDS]);
+            $fix->plan();
+            $this->assertFalse($fix->apply()['formatted']);
+        } finally {
+            putenv('LARAPACK_PINT=off');
+        }
 
         // Con algo que arreglar y sin Pint: tampoco.
         $this->resource("\$this->resource->setAppends(\$request->get('appends'));");
@@ -555,7 +563,7 @@ final class LegacyFixTest extends TestCase
         try {
             $result = ProjectRoot::using($this->root, fn (): array => $fix->apply());
         } finally {
-            putenv('LARAPACK_PINT');
+            putenv('LARAPACK_PINT=off'); // lo de la suite: phpunit.xml.dist
         }
 
         $this->assertTrue($result['formatted']);
@@ -584,7 +592,7 @@ final class LegacyFixTest extends TestCase
         try {
             $result = ProjectRoot::using($this->root, fn (): array => $fix->apply());
         } finally {
-            putenv('LARAPACK_PINT');
+            putenv('LARAPACK_PINT=off'); // lo de la suite: phpunit.xml.dist
         }
 
         $this->assertSame(

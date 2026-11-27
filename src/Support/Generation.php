@@ -111,11 +111,37 @@ final class Generation
         return array_values(array_unique(self::$written));
     }
 
+    /**
+     * Las regiones del generador completadas —o que no se pudieron completar—
+     * en archivos conservados por estar editados a mano (ModelRegions).
+     *
+     * @var list<array{file: string, added: array<string, list<string>>, skipped: list<array{region: string, reason: string, manual: string}>, dryRun: bool}>
+     */
+    private static array $regions = [];
+
+    /**
+     * @param  array<string, list<string>>  $added
+     * @param  list<array{region: string, reason: string, manual: string}>  $skipped
+     */
+    public static function regions(string $file, array $added, array $skipped): void
+    {
+        self::$regions[] = ['file' => $file, 'added' => $added, 'skipped' => $skipped, 'dryRun' => self::$dryRun];
+    }
+
+    /**
+     * @return list<array{file: string, added: array<string, list<string>>, skipped: list<array{region: string, reason: string, manual: string}>, dryRun: bool}>
+     */
+    public static function regionsLog(): array
+    {
+        return self::$regions;
+    }
+
     public static function reset(): void
     {
         self::$force = false;
         self::$dryRun = false;
         self::$log = [];
         self::$written = [];
+        self::$regions = [];
     }
 }

@@ -211,7 +211,10 @@ todas las garantías de una vez:
 
 1. Si existe y no hay `--force`: `skipped`.
 2. Si existe y el manifiesto dice que se editó a mano (`Manifest::wasCustomised`):
-   `preserved`. **Nada de lo editado se sobrescribe, ni con `--force`.**
+   `preserved`. **Nada de lo editado se sobrescribe, ni con `--force`.** La
+   herramienta puede mantener sus propias regiones (`Tool::preserve`): el
+   modelo completa sus listas con [`ModelRegions`](src/Support/ModelRegions.php),
+   sólo añadiendo, y lo que no reconoce lo devuelve con la orden manual.
 3. Con `--dry-run`, se anota lo que haría y se sale.
 4. Copia la plantilla y, en este orden:
    - `Tool::applyBlocks`: resuelve los bloques `@larapack:if` con
@@ -258,7 +261,8 @@ siga uno de estos caminos no tendrá bloques, manifiesto ni la comprobación de
 | `TestTool::createFeatureTest` | El test de endpoints de cada modelo (`tests/Feature/Models/<Modelo>EndpointsTest.php`). | Sí, llamando a `Tool::applyBlocks`. | No. | Sólo con `--dry-run`; se formatea por `Tool::replaceData`. |
 | `ModelTraitsTool::create` | Los cinco traits de huecos. | Operations, Relations y Storage llaman a `Tool::applyBlocks`; Assignment y Mutators, no. | No: son huecos. | Sólo con `--dry-run`; se formatean por `Tool::replaceData`. |
 | `PivotMigrationTool::create` | La migración de cada pivote. | No, y tampoco `Tool::replaceTokens`: sólo sustituye `migration_name`. | No. | Sí; si existe, ni siquiera `skipped`. |
-| `MigrationTool::alter` | La migración `alter` cuando cambia una tabla que ya existe. | No. | Sí. | Sí. Si la migración de creación está editada, `preserved` y no escribe. |
+| `MigrationTool::alter` | La migración `alter` cuando cambia una tabla que ya existe. | No. | Sí. | Sí. Si la migración de creación está editada, `preserved` y no escribe; si alguna migración de la tabla no se puede leer, `skipped` con el archivo. |
+| `MigrationTool::writeDeferredForeignKeys` | `add_foreign_keys_to_<tabla>_table`: las llaves hacia una tabla que se crea después (o un ciclo), al terminar los modelos. | No. | Sí. | Sí. |
 | `MigrationTool::remove`, `PivotMigrationTool::remove` | La migración `drop` de `larapack:remove-full-model`. | No. | No. | No. |
 
 Fuera de las herramientas escriben además `Skill::install`, `CiCommand`,
@@ -274,8 +278,8 @@ hacerlo, quedarían sin formatear.
 Las piezas que comparten más de una herramienta están arriba, no copiadas:
 `Tool::phpString` (todo valor libre del laraimport sale escapado; un `default`
 con comilla ya no rompe una migración), `Tool::defaultLiteral` (el `default` de
-columna, igual en modelo y pivote; su forma es contrato, porque `alter()` compara
-las definiciones como texto), `Tool::referentialActions`,
+columna, igual en modelo y pivote; con el tipo de la columna: en una de texto
+todo va entre comillas), `Tool::referentialActions`,
 `Tool::migrationFile` (reutiliza la migración de creación que ya exista) y
 `Tool::MODEL_NAME` (el nombre de modelo es un identificador: un `..` borraba
 directorios enteros).
@@ -293,7 +297,16 @@ Casos que conviene conocer antes de tocarlos:
   laraimport con lo que dejaron las migraciones anteriores y escribe una
   `alter`. Las marcas de tiempo salen de
   [`MigrationTimestamp`](src/Support/MigrationTimestamp.php), que garantiza que
-  sean crecientes dentro de una ejecución.
+  sean crecientes dentro de una ejecución. Lo que dejaron las migraciones lo
+  calcula [`SchemaHistory`](src/Tools/Migration/Schema/SchemaHistory.php) con
+  TODAS las del directorio, leídas por
+  [`MigrationReader`](src/Tools/Migration/Schema/MigrationReader.php) con el
+  tokenizador de PHP: cada columna queda como una
+  [`ColumnDefinition`](src/Tools/Migration/Schema/ColumnDefinition.php) que se
+  compara por lo que significa, y lo que no se lee con seguridad queda marcado
+  (opaco o incierto) en la
+  [`TableState`](src/Tools/Migration/Schema/TableState.php), para no adivinarlo.
+  Las reglas están en la cabecera de `MigrationTool`.
 - [`PackageTool`](src/Tools/Package/PackageTool.php) es el andamiaje de un
   paquete nuevo (`larapack:new`): `PackageTool::FILES` es la lista de archivos y
   `PackageTool::composerJson` saca las versiones de `ecosystem.json`.
@@ -345,16 +358,18 @@ traducciones que LaraPack ya conoce, en
 ## El formateo
 
 Las plantillas no siguen ningún estilo. Al final de cada comando,
-`ReportsGeneration::reportGeneration` pasa lo creado y regenerado por el Pint
-**del proyecto destino** ([`Formatter::format`](src/Support/Formatter.php)),
-con su `pint.json`. Así un paquete recién generado pasa `pint --test` en su CI
+`ReportsGeneration::reportGeneration` pasa lo creado y regenerado por Pint
+([`Formatter::format`](src/Support/Formatter.php)) con el `pint.json` del
+proyecto destino. `Formatter::resolve` elige cuál: `LARAPACK_PINT` (una ruta, u
+`off`), la del proyecto o la que trae el generador (`laravel/pint` es
+dependencia suya), y el informe dice cuál fue o que no hubo ninguna. Así un paquete recién generado pasa `pint --test` en su CI
 sin depender de que las plantillas estén al día con las reglas de Pint.
 
 Sólo se formatea lo escrito en esa ejecución, nunca lo editado a mano, y lo que
 el manifiesto conoce se vuelve a anotar con el hash ya formateado
-(`Manifest::rehash`); si no, todo lo generado parecería editado. Sin Pint en el
-proyecto, se avisa y se sigue. `Formatter::pint` acepta `LARAPACK_PINT` para
-quien genera sin `vendor/`, como la propia suite.
+(`Manifest::rehash`); si no, todo lo generado parecería editado. Sin ninguna
+Pint, se dice (`formatter.source: none`) y se sigue. La propia suite corre con
+`LARAPACK_PINT=off` para comparar la salida de las plantillas.
 
 ---
 
@@ -386,8 +401,13 @@ proyecto destino:
   manifiesto idéntico al de antes, y uno viejo se sigue leyendo: la ausencia
   significa «todas las acciones». `verify` no recibe el laraimport; sin esto no
   distinguiría un formulario que falta de uno que no se declaró.
-- Se escribe en cada `record()`: si una herramienta aborta a mitad, el
-  manifiesto refleja lo que de verdad quedó en disco.
+- **Se escribe una vez por corrida** (`Manifest::batch`, que abren
+  `larapack:import` y `larapack:full-model`): dentro, todas las instancias leen
+  y anotan sobre la misma copia en memoria, y al salir —en un `finally`, así que
+  también si una herramienta aborta a mitad— se escribe de forma atómica
+  (temporal y `rename()`), reintentando un bloqueo pasajero. Fuera de una
+  corrida, cada `record()` escribe. Antes se reescribía entero en cada archivo:
+  cuadrático, y en Windows chocaba con el bloqueo del archivo recién escrito.
 - Lo que no es de ningún modelo (proveedores, configuración, andamiaje del
   módulo npm) va en `package`, fuera de la comparación entre entidades.
 
@@ -404,7 +424,11 @@ hallazgo es `{level, check, model, file, message}`, con nivel `error`,
 **Contra el manifiesto** (`Verifier::MANIFEST_CHECKS`): `missing-file`,
 `customised`, `inconsistent-entity`, `route-prefix`, `route-not-declared`,
 `endpoint-missing`, `immutable-write`, `secret-exposed`,
-`endpoint-tests-outdated`. Se lee el manifiesto
+`endpoint-tests-outdated` y, contra el `laraimport.json` de la raíz si existe,
+`model-lists-outdated` y `relation-missing`
+([`ContractDrift`](src/Support/ContractDrift.php), con las listas que calcula
+[`ModelLists`](src/Support/ModelLists.php), lo mismo que usa el generador).
+Se lee el manifiesto
 una sola vez (`Manifest::snapshot`): releerlo en cada consulta hacía que un
 proyecto grande tardara minutos. `inconsistent-entity` compara sólo contra el
 consenso **unánime** de las entidades con la misma forma declarada; otra regla
@@ -669,6 +693,9 @@ cambia algo que ve quien usa el generador.
    [`PivotMigrationTool`](src/Tools/PivotMigration/PivotMigrationTool.php)
    escriben `$table-><tipo>('<columna>')`: si el método de Blueprint se llama
    igual, no hay nada que tocar. Si recibe más argumentos, aquí.
+   [`ColumnTypes`](src/Tools/Migration/Schema/ColumnTypes.php) dice si es
+   numérico (el `default` va sin comillas) y si es otra forma de escribir un
+   tipo que ya existe: si falta, `alter()` vería un cambio donde no lo hay.
 3. [`FactoryTool`](src/Tools/Factory/FactoryTool.php): su valor de Faker. Sin
    él la columna sale `null` y una no anulable rompe el insert.
 4. Si se lee como texto (para elegir `display`), `ImportDocument::TEXT_TYPES`.

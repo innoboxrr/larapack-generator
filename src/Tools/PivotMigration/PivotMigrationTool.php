@@ -137,7 +137,7 @@ class PivotMigrationTool extends Tool
             // El mismo literal que en las migraciones de modelo: un booleano
             // era '1' o '' —este último, un default inválido para un boolean
             // en MySQL estricto— y un número, una cadena.
-            $column .= '->default('.self::defaultLiteral($prop['default']).')';
+            $column .= '->default('.self::defaultLiteral($prop['default'], $prop['type']).')';
         }
 
         /*

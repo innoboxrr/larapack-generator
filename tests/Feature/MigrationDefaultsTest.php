@@ -11,12 +11,11 @@ use Symfony\Component\Console\Command\Command;
  * Cómo se escribe el `default` de una columna en la migración, y que cambiarlo
  * no reescriba columnas que no cambiaron.
  *
- * MigrationTool::alter() compara cada definición de columna como texto. Por
- * eso la forma del literal es parte del contrato con los proyectos ya
- * generados: una 9.1 que escribía `->default('10.00')` donde la 9.0 escribía
- * `->default(10.00)` habría hecho que el primer import tras actualizar
- * escribiera un `->change()` por cada columna de dinero, sin que nada hubiera
- * cambiado.
+ * Hasta 9.3.0 MigrationTool::alter() comparaba cada definición como texto,
+ * y cambiar cómo se escribe un literal hacía que el primer import tras
+ * actualizar escribiera un `->change()` por columna sin que nada hubiera
+ * cambiado. Desde 9.3.1 compara lo que guarda la base (MigrationReaderTest),
+ * pero lo que la 9.0 ya escribía bien sigue saliendo igual.
  */
 final class MigrationDefaultsTest extends TestCase
 {

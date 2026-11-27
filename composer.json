@@ -13,6 +13,7 @@
         "innoboxrr/search-surge": "^3.0",
         "innoboxrr/support": "^2.1",
         "innoboxrr/traits": "^2.1",
+        "laravel/pint": "^1.18",
         "opis/json-schema": "^2.6",
         "staudenmeir/belongs-to-through": "^2.5",
         "staudenmeir/eloquent-has-many-deep": "^1.7",
@@ -20,7 +21,6 @@
     },
     "require-dev": {
         "larastan/larastan": "^3.0",
-        "laravel/pint": "^1.18",
         "laravel/sanctum": "^4.3",
         "maatwebsite/excel": "^4.0",
         "orchestra/testbench": "^11.0",

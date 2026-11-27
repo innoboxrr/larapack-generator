@@ -74,7 +74,7 @@ final class LegacyFix
      * Lo que sabe corregir: lo de LegacySecurity y el `route-closure` de
      * ControllerShape, en el caso que reconoce SpaFallback.
      */
-    public const CHECKS = [...LegacySecurity::CHECKS, ControllerShape::ROUTE_CLOSURE];
+    public const CHECKS = [...LegacySecurity::CHECKS, ControllerShape::ROUTE_CLOSURE, ContractDrift::RELATION_MISSING];
 
     private const JSON_RESOURCE = 'illuminate\http\resources\json\jsonresource';
 
@@ -269,7 +269,44 @@ final class LegacyFix
             $this->planRouteClosures();
         }
 
+        if (isset($this->report[ContractDrift::RELATION_MISSING])) {
+            $this->planRelations();
+        }
+
         return $this->report;
+    }
+
+    // RELATION-MISSING
+
+    /**
+     * Las relaciones del laraimport que no define nadie, añadidas al trait de
+     * relaciones de cada raíz (RelationFix decide si es seguro).
+     */
+    private function planRelations(): void
+    {
+        $check = ContractDrift::RELATION_MISSING;
+        $project = $this->security->project();
+
+        // Una raíz sin manifiesto no tiene modelos generados: RelationFix no
+        // encuentra nada que comparar y no devuelve nada.
+        foreach ($project->roots() as $root) {
+            $plan = RelationFix::plan(new Manifest($root));
+
+            foreach ($plan['fixes'] as $fix) {
+                if ($this->inScope($fix['file'])) {
+                    $this->originals[$fix['file']] = $fix['original'];
+                    $this->fixes[$fix['file']] = $fix['code'];
+                    $this->checkOf[$fix['file']] = $check;
+                    $this->report[$check]['fixed'][] = ['file' => $project->relative($fix['file'])];
+                }
+            }
+
+            foreach ($plan['skipped'] as $skip) {
+                if ($this->inScope($skip['file'])) {
+                    $this->skip($check, $skip['file'], $skip['reason']);
+                }
+            }
+        }
     }
 
     // ROUTE-CLOSURE

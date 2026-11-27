@@ -2,6 +2,8 @@
 
 namespace Innoboxrr\LarapackGenerator\Support;
 
+use Composer\InstalledVersions;
+
 /**
  * Formatea con Pint lo que acaba de escribir el generador.
  *
@@ -24,20 +26,85 @@ final class Formatter
     private const CHUNK = 40;
 
     /**
-     * El Pint del proyecto. LARAPACK_PINT apunta a otro, para quien genera
-     * sin tener vendor —la suite de LaraPack—.
+     * La Pint con la que se formatea: su ruta, o null si no hay ninguna.
      */
     public static function pint(): ?string
     {
+        return self::resolve()['path'];
+    }
+
+    /**
+     * Qué Pint se usa, de dónde sale, con qué configuración, y qué decir.
+     *
+     * Por orden: LARAPACK_PINT (una ruta, o `off` para no formatear a
+     * propósito), la del proyecto y la que trae el generador. Antes sólo se
+     * miraba la del proyecto: con `builder` usado desde fuera y el proyecto sin
+     * vendor/, lo generado quedaba sin formatear —en school-management, unos
+     * 5 600 archivos que sólo diferían en el formato— y el manifiesto los daba
+     * después por editados a mano.
+     *
+     * La configuración es siempre el pint.json del proyecto si lo tiene, se
+     * use la Pint que se use. Sin él, el preset por omisión de Pint (laravel).
+     *
+     * @return array{path: string|null, source: 'override'|'project'|'generator'|'none'|'disabled', config: string|null, message: string}
+     */
+    public static function resolve(): array
+    {
+        $config = is_file(root_path().'/pint.json') ? 'pint.json' : null;
+        $with = $config === null ? 'el preset laravel, porque el proyecto no tiene pint.json' : 'el pint.json del proyecto';
         $override = getenv('LARAPACK_PINT');
 
         if (is_string($override) && $override !== '') {
-            return is_file($override) ? $override : null;
+            if (strtolower($override) === 'off') {
+                return ['path' => null, 'source' => 'disabled', 'config' => $config,
+                    'message' => 'LARAPACK_PINT=off: lo generado queda sin formatear a propósito.'];
+            }
+
+            return is_file($override)
+                ? ['path' => $override, 'source' => 'override', 'config' => $config, 'message' => "Formateado con la Pint de LARAPACK_PINT y {$with}."]
+                : ['path' => null, 'source' => 'none', 'config' => $config,
+                    'message' => "LARAPACK_PINT apunta a {$override}, que no existe: lo generado queda sin formatear. Corrígela o quítala para usar la del proyecto o la del generador."];
         }
 
-        $candidate = root_path().'/vendor/laravel/pint/builds/pint';
+        $project = root_path().'/vendor/laravel/pint/builds/pint';
 
-        return is_file($candidate) ? $candidate : null;
+        if (is_file($project)) {
+            return ['path' => $project, 'source' => 'project', 'config' => $config, 'message' => "Formateado con la Pint del proyecto y {$with}."];
+        }
+
+        $generator = self::generatorPint();
+
+        if ($generator !== null) {
+            return ['path' => $generator, 'source' => 'generator', 'config' => $config, 'message' => "Formateado con la Pint del generador (el proyecto no la tiene) y {$with}."];
+        }
+
+        return ['path' => null, 'source' => 'none', 'config' => $config,
+            'message' => 'No hay Pint ni en el proyecto ni junto al generador: lo generado queda sin formatear y el manifiesto lo anotará así. composer require --dev laravel/pint'];
+    }
+
+    /**
+     * La Pint instalada junto al generador: en su vendor/ si se usa clonado,
+     * o en el vendor/ que lo contiene si está instalado como dependencia.
+     */
+    private static function generatorPint(): ?string
+    {
+        $candidates = [dirname(__DIR__, 2).'/vendor/laravel/pint/builds/pint', dirname(__DIR__, 4).'/laravel/pint/builds/pint'];
+
+        if (class_exists(InstalledVersions::class) && InstalledVersions::isInstalled('laravel/pint')) {
+            $installed = InstalledVersions::getInstallPath('laravel/pint');
+
+            if ($installed !== null) {
+                array_unshift($candidates, $installed.'/builds/pint');
+            }
+        }
+
+        foreach ($candidates as $candidate) {
+            if (is_file($candidate)) {
+                return realpath($candidate) ?: $candidate;
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -55,7 +122,7 @@ final class Formatter
             return 0;
         }
 
-        $pint = self::pint();
+        ['path' => $pint, 'config' => $config] = self::resolve();
 
         if ($pint === null) {
             return null;
@@ -67,7 +134,9 @@ final class Formatter
         ));
 
         foreach (array_chunk($files, self::CHUNK) as $chunk) {
-            self::run([PHP_BINARY, $pint, ...$chunk]);
+            // La configuración, explícita: la Pint del generador no está en el
+            // proyecto y no tiene por qué buscarla en él.
+            self::run([PHP_BINARY, $pint, ...($config === null ? [] : ['--config='.root_path().'/'.$config]), ...$chunk]);
         }
 
         $manifest->rehash($tracked);

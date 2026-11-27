@@ -11,6 +11,7 @@ use Innoboxrr\LarapackGenerator\Support\Manifest;
 use Innoboxrr\LarapackGenerator\Support\TablePrefix;
 use Innoboxrr\LarapackGenerator\Tools\Controller\ControllerTool;
 use Innoboxrr\LarapackGenerator\Tools\Endpoint\EndpointTool;
+use Innoboxrr\LarapackGenerator\Tools\Migration\MigrationTool;
 use Innoboxrr\LarapackGenerator\Tools\ModelView\ModelViewTool;
 use Innoboxrr\LarapackGenerator\Tools\PivotMigration\PivotMigrationTool;
 use Innoboxrr\LarapackGenerator\Tools\ReactView\ReactViewTool;
@@ -40,6 +41,13 @@ class JsonImporterCommand extends Command
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
+    {
+        // El manifiesto se anota en memoria y se escribe una vez al terminar,
+        // también si algo falla a mitad (Manifest::batch).
+        return Manifest::batch(fn (): int => $this->import($input, $output));
+    }
+
+    private function import(InputInterface $input, OutputInterface $output): int
     {
         $this->applyGenerationOptions($input);
 
@@ -119,6 +127,10 @@ class JsonImporterCommand extends Command
                 );
             }
 
+            // Las llaves hacia tablas que se crearon después —un ciclo, una
+            // tabla posterior—, ya con todas las tablas creadas.
+            MigrationTool::writeDeferredForeignKeys();
+
             foreach ($document->pivots() as $pivot) {
                 $progress->writeln("Processing pivot: {$pivot['name']}");
 
@@ -153,6 +165,7 @@ class JsonImporterCommand extends Command
             // En un finally: si algo lanza, el flag no puede quedarse activo
             // para el resto del proceso.
             Tool::setFromJsonImporter(false);
+            MigrationTool::reset();
             Declaration::reset();
             TablePrefix::reset();
 

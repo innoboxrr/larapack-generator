@@ -1,0 +1,130 @@
+{
+    "models": [
+        {
+            "name": "ExternalIdentity",
+            "display": "external_id",
+            "routes": {
+                "only": [
+                    "policies",
+                    "index",
+                    "show"
+                ]
+            },
+            "props": [
+                {
+                    "name": "integration_connection_id",
+                    "type": "foreignId",
+                    "constraint": "integration_connections",
+                    "updatable": false,
+                    "datatable": true,
+                    "form": false,
+                    "fillable": false,
+                    "creatable": false
+                },
+                {
+                    "name": "local_type",
+                    "type": "string",
+                    "updatable": false,
+                    "datatable": true,
+                    "form": false,
+                    "fillable": false,
+                    "creatable": false
+                },
+                {
+                    "name": "local_id",
+                    "type": "string",
+                    "updatable": false,
+                    "datatable": true,
+                    "form": false,
+                    "fillable": false,
+                    "creatable": false
+                },
+                {
+                    "name": "external_type",
+                    "type": "string",
+                    "updatable": false,
+                    "datatable": true,
+                    "form": false,
+                    "fillable": false,
+                    "creatable": false
+                },
+                {
+                    "name": "external_id",
+                    "type": "string",
+                    "updatable": false,
+                    "datatable": true,
+                    "form": false,
+                    "fillable": false,
+                    "creatable": false
+                },
+                {
+                    "name": "status",
+                    "type": "string",
+                    "enum": {
+                        "PROPOSED": "Propuesta",
+                        "LINKED": "Enlazada"
+                    },
+                    "default": "LINKED",
+                    "updatable": false,
+                    "datatable": true,
+                    "form": false,
+                    "fillable": false,
+                    "creatable": false
+                },
+                {
+                    "name": "shared",
+                    "type": "boolean",
+                    "cast": "boolean",
+                    "default": false,
+                    "updatable": false,
+                    "datatable": true,
+                    "form": false,
+                    "fillable": false,
+                    "creatable": false
+                },
+                {
+                    "name": "matched_by",
+                    "type": "string",
+                    "nullable": true,
+                    "updatable": false,
+                    "datatable": false,
+                    "form": false,
+                    "fillable": false,
+                    "creatable": false
+                },
+                {
+                    "name": "linked_at",
+                    "type": "dateTime",
+                    "cast": "datetime",
+                    "nullable": true,
+                    "updatable": false,
+                    "datatable": true,
+                    "form": false,
+                    "fillable": false,
+                    "creatable": false
+                },
+                {
+                    "name": "last_synced_at",
+                    "type": "dateTime",
+                    "cast": "datetime",
+                    "nullable": true,
+                    "updatable": false,
+                    "datatable": true,
+                    "form": false,
+                    "fillable": false,
+                    "creatable": false
+                },
+                {
+                    "name": "last_synced_hash",
+                    "type": "string",
+                    "nullable": true,
+                    "updatable": false,
+                    "datatable": false,
+                    "form": false,
+                    "fillable": false,
+                    "creatable": false
+                }
+            ]
+        }
+    ]
+}
