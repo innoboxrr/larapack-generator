@@ -280,18 +280,16 @@ final class LegacyFix
 
     /**
      * Las relaciones del laraimport que no define nadie, añadidas al trait de
-     * relaciones de cada raíz con manifiesto (RelationFix decide si es seguro).
+     * relaciones de cada raíz (RelationFix decide si es seguro).
      */
     private function planRelations(): void
     {
         $check = ContractDrift::RELATION_MISSING;
         $project = $this->security->project();
 
+        // Una raíz sin manifiesto no tiene modelos generados: RelationFix no
+        // encuentra nada que comparar y no devuelve nada.
         foreach ($project->roots() as $root) {
-            if (! is_file($root.'/.larapack/manifest.json')) {
-                continue;
-            }
-
             $plan = RelationFix::plan(new Manifest($root));
 
             foreach ($plan['fixes'] as $fix) {

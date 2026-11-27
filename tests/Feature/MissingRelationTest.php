@@ -153,6 +153,21 @@ final class MissingRelationTest extends TestCase
         $this->assertStringContainsString('Other\\Domain\\PractitionerLocation', $report['checks']['relation-missing']['skipped'][0]['reason']);
     }
 
+    public function test_un_paquete_local_sin_manifiesto_no_se_mira_y_el_resto_se_arregla(): void
+    {
+        // Un paquete escrito a mano, sin manifiesto ni laraimport: no hay
+        // contrato con el que comparar, y no impide arreglar la raíz.
+        mkdir($this->project->path.'/packages/legacy/src/Models/Traits/Relations', 0777, true);
+        file_put_contents($this->project->path.'/packages/legacy/composer.json', json_encode(['name' => 'acme/legacy', 'autoload' => ['psr-4' => ['Acme\\Legacy\\' => 'src/']]]));
+        file_put_contents($this->project->path.'/packages/legacy/laraimport.json', json_encode($this->contract));
+
+        $this->assertSame(Command::SUCCESS, $this->runCommand('larapack:fix', ['checks' => ['relation-missing'], '--format' => 'json']), $this->lastOutput);
+        $report = json_decode($this->lastOutput, true, flags: JSON_THROW_ON_ERROR);
+
+        $this->assertSame([['file' => self::TRAIT]], $report['checks']['relation-missing']['fixed']);
+        $this->assertSame([], $report['checks']['relation-missing']['skipped']);
+    }
+
     public function test_si_el_modelo_ya_la_define_no_se_reporta(): void
     {
         $model = $this->project->path.'/app/Models/Location.php';

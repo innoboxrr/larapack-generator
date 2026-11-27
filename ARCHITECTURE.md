@@ -211,7 +211,10 @@ todas las garantías de una vez:
 
 1. Si existe y no hay `--force`: `skipped`.
 2. Si existe y el manifiesto dice que se editó a mano (`Manifest::wasCustomised`):
-   `preserved`. **Nada de lo editado se sobrescribe, ni con `--force`.**
+   `preserved`. **Nada de lo editado se sobrescribe, ni con `--force`.** La
+   herramienta puede mantener sus propias regiones (`Tool::preserve`): el
+   modelo completa sus listas con [`ModelRegions`](src/Support/ModelRegions.php),
+   sólo añadiendo, y lo que no reconoce lo devuelve con la orden manual.
 3. Con `--dry-run`, se anota lo que haría y se sale.
 4. Copia la plantilla y, en este orden:
    - `Tool::applyBlocks`: resuelve los bloques `@larapack:if` con
@@ -345,16 +348,18 @@ traducciones que LaraPack ya conoce, en
 ## El formateo
 
 Las plantillas no siguen ningún estilo. Al final de cada comando,
-`ReportsGeneration::reportGeneration` pasa lo creado y regenerado por el Pint
-**del proyecto destino** ([`Formatter::format`](src/Support/Formatter.php)),
-con su `pint.json`. Así un paquete recién generado pasa `pint --test` en su CI
+`ReportsGeneration::reportGeneration` pasa lo creado y regenerado por Pint
+([`Formatter::format`](src/Support/Formatter.php)) con el `pint.json` del
+proyecto destino. `Formatter::resolve` elige cuál: `LARAPACK_PINT` (una ruta, u
+`off`), la del proyecto o la que trae el generador (`laravel/pint` es
+dependencia suya), y el informe dice cuál fue o que no hubo ninguna. Así un paquete recién generado pasa `pint --test` en su CI
 sin depender de que las plantillas estén al día con las reglas de Pint.
 
 Sólo se formatea lo escrito en esa ejecución, nunca lo editado a mano, y lo que
 el manifiesto conoce se vuelve a anotar con el hash ya formateado
-(`Manifest::rehash`); si no, todo lo generado parecería editado. Sin Pint en el
-proyecto, se avisa y se sigue. `Formatter::pint` acepta `LARAPACK_PINT` para
-quien genera sin `vendor/`, como la propia suite.
+(`Manifest::rehash`); si no, todo lo generado parecería editado. Sin ninguna
+Pint, se dice (`formatter.source: none`) y se sigue. La propia suite corre con
+`LARAPACK_PINT=off` para comparar la salida de las plantillas.
 
 ---
 
@@ -386,8 +391,13 @@ proyecto destino:
   manifiesto idéntico al de antes, y uno viejo se sigue leyendo: la ausencia
   significa «todas las acciones». `verify` no recibe el laraimport; sin esto no
   distinguiría un formulario que falta de uno que no se declaró.
-- Se escribe en cada `record()`: si una herramienta aborta a mitad, el
-  manifiesto refleja lo que de verdad quedó en disco.
+- **Se escribe una vez por corrida** (`Manifest::batch`, que abren
+  `larapack:import` y `larapack:full-model`): dentro, todas las instancias leen
+  y anotan sobre la misma copia en memoria, y al salir —en un `finally`, así que
+  también si una herramienta aborta a mitad— se escribe de forma atómica
+  (temporal y `rename()`), reintentando un bloqueo pasajero. Fuera de una
+  corrida, cada `record()` escribe. Antes se reescribía entero en cada archivo:
+  cuadrático, y en Windows chocaba con el bloqueo del archivo recién escrito.
 - Lo que no es de ningún modelo (proveedores, configuración, andamiaje del
   módulo npm) va en `package`, fuera de la comparación entre entidades.
 

@@ -598,6 +598,16 @@ El generador es idempotente y **nunca destruye trabajo**:
 - Con `--force`, se regenera **salvo** que su hash no coincida con el del
   manifiesto, es decir, salvo que lo hayas editado. Entonces se conserva y se
   te dice.
+- Un **modelo** editado se conserva, pero sus listas son del generador: con
+  `--force` se le **añade** a `$fillable`, `$hidden`, `$creatable`,
+  `$updatable`, `$export_cols`, `$loadable_relations`, `$loadable_counts` y
+  `casts()` lo que el laraimport declara y le falta, sin tocar nada más. Lo que
+  no reconoce con certeza sale en el informe con la orden manual (`regions` en
+  el JSON); no quita nada ni cambia un cast que ya tenga otro valor.
+- Los **traits** (`Models/Traits/*`) son tuyos: nunca se regeneran. Una
+  relación que añadas después a `load_relations` no aparece sola: `verify` la
+  marca como `relation-missing` y `larapack:fix relation-missing` la añade.
+  No borres el trait para que se regenere.
 
 Así que ampliar el `laraimport.json` y volver a importar es seguro. Es el flujo
 normal, no una excepción.
@@ -610,7 +620,10 @@ de poder escribir las alteraciones. Una llave foránea que cambia se escribe a
 mano; la alteración lo dice.
 
 Lo generado sale formateado y pasa Larastan: si `vendor/bin/pint --test` o
-`vendor/bin/phpstan analyse` fallan, lo que falla es algo escrito a mano.
+`vendor/bin/phpstan analyse` fallan, lo que falla es algo escrito a mano. Se
+formatea con la Pint del proyecto o, si no tiene, con la del generador, y el
+informe dice cuál (`formatter` en el JSON); si dice que no hubo ninguna,
+`composer require --dev laravel/pint` antes de comitear lo generado.
 
 ## Vue y React
 
