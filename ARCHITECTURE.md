@@ -375,6 +375,9 @@ el manifiesto conoce se vuelve a anotar con el hash ya formateado
 (`Manifest::rehash`); si no, todo lo generado parecería editado. Sin ninguna
 Pint, se dice (`formatter.source: none`) y se sigue. La propia suite corre con
 `LARAPACK_PINT=off` para comparar la salida de las plantillas.
+`LARAPACK_PINT_JOBS` (`Formatter::jobs`; por omisión, 1) reparte los trozos en
+varios procesos: Pint formatea cada archivo por separado, así que el resultado
+es el mismo. Lo sube `Regeneration` para el contrato grande de un diagnóstico.
 
 ---
 
@@ -666,6 +669,17 @@ quien la haga y que esta sección nombre cada clase de las dos carpetas.
    `ProjectVerification` y `Guard::findings` (lo cubierto baja a `info`) y
    `ControllerShape`, que nombra cada closure. La guía:
    [docs/realign/exceptions.md](docs/realign/exceptions.md).
+
+**Lo que cuesta** es Pint (unos 25 ms por archivo) y `verify`, y el módulo
+está hecho para no pagarlos dos veces. `--jobs` cuenta procesos, no sólo
+regeneraciones: `Regeneration` arranca primero el contrato más grande y le da
+a su Pint los huecos libres; `ScopeClassifier::classifyScopes` junta los
+archivos de todos los ámbitos que comparten Pint y configuración
+(`PintPass::equivalentMany`) en vez de lanzar una por ámbito;
+`ScopeClassifier::classifyFiles` hace lo mismo para los archivos de un paso
+(`check`), y `Diagnosis::verification` guarda el `verify` del diagnóstico para
+que `done` no lo repita. Quien añada un recorrido por archivo o por ámbito
+tiene que mirar si ya existe la versión por lotes.
 
 **El plan** ([`Planner`](src/Support/Realign/Planner.php)) agrupa por tipo de
 paso y ámbito —por archivo en `controller-shape`, por familia de plantilla en
