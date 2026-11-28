@@ -12,7 +12,10 @@ estás sin preguntarle a nadie:
 | [Sin contrato](#3-sin-contrato) | `no-contract` en la raíz y en los paquetes; mucho `unmanaged-http` y `unmanaged-models`. | `infer` y la decisión de adoptar. |
 
 Las cifras son de copias de proyectos reales, ensayadas sin tocar los
-originales (CHANGELOG de 9.4.0).
+originales (CHANGELOG de 9.4.0). Los tres recorridos, de `diagnose` a
+`verify --strict`, están además en una prueba de punta a punta del paquete
+(`RealignProfilesTest`), sobre proyectos sintéticos con las formas de los
+reales.
 
 ## 1. Con contrato y manifiesto al día
 
@@ -49,7 +52,9 @@ larapack:verify --strict
   a 20. `edited_outside`: de 404 a 207.
 - Queda: 24 pasos `edited-outside`, 4 `controller-shape`, 1
   `declared-routes` y 77 decisiones (closures de la SPA según el Host,
-  paquetes sin modelos, `#[HandRolled]`, controladores escritos a mano).
+  paquetes sin modelos, `#[HandRolled]`, controladores y archivos de rutas
+  escritos a mano: un `routes/web.php` que sirve la SPA y la salud de la CI
+  es a la vez `route-closure` y `unmanaged-http`).
 
 **Cuidado con:** trabajar por paquete (`--package`) y comitear por paquete en
 un monorepo; las decisiones de rutas a mano necesitan conservar su
@@ -146,7 +151,12 @@ perfil 1 ó 2: `diagnose`, `plan`, `adopt`… Los pasos están en
 quedarse con lo que sí vale sin contrato: `larapack:verify` comprueba la forma
 de **todos** los controladores (`controller-shape`, `request-handle`,
 `controller-concern`), aunque no los haya generado LaraPack. Es la guardia más
-barata contra la deriva, y no obliga a adoptar nada.
+barata contra la deriva, y no obliga a adoptar nada. Los pasos
+`controller-shape` se hacen igual (son guiados, con su playbook), cada
+decisión `no-contract`, `unmanaged-http`, `unmanaged-models` y
+`route-closure` se decide `keep`/`except` con su excepción aprobada, y al
+final `verify --strict` sólo dice `empty-manifest`: no hay manifiesto porque
+el proyecto no usa LaraPack ([verify.md](verify.md#cuándo-se-termina)).
 
 **Cuidado con:** la interfaz y la autorización no se infieren (adoptar y
 regenerar el front daría pantallas sin campos; un endpoint de modelo nace con

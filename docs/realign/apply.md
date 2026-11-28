@@ -36,7 +36,10 @@ larapack:realign apply --deterministic --package=billing
 lo hace por omisión; `--deterministic` con ids es un error. Con
 `--deterministic` hace también los pasos de [adopt](adopt.md) (`relink`,
 `prune`, `adopt`), en su orden. Las decisiones sólo entran si se decidió la
-opción que ejecuta `apply` (`restore` en `missing`).
+opción que ejecuta `apply` (`restore` en `missing`). Sin nada determinista
+pendiente (un proyecto sin contrato, o ya realineado), termina con error y lo
+dice: «No hay pasos pendientes que `apply` sepa hacer». No es un fallo del
+proyecto; `larapack:realign status` dice qué queda.
 
 Como toda operación que escribe: sin `--dry-run` exige el árbol git limpio
 fuera de `.larapack/realign/` (o `--allow-dirty`), informa

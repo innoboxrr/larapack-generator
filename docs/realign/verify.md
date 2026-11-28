@@ -35,6 +35,16 @@ Si queda algo que el proyecto decidió dejar fuera, sigue en el plan como un
 paso hecho con su decisión, y en `verify` como `info` con su excepción: lo que
 queda fuera de alcance está **declarado**, no olvidado.
 
+**Un proyecto que se queda fuera de LaraPack** (sin contrato, decidido `keep`)
+no tiene manifiesto, y `verify --strict` siempre dirá `empty-manifest`. Ése es
+el único aviso que puede quedar, y es lo declarado fuera de alcance. El
+cumplimiento de lo que sí vale sin contrato —la forma de los controladores y
+las rutas— se comprueba acotando:
+
+```bash
+larapack:verify --strict --check=controller-shape --check=request-handle --check=controller-concern --check=route-closure --check=hand-rolled
+```
+
 ## `larapack:verify` y `--strict`
 
 ```bash
