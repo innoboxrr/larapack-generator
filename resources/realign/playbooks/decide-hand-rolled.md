@@ -20,8 +20,14 @@ suelen serlo:
 
 - Comprueba una **firma sobre el cuerpo en bruto** antes de que nada lo toque
   (webhooks de pagos, de GitHub).
-- Responde con el **formato de un protocolo** que no es el de Laravel: los
-  errores de OAuth2 (RFC 6749), xAPI, SCIM.
+- Responde con el **formato de un protocolo** que no es el de Laravel (los
+  errores de OAuth2 —RFC 6749—, el registro de clientes de RFC 7591, xAPI,
+  SCIM) **y** ese formato o su código de estado no se pueden conservar con
+  una request. Casi siempre se pueden: `failedValidation()` y
+  `failedAuthorization()` de la request devuelven el error del protocolo, y
+  `handle()` la misma respuesta. Si la razón sólo dice «es un protocolo»,
+  la opción es `refactor` (el criterio completo está en el playbook
+  `controller-to-request`, «Protocolos»).
 - Hace **streaming** o devuelve un archivo por partes.
 
 Casos que **no** lo son, aunque lo parezcan:
