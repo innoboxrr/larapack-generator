@@ -408,6 +408,26 @@ final class GuardTest extends TestCase
     }
 
     /**
+     * Auditoría de seguridad de 9.4.0: un directorio llamado `vendor` o
+     * `node_modules` dentro del código no es de terceros —PSR-4 lo carga
+     * como cualquier otro—, y guardar ahí un controlador lo sacaba de la
+     * guardia y de verify.
+     */
+    public function test_un_controlador_en_un_directorio_llamado_vendor_dentro_del_codigo_si_es_del_proyecto(): void
+    {
+        foreach (['vendor', 'node_modules'] as $name) {
+            $controller = $this->file("src/Http/Controllers/{$name}/EvilController.php");
+            mkdir(dirname($controller), 0777, true);
+            file_put_contents($controller, "<?php\n\nnamespace Acme\\Notes\\Http\\Controllers\\{$name};\n\nclass EvilController\n{\n    public function index(\\Illuminate\\Http\\Request \$request)\n    {\n        return response()->json(\$request->all());\n    }\n}\n");
+
+            $this->assertSame(GuardCommand::BLOCK, $this->edit(['file_path' => $controller]), $name);
+            $this->assertStringContainsString('EvilController::index()', $this->stderr, $name);
+
+            unlink($controller);
+        }
+    }
+
+    /**
      * Sin manifiesto, sólo lo que `verify` comprueba igual sin él: la forma
      * de los controladores. Lo demás no es de LaraPack todavía.
      */
@@ -460,6 +480,40 @@ final class GuardTest extends TestCase
         } finally {
             $other->cleanup();
         }
+    }
+
+    /**
+     * Varias consolas a la vez (9.4.0): la que cambia el contrato y no vuelve
+     * a importar no termina el turno; las demás, que no lo tocaron, sí.
+     */
+    public function test_al_terminar_el_turno_retiene_a_quien_cambio_el_laraimport_y_no_importo(): void
+    {
+        $contract = $this->file('laraimport.json');
+        $author = $this->session();
+        $other = $this->session();
+
+        file_put_contents($contract, json_encode([
+            'models' => [[
+                'name' => 'Note',
+                'routes' => ['only' => ['policies', 'index', 'show']],
+                'props' => [['name' => 'name', 'type' => 'text']],
+            ]],
+        ]));
+
+        // Al editarlo no se le frena: importar es el paso siguiente.
+        $this->assertSame(Command::SUCCESS, $this->edit(['file_path' => $contract], 'Edit', null, $author));
+
+        $this->assertSame(GuardCommand::BLOCK, $this->stop($author));
+        $this->assertStringContainsString('contract-outdated', $this->stderr);
+        $this->assertStringContainsString('larapack:import --force', $this->stderr);
+
+        // La otra consola tocó otra cosa: el error no es de su sesión.
+        file_put_contents($this->file('README.md'), "# notas\n");
+        $this->edit(['file_path' => $this->file('README.md')], 'Write', null, $other);
+        $this->assertSame(Command::SUCCESS, $this->stop($other));
+
+        $this->assertSame(Command::SUCCESS, $this->runCommand('larapack:import', ['jsonPath' => $contract, '--force' => true]), $this->lastOutput);
+        $this->assertSame(Command::SUCCESS, $this->stop($author));
     }
 
     /**

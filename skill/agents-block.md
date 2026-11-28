@@ -19,6 +19,12 @@ lee `{{skill}}` y sigue su flujo.
   corras `larapack:hand-rolled approve` ni `revoke`.
 - **Antes de dar una tarea por terminada**, `larapack:validate --format=json` y
   `larapack:verify --format=json`, los dos con código de salida 0.
+- **Si hay un realineamiento en curso** (`.larapack/realign/plan.json`) o te
+  piden llevar el proyecto de vuelta al contrato, empieza por
+  `larapack:realign status` y sigue la guía del paquete
+  (`vendor/innoboxrr/larapack-generator/docs/realign/README.md`): las
+  decisiones y las excepciones las toma y aprueba el dueño, no tú. Está
+  terminado sólo cuando `larapack:realign done --format=json` sale con 0.
 
 ```
 php artisan larapack:<comando>               # dentro de una aplicación Laravel

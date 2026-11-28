@@ -2,6 +2,7 @@
 
 namespace Innoboxrr\LarapackGenerator\Tests\Unit;
 
+use Innoboxrr\LarapackGenerator\Exceptions\MakerException;
 use Innoboxrr\LarapackGenerator\Support\HandRolledLock;
 use Innoboxrr\LarapackGenerator\Support\PhpOutline;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -98,7 +99,7 @@ final class HandRolledLockFormatTest extends TestCase
 
     private function lock(string $json): void
     {
-        mkdir($this->root.'/.larapack');
+        is_dir($this->root.'/.larapack') || mkdir($this->root.'/.larapack');
         file_put_contents($this->root.'/.larapack/hand-rolled.lock', $json);
     }
 
@@ -167,6 +168,99 @@ final class HandRolledLockFormatTest extends TestCase
             '[{"target": "A", "reason": "r", "fingerprint": "'.$good.'"}, {"target": "B", "reason": "r", "fingerprint": "sha1:abc"}]',
             '.larapack/hand-rolled.lock tiene una `fingerprint` que no es sha256:<64 hex> (posición 1).'
         );
+    }
+
+    public function test_quien_aprueba_sin_nombre_dice_su_posicion(): void
+    {
+        // `approved_by` es el nombre de la persona que aprobó sin terminal:
+        // vacío o que no es texto no nombra a nadie.
+        foreach (['""', '"   "', '7', '["Ana"]'] as $approver) {
+            $this->assertUnreadable(
+                '[{"target": "A", "reason": "r", "fingerprint": null}, {"target": "B", "reason": "r", "fingerprint": null, "approved_by": '.$approver.'}]',
+                '.larapack/hand-rolled.lock tiene un `approved_by` que no es un nombre (posición 1).'
+            );
+        }
+
+        $this->lock('[{"target": "A", "reason": "r", "fingerprint": null, "approved_by": "Ana Pérez"}]');
+        $this->assertSame('Ana Pérez', HandRolledLock::read($this->root)['A']['approved_by'] ?? null);
+    }
+
+    public function test_la_corrida_que_aprobo_tiene_que_ser_una_direccion(): void
+    {
+        // `approved_run` es la dirección de la corrida de aprobación lanzada a
+        // mano en GitHub: lo que no es una URL https no prueba nada.
+        foreach (['""', '"http://x/1"', '"https://"', '"https://a b"', '7', '["https://x"]'] as $run) {
+            $this->assertUnreadable(
+                '[{"target": "A", "reason": "r", "fingerprint": null}, {"target": "B", "reason": "r", "fingerprint": null, "approved_run": '.$run.'}]',
+                '.larapack/hand-rolled.lock tiene un `approved_run` que no es la dirección de una corrida (posición 1).'
+            );
+        }
+
+        $this->lock('[{"target": "A", "reason": "r", "fingerprint": null, "approved_by": "ana", "approved_run": "https://github.com/acme/notes/actions/runs/4242"}]');
+        $read = HandRolledLock::read($this->root);
+        $this->assertSame('https://github.com/acme/notes/actions/runs/4242', $read['A']['approved_run'] ?? null);
+        $this->assertSame("[\n    {\n        \"target\": \"A\",\n        \"reason\": \"r\",\n        \"fingerprint\": null,\n        \"approved_by\": \"ana\",\n        \"approved_run\": \"https://github.com/acme/notes/actions/runs/4242\"\n    }\n]\n", HandRolledLock::encode((array) $read));
+    }
+
+    public function test_la_linea_de_un_objetivo_en_el_candado(): void
+    {
+        // Sin candado, la primera línea.
+        $this->assertSame(1, HandRolledLock::lineOf($this->root, 'App\\A'));
+
+        $this->lock(HandRolledLock::encode([
+            'App\\Http\\Controllers\\A' => ['reason' => 'r', 'fingerprint' => null],
+            'realign:route-closure:routes/web.php#get(\'/año\')' => ['reason' => 'r', 'fingerprint' => null],
+        ]));
+
+        // Cada uno donde empieza su entrada, con barras y acentos tal cual.
+        $this->assertSame(3, HandRolledLock::lineOf($this->root, 'App\\Http\\Controllers\\A'));
+        $this->assertSame(8, HandRolledLock::lineOf($this->root, 'realign:route-closure:routes/web.php#get(\'/año\')'));
+        // Lo que no está, la primera línea; y un objetivo no se confunde con
+        // otro que lo contiene.
+        $this->assertSame(1, HandRolledLock::lineOf($this->root, 'App\\Http'));
+        $this->assertSame(1, HandRolledLock::lineOf($this->root, 'r'));
+    }
+
+    public function test_la_corrida_en_que_se_aprobo_es_una_direccion_https_o_no_se_lee(): void
+    {
+        // `approved_run` es lo que la puerta de la CI le pregunta a GitHub:
+        // tiene que ser una dirección, entera y sin nada alrededor.
+        foreach (['"http://github.com/a/b/actions/runs/1"', '"mira https://github.com/a/b/actions/runs/1"', '"https://github.com/a/b/actions/runs/1 y más"', '"https://"', '""', '7', '["https://x"]'] as $run) {
+            $this->assertUnreadable(
+                '[{"target": "A", "reason": "r", "fingerprint": null}, {"target": "B", "reason": "r", "fingerprint": null, "approved_by": "ana", "approved_run": '.$run.'}]',
+                '.larapack/hand-rolled.lock tiene un `approved_run` que no es la dirección de una corrida (posición 1).'
+            );
+        }
+
+        $this->lock('[{"target": "A", "reason": "r", "fingerprint": null, "approved_by": "ana", "approved_run": "https://github.com/acme/notes/actions/runs/4242"}]');
+        $this->assertSame(
+            ['A' => ['reason' => 'r', 'fingerprint' => null, 'approved_by' => 'ana', 'approved_run' => 'https://github.com/acme/notes/actions/runs/4242']],
+            HandRolledLock::read($this->root)
+        );
+    }
+
+    public function test_la_linea_del_candado_de_un_objetivo_es_la_de_su_target(): void
+    {
+        // Sin candado, o sin esa entrada, la anotación va a la primera línea.
+        $this->assertSame(1, HandRolledLock::lineOf($this->root, 'App\\A'));
+
+        $closure = "realign:route-closure:routes/web.php#get('/señal')";
+        HandRolledLock::write($this->root, [
+            // Una razón que nombra otro objetivo no es la entrada de ese objetivo.
+            'App\\A' => ['reason' => $closure, 'fingerprint' => null],
+            'App\\B' => ['reason' => 'r', 'fingerprint' => null, 'approved_by' => 'ana'],
+            $closure => ['reason' => 'r', 'fingerprint' => null],
+        ]);
+
+        $lines = explode("\n", (string) file_get_contents($this->root.'/.larapack/hand-rolled.lock'));
+
+        $this->assertSame(3, HandRolledLock::lineOf($this->root, 'App\\A'));
+        $this->assertSame('        "target": "App\\\\A",', $lines[2]);
+        $this->assertSame(8, HandRolledLock::lineOf($this->root, 'App\\B'));
+        // Con barras y acentos, como se escriben en el candado: sin escapar.
+        $this->assertSame(14, HandRolledLock::lineOf($this->root, $closure));
+        $this->assertStringContainsString("routes/web.php#get('/señal')", $lines[13]);
+        $this->assertSame(1, HandRolledLock::lineOf($this->root, 'App\\C'));
     }
 
     public function test_un_objetivo_aprobado_dos_veces_no_se_lee(): void
@@ -386,6 +480,28 @@ final class HandRolledLockFormatTest extends TestCase
             $this->assertNotSame($original, HandRolledLock::classFingerprint($orphan));
         } finally {
             restore_error_handler();
+        }
+    }
+
+    public function test_el_candado_no_se_escribe_a_traves_de_un_enlace_que_saca_del_proyecto(): void
+    {
+        // `.larapack` enlazado fuera: la aprobación acabaría en un archivo
+        // ajeno (auditoría de seguridad de 9.4.0).
+        $outside = $this->root.'-fuera';
+        mkdir($outside);
+        $project = $this->root.'/project';
+        mkdir($project);
+        symlink($outside, $project.'/.larapack');
+
+        try {
+            HandRolledLock::write($project, ['App\X' => ['reason' => 'r', 'fingerprint' => null]]);
+            $this->fail('Escribió a través del enlace.');
+        } catch (MakerException $e) {
+            $this->assertStringContainsString('lleva fuera del proyecto', $e->getMessage());
+            $this->assertFileDoesNotExist($outside.'/hand-rolled.lock');
+        } finally {
+            @unlink($outside.'/hand-rolled.lock');
+            rmdir($outside);
         }
     }
 }

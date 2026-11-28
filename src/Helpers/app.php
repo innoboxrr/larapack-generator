@@ -56,6 +56,11 @@ if (! function_exists('get_path')) {
     function get_path(string $path): string
     {
         $path = root_path().'/'.$path;
+
+        // Un directorio del proyecto que es un enlace hacia fuera (`src/Models`
+        // apuntando a otro sitio) no es donde se genera.
+        Files::guard($path);
+
         if (! file_exists($path)) {
             mkdir($path, 0777, true);
         }
@@ -93,6 +98,14 @@ if (! function_exists('get_namespace')) {
                 $onlyGlobal = true;
 
                 continue;
+            }
+
+            // El namespace va tal cual al `namespace` y a los `use` de cada
+            // archivo generado, y composer.json es un archivo del proyecto:
+            // con `"Acme\\Shop;\n} namespace X { … \\"` lo que seguía al `;` salía
+            // como código en cada clase. Tiene que ser un namespace de PHP.
+            if (preg_match('/^[A-Za-z_\x80-\xff][A-Za-z0-9_\x80-\xff]*(?:\\\\[A-Za-z_\x80-\xff][A-Za-z0-9_\x80-\xff]*)*\\\\\z/', $key) !== 1) {
+                throw MakerException::invalidNamespace(root_path().'/composer.json', $key);
             }
 
             return $key;

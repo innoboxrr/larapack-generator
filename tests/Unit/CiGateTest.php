@@ -121,13 +121,18 @@ final class CiGateTest extends TestCase
             verify:
                 name: LaraPack verify
                 runs-on: ubuntu-latest
-                # Sólo lectura: verify no escribe nada, y el último paso sólo lee
-                # las reglas de la rama.
+                # Sólo lectura: verify no escribe nada, y los dos últimos pasos sólo
+                # leen las reglas de la rama y las corridas de aprobación.
                 permissions:
                     contents: read
+                    actions: read
 
                 steps:
                     - uses: actions/checkout@v5
+                      with:
+                          # Con historial: larapack:reconcile --check compara las dos ramas
+                          # de la fusión, y sin sus commits no tiene qué comparar.
+                          fetch-depth: 0
 
                     - uses: shivammathur/setup-php@v2
                       with:
@@ -140,6 +145,21 @@ final class CiGateTest extends TestCase
 
                     - name: Contrato de LaraPack
                       run: php vendor/bin/builder larapack:verify --strict --format=json
+
+                    # Varias ramas a la vez: que entre las dos de esta fusión no quede nada
+                    # por reconciliar (el laraimport, el manifiesto, migraciones repetidas).
+                    - name: Fusión reconciliada
+                      if: ${{ !cancelled() }}
+                      run: php vendor/bin/builder larapack:reconcile --check
+
+                    # Cada aprobación sin terminal del candado (approved_by), a la vista en
+                    # el diff del PR y comprobada con GitHub: la corrida tiene que ser la del
+                    # workflow de aprobación, lanzada a mano por quien dice. Si no, falla.
+                    - name: Aprobaciones sin terminal
+                      if: ${{ !cancelled() }}
+                      env:
+                          GH_TOKEN: ${{ github.token }}
+                      run: php vendor/bin/builder larapack:hand-rolled list --format=github
 
                     # La puerta sólo vale si la rama exige este check, y eso lo decide el
                     # dueño en GitHub (larapack:ci imprime cómo). Aquí se comprueba en cada
@@ -182,13 +202,18 @@ final class CiGateTest extends TestCase
             verify:
                 name: LaraPack verify
                 runs-on: [self-hosted, linux]
-                # Sólo lectura: verify no escribe nada, y el último paso sólo lee
-                # las reglas de la rama.
+                # Sólo lectura: verify no escribe nada, y los dos últimos pasos sólo
+                # leen las reglas de la rama y las corridas de aprobación.
                 permissions:
                     contents: read
+                    actions: read
 
                 steps:
                     - uses: actions/checkout@v5
+                      with:
+                          # Con historial: larapack:reconcile --check compara las dos ramas
+                          # de la fusión, y sin sus commits no tiene qué comparar.
+                          fetch-depth: 0
 
                     - uses: shivammathur/setup-php@v2
                       with:
@@ -206,6 +231,21 @@ final class CiGateTest extends TestCase
 
                     - name: Contrato de LaraPack
                       run: php artisan larapack:verify --strict --format=json
+
+                    # Varias ramas a la vez: que entre las dos de esta fusión no quede nada
+                    # por reconciliar (el laraimport, el manifiesto, migraciones repetidas).
+                    - name: Fusión reconciliada
+                      if: ${{ !cancelled() }}
+                      run: php artisan larapack:reconcile --check
+
+                    # Cada aprobación sin terminal del candado (approved_by), a la vista en
+                    # el diff del PR y comprobada con GitHub: la corrida tiene que ser la del
+                    # workflow de aprobación, lanzada a mano por quien dice. Si no, falla.
+                    - name: Aprobaciones sin terminal
+                      if: ${{ !cancelled() }}
+                      env:
+                          GH_TOKEN: ${{ github.token }}
+                      run: php artisan larapack:hand-rolled list --format=github
 
                     # La puerta sólo vale si la rama exige este check, y eso lo decide el
                     # dueño en GitHub (larapack:ci imprime cómo). Aquí se comprueba en cada
@@ -232,6 +272,35 @@ final class CiGateTest extends TestCase
             'con algo delante que no es de YAML' => ['@main', "['@main']"],
             'una comilla se dobla' => ["it's", "['it''s']"],
         ];
+    }
+
+    /**
+     * El estilo sólo se exige donde el proyecto ya usa Pint: lo generado sale
+     * formateado, y lo que cada consola escribe a mano tiene que leerse igual.
+     */
+    public function test_el_paso_de_pint_solo_si_el_proyecto_lo_requiere(): void
+    {
+        $this->composer(['require' => ['php' => '^8.3']]);
+        $this->assertStringNotContainsString('pint', CiGate::workflow($this->root, null));
+
+        $this->composer(['require' => ['php' => '^8.3'], 'require-dev' => ['laravel/pint' => '^1.18']]);
+        $workflow = CiGate::workflow($this->root, null);
+
+        $this->assertStringContainsString("            # El mismo estilo para lo que escribe cada consola.\n            - name: Estilo (Pint)\n              if: \${{ !cancelled() }}\n              run: vendor/bin/pint --test\n", $workflow);
+        // Después del contrato y de la fusión, antes de las aprobaciones.
+        $this->assertLessThan(strpos($workflow, 'Aprobaciones sin terminal'), strpos($workflow, 'Estilo (Pint)'));
+        $this->assertGreaterThan(strpos($workflow, 'Fusión reconciliada'), strpos($workflow, 'Estilo (Pint)'));
+    }
+
+    /**
+     * El workflow de aprobación no compara ramas: clona como siempre.
+     */
+    public function test_solo_la_puerta_clona_con_historial(): void
+    {
+        $this->composer(['require' => ['php' => '^8.3']]);
+
+        $this->assertStringContainsString('fetch-depth: 0', CiGate::workflow($this->root, null));
+        $this->assertStringNotContainsString('fetch-depth', CiGate::approvalWorkflow($this->root));
     }
 
     #[DataProvider('ramas')]
@@ -427,9 +496,17 @@ final class CiGateTest extends TestCase
         $this->put('CODEOWNERS', '');
         $this->assertSame('CODEOWNERS', CiGate::codeownersFile($this->root));
 
+        // Auditoría de seguridad de 9.4.0: las tres rutas donde GitHub busca
+        // CODEOWNERS (la primera que existe manda: un `.github/CODEOWNERS`
+        // nuevo le quitaba el sitio al de la raíz) y todos los workflows
+        // (cualquiera puede declarar un job llamado como el check exigido).
         $this->assertSame(
-            ['/.larapack/hand-rolled.lock', '/.github/workflows/larapack.yml', '/CODEOWNERS'],
+            ['/.github/workflows/', '/.githooks/', '/.larapack/hand-rolled.lock', '/.github/workflows/larapack.yml', '/.github/workflows/larapack-approve.yml', '/CODEOWNERS', '/.github/CODEOWNERS', '/docs/CODEOWNERS'],
             CiGate::ownedPaths('CODEOWNERS')
+        );
+        $this->assertSame(
+            ['/.github/workflows/', '/.githooks/', '/.larapack/hand-rolled.lock', '/.github/workflows/larapack.yml', '/.github/workflows/larapack-approve.yml', '/.github/CODEOWNERS', '/CODEOWNERS', '/docs/CODEOWNERS'],
+            CiGate::ownedPaths('.github/CODEOWNERS')
         );
     }
 
@@ -491,6 +568,8 @@ final class CiGateTest extends TestCase
             ." -f 'required_status_checks[contexts][]=LaraPack verify'"
             ." -F 'enforce_admins=true'"
             ." -F 'required_pull_request_reviews[require_code_owner_reviews]=true'"
+            // Sin esto se aprueba el PR y después se empuja el candado.
+            ." -F 'required_pull_request_reviews[dismiss_stale_reviews]=true'"
             ." -F 'required_pull_request_reviews[required_approving_review_count]=1'"
             ." -F 'restrictions=null'",
             CiGate::protectionCommand('acme/app', 'main')

@@ -27,7 +27,7 @@ final class Declaration
      * donde los stubs preguntan, y porque esta lista es la que comprueba que
      * ningún stub use una condición que no existe.
      */
-    public const FLAGS = ['immutable', 'secret', 'metas', 'authenticatable', 'table_prefix', 'endpoint_writes', 'record_actions'];
+    public const FLAGS = ['immutable', 'secret', 'metas', 'authenticatable', 'table_prefix', 'declared_table', 'endpoint_writes', 'record_actions'];
 
     /**
      * @var array<string, array{actions: array<int, string>, immutable: bool, secret: array<int, string>, metas: bool, display: string, authenticatable: bool, endpoints: array<int, array<string, mixed>>, controller: bool}>
@@ -166,6 +166,9 @@ final class Declaration
             // porque es donde los stubs preguntan. Sin `table_prefix`, el bloque
             // desaparece y el modelo sale byte a byte como salía antes.
             $condition === 'table_prefix' => TablePrefix::get() !== '',
+            // El modelo declara su tabla con `table` (9.4.0): el `$table` del
+            // modelo lleva ésa, sin prefijo. Sin la clave, nada cambia.
+            $condition === 'declared_table' => TablePrefix::explicit($model) !== null,
             // Las del módulo de interfaz. `endpoint_writes`: algún endpoint del
             // modelo cambia algo, y su función del contrato JS pregunta antes,
             // como borrar. `record_actions`: alguno sale en el menú de la ficha.

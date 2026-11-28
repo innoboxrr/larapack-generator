@@ -4,6 +4,7 @@ namespace Innoboxrr\LarapackGenerator\Support;
 
 use Closure;
 use Innoboxrr\LarapackGenerator\Attributes\HandRolled;
+use Innoboxrr\LarapackGenerator\Support\Realign\ExceptionTargets;
 use RuntimeException;
 
 /**
@@ -28,9 +29,9 @@ use RuntimeException;
  * con cuerpo de routes/*.php, que son acciones sin controlador.
  *
  * Qué se recorre lo decide ProjectSources, que también explica lo que queda
- * fuera a propósito: Livewire, Filament y los controladores que no cuelgan de
- * `Http/Controllers` no tienen el patrón FormRequest::handle() que se
- * comprueba aquí.
+ * fuera a propósito: Livewire y Filament no tienen el patrón
+ * FormRequest::handle() que se comprueba aquí. Una clase de fuera de
+ * `Http/Controllers` que una ruta usa de controlador sí (checkRouteActions()).
  *
  * Lo que de verdad no puede seguir la forma se declara con
  * #[HandRolled('razón')]. Es una excepción que aprueba el dueño del proyecto,
@@ -89,6 +90,11 @@ final class ControllerShape
     private const ROUTE_METHODS = ['get', 'post', 'put', 'patch', 'delete', 'options', 'any', 'match', 'fallback', 'addroute'];
 
     /**
+     * Los que registran de una vez todas las acciones de un controlador.
+     */
+    private const RESOURCE_METHODS = ['resource', 'apiresource', 'singleton', 'apisingleton'];
+
+    /**
      * Lo que en una expresión ejecuta código que no se ve: un closure, un
      * include, eval, exit o una orden de shell.
      */
@@ -111,6 +117,24 @@ final class ControllerShape
      * @var array<string, array{reason: string, fingerprint: string, file: string, line: int}>
      */
     private array $declared = [];
+
+    /**
+     * Los closures de rutas que se evaluaron, por su objetivo de excepción
+     * del realineamiento (ExceptionTargets): lo aprobado que no está aquí
+     * sobra.
+     *
+     * @var array<string, true>
+     */
+    private array $closures = [];
+
+    /**
+     * Si lleva #[HandRolled] con razón cada clase o método de fuera de
+     * Http/Controllers que ya se evaluó (por objetivo): lo heredan o lo
+     * enrutan varios, y su excepción se anota una vez.
+     *
+     * @var array<string, bool>
+     */
+    private array $excusedElsewhere = [];
 
     /**
      * @var array<string, list<ClassOutline>>
@@ -151,6 +175,8 @@ final class ControllerShape
         $findings = [];
         $requests = [];
         $this->declared = [];
+        $this->closures = [];
+        $this->excusedElsewhere = [];
         $this->loadLock($findings);
         $files = $this->project->files('/Http/Controllers/');
 
@@ -217,8 +243,14 @@ final class ControllerShape
                         $requests[strtolower($request)] ??= [$request, $where, $relative];
                     }
                 }
+
+                if (! $class['abstract']) {
+                    $this->checkInherited($class, $excused, $relative, $findings, $requests);
+                }
             }
         }
+
+        $this->checkRouteActions($findings, $requests);
 
         foreach ($requests as [$request, $where, $relative]) {
             $this->checkRequestHandles($request, $where, $relative, $findings);
@@ -259,12 +291,19 @@ final class ControllerShape
      */
     private function checkStale(array &$findings): void
     {
-        $stale = array_diff_key($this->approved ?? [], $this->declared);
+        $stale = array_diff_key($this->approved ?? [], $this->declared, $this->closures);
         ksort($stale, SORT_STRING);
 
         foreach (array_keys($stale) as $target) {
-            $findings[] = $this->finding(Verifier::WARNING, self::HAND_ROLLED_STALE, HandRolledLock::PATH,
-                'Aprueba '.self::sanitise((string) $target).', que ya no lleva #[HandRolled] en ningún controlador. El dueño del proyecto la retira con larapack:hand-rolled revoke.');
+            // Las excepciones del realineamiento que no son de un closure las
+            // juzga ProjectVerification, que ve todos los hallazgos.
+            if (ExceptionTargets::isRealign($target) && ! str_starts_with($target, ExceptionTargets::PREFIX.'route-closure:')) {
+                continue;
+            }
+
+            $findings[] = $this->finding(Verifier::WARNING, self::HAND_ROLLED_STALE, HandRolledLock::PATH, ExceptionTargets::isRealign($target)
+                ? 'Aprueba la excepción '.self::sanitise($target).', y esa ruta ya no lleva su acción en un closure (o cambió de URI). El dueño del proyecto la retira con larapack:hand-rolled revoke.'
+                : 'Aprueba '.self::sanitise($target).', que ya no lleva #[HandRolled] en ningún controlador. El dueño del proyecto la retira con larapack:hand-rolled revoke.');
         }
     }
 
@@ -284,7 +323,10 @@ final class ControllerShape
      *   anteriores). Cualquier otra sentencia —una llamada, un if, leer
      *   auth()— es lógica que ninguna acción muestra.
      * - El middleware() estático de HasMiddleware puede registrar un closure
-     *   con cuerpo: lógica en el controlador por la puerta de atrás.
+     *   con cuerpo: lógica en el controlador por la puerta de atrás. Lo mismo
+     *   un getMiddleware() redefinido que devuelve uno.
+     * - callAction() redefinido corre delante de cada acción, y un
+     *   __destruct() con cuerpo, detrás de cada petición: siempre son error.
      *
      * @param  MethodOutline  $method
      */
@@ -308,6 +350,24 @@ final class ControllerShape
             }
 
             return null;
+        }
+
+        // callAction() es por donde el router llama a TODAS las acciones:
+        // redefinirlo es poner lógica delante de cada una, sin que ninguna
+        // la muestre. Con cuerpo: una declaración abstracta no hace nada.
+        if ($name === 'callaction' && $method['body'] !== null) {
+            return 'redefine callAction(), por donde el router llama a todas las acciones: lo que haga ahí corre en cada una y ninguna lo muestra. '
+                .'Quítalo; lo que tenga que pasar antes de una acción es un middleware con nombre, y lo demás va en el handle() de su request.';
+        }
+
+        if ($name === '__destruct' && $body !== []) {
+            return 'es un destructor con cuerpo: corre al terminar cada petición que pasa por el controlador, y es lógica que ninguna acción muestra. '
+                .'Quítalo; lo que haya que hacer después de responder va en un middleware terminable o en un listener.';
+        }
+
+        if ($name === 'getmiddleware' && array_intersect(array_column($body, 0), [T_FUNCTION, T_FN]) !== []) {
+            return 'devuelve un middleware en un closure desde getMiddleware(): es lógica en el controlador que no se ve al leer sus acciones. '
+                .'Hazlo una clase de middleware y regístrala por su nombre o su alias.';
         }
 
         if ($name === 'middleware' && $method['static'] && array_intersect(array_column($body, 0), [T_FUNCTION, T_FN]) !== []) {
@@ -423,6 +483,372 @@ final class ControllerShape
     }
 
     /**
+     * Las acciones que un controlador concreto hereda sin declararlas: las de
+     * un trait o de un padre que viven fuera de Http/Controllers, y las de un
+     * padre abstracto de dentro (cuyos métodos no se cuentan en él: el router
+     * nunca lo instancia).
+     *
+     * El router las llama igual que a las declaradas. Sin esto bastaba mover
+     * la acción —con su validación y sus consultas— a un trait de
+     * `Support/` o a una clase base, y dejar el controlador vacío: verify no
+     * veía nada. Un trait de Http/Controllers lo cuenta controller-concern;
+     * un padre concreto de Http/Controllers se comprueba como controlador
+     * que es. Lo que viene de vendor no se ve sin cargarlo, y no se adivina.
+     *
+     * El hallazgo es del controlador: es él quien convierte ese método en
+     * una acción.
+     *
+     * @param  ClassOutline  $class
+     * @param  list<Finding>  $findings
+     * @param  array<string, array{0: string, 1: string, 2: string}>  $requests
+     */
+    private function checkInherited(array $class, bool $excused, string $relative, array &$findings, array &$requests): void
+    {
+        foreach ($this->inherited($class) as [$owner, $method, $ownerFile]) {
+            $from = "heredada de {$owner['name']} ({$ownerFile})";
+            $where = "{$class['name']}::{$method['name']}(), {$from},";
+            $outside = ! $this->inControllers($ownerFile);
+            $side = $outside ? $this->sideEntrance($method) : null;
+
+            if (! ($side !== null || $this->isAction($method))) {
+                continue;
+            }
+
+            $ownerExcused = $this->excusedElsewhere($owner['attributes'], $owner['name'], $owner['fqcn'], $ownerFile, $findings,
+                fn (): string => HandRolledLock::classFingerprint($owner), $outside);
+            $methodExcused = $this->excusedElsewhere($method['attributes'], "{$owner['name']}::{$method['name']}()", "{$owner['fqcn']}::{$method['name']}", $ownerFile, $findings,
+                fn (): string => HandRolledLock::methodFingerprint($method), true);
+
+            if ($excused || $ownerExcused || $methodExcused) {
+                continue;
+            }
+
+            if ($side !== null) {
+                $findings[] = $this->finding(Verifier::ERROR, self::SHAPE, $relative, "{$where} (línea {$method['line']}) {$side}");
+
+                continue;
+            }
+
+            $request = $this->delegatedRequest($method, $where, $relative, $findings);
+
+            if ($request !== null) {
+                $requests[strtolower($request)] ??= [$request, $where, $relative];
+            }
+        }
+    }
+
+    /**
+     * Los métodos que una clase recibe de sus traits y de sus padres, sin los
+     * que ella misma declara: cada uno con la clase o el trait que lo declara
+     * y su archivo. Gana el más cercano, como en PHP: la clase, sus traits,
+     * su padre.
+     *
+     * @param  ClassOutline  $class
+     * @return list<array{0: ClassOutline, 1: MethodOutline, 2: string}>
+     */
+    private function inherited(array $class): array
+    {
+        $found = [];
+        $names = [];
+
+        foreach ($class['methods'] as $method) {
+            $names[strtolower($method['name'])] = true;
+        }
+
+        $visited = [strtolower($class['fqcn']) => true];
+        $current = $class;
+
+        while (true) {
+            foreach ($current['traits'] as $trait) {
+                $this->collectFrom($trait, true, $found, $names, $visited);
+            }
+
+            $parent = $current['extends'] === null ? null : $this->classOutline($current['extends']);
+
+            if ($parent === null || isset($visited[strtolower($parent['fqcn'])])) {
+                break;
+            }
+
+            $file = $this->fileOf($parent['fqcn']);
+
+            // Un padre concreto de Http/Controllers es un controlador: sus
+            // acciones, y lo que él herede, se comprueban en él.
+            if ($this->inControllers($file) && ! $parent['abstract']) {
+                break;
+            }
+
+            $this->collectFrom($parent['fqcn'], false, $found, $names, $visited);
+            $current = $parent;
+        }
+
+        return $found;
+    }
+
+    /**
+     * @param  list<array{0: ClassOutline, 1: MethodOutline, 2: string}>  $found
+     * @param  array<string, true>  $names
+     * @param  array<string, true>  $visited
+     */
+    private function collectFrom(string $name, bool $trait, array &$found, array &$names, array &$visited): void
+    {
+        $key = strtolower($name);
+        $outline = isset($visited[$key]) ? null : $this->classOutline($name);
+
+        if ($outline === null) {
+            return;
+        }
+
+        $visited[$key] = true;
+        $file = $this->fileOf($name);
+
+        // Los de un trait de Http/Controllers los cuenta controller-concern.
+        if (! ($trait && $this->inControllers($file))) {
+            foreach ($outline['methods'] as $method) {
+                $lower = strtolower($method['name']);
+
+                if (! isset($names[$lower]) && $method['body'] !== null) {
+                    $names[$lower] = true;
+                    $found[] = [$outline, $method, $file];
+                }
+            }
+        }
+
+        if ($trait) {
+            foreach ($outline['traits'] as $nested) {
+                $this->collectFrom($nested, true, $found, $names, $visited);
+            }
+        }
+    }
+
+    /**
+     * El archivo, relativo a la raíz, de una clase cuyo ClassOutline ya se
+     * encontró: locate() no puede dar null.
+     */
+    private function fileOf(string $fqcn): string
+    {
+        return $this->project->relative((string) $this->project->locate($fqcn));
+    }
+
+    private function inControllers(string $relative): bool
+    {
+        return str_contains('/'.$relative, '/Http/Controllers/');
+    }
+
+    /**
+     * handRolled() para una clase o un método que puede evaluarse varias
+     * veces —lo heredan varios controladores, lo nombran varias rutas—: la
+     * excepción se anota la primera vez. Con `$declare` a false sólo se mira
+     * si lleva el atributo con razón: la clase de Http/Controllers ya lo
+     * anotó en su turno.
+     *
+     * @param  list<AttributeOutline>  $attributes
+     * @param  list<Finding>  $findings
+     * @param  Closure(): string  $fingerprint
+     */
+    private function excusedElsewhere(array $attributes, string $what, string $target, string $file, array &$findings, Closure $fingerprint, bool $declare): bool
+    {
+        // El objetivo sale del ClassOutline (el nombre como se declaró), así
+        // que dos rutas que lo escriben con otra caja dan el mismo.
+        if ($declare) {
+            return $this->excusedElsewhere[$target] ??= $this->handRolled($attributes, $what, $target, $file, $findings, $fingerprint);
+        }
+
+        foreach ($attributes as $attribute) {
+            if (strcasecmp($attribute['name'], HandRolled::class) === 0) {
+                return self::sanitise((string) PhpOutline::stringArgument($attribute['args'], 0, 'reason')) !== '';
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Las acciones de las rutas que no son ni un closure en línea ni un
+     * controlador de Http/Controllers.
+     *
+     *  - Una clase del proyecto de fuera de Http/Controllers puesta como
+     *    acción (`[Exportar::class, 'run']`, `Exportar::class`,
+     *    `'…\Exportar@run'`, `Route::resource()`): para el router es un
+     *    controlador, y su acción tiene que ser `return $request->handle();`
+     *    como la de cualquiera. Antes quedaba fuera a propósito —«no siguen
+     *    el patrón»—, y eso era la forma más corta de saltarse verify: el
+     *    mismo controlador con lógica, en `Actions/`. Sólo se mira si el
+     *    método enrutado está en el código del proyecto: un componente de
+     *    Livewire o una página de Filament, cuyo `__invoke` viene de vendor,
+     *    siguen fuera.
+     *  - Una acción que no se puede leer —una variable, una función con
+     *    nombre pasada como `f(...)`, un objeto, un closure dentro de un
+     *    array— es un closure por otro camino: `route-closure`, como aviso.
+     *
+     * Sólo las llamadas sobre el router (`Route::…`, `$router->…`) en los
+     * routes/*.php: una ruta registrada en otro sitio no se ve desde aquí.
+     *
+     * @param  list<Finding>  $findings
+     * @param  array<string, array{0: string, 1: string, 2: string}>  $requests
+     */
+    private function checkRouteActions(array &$findings, array &$requests): void
+    {
+        $seen = [];
+
+        foreach ($this->routeFiles() as $file) {
+            $relative = $this->project->relative($file);
+            $outline = PhpOutline::ofFile($file);
+
+            foreach ($outline->callsTo([...self::ROUTE_METHODS, ...self::RESOURCE_METHODS]) as $call) {
+                $root = strtolower($call['root']);
+
+                if ($root !== '$router' && basename(str_replace('\\', '/', $root)) !== 'route') {
+                    continue;
+                }
+
+                $name = strtolower($call['call']);
+                $resource = in_array($name, self::RESOURCE_METHODS, true);
+                $position = match (true) {
+                    $name === 'fallback' => 0,
+                    in_array($name, ['match', 'addroute'], true) => 2,
+                    default => 1,
+                };
+                $target = self::routeTarget($outline, $call['named']['action'] ?? $call['named']['controller'] ?? $call['arguments'][$position] ?? []);
+
+                if ($target === null) {
+                    continue;
+                }
+
+                if ($target === []) {
+                    $findings[] = $this->finding(Verifier::WARNING, self::ROUTE_CLOSURE, $relative,
+                        "La ruta de la línea {$call['line']} ({$call['call']}()) lleva como acción algo que no se puede leer sin ejecutarlo —una variable, una función, un objeto o un closure dentro de un array—: es una acción sin controlador, como un closure, y nada de lo que verify comprueba en los controladores la alcanza. "
+                        .'Llévala a un controlador cuya acción sea `return $request->handle();` con un FormRequest propio, y nómbralo en la ruta (`[Controlador::class, \'accion\']`).');
+
+                    continue;
+                }
+
+                $this->checkRoutedClass($target['class'], $resource ? null : ($target['method'] ?? '__invoke'), $relative, $seen, $findings, $requests);
+            }
+        }
+    }
+
+    /**
+     * La acción de una ruta: `['class' => …, 'method' => …|null]` si nombra
+     * una clase, `[]` si no se puede leer, null si es un closure en línea
+     * (route-closure ya lo cuenta) o no hay nada que mirar.
+     *
+     * @param  list<array{0: int|string, 1: string, 2: int}>  $action
+     * @return array{class: string, method: string|null}|array{}|null
+     */
+    private static function routeTarget(PhpOutline $outline, array $action): ?array
+    {
+        if ($action === []) {
+            return null;
+        }
+
+        $kinds = array_column($action, 0);
+        $first = $kinds[0] === T_STATIC ? ($kinds[1] ?? null) : $kinds[0];
+
+        if (in_array($first, [T_FUNCTION, T_FN], true)) {
+            return null;
+        }
+
+        $className = fn (array $tokens): ?string => count($tokens) === 3
+            && in_array($tokens[0][0], [T_STRING, T_NAME_QUALIFIED, T_NAME_FULLY_QUALIFIED, T_NAME_RELATIVE], true)
+            && $tokens[1][0] === T_DOUBLE_COLON
+            && $tokens[2][0] === T_CLASS
+                ? $outline->resolveName($tokens[0][1])
+                : null;
+
+        // 'Clase@metodo', o 'Clase' (invocable).
+        if (count($action) === 1 && $action[0][0] === T_CONSTANT_ENCAPSED_STRING) {
+            $parts = explode('@', (string) PhpOutline::stringArgument($action, 0, ''), 2);
+
+            return ['class' => ltrim($parts[0], '\\'), 'method' => $parts[1] ?? null];
+        }
+
+        if (($class = $className($action)) !== null) {
+            return ['class' => $class, 'method' => null];
+        }
+
+        if (PhpOutline::is($action[0], '[') && PhpOutline::is($action[count($action) - 1], ']')) {
+            $parts = PhpOutline::splitTopLevel(array_slice($action, 1, -1));
+            $class = $className($parts[0] ?? []);
+            $method = count($parts) === 2 ? PhpOutline::stringArgument($parts[1], 0, '') : null;
+
+            if ($class !== null && (count($parts) === 1 || $method !== null)) {
+                return ['class' => $class, 'method' => $method];
+            }
+        }
+
+        // Lo que queda sólo es opaco si ejecuta o trae algo: una constante o
+        // un literal suelto no son una acción que esconda nada. Un closure
+        // dentro de un array (`['uses' => function () {…}]`) lleva siempre su
+        // `(`.
+        return array_intersect($kinds, [T_VARIABLE, T_NEW, '(']) !== [] ? [] : null;
+    }
+
+    /**
+     * Una clase del proyecto de fuera de Http/Controllers que una ruta usa
+     * de controlador: su acción enrutada (todas las públicas, con
+     * `$method` null: un `Route::resource()`) y sus puertas laterales.
+     *
+     * @param  array<string, true>  $seen
+     * @param  list<Finding>  $findings
+     * @param  array<string, array{0: string, 1: string, 2: string}>  $requests
+     */
+    private function checkRoutedClass(string $fqcn, ?string $method, string $routes, array &$seen, array &$findings, array &$requests): void
+    {
+        $file = $this->project->locate($fqcn);
+        $class = $file === null ? null : $this->classOutline($fqcn);
+        $relative = $file === null ? '' : $this->project->relative($file);
+
+        if ($class === null || $class['kind'] !== 'class' || $this->inControllers($relative)) {
+            return;
+        }
+
+        $candidates = [];
+
+        foreach ($class['methods'] as $own) {
+            $candidates[] = [$class, $own, $relative];
+        }
+
+        foreach ([...$candidates, ...$this->inherited($class)] as [$owner, $candidate, $ownerFile]) {
+            $side = $this->sideEntrance($candidate);
+            $routed = $method === null ? $this->isAction($candidate) : strcasecmp($candidate['name'], $method) === 0 && $this->isAction($candidate);
+            $key = strtolower("{$fqcn}::{$candidate['name']}");
+
+            if (($side === null && ! $routed) || isset($seen[$key])) {
+                continue;
+            }
+
+            $seen[$key] = true;
+            $where = "{$class['name']}::{$candidate['name']}()".($owner === $class ? '' : ", heredada de {$owner['name']} ({$ownerFile}),");
+
+            $excused = $this->excusedElsewhere($class['attributes'], $class['name'], $class['fqcn'], $relative, $findings,
+                fn (): string => HandRolledLock::classFingerprint($class), true);
+            $excused = $this->excusedElsewhere($candidate['attributes'], "{$owner['name']}::{$candidate['name']}()", "{$owner['fqcn']}::{$candidate['name']}", $ownerFile, $findings,
+                fn (): string => HandRolledLock::methodFingerprint($candidate), true) || $excused;
+
+            if ($excused) {
+                continue;
+            }
+
+            $context = "{$where} es la acción de una ruta de {$routes} aunque su clase no esté en Http/Controllers: para el router es un controlador.";
+
+            if ($side !== null) {
+                $findings[] = $this->finding(Verifier::ERROR, self::SHAPE, $relative, "{$context} (línea {$candidate['line']}) {$side}");
+
+                continue;
+            }
+
+            $before = count($findings);
+            $request = $this->delegatedRequest($candidate, $where, $relative, $findings);
+
+            if ($request !== null) {
+                $requests[strtolower($request)] ??= [$request, $where, $relative];
+            } elseif (isset($findings[$before])) {
+                $findings[$before]['message'] .= " Es la acción de una ruta de {$routes}: aunque su clase no esté en Http/Controllers, para el router es un controlador.";
+            }
+        }
+    }
+
+    /**
      * Un closure con cuerpo en routes/*.php es una acción sin controlador:
      * nada de lo que `verify` comprueba en los controladores lo alcanza. Es
      * aviso y no error porque es el patrón de la documentación de Laravel y
@@ -436,8 +862,33 @@ final class ControllerShape
     private function checkRouteClosures(array &$findings): void
     {
         foreach ($this->routeClosures() as $file => $closures) {
+            $relative = $this->project->relative($file);
+            $named = [];
+
+            // El nombre y la huella con que se aprueba cada closure como
+            // excepción del realineamiento (ExceptionTargets), por su línea.
+            foreach ($closures === [] ? [] : ExceptionTargets::routeClosures($relative, Files::read($file)) as $exception) {
+                $named[$exception['call'].'@'.$exception['line']] = $exception;
+                $this->closures[$exception['target']] = true;
+            }
+
             foreach ($closures as ['closure' => $closure, 'spa' => $spa]) {
-                $findings[] = $this->finding(Verifier::WARNING, self::ROUTE_CLOSURE, $this->project->relative($file), self::routeClosureMessage($closure, $spa));
+                $message = self::routeClosureMessage($closure, $spa);
+                $exception = $named[strtolower($closure['call']).'@'.$closure['line']] ?? null;
+                $approved = $exception === null ? null : ($this->approved[$exception['target']] ?? null);
+
+                if ($exception !== null && $approved !== null && $approved['fingerprint'] === $exception['fingerprint']) {
+                    $findings[] = $this->finding(Verifier::INFO, self::ROUTE_CLOSURE, $relative,
+                        "La ruta de la línea {$closure['line']} lleva su acción en un closure ({$closure['call']}()), escrito así a propósito: «".self::sanitise($approved['reason']).'». Excepción aprobada por el dueño del proyecto en '.HandRolledLock::PATH." ({$exception['target']}).");
+
+                    continue;
+                }
+
+                if ($exception !== null && $approved !== null) {
+                    $message .= " La excepción aprobada {$exception['target']} era de otro código: el closure cambió y ya no lo cubre. El dueño del proyecto la vuelve a aprobar (larapack:hand-rolled approve) o la ruta se lleva a un controlador.";
+                }
+
+                $findings[] = $this->finding(Verifier::WARNING, self::ROUTE_CLOSURE, $relative, $message);
             }
         }
     }
@@ -457,7 +908,7 @@ final class ControllerShape
         $web = $this->project->root().'/routes/web.php';
 
         foreach ($this->routeFiles() as $file) {
-            $code = (string) file_get_contents($file);
+            $code = Files::read($file);
             $spa = $file === $web ? SpaFallback::fallback($code) : null;
             $result[$file] = array_map(
                 fn (array $closure): array => [
@@ -547,8 +998,8 @@ final class ControllerShape
 
     /**
      * Una acción es lo que el router puede llamar: un método público con
-     * cuerpo, declarado en la clase. Los heredados no se ven aquí, y los de un
-     * trait de Http/Controllers los cuenta controller-concern.
+     * cuerpo. Los heredados los trae checkInherited(), y los de un trait de
+     * Http/Controllers los cuenta controller-concern.
      *
      * @param  MethodOutline  $method
      */

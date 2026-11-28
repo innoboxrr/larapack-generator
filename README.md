@@ -10,24 +10,46 @@ o una aplicación, lo genera siempre igual y comprueba que siga siendo así.
 
 ¿Vas a cambiar el generador? Cómo está hecho, en [ARCHITECTURE](ARCHITECTURE.md); cómo se prueba y se publica, en [CONTRIBUTING](CONTRIBUTING.md).
 
+## Por dónde empezar
+
+Este documento es largo porque es la referencia. Según a qué vengas:
+
+| Quieres… | Lee |
+|---|---|
+| Entender qué es y si te sirve | [Por qué existe](#por-qué-existe) |
+| Crear un paquete nuevo | [Instalación](#instalación) y [Un paquete desde cero](#un-paquete-desde-cero) |
+| Añadir un modelo o un endpoint a un paquete que ya usa LaraPack | [Ampliar un paquete que ya usa LaraPack](#ampliar-un-paquete-que-ya-usa-larapack) y [El contrato](#el-contrato-laraimportjson) |
+| Saber dónde escribir tu código | [Dónde va tu código](#dónde-va-tu-código) |
+| Trabajar con un agente de IA sin que la arquitectura se degrade | [Trabajar con agentes de IA](#trabajar-con-agentes-de-ia) |
+| Arreglar un proyecto que ya existe y se desvió, viene de una versión vieja o nunca tuvo contrato | [Realinear un proyecto existente](#realinear-un-proyecto-existente) |
+| Comprobar que el proyecto cumple, y que lo siga haciendo | [Verificar la arquitectura](#verificar-la-arquitectura) |
+| Subir de versión de LaraPack | [Guía de actualización](#guía-de-actualización) |
+| Buscar un comando | [Referencia de comandos](#referencia-de-comandos) |
+| Cambiar el generador | [ARCHITECTURE](ARCHITECTURE.md) y [CONTRIBUTING](CONTRIBUTING.md) |
+
 ## Índice
 
 1. [Por qué existe](#por-qué-existe)
 2. [Requisitos](#requisitos)
 3. [Instalación](#instalación)
 4. [Cómo se desarrolla con LaraPack](#cómo-se-desarrolla-con-larapack)
-5. [Desarrollo con IA](#desarrollo-con-ia)
+   - [El reparto del trabajo](#el-reparto-del-trabajo) · [Un paquete desde cero](#un-paquete-desde-cero) · [Ampliar un paquete que ya usa LaraPack](#ampliar-un-paquete-que-ya-usa-larapack) · [Publicar una versión](#publicar-una-versión) · [Convenciones](#convenciones)
+5. [Trabajar con agentes de IA](#trabajar-con-agentes-de-ia)
+   - [Lo esencial, en diez líneas](#lo-esencial-en-diez-líneas) · [Preparar el proyecto](#preparar-el-proyecto) · [La guardia](#la-guardia-que-el-agente-no-pierda-la-guía) · [El ciclo que sigue el agente](#el-ciclo-que-sigue-el-agente) · [Cómo pedirle las cosas](#cómo-pedirle-las-cosas) · [Qué revisa una persona](#qué-revisa-una-persona) · [Lo que no se delega](#lo-que-no-se-delega)
 6. [El contrato: laraimport.json](#el-contrato-laraimportjson)
+   - [Lo mínimo](#lo-mínimo) · [Las claves ajenas](#las-claves-ajenas-restrict-por-omisión) · [`table_prefix`](#table_prefix-varios-paquetes-en-una-sola-base-de-datos) · [Las claves que más se usan](#las-claves-que-más-se-usan) · [Un modelo completo](#un-modelo-completo) · [Metas y payload](#metas-y-payload) · [Endpoints que no son CRUD](#endpoints-que-no-son-crud-endpoints-y-controllers) · [El usuario que inicia sesión](#el-usuario-que-inicia-sesión)
 7. [Qué se genera y dónde va tu código](#qué-se-genera-y-dónde-va-tu-código)
+   - [Dónde va tu código](#dónde-va-tu-código) · [Lo que prueban los tests generados](#lo-que-prueban-los-tests-generados) · [Qué no se toca](#qué-no-se-toca)
 8. [Regenerar sin destruir](#regenerar-sin-destruir)
-9. [Verificar la arquitectura](#verificar-la-arquitectura)
-10. [La interfaz: Vue y React](#la-interfaz-vue-y-react)
-11. [Montar un paquete en una aplicación](#montar-un-paquete-en-una-aplicación)
-12. [La línea base y la publicación](#la-línea-base-y-la-publicación)
-13. [Guía de actualización](#guía-de-actualización)
-14. [Referencia de comandos](#referencia-de-comandos)
-15. [Código generado (Laravel 13)](#código-generado-laravel-13)
-16. [Apoya nuestro trabajo](#apoya-nuestro-trabajo)
+9. [Realinear un proyecto existente](#realinear-un-proyecto-existente)
+10. [Verificar la arquitectura](#verificar-la-arquitectura)
+11. [La interfaz: Vue y React](#la-interfaz-vue-y-react)
+12. [Montar un paquete en una aplicación](#montar-un-paquete-en-una-aplicación)
+13. [La línea base y la publicación](#la-línea-base-y-la-publicación)
+14. [Guía de actualización](#guía-de-actualización)
+15. [Referencia de comandos](#referencia-de-comandos)
+16. [Código generado (Laravel 13)](#código-generado-laravel-13)
+17. [Apoya nuestro trabajo](#apoya-nuestro-trabajo)
 
 ---
 
@@ -232,13 +254,41 @@ Detalles en [La línea base y la publicación](#la-línea-base-y-la-publicación
 
 ---
 
-## Desarrollo con IA
+## Trabajar con agentes de IA
 
 LaraPack está pensado para trabajar con un agente —Claude Code, Codex u otro—
 sin que la arquitectura se degrade. El reparto es simple: **el agente escribe el
 contrato y la lógica de negocio; el generador escribe la estructura; las
 herramientas comprueban el trabajo de los dos; una persona decide el dominio y
 revisa.**
+
+### Lo esencial, en diez líneas
+
+1. `larapack:skill` deja en el proyecto las instrucciones que lee el agente
+   (el skill y el bloque de `AGENTS.md`); con `--hooks`, además, la guardia.
+2. El agente **no escribe** controladores, requests ni migraciones: escribe
+   `laraimport.json` y la lógica en los huecos ([dónde va tu código](#dónde-va-tu-código)).
+3. Cada comando da `--format=json` y un código de salida: el agente itera
+   solo con `larapack:validate`, `larapack:import` y `larapack:verify`.
+4. El ciclo de siempre está [abajo](#el-ciclo-que-sigue-el-agente).
+5. Si el proyecto ya existe y se desvió, el agente **no lo arregla a mano**:
+   lo realinea. Su entrada es `larapack:realign status`, y su guía,
+   [docs/realign/README.md](docs/realign/README.md#inicio-rápido-para-un-agente).
+6. El agente **nunca decide ni aprueba** por el dueño del proyecto: ni
+   `#[HandRolled]`, ni `larapack:hand-rolled approve`, ni
+   `larapack:realign decide` o `accept-untested`
+   ([por qué no puede](docs/realign/exceptions.md#por-qué-un-agente-no-puede-aprobar)).
+7. Cuando algo es del dueño, el agente se lo prepara en un documento
+   (`larapack:realign brief`) y sigue con lo demás
+   ([docs/realign/owner.md](docs/realign/owner.md)).
+8. Una tarea está terminada con `larapack:validate` y `larapack:verify` en
+   verde y la suite pasando; un realineamiento, con `larapack:realign done`
+   en 0.
+9. La guardia y la rama protegida hacen que saltarse lo anterior se vea
+   ([la guardia](#la-guardia-que-el-agente-no-pierda-la-guía),
+   [verificar](#verificar-la-arquitectura)).
+10. Una persona revisa el diff del contrato, la autorización y cada excepción
+    ([qué revisa una persona](#qué-revisa-una-persona)).
 
 ### Por qué funciona
 
@@ -390,6 +440,15 @@ Lo que no cierra, dicho claro:
   `larapack:skill --hooks`), y `--doctor` lo detecta si falta. Si el proyecto ya
   usa otro `core.hooksPath` (husky) o tiene hooks propios en `.git/hooks`, no se
   cambia nada: se dice qué línea añadir para encadenar.
+- **La guardia no protege su propia instalación.** Un agente puede reescribir
+  `.githooks/pre-commit` (un `exit 0` basta), `.claude/settings.json` o
+  `.git/config`, o sacar los commits desde otro clon sin hooks; la guardia lee
+  órdenes de shell, y una ruta armada con una variable o un script propio no
+  se ve. `--doctor` detecta un hook que ya no llama a LaraPack, y con
+  `larapack:ci --owner` los hooks versionados (`/.githooks/`) son del dueño en
+  CODEOWNERS: el cambio se ve en el PR. Nada local lo impide.
+- **El `pre-push` sólo comprueba la rama que tienes en el árbol.** Empujar
+  otra rama sale con un aviso; lo que llega a la rama protegida lo frena la CI.
 - **Un hook de git se salta con `--no-verify`.** Los hooks de los agentes que
   los tienen lo impiden, y el `pre-push` frena lo que se comiteó así, pero un
   agente sin hooks o una persona pueden hacerlo. Por eso la CI.
@@ -431,6 +490,45 @@ Lo que no cierra, dicho claro:
 
 La skill le explica además el mapa de lo que se genera, **dónde va la lógica de
 negocio**, qué no debe tocar y los errores frecuentes.
+
+Ese es el ciclo de un proyecto que cumple. En uno que **ya existe y se
+desvió** el agente no empieza por ahí: empieza por `larapack:realign status` y
+sigue el ciclo del realineamiento, que le da cada paso con sus instrucciones y
+le dice qué es del dueño ([Realinear un proyecto existente](#realinear-un-proyecto-existente)).
+
+### Varias consolas a la vez
+
+Diez o veinte agentes sobre el mismo proyecto, cada uno en su rama o en su
+worktree, que luego se integran. Lo generado sale del contrato, así que dos
+ramas no fusionan lo generado: fusionan **el contrato** y vuelven a generar.
+
+- **Cada consola**, antes de empujar: su rama, el ciclo de arriba entero
+  (`import --force` después de cada cambio del `laraimport.json`: si no, es el
+  error `contract-outdated`), `verify --strict` y las pruebas. No resuelve a
+  mano un conflicto en `laraimport.json` ni en `.larapack/manifest.json`, y
+  declara un endpoint antes que escribirlo a mano: lo declarado se fusiona por
+  nombre.
+- **Quien integra**, de una rama en una:
+
+  ```
+  git merge --no-ff --no-commit <rama>     # con conflictos o sin ellos
+  php artisan larapack:reconcile           # --dry-run dice lo que haría
+  php artisan larapack:verify --strict
+  git add -A && git commit
+  ```
+
+  `larapack:reconcile` fusiona el laraimport por nombres (modelos, columnas,
+  endpoints), recompone el manifiesto de las dos ramas, retira la migración
+  repetida que trae la rama que entra y vuelve a importar. Lo que no es suyo
+  decidir —el mismo endpoint declarado distinto en dos ramas, dos consolas en
+  el mismo hueco— lo deja nombrado y sale con error.
+- **La CI** (`larapack:ci`) corre `verify --strict` sobre la fusión del pull
+  request, `larapack:reconcile --check` y, si el proyecto usa Pint,
+  `pint --test`.
+
+La guía completa —qué se midió, qué hace cada paso, qué grados de libertad
+quedan entre consolas y qué no se puede garantizar desde el paquete— está en
+[docs/swarm.md](docs/swarm.md).
 
 ### Cómo pedirle las cosas
 
@@ -494,15 +592,23 @@ del `composer.json` para que una herramienta externa lo encuentre sin conocer la
 estructura del paquete.
 
 ```
-php vendor/bin/builder larapack:validate                 # valida ./laraimport.json
-php vendor/bin/builder larapack:validate ruta.json       # valida el que le digas
+php vendor/bin/builder larapack:validate                 # valida ./laraimport.json y el de cada paquete local
+php vendor/bin/builder larapack:validate ruta.json       # valida el que le digas, y sólo ése
+php vendor/bin/builder larapack:validate --package=billing   # sólo un paquete local (o `app`, el núcleo); repetible
+php vendor/bin/builder larapack:validate --no-packages   # sólo el de la raíz
 php vendor/bin/builder larapack:validate --format=json   # para la CI o un agente
 php vendor/bin/builder larapack:validate --vue --react   # también lo que necesitan las vistas
 php vendor/bin/builder larapack:schema                   # imprime el esquema
 ```
 
 `larapack:validate` sale con código distinto de cero si el archivo no es válido,
-así que sirve de puerta antes de generar. Comprueba dos cosas:
+así que sirve de puerta antes de generar. Sin ruta, en la raíz de un proyecto
+con paquetes locales valida también el `laraimport.json` de cada uno, como
+`larapack:verify` lee sus manifiestos: cada hallazgo dice su `package` y su
+`file`, y el resumen (`summary` en JSON) va por paquete. Un paquete sin
+contrato no es un fallo —sale como `contract: false`—, ni una raíz sin
+contrato que sólo agrupa paquetes; un paquete nombrado en `--package` sin
+contrato, sí. Comprueba dos cosas:
 
 **Forma**, contra el esquema: tipos de columna y componentes de formulario son
 enums cerrados; `form: true` obliga a declarar `form_component`; `foreignId`
@@ -712,6 +818,10 @@ restricción a mano en una alteración.
 | `routes` | Qué acciones genera el modelo: `only` o `except`. Sin la clave, todas. |
 | `immutable` | La fila no cambia una vez creada. |
 | `authenticatable` | El modelo es el usuario que inicia sesión. Ver [El usuario que inicia sesión](#el-usuario-que-inicia-sesión). |
+| `props[].length`, `precision`/`scale`, `use_current` | Longitud de un `string`/`char`, dígitos de un `decimal` y `->useCurrent()` de una fecha (9.4.0). Sin ellas, lo de Laravel. |
+| `indexes[]` | Índices del modelo, simples o compuestos: `{"columns": [...], "unique": true, "name": "…"}` (9.4.0). En una tabla que existe sólo se añaden los que faltan. |
+| `table` | La tabla del modelo tal cual, sin `table_prefix`: para adoptar una que ya tiene nombre (9.4.0). |
+| `endpoints[].route_name` | Conserva el nombre de una ruta que ya llama el front (9.4.0). Ver [docs/realign/infer.md](docs/realign/infer.md). |
 
 ### Un modelo completo
 
@@ -1095,10 +1205,25 @@ administrador. Lo que cambia respecto a un modelo normal:
   `hashed`: se guarda cifrada sin que el controlador lo haga;
 - `isAdmin()` compara el correo con `config('auth.admins')`, que es lo que
   consulta el `before()` de cada política. La aplicación define esa lista en
-  `config/auth.php`.
+  `config/auth.php`. La comparación es exacta, letra por letra (9.4.0): escribe
+  cada correo como está guardado en la tabla;
+- `email` lleva un índice único aunque no declares `indexes` (9.4.0). En una
+  tabla que ya lo tiene —la `users` de Laravel— la migración no añade nada.
 
 `larapack:validate` falla si no declara `email` y `password`: sin ellos nadie
-puede iniciar sesión.
+puede iniciar sesión. Y avisa si `email_verified_at` o `remember_token` quedan
+escribibles desde la API (`creatable` y `updatable` valen `true` por omisión).
+
+**Lo que no decide el generador.** Quien pase la política de `update` escribe
+todas las columnas `updatable` del usuario, y todas lo son salvo que digas lo
+contrario. Antes de abrir esa política a alguien que no administra —«cada uno
+edita su perfil»—, declara `"creatable": false, "updatable": false` en las
+columnas que dan privilegios (`is_admin`, `role`, `email_verified_at`), y
+decide qué pasa con `email` y `password`: la request generada no pide la
+contraseña actual ni vuelve a verificar un correo nuevo. Mientras `isAdmin()`
+decida por el correo, quien pueda cambiar el suyo por uno de `auth.admins` que
+todavía no tenga cuenta, administra: no pongas en esa lista un correo sin
+usuario, o cambia `isAdmin()` por tu sistema de roles.
 
 ```json
 {
@@ -1135,7 +1260,7 @@ src/Models/Filters/<Model>/ManagedFilter.php       ← hueco (visibilidad)
 src/Models/Filters/<Model>/{Id,Creation,Updated,EagerLoading}Filter.php
 
 src/Http/Controllers/<Model>Controller.php         delega en las requests
-src/Http/Requests/<Model>/*.php                    rules() ← hueco
+src/Http/Requests/<Model>/*.php                    rules() y ganchos de validación ← hueco
 src/Http/Resources/Models/<Model>Resource.php      ← hueco (forma de la respuesta)
 src/Http/Events/<Model>/Events/*.php
 src/Http/Events/<Model>/Listeners/*/*.php          ← hueco (efectos secundarios)
@@ -1179,8 +1304,11 @@ Si una lógica no cabe en ninguno de estos sitios, falta algo en el
 | `Filters/<Model>/ManagedFilter::canView` | **Quién puede ver qué.** Sin esto el índice lo devuelve todo. El IndexRequest fuerza `managed`, así que acota a todos, administrador incluido: cubre ese caso aquí. |
 | `Policies/<Model>Policy` | Autorización por acción y por endpoint. Nace cerrada: sólo pasa el administrador, y ni él borra para siempre hasta que se saque `forceDelete` de `$exceptAbilities`. |
 | `Requests/*/rules()` | Reglas que no vengan del JSON. Nada fuera del array. |
+| `Requests/*/` `messages()`, `attributes()`, `prepareForValidation()`, `passedValidation()` | Los ganchos de validación que la plantilla deja vacíos: mensajes y nombres de los campos, normalizar el payload antes de validarlo, ajustarlo después. En `IndexRequest`, `prepareForValidation()` no: fuerza `managed`. En un endpoint de `endpoints`/`controllers`, `prepareForValidation()` y `rules()`. |
+| Endpoint sin modelo: `authorize()` y `handle()` | Nacen cerrado y con `abort(501)`: quién entra y qué hace (si es más que unas líneas, una clase de `Support/` a la que se llama). En un endpoint de modelo no: preguntan a la política y delegan en la operación. |
+| `Providers/AuthServiceProvider::defineGates()` | Gates y habilidades sueltas, que no son de una política. |
 | `Resources/<Model>Resource` | La forma exacta de la respuesta y su array `actions`. Los accessors que el cliente puede pedir con `appends[]` se listan en `$appendable`; lo demás se ignora. |
-| `Events/*/Listeners/` | Efectos secundarios: notificaciones, colas, integraciones. |
+| `Events/*/Listeners/` | Efectos secundarios: notificaciones, colas, integraciones. `$event->data` es la petición sin las columnas `$hidden` del modelo (un `secret`, la contraseña) ni su `_confirmation`: un secreto no viaja a una cola (9.4.0). |
 | `Observers/` | Ciclo de vida del modelo. |
 | `Factories/` | Datos de prueba realistas. Las generadas ya insertan. |
 | `tests/Feature/` | El comportamiento. Los generados pasan recién generados; si uno falla, algo se rompió. |
@@ -1225,6 +1353,50 @@ devolviendo `true`, y el test, que no consulta la política, sigue pasando.
 `<Model>EndpointsTest` se crea una vez y no se regenera: en un modelo que ya
 existía, `verify` avisa con `endpoint-tests-outdated`. Guarda lo que le
 añadiste, bórralo y vuelve a importar.
+
+### Lo que el código generado cierra, y lo que deja al dueño
+
+Lo que sale cerrado sin que nadie escriba nada, y que
+`tests/EndToEnd/GeneratedSecurityAuditTest.php` ataca contra una aplicación que
+arranca:
+
+- **Cada acción pide sesión y pregunta a la política**, que nace en `false`;
+  las masivas, registro a registro. Un endpoint público sigue preguntando.
+- **Sólo se escribe lo declarado**: `$creatable` al crear, `$updatable` al
+  editar, las metas de `editable_metas`. `id`, las fechas, `payload` y una
+  columna con `"updatable": false` no cambian por mucho que lleguen.
+- **Un `secret` no sale**: ni en la API, ni en la tabla, ni en la exportación,
+  ni en la carga de los eventos.
+- **`show` sólo carga las relaciones de `$loadable_relations`**, y sólo si
+  llegan como lista: `load_relations[otra.relacion]=…` responde 422 (9.4.0).
+- **El listado pagina siempre**: `paginate=0` deja de ser «todo» y pasa a ser
+  `search-surge.pagination.max_per_page`, 1000 por omisión (9.4.0). El orden
+  sólo admite las columnas de cada filtro.
+- **La exportación no escribe fórmulas** y su archivo va a `exports/<uuid>.xlsx`
+  en el disco de `export_disk`, con un enlace firmado que caduca en un día.
+
+Lo que un generador no puede decidir, y sigue siendo del dueño:
+
+- **Quién puede qué**: la política y `ManagedFilter::canView()`. Abrir `index`
+  sin escribir `canView()` lista todas las filas. `show` no pasa por
+  `canView()`: lo decide `view`.
+- **Qué se valida**: `rules()` sólo trae lo de `requests[]`. Sin reglas, una
+  columna `creatable` acepta lo que llegue, también una clave ajena
+  (`user_id`) que apunte al registro de otro: valida o quítala de `creatable`.
+- **Qué relaciones se pueden pedir**: lo que declares en `load_relations` lo
+  carga cualquiera que pueda ver el registro, sin preguntar a la política del
+  modelo relacionado. `payload` trae todas las metas, también las de
+  `protected_metas`: protegidas quiere decir que el formulario no las escribe,
+  no que no se lean.
+- **Los archivos exportados**: nadie los borra. Una regla de ciclo de vida en
+  S3 o una tarea programada sobre `exports/`. En un disco que no firma
+  (`public`) el enlace no caduca y lo abre quien lo tenga.
+- **Un `.csv`**: la exportación genera `.xlsx`, donde sólo es fórmula lo que
+  empieza por `=`. Si la cambias a CSV, neutraliza también `+`, `-`, `@`,
+  tabulador y retorno de carro.
+- **El límite de peticiones**: sólo un endpoint `public` avisa si no declara
+  `throttle`. El resto no trae ninguno propio: lleva el del grupo `api`, si la
+  aplicación lo configuró (`throttleApi()`).
 
 ### Qué no se toca
 
@@ -1289,7 +1461,68 @@ Sin cambios no se escribe nada, y con `--dry-run` sólo se dice. Las reglas
 Sigue dejándose a mano una migración de creación editada, porque lo escrito
 fuera del laraimport en ella no se puede leer con seguridad.
 
-El manifiesto debe versionarse con el proyecto.
+El manifiesto debe versionarse con el proyecto. Es un registro de hashes, y un
+hash no se fusiona: un conflicto de git en él no se resuelve a mano, lo
+recompone `larapack:reconcile` (ver [Varias consolas a la vez](#varias-consolas-a-la-vez)).
+
+---
+
+## Realinear un proyecto existente
+
+Cuando lo que hay en disco ya no es lo que generaría el contrato —un proyecto
+de una versión vieja de LaraPack, código editado fuera de los huecos,
+controladores y modelos escritos a mano, o un proyecto sin contrato—,
+`larapack:realign` lo lleva de vuelta **sin reconstruirlo**. Reparte el
+trabajo en cuatro:
+
+| Qué | Quién lo hace |
+|---|---|
+| Lo determinista (adoptar, regenerar lo que nadie editó, las correcciones conocidas) | La herramienta, con una orden. |
+| Lo mecánico que no se automatiza con certeza (llevar la lógica de un controlador a su request, devolver código a sus huecos) | Una persona o un agente, con el playbook del paquete y una comprobación como criterio de terminado. |
+| Lo que cambia el comportamiento o el alcance | El dueño del proyecto: se le presenta como decisión, con sus opciones. |
+| Lo que no es de LaraPack (dominio, servicios, front propio, la historia de las migraciones) | Nadie: se declara fuera y no se toca. |
+
+El recorrido, de principio a fin:
+
+```
+php artisan larapack:realign status                     # si llegas sin contexto: dónde se va y qué sigue
+php artisan larapack:realign diagnose                   # regenera el contrato aparte y clasifica cada archivo
+php artisan larapack:realign plan                       # pasos ordenados y reanudables
+php artisan larapack:realign apply --deterministic      # lo determinista (con --dry-run primero)
+php artisan larapack:realign next                       # el siguiente paso, con su playbook
+php artisan larapack:realign check <id>                 # sólo esto lo da por hecho
+php artisan larapack:realign brief                      # lo que espera al dueño, en un documento
+php artisan larapack:realign done                       # el criterio de terminado: sale con 0, o dice qué falta
+php artisan larapack:realign help <acción>              # cada acción: uso, lo que escribe, su guía
+```
+
+Lo que conviene saber antes de empezar:
+
+- **Nada de lo que sólo lee escribe código**; lo que escribe tiene `--dry-run`,
+  exige el árbol git limpio y nunca toca una migración ni un nombre de ruta.
+- **El estado vive en el proyecto** (`.larapack/realign/`), así que cualquiera
+  —persona o agente— lo retoma con `status`.
+- **Se termina cuando `larapack:realign done` sale con 0**, no cuando
+  `verify` está en verde.
+- **Un agente no decide ni aprueba**: las decisiones y las excepciones son del
+  dueño.
+
+La guía está en [docs/realign/](docs/realign/README.md), una página por tema:
+
+| Necesitas | Página |
+|---|---|
+| Empezar: diez líneas para una persona, diez para un agente, y el ciclo completo | [docs/realign/README.md](docs/realign/README.md) |
+| Salir de un atasco: una decisión que no es tuya, sin pruebas, `untested`, `done` que no termina, el árbol sucio, un monorepo, sin contrato | [docs/realign/faq.md](docs/realign/faq.md) |
+| Una palabra: ámbito, hueco, paso, decisión, excepción, adoptar | [docs/realign/glossary.md](docs/realign/glossary.md) |
+| El recorrido según de dónde parte el proyecto | [docs/realign/profiles.md](docs/realign/profiles.md) |
+| Leer el diagnóstico y el plan | [diagnose.md](docs/realign/diagnose.md), [plan.md](docs/realign/plan.md) |
+| Lo automático y lo guiado | [adopt.md](docs/realign/adopt.md), [apply.md](docs/realign/apply.md), [guided.md](docs/realign/guided.md) |
+| Las decisiones del dueño y las excepciones | [owner.md](docs/realign/owner.md), [exceptions.md](docs/realign/exceptions.md) |
+| Un proyecto sin contrato | [infer.md](docs/realign/infer.md), [contract.md](docs/realign/contract.md) |
+| Cuándo se termina, qué garantiza y qué puede romper | [verify.md](docs/realign/verify.md), [risks.md](docs/realign/risks.md) |
+
+`larapack:skill` instala la guía para agentes
+(`.claude/skills/larapack-realign/SKILL.md`).
 
 ---
 
@@ -1315,7 +1548,13 @@ Contra el manifiesto:
 | `immutable-write` | error | Un camino de escritura en un modelo `immutable`, o su modelo sin la guarda que rechaza modificaciones. |
 | `secret-exposed` | error | Una columna `secret` fuera de `$hidden`, en la exportación, en el Resource o en la tabla. |
 | `endpoint-tests-outdated` | aviso | Un `<Modelo>EndpointsTest` sin alguna de las pruebas que cierran la autorización (`test_…_cada_accion_requiere_sesion`, `…_cada_accion_pregunta_a_la_politica` y, si hay listado, `…_index_pasa_por_su_managed_filter`): se generó antes de 9.1. Ese test no se regenera ni está en el manifiesto, así que no se reescribe: el mensaje dice cómo traerlas. |
+| `contract-outdated` | error | Contra el `laraimport.json` de la raíz, con la huella que la importación anota en el manifiesto (`"contract"`, 9.4.0): lo generado de un modelo corresponde a otro contrato —su declaración, el prefijo de tablas o el modelo al que apunta una de sus claves ajenas cambió y no se volvió a importar, a mano o al fusionar dos ramas—; el laraimport declara un modelo del que no hay nada generado; o el manifiesto registra uno que el laraimport ya no declara. Escribir lo mismo de otra forma (el valor por omisión dicho a mano, las claves en otro orden) no cuenta. Un manifiesto anterior a 9.4.0 no trae huella y no se compara hasta el primer `import --force`. |
+| `manifest-unreadable` | error | `.larapack/manifest.json` existe y no se puede leer: marcadores de conflicto de git o JSON roto. Antes se leía como vacío y la siguiente importación lo reescribía; ahora ningún comando lo toca, y `larapack:reconcile` lo recompone de las dos ramas. |
+| `merge-conflict` | error | Un conflicto de git sin resolver (`<<<<<<<`) en el laraimport, en un archivo de estado de `.larapack/`, en algo generado o en el código del proyecto. |
+| `migration-duplicate` | error | Dos migraciones que crean la misma tabla o añaden la misma columna sin que nada la quite entre medias, si al menos una la generó LaraPack: cada una corre sola y las dos juntas tumban `migrate`. Lo que no se lee con seguridad (un `if`, `Schema::hasColumn`, SQL crudo) no cuenta. |
+| `route-duplicate` | error | Un archivo de rutas generado que registra dos veces el mismo verbo y la misma URI: Laravel se queda con la última. |
 | `relation-missing` | aviso | Contra el mismo `laraimport.json`: una relación de `load_relations` que ni el modelo ni sus traits (`Models/Traits/*/<Modelo>*.php`) definen. El trait de relaciones se escribe una sola vez y es del proyecto, así que no la recibe al reimportar. El mensaje trae el método y el `use` exactos; `larapack:fix relation-missing` los añade al trait si es seguro. |
+| `manifest-declaration` | error / aviso | Contra el `laraimport.json` de la raíz: lo que el manifiesto anota de la forma de un modelo —acciones, `immutable`, columnas `secret`, endpoints— no es lo que declara el contrato (error), o el contrato declara un modelo que el manifiesto no tiene (aviso). Las cuatro comprobaciones de arriba miran el código contra esa anotación: sin esto, borrarla del manifiesto las apagaba con el contrato intacto. `larapack:import` la vuelve a escribir. |
 | `model-lists-outdated` | aviso (info si sólo sobra o difiere) | Contra el `laraimport.json` de la raíz, sin regenerar: a `$fillable`, `$hidden`, `$creatable`, `$updatable`, `$export_cols`, `$loadable_relations`, `$loadable_counts` o `casts()` del modelo le falta lo que el contrato declara —típico de un modelo editado a mano tras añadir una columna—. `larapack:import --force` lo completa sin tocar el resto del modelo. Lo que sobra o un cast con otro valor sale como info y no se cambia solo. |
 
 Sobre todo el código, lo haya generado LaraPack o no, en la raíz y en los
@@ -1324,13 +1563,13 @@ manifiesto:
 
 | Comprobación | Nivel | Qué detecta |
 | --- | --- | --- |
-| `controller-shape` | error | Una acción de controlador que hace algo más que `return $request->handle();`: recibe `Request` o `FormRequest` base, llama a `validate()`, pasa una expresión a `handle()`. También `__call`, un constructor que hace algo más que asignar lo inyectado y registrar middleware, y un `middleware()` con un closure. |
+| `controller-shape` | error | Una acción de controlador que hace algo más que `return $request->handle();`: recibe `Request` o `FormRequest` base, llama a `validate()`, pasa una expresión a `handle()`. También `__call`, un `callAction()` redefinido, un `__destruct()` con cuerpo, un constructor que hace algo más que asignar lo inyectado y registrar middleware, y un `middleware()` o un `getMiddleware()` con un closure. Cuenta igual la acción que el controlador **hereda** de un trait o de un padre del proyecto (estén donde estén), y la de una clase del proyecto de fuera de `Http/Controllers` que un `routes/*.php` pone como acción (`[Exportar::class, 'run']`, `Exportar::class`, `Route::resource()`): para el router es un controlador. |
 | `request-handle` | error | La request de una acción no define `handle()`. Una de `vendor/` sólo se informa. |
 | `controller-concern` | error / aviso | Un trait con lógica en `Http/Controllers`: error si lo usa un controlador, aviso si sólo lo usan requests (va en `Http/Requests/Concerns`). |
 | `hand-rolled` | aviso / info | Una acción marcada `#[HandRolled('razón')]`: aviso sin candado; info si el dueño la aprobó en `.larapack/hand-rolled.lock`. Sin razón, error. |
 | `hand-rolled-unapproved` | error | Con candado: una excepción que no está aprobada, o cuya razón o cuyo código (la huella) cambió desde que se aprobó. |
 | `hand-rolled-stale` | aviso | Con candado: una aprobación de algo que ya no lleva `#[HandRolled]`. |
-| `route-closure` | aviso | Un closure con cuerpo como acción de una ruta. Si es el fallback de la SPA de laravel-setup <= 7.2.0, el mensaje dice que `larapack:fix` lo corrige. |
+| `route-closure` | aviso | Un closure con cuerpo como acción de una ruta, o una acción que no se puede leer sin ejecutarla (una variable, `funcion(...)`, un objeto, un closure dentro de un array). Si es el fallback de la SPA de laravel-setup <= 7.2.0, el mensaje dice que `larapack:fix` lo corrige. |
 | `index-managed` | aviso | Una request que usa el `Builder` de SearchSurge sin forzar `managed`: el listado se salta `ManagedFilter::canView()`. |
 | `resource-appends` | aviso | Un `setAppends()` que recibe lo que manda el cliente sin una lista blanca. |
 
@@ -1472,7 +1711,24 @@ estable. Cambiar la razón o el
 código invalida la aprobación: a una clase aprobada no se le añade una acción
 sin que el dueño la vuelva a aprobar, y ese diff del candado es el que revisa.
 `approve` recalcula la huella; sin nada que aprobar, `approve --all` no crea un
-candado vacío. Sin candado, `verify` la lista como aviso y con `--strict` falla,
+candado vacío.
+
+**`approve` y `revoke` los confirma una persona**, también en un proyecto sin la
+guardia ni el hook de git: el comando enseña en la terminal lo que va a aprobar
+o retirar —el objetivo, la razón, lo que cubre y el mensaje del hallazgo— y hay
+que escribir `apruebo <n>` (`retiro <n>`). La pregunta va a `/dev/tty`, no a la
+entrada estándar: una tubería no la contesta, y sin terminal no se cambia nada
+(y sale con error). Una persona sin terminal aprueba en el **workflow de
+aprobación** de GitHub Actions (`larapack:ci --approval`), que lanza a mano:
+queda a nombre de su cuenta y con la corrida en el candado (`approved_by`,
+`approved_run`), y el job de la puerta las anota en el diff del PR y comprueba
+con GitHub que la corrida es la que dicen. Fuera de ese workflow, nombrarse con
+`LARAPACK_APPROVER` y `--approver` no aprueba nada, y la guardia de los agentes
+lo bloquea igual. Los pasos y lo que no garantiza, en
+[docs/realign/exceptions.md](docs/realign/exceptions.md#aprobar-sin-terminal-el-workflow-de-aprobación).
+En Windows vale la consola (PowerShell, cmd); desde Git Bash (mintty) no hay
+forma fiable de saber si hay alguien delante, así que se corre desde PowerShell
+o con `winpty`. Sin candado, `verify` la lista como aviso y con `--strict` falla,
 como en 9.0. Con candado, lo aprobado se informa y `--strict` pasa; lo que no
 está aprobado es error (`hand-rolled-unapproved`) y lo aprobado que ya no está
 en el código, aviso (`hand-rolled-stale`). El candado es de la raíz sobre la que
@@ -1496,6 +1752,7 @@ dependencia: su manifiesto no se lee.
 php artisan larapack:verify --package=school-library        # sólo ese (directorio, ruta o nombre de Composer)
 php artisan larapack:verify --package=app                   # sólo el núcleo
 php artisan larapack:verify --no-packages                   # sin los manifiestos de los paquetes, como antes de 9.3.1
+php artisan larapack:verify --path=app/Http/Controllers/X.php   # sólo lo de ese archivo o directorio (9.4.0)
 ```
 
 La salida de texto termina con una línea por paquete; la JSON trae `summary`,
@@ -1933,7 +2190,9 @@ y el proyecto sin `vendor/` también se formatea—. Siempre con el `pint.json` 
 proyecto si lo tiene; sin él, el preset `laravel`. El informe dice cuál se usó: en
 texto, una línea; con `--format=json`, `formatter: {source, pint, config,
 message}` junto a `formatted`. Si no hay ninguna, `formatted` es `null` y
-`formatter.source` es `none`, nunca un silencio.
+`formatter.source` es `none`, nunca un silencio. Pint formatea en un solo núcleo;
+con `LARAPACK_PINT_JOBS=<n>` se reparte en hasta `n` procesos a la vez (por
+defecto uno; el resultado es el mismo).
 
 **La compilación del front** va sobre Vite 8, la de Laravel 13: el `package.json`
 del módulo pide `vite ^8`, y `@vitejs/plugin-vue ^6` o `@vitejs/plugin-react ^6`.
@@ -1994,8 +2253,10 @@ php artisan larapack:ci --owner=@organizacion/arquitectura
   en una aplicación, el builder en un paquete; el PHP de `config.platform.php`
   o el mínimo con el que se instala `composer.lock`; las `ext-*` de
   `composer.json`; `pull_request` y `push` a la rama por defecto de `origin`;
-  `permissions: contents: read`). Su último paso comprueba que la rama exija el
-  check (abajo).
+  `permissions: contents: read` y `actions: read`). Su último paso comprueba
+  que la rama exija el check (abajo); el anterior, `larapack:hand-rolled list
+  --format=github`, anota en el diff del PR cada aprobación sin terminal del
+  candado y comprueba con GitHub su corrida (si no cuadra, el check falla).
 - Crea `.github/rulesets/larapack-verify.json`, el ruleset para importar en
   GitHub. El workflow y el ruleset van juntos: si uno de los dos difiere, no
   pisa ninguno sin `--force` ni escribe nada más. No edita otros workflows.
@@ -2004,9 +2265,14 @@ php artisan larapack:ci --owner=@organizacion/arquitectura
   monorepo donde `verify` tarda minutos, el runner alojado los cobra en cada PR,
   y un job que no arranca deja el check exigido sin llegar.
 - Con `--owner` (repetible: `@usuario`, `@organización/equipo` o un correo)
-  fusiona en el CODEOWNERS que GitHub ya lee `/.larapack/hand-rolled.lock`, el
-  workflow y el propio CODEOWNERS, sin duplicar ni tocar líneas ajenas. Sin
-  `--owner` no inventa un dueño.
+  fusiona en el CODEOWNERS que GitHub ya lee `/.larapack/hand-rolled.lock`,
+  `/.github/workflows/` (y, con su línea, el workflow y el de aprobación,
+  aunque no exista), `/.githooks/` y las tres rutas de CODEOWNERS, sin
+  duplicar ni tocar líneas ajenas. Sin `--owner` no inventa un dueño.
+- Con `--approval` crea además `.github/workflows/larapack-approve.yml`, el
+  workflow de aprobación sin terminal: lo lanza a mano una persona en Actions
+  y aprueba las excepciones a nombre de su cuenta, en una rama nueva para
+  revisar en un PR ([docs/realign/exceptions.md](docs/realign/exceptions.md#aprobar-sin-terminal-el-workflow-de-aprobación)).
 - Imprime, paso a paso, lo que no puede hacer: proteger la rama. Nunca lo
   ejecuta —cambia quién puede fusionar, y eso lo decide el dueño—.
 
@@ -2037,6 +2303,37 @@ sale en rojo y el PR se fusiona igual. Una de tres vías:
    los campos exactos. PUT sustituye la protección entera: si ya exige otros
    checks, se añaden a la orden. No fija de qué app llega el check: por eso el
    ruleset va primero.
+
+**Lo que la puerta no cierra, dicho claro.**
+
+- **El job corre el código del PR.** Instala las dependencias que dice el
+  `composer.json` del PR y ejecuta su `vendor/bin/builder` (o su `artisan`):
+  un PR que cambie de dónde sale `innoboxrr/larapack-generator`, que añada un
+  script o un plugin de Composer, o que en una aplicación registre un comando
+  llamado `larapack:verify`, decide lo que responde el check. `verify` no
+  carga el código del proyecto, pero quien lo lanza sí es del PR. Desde un
+  paquete no se cierra: si el riesgo importa, pon también `composer.json`,
+  `composer.lock` y, en una aplicación, `artisan` y `bootstrap/` a nombre del
+  dueño en CODEOWNERS, y revisa esos diffs como revisas el candado.
+- **Las acciones van por etiqueta** (`actions/checkout@v5`,
+  `shivammathur/setup-php@v2`), no por SHA: fíjalas si tu política lo pide.
+- **El workflow de aprobación corre código de la rama con permiso de
+  escritura** (`contents: write`, para empujar la rama del candado). Lánzalo
+  sobre una rama cuyo diff hayas leído; lo que escribe se revisa igual en el
+  PR del candado.
+- **`verify` mira la forma, no la intención.** Un `authorize()` que devuelve
+  `true`, una política abierta o un `handle()` que hace lo que no debe pasan:
+  eso es lo que revisa una persona. Tampoco ve una ruta registrada fuera de
+  `routes/*.php` (en un proveedor, con `app('router')`), un componente de
+  Livewire o una página de Filament.
+- **Con `--owner`, CODEOWNERS cubre** el candado, todos los workflows
+  (`/.github/workflows/`: cualquiera puede declarar un job llamado como el
+  check exigido), los hooks versionados (`/.githooks/`) y las tres rutas donde
+  GitHub busca CODEOWNERS (usa la primera que existe, así que uno nuevo en
+  `.github/` le quitaría el sitio al de la raíz). Si ya corriste `larapack:ci
+  --owner` con una versión anterior, **vuelve a correrlo**: añade las líneas
+  que faltan. La protección clásica (vía 3) pide ahora
+  `dismiss_stale_reviews=true`; si la pusiste antes, repite la orden.
 
 En un repositorio privado de una cuenta Free, GitHub no aplica ni rulesets ni
 protección de ramas: hace falta Pro, Team o Enterprise. En GitHub Enterprise
@@ -2793,12 +3090,17 @@ larapack:schema                  Emite el esquema del laraimport.
 larapack:verify                  Busca desviaciones respecto al manifiesto y en los controladores.
 larapack:fix                     Corrige index-managed y resource-appends, el fallback de la SPA de laravel-setup <= 7.2.0
                                  y las relaciones del laraimport que faltan en el trait (relation-missing).
+larapack:reconcile               Tras un git merge: fusiona el laraimport por nombres, recompone el manifiesto de las
+                                 dos ramas, retira las migraciones repetidas y vuelve a importar. --check sólo comprueba.
 larapack:audit                   Comprueba la línea base del ecosistema.
 larapack:skill                   Instala las instrucciones para un agente; con --hooks, la guardia.
 larapack:guard                   Hook para agentes: comprueba el archivo recién editado.
-larapack:hand-rolled             Lista, aprueba o retira las excepciones #[HandRolled] (el dueño).
+larapack:hand-rolled             Lista, aprueba o retira las excepciones #[HandRolled] y las del realineamiento (el dueño).
 larapack:ci                      Crea el workflow «LaraPack verify», el ruleset para la rama y, con --owner, CODEOWNERS;
                                  con --check, dice si la rama exige el check.
+larapack:realign                 Realinea con el contrato un proyecto que se desvió: diagnose, plan, status, next, show, check,
+                                 decide, defer, undefer, escalate, accept-untested, done, brief, playbook y las operaciones
+                                 adopt, apply, infer, except. help <acción> explica cada una. Guía: docs/realign/README.md.
 
 larapack:full-model              Crea un entorno completo de modelo.
 larapack:remove-full-model       Elimina todas las entidades de un modelo.

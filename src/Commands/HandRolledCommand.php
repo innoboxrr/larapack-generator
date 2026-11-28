@@ -4,8 +4,14 @@ namespace Innoboxrr\LarapackGenerator\Commands;
 
 use Innoboxrr\LarapackGenerator\Commands\Concerns\TargetsProject;
 use Innoboxrr\LarapackGenerator\Commands\Concerns\WritesJson;
+use Innoboxrr\LarapackGenerator\Support\BranchProtection;
+use Innoboxrr\LarapackGenerator\Support\CiGate;
 use Innoboxrr\LarapackGenerator\Support\ControllerShape;
 use Innoboxrr\LarapackGenerator\Support\HandRolledLock;
+use Innoboxrr\LarapackGenerator\Support\NamedApproval;
+use Innoboxrr\LarapackGenerator\Support\OwnerConfirmation;
+use Innoboxrr\LarapackGenerator\Support\Realign\Exceptions;
+use Innoboxrr\LarapackGenerator\Support\Realign\ExceptionTargets;
 use RuntimeException;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Formatter\OutputFormatter;
@@ -21,17 +27,44 @@ use Symfony\Component\Console\Output\OutputInterface;
  * Aprobar es esto: el dueño corre `approve`, revisa el diff del candado y lo
  * comitea. Se aprueba la razón y la huella del código tal como está ahora
  * (HandRolledLock): si el código cambia, la excepción vuelve a pedir
- * aprobación, y `approve` de nuevo recalcula la huella. El comando no pregunta nada ni comprueba quién lo corre —en
- * Windows no hay forma fiable de saber si hay una terminal delante, y una
- * pregunta se contesta con una tubería—; lo que lo hace del dueño es que el
- * candado pide su revisión (CODEOWNERS, `larapack:ci --owner`) y que la
- * guardia de los agentes bloquea `approve` y `revoke` antes de que se
- * ejecuten.
+ * aprobación, y `approve` de nuevo recalcula la huella.
+ *
+ * Desde 9.4.0 `approve` y `revoke` los confirma una persona
+ * (OwnerConfirmation): en su terminal —/dev/tty, no la entrada estándar,
+ * que una tubería contesta—, viendo qué se aprueba (el objetivo, la razón y
+ * lo que cubre) y escribiendo `apruebo <n>`; o, sin terminal, dentro del
+ * workflow de aprobación de GitHub Actions que lanza a mano (NamedApproval),
+ * y su cuenta y la corrida quedan en el candado.
+ * Antes no preguntaba nada, y en un proyecto sin la guardia ni el hook de git
+ * un agente aprobaba sus propias excepciones con `approve --all`. Lo demás
+ * sigue: el candado pide la revisión del dueño (CODEOWNERS, `larapack:ci
+ * --owner`) y la guardia de los agentes bloquea `approve`, `revoke` y la vía
+ * sin terminal antes de que se ejecuten.
+ *
+ * Un rechazo sale siempre con un código distinto de cero y no enseña cómo
+ * saltárselo: a quien no tiene terminal le dice que un agente no lo intenta
+ * y remite a la documentación para personas (NamedApproval::DOCS), no a una
+ * orden lista para copiar. En una prueba de autonomía, el propio mensaje le
+ * enseñó a un agente la orden con la que se aprobó sus excepciones.
+ *
+ * `list --format=github` es el paso de la CI que genera `larapack:ci`: cada
+ * aprobación sin terminal del candado sale como anotación sobre su línea
+ * —en el diff del PR— y se comprueba con GitHub que su corrida es la que
+ * dice; si alguna no, sale con error.
  *
  * Los objetivos se escriben como los da `list`: el nombre completo de la
  * clase, con `::metodo` si la excepción es de una acción. Basta el final que
  * lo distinga —`TokenController::issue`—, para no tener que escapar las
  * barras invertidas en la terminal; si coincide con más de uno, no se adivina.
+ *
+ * Desde 9.4.0 aprueba también las excepciones del realineamiento: lo que no
+ * puede llevar atributo (el closure de una ruta, un controlador o un modelo
+ * que se deja fuera del contrato, un hallazgo que se acepta). Las pide
+ * cualquiera con `larapack:realign except` (Realign\Exceptions); su objetivo
+ * empieza por `realign:` y basta su final —`routes/web.php#fallback()`—. Se
+ * aprueban en este mismo candado, con la razón de la solicitud y la huella de
+ * lo que cubren hoy, y por eso las protege todo lo que ya protege la
+ * aprobación de #[HandRolled].
  */
 class HandRolledCommand extends Command
 {
@@ -45,11 +78,12 @@ class HandRolledCommand extends Command
         $this->addRootOption();
 
         $this->setName('larapack:hand-rolled')
-            ->setDescription('Lista, aprueba o retira las excepciones #[HandRolled] (lo corre el dueño del proyecto)')
+            ->setDescription('Lista, aprueba o retira las excepciones #[HandRolled] (lo corre el dueño del proyecto, en su terminal)')
             ->addArgument('action', InputArgument::REQUIRED, 'list, approve o revoke')
             ->addArgument('targets', InputArgument::OPTIONAL | InputArgument::IS_ARRAY, 'Clase o Clase::metodo, como los da list')
             ->addOption('all', null, InputOption::VALUE_NONE, 'Con approve: aprueba todas las excepciones del código')
-            ->addOption('format', null, InputOption::VALUE_REQUIRED, 'Formato de salida: txt o json', 'txt');
+            ->addOption('approver', null, InputOption::VALUE_REQUIRED, 'Sólo lo usa el workflow de aprobación que genera larapack:ci --approval (ver '.NamedApproval::DOCS.'); fuera de él no aprueba nada')
+            ->addOption('format', null, InputOption::VALUE_REQUIRED, 'Formato de salida: txt o json; con list, también github (las aprobaciones sin terminal, comprobadas, como anotaciones del PR)', 'txt');
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
@@ -68,6 +102,12 @@ class HandRolledCommand extends Command
         // `revoke` por su nombre exacto.
         if (! in_array($action, self::ACTIONS, true)) {
             return $this->reportFailure($input, $output, "Acción desconocida: {$action}.", 'Usa list, approve o revoke.');
+        }
+
+        $format = (string) $input->getOption('format');
+
+        if (! in_array($format, $action === 'list' ? ['txt', 'json', 'github'] : ['txt', 'json'], true)) {
+            return $this->reportFailure($input, $output, "--format={$format} no existe aquí.", $action === 'list' ? 'Usa txt, json o github.' : 'Usa txt o json (github sólo con list).');
         }
 
         if ($action === 'list' && ($targets !== [] || $all)) {
@@ -97,8 +137,44 @@ class HandRolledCommand extends Command
             return $this->reportFailure($input, $output, $e->getMessage(), 'Corrígelo a mano (o bórralo y aprueba de nuevo); no se toca.');
         }
 
+        try {
+            $realign = Exceptions::forRoot($root);
+            $requested = $realign->requests();
+        } catch (RuntimeException $e) {
+            return $this->reportFailure($input, $output, $e->getMessage(), 'Las solicitudes las escribe larapack:realign except; corrígelas o bórralas y vuelve a pedirlas.');
+        }
+
+        if ($action === 'list' && $format === 'github') {
+            return $this->annotateNamed($root, $approved ?? [], $output);
+        }
+
         if ($action === 'list') {
-            return $this->list($input, $output, $exceptions, $approved);
+            return $this->list($input, $output, $exceptions, $approved, $realign);
+        }
+
+        // Lo que se puede aprobar: cada #[HandRolled] con razón del código y
+        // cada excepción del realineamiento solicitada, con la huella de lo
+        // que cubre hoy. Una cuyo código ya no existe no se aprueba.
+        //
+        // La de un hallazgo sin archivo (`model:`) se aprueba con la huella de
+        // su hallazgo de hoy —verify se corre—, no con la que trae la
+        // solicitud, que la escribe quien pide: sin ese hallazgo no hay nada
+        // que aprobar, y al dueño se le enseña el de hoy.
+        foreach ($action === 'approve' ? $requested : [] as $target => $request) {
+            $fingerprint = $realign->fingerprint($target);
+
+            if ($fingerprint !== null) {
+                // El archivo sale del objetivo —que es lo que se aprueba—, no
+                // del de la solicitud: exceptions.json lo escribe quien pide,
+                // y podía decir que cubría otro archivo. Por lo mismo, el
+                // hallazgo de la solicitud se enseña como lo que es: el texto
+                // de quien pide, sin comprobar (`claimed`).
+                $statement = Exceptions::isStatement($target);
+                $exceptions[$target] = ['reason' => $request['reason'], 'fingerprint' => $fingerprint,
+                    'file' => ExceptionTargets::parse($target)['file'] ?? $request['file'], 'line' => $request['line'] ?? 0,
+                    'finding' => $statement ? $realign->statement($target) : null,
+                    'claimed' => $statement ? null : $request['message']];
+            }
         }
 
         $current = $approved ?? [];
@@ -137,8 +213,25 @@ class HandRolledCommand extends Command
         }
 
         $changed = $approved === null || HandRolledLock::encode($next) !== HandRolledLock::encode($current);
+        $approver = null;
+        $run = null;
 
+        // Lo que cambia el candado lo confirma una persona.
         if ($changed) {
+            $confirmation = $this->confirm($input, $output, $action, $chosen, $action === 'approve' ? $exceptions : $current);
+
+            if ($confirmation['error'] !== null) {
+                return $this->reportFailure($input, $output, $confirmation['error']);
+            }
+
+            $approver = $confirmation['approver'];
+            $run = $confirmation['run'];
+
+            foreach ($action === 'approve' && $approver !== null ? $chosen : [] as $target) {
+                $next[$target] = ['reason' => $exceptions[$target]['reason'], 'fingerprint' => $exceptions[$target]['fingerprint'], 'approved_by' => $approver]
+                    + ($run === null ? [] : ['approved_run' => $run]);
+            }
+
             HandRolledLock::write($root, $next);
         }
 
@@ -146,7 +239,7 @@ class HandRolledCommand extends Command
             + ($action === 'approve' ? ['reason' => $exceptions[$target]['reason']] : []), $chosen);
 
         if ($this->wantsJson($input)) {
-            $this->writeJson($output, ['ok' => true, 'action' => $action, 'lock' => HandRolledLock::PATH, 'changed' => $changed, 'targets' => $done]);
+            $this->writeJson($output, ['ok' => true, 'action' => $action, 'lock' => HandRolledLock::PATH, 'changed' => $changed, 'approved_by' => $approver, 'approved_run' => $run, 'targets' => $done]);
 
             return Command::SUCCESS;
         }
@@ -175,6 +268,139 @@ class HandRolledCommand extends Command
     }
 
     /**
+     * La persona que confirma el cambio: en su terminal, viendo lo que
+     * aprueba o retira y escribiendo la frase; o sin terminal, nombrándose
+     * en el workflow de aprobación (OwnerConfirmation, NamedApproval).
+     *
+     * @param  list<string>  $targets
+     * @param  array<string, array{reason: string, file?: string, line?: int, finding?: string|null, claimed?: string|null}>  $entries
+     * @return array{approver: string|null, run: string|null, error: string|null}
+     */
+    private function confirm(InputInterface $input, OutputInterface $output, string $action, array $targets, array $entries): array
+    {
+        $option = $input->getOption('approver');
+        $named = OwnerConfirmation::namedApprover(is_string($option) ? $option : null);
+
+        if ($named['error'] !== null) {
+            return $named;
+        }
+
+        $summary = $this->summary($action, $targets, $entries);
+
+        if ($named['approver'] !== null) {
+            if (! $this->wantsJson($input)) {
+                $output->writeln(array_map(fn (string $line): string => OutputFormatter::escape($line), $summary));
+                $output->writeln('  Lo aprueba '.OutputFormatter::escape(Exceptions::sanitise($named['approver'])).' sin terminal, en la corrida '.OutputFormatter::escape((string) $named['run']).'; las dos cosas quedan en '.HandRolledLock::PATH.".\n");
+            }
+
+            return $named;
+        }
+
+        $terminal = OwnerConfirmation::openTerminal();
+
+        if ($terminal === null) {
+            // Sin la orden para copiar: quien no tiene terminal casi siempre es
+            // un agente, y el mensaje le enseñaría cómo saltárselo.
+            return ['approver' => null, 'run' => null, 'error' => ($action === 'approve' ? 'Aprobar' : 'Retirar').' una excepción lo confirma una persona en su terminal, y este proceso no tiene ninguna (/dev/tty): no se cambió nada. '
+                .'Si eres un agente, no lo intentes por ninguna otra vía: pide al dueño del proyecto que lo haga él (larapack:realign brief le prepara la lista). '
+                .'Si eres una persona sin terminal, lee '.NamedApproval::DOCS.'. '
+                .'En Git Bash para Windows, córrelo desde PowerShell o con winpty.'];
+        }
+
+        $phrase = OwnerConfirmation::phrase($action, count($targets));
+        $terminal->write(implode("\n", $summary)."\n\n  Si eres el dueño del proyecto y lo ".($action === 'approve' ? 'apruebas' : 'retiras')." tú, escribe «{$phrase}»: ");
+        $answer = $terminal->readLine();
+        $terminal->write("\n");
+
+        if ($answer === null || trim($answer) !== $phrase) {
+            return ['approver' => null, 'run' => null, 'error' => "No se confirmó (había que escribir «{$phrase}»): no se cambió nada."];
+        }
+
+        return ['approver' => null, 'run' => null, 'error' => null];
+    }
+
+    /**
+     * Lo que se le enseña a quien confirma: cada objetivo, su razón y lo que
+     * cubre. Todo en una línea y sin caracteres de control: la razón y el
+     * hallazgo los escribe quien pide, y no deben poder borrar ni tapar nada
+     * en la terminal.
+     *
+     * @param  list<string>  $targets
+     * @param  array<string, array{reason: string, file?: string, line?: int, finding?: string|null, claimed?: string|null}>  $entries
+     * @return list<string>
+     */
+    private function summary(string $action, array $targets, array $entries): array
+    {
+        $lines = ['  Vas a '.($action === 'approve' ? 'aprobar' : 'retirar').' en '.HandRolledLock::PATH.' ('.count($targets).'):'];
+
+        foreach ($targets as $target) {
+            $entry = $entries[$target] ?? ['reason' => ''];
+            $lines[] = '  - '.Exceptions::sanitise($target);
+            $lines[] = '      razón: «'.Exceptions::sanitise($entry['reason']).'»';
+            $file = $entry['file'] ?? null;
+
+            if (is_string($file) && $file !== '') {
+                $lines[] = '      cubre: '.(str_starts_with($file, 'model:')
+                    ? 'el hallazgo de verify sobre '.Exceptions::sanitise(substr($file, 6))
+                    : Exceptions::sanitise($file).(($entry['line'] ?? 0) > 0 ? ':'.$entry['line'] : ''));
+            }
+
+            if (is_string($entry['finding'] ?? null) && $entry['finding'] !== '') {
+                $lines[] = '      hallazgo: «'.Exceptions::sanitise($entry['finding']).'»';
+            }
+
+            if (is_string($entry['claimed'] ?? null) && $entry['claimed'] !== '') {
+                $lines[] = '      hallazgo, según quien la pidió (no se comprobó; lee el código): «'.Exceptions::sanitise($entry['claimed']).'»';
+            }
+        }
+
+        return $lines;
+    }
+
+    /**
+     * `list --format=github`: el paso de la CI que genera `larapack:ci`. Cada
+     * entrada del candado aprobada sin terminal (`approved_by`) sale como
+     * anotación sobre su línea, que GitHub enseña en el diff del PR, y se
+     * comprueba con GitHub (NamedApproval::verify()): `notice` si la corrida
+     * es la que dice, `error` si no. Sale con error si alguna no se pudo
+     * comprobar; sin ninguna, no dice nada y sale bien.
+     *
+     * @param  array<string, array{reason: string, fingerprint: string|null, approved_by?: string|null, approved_run?: string|null}>  $approved
+     */
+    private function annotateNamed(string $root, array $approved, OutputInterface $output): int
+    {
+        $named = array_filter($approved, fn (array $approval): bool => isset($approval['approved_by']));
+
+        if ($named === []) {
+            return Command::SUCCESS;
+        }
+
+        $environment = getenv('GITHUB_REPOSITORY');
+        $repository = is_string($environment) && $environment !== '' ? $environment : CiGate::repository($root);
+        $api = BranchProtection::api();
+        $failed = false;
+
+        foreach ($named as $target => $approval) {
+            $by = (string) $approval['approved_by'];
+            $run = $approval['approved_run'] ?? null;
+            $problem = NamedApproval::verify($api, $repository, $by, $run);
+            $failed = $failed || $problem !== null;
+            $what = Exceptions::sanitise((string) $target).': aprobada sin terminal por '.Exceptions::sanitise($by)
+                .($run === null ? '' : ' en '.Exceptions::sanitise($run)).' — «'.Exceptions::sanitise($approval['reason']).'».';
+
+            $output->writeln(NamedApproval::annotation(
+                $problem === null ? 'notice' : 'error',
+                HandRolledLock::PATH,
+                HandRolledLock::lineOf($root, (string) $target),
+                $problem === null ? 'Aprobada sin terminal' : 'Aprobación sin terminal que no se puede comprobar',
+                $what.($problem === null ? ' GitHub confirma la corrida: revisa que la quisiste aprobar.' : ' '.ucfirst($problem).' No cuenta como aprobada por esa persona: que el dueño lo revise.')
+            ), OutputInterface::OUTPUT_RAW);
+        }
+
+        return $failed ? Command::FAILURE : Command::SUCCESS;
+    }
+
+    /**
      * `approve --all` sin candado y sin excepciones en el código: no escribe.
      */
     private function nothingToApprove(InputInterface $input, OutputInterface $output): int
@@ -195,14 +421,17 @@ class HandRolledCommand extends Command
     }
 
     /**
-     * Las excepciones del código y las del candado, con su estado.
+     * Las excepciones del código y las del candado, con su estado; después,
+     * las del realineamiento (solicitadas o aprobadas).
      *
      * @param  array<string, array{reason: string, fingerprint: string, file: string, line: int}>  $exceptions
      * @param  array<string, array{reason: string, fingerprint: string|null}>|null  $approved
      */
-    private function list(InputInterface $input, OutputInterface $output, array $exceptions, ?array $approved): int
+    private function list(InputInterface $input, OutputInterface $output, array $exceptions, ?array $approved, Exceptions $realign): int
     {
         $rows = [];
+        $requested = $realign->requests();
+        $approved = $approved === null ? null : array_filter($approved, fn (string|int $target): bool => ! ExceptionTargets::isRealign((string) $target), ARRAY_FILTER_USE_KEY);
 
         foreach ($exceptions as $target => $exception) {
             $locked = $approved[$target] ?? null;
@@ -226,6 +455,23 @@ class HandRolledCommand extends Command
             $rows[] = ['target' => (string) $target, 'reason' => $approval['reason'], 'file' => null, 'line' => null, 'status' => 'stale'];
         }
 
+        $realignTargets = array_unique([...array_keys($requested), ...array_keys($realign->approvals())]);
+        sort($realignTargets, SORT_STRING);
+
+        foreach ($realignTargets as $target) {
+            $request = $requested[$target] ?? null;
+            $parts = ExceptionTargets::parse($target);
+            $rows[] = [
+                'target' => $target,
+                'reason' => $request['reason'] ?? $realign->approvals()[$target]['reason'],
+                'file' => $parts === null || str_starts_with($parts['file'], 'model:') ? null : $parts['file'],
+                'line' => $request['line'] ?? null,
+                'status' => $realign->status($target),
+                'realign' => true,
+                'step' => $request['step'] ?? null,
+            ];
+        }
+
         if ($this->wantsJson($input)) {
             $this->writeJson($output, ['ok' => true, 'lock' => $approved === null ? null : HandRolledLock::PATH, 'exceptions' => $rows]);
 
@@ -235,11 +481,11 @@ class HandRolledCommand extends Command
         foreach ($rows as $row) {
             $output->writeln(sprintf('  %s %s', $this->tag($row['status']), OutputFormatter::escape($row['target'])));
             $output->writeln('             «'.OutputFormatter::escape($row['reason']).'»'
-                .($row['file'] === null ? '' : ' — '.OutputFormatter::escape($row['file']).':'.$row['line']));
+                .($row['file'] === null ? '' : ' — '.OutputFormatter::escape($row['file']).($row['line'] === null ? '' : ':'.$row['line'])));
         }
 
         if ($rows === []) {
-            $output->writeln('  No hay excepciones #[HandRolled] en el código ni en el candado.');
+            $output->writeln('  No hay excepciones #[HandRolled] en el código ni en el candado, ni excepciones del realineamiento solicitadas.');
         }
 
         if ($approved === null) {
@@ -261,7 +507,10 @@ class HandRolledCommand extends Command
             return [$target];
         }
 
-        return array_values(array_filter($pool, fn (string $candidate): bool => str_ends_with($candidate, '\\'.$target)));
+        // Una del realineamiento, por el final de su objetivo: después de
+        // `:` (el archivo), de `/` (parte de la ruta) o de `#` (el sujeto).
+        return array_values(array_filter($pool, fn (string $candidate): bool => str_ends_with($candidate, '\\'.$target)
+            || (ExceptionTargets::isRealign($candidate) && (str_ends_with($candidate, ':'.$target) || str_ends_with($candidate, '/'.$target) || str_ends_with($candidate, '#'.$target)))));
     }
 
     /**
@@ -271,7 +520,7 @@ class HandRolledCommand extends Command
     {
         if ($matches === []) {
             return $action === 'approve'
-                ? "{$target} no es una excepción #[HandRolled] con razón del código. Míralas con larapack:hand-rolled list; no se aprobó nada."
+                ? "{$target} no es una excepción #[HandRolled] con razón del código ni una excepción del realineamiento solicitada (larapack:realign except) cuyo código siga ahí. Míralas con larapack:hand-rolled list; no se aprobó nada."
                 : "{$target} no está en ".HandRolledLock::PATH.'. No se retiró nada.';
         }
 

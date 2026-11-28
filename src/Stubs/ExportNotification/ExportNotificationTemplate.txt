@@ -20,6 +20,8 @@ class ExportNotification extends Notification
 
     private bool $exported = false;
 
+    private ?string $signedUrl = null;
+
     public function __construct(private array $data)
     {
         $this->path = $this->getPath();
@@ -107,9 +109,17 @@ class ExportNotification extends Notification
         return __('Hello');
     }
 
+    /**
+     * Sólo promete lo que pasa. Antes decía que el archivo se borraba a las 24
+     * horas y nadie lo borraba: lo que caduca es el enlace firmado, y en un
+     * disco que no firma (`public`) ni eso. Borrar los archivos de `exports/`
+     * es cosa de la aplicación: una regla de ciclo de vida o una tarea.
+     */
     private function getBodyMessage(): string
     {
-        return __('Click to download the file. It will be deleted after 24 hours.');
+        return $this->signedUrl() !== null
+            ? __('Click to download the file. The link expires in 24 hours.')
+            : __('Click to download the file.');
     }
 
     private function getActionButton(): string
@@ -122,15 +132,21 @@ class ExportNotification extends Notification
      * Laravel lo sirve, igual que S3. Antes el correo apuntaba a
      * `/notification/read/{id}`, una ruta que nadie define, y la notificación a
      * `app.aws_url`, que sólo existe con S3.
+     *
+     * Un disco que no firma —`public`— da su URL de siempre: no caduca y la
+     * abre cualquiera que la tenga. Para una exportación, usa `local` o `s3`.
      */
     private function getDownloadUrl(): string
     {
-        $disk = Storage::disk($this->disk());
+        return $this->signedUrl() ?? Storage::disk($this->disk())->url($this->path);
+    }
 
+    private function signedUrl(): ?string
+    {
         try {
-            return $disk->temporaryUrl($this->path, now()->addDay());
+            return $this->signedUrl ??= Storage::disk($this->disk())->temporaryUrl($this->path, now()->addDay());
         } catch (\RuntimeException) {
-            return $disk->url($this->path);
+            return null;
         }
     }
 

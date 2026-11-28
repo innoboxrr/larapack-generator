@@ -27,6 +27,10 @@ use Symfony\Component\Console\Output\OutputInterface;
  * sesión larga; un hook que devuelve el error en cada edición, no. Con
  * `--agents` instala también los hooks y las reglas de otros agentes
  * (AgentIntegrations).
+ *
+ * Junto al skill instala la guía del realineamiento (`larapack-realign`), y el
+ * bloque de AGENTS.md —que es también el de las reglas de Cursor, Codex,
+ * Gemini y Copilot— manda a `larapack:realign status` cuando hay uno en curso.
  */
 class SkillCommand extends Command
 {
@@ -44,7 +48,8 @@ class SkillCommand extends Command
             ->addOption('force', null, InputOption::VALUE_NONE, 'Sobrescribe el destino aunque ya exista')
             ->addOption('hooks', null, InputOption::VALUE_NONE, 'Fusiona en .claude/settings.json los hooks que ejecutan larapack:guard, y pone los hooks de git (.githooks/, core.hooksPath)')
             ->addOption('agents', null, InputOption::VALUE_REQUIRED, 'Hooks y reglas de otros agentes, separados por comas: '.implode(', ', AgentIntegrations::AGENTS).' o all')
-            ->addOption('no-agents', null, InputOption::VALUE_NONE, 'No escribe el bloque de LaraPack en AGENTS.md');
+            ->addOption('no-agents', null, InputOption::VALUE_NONE, 'No escribe el bloque de LaraPack en AGENTS.md')
+            ->addOption('no-realign', null, InputOption::VALUE_NONE, 'No instala la guía del realineamiento (larapack-realign/SKILL.md, junto al skill)');
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
@@ -84,6 +89,8 @@ class SkillCommand extends Command
         } else {
             $output->writeln("  <info>Instalado:</info> {$result['target']}");
         }
+
+        $this->realignGuide($input, $output, $path);
 
         try {
             // El bloque se reescribe siempre, sin --force: lo de fuera de los
@@ -137,6 +144,41 @@ class SkillCommand extends Command
         }
 
         return Command::SUCCESS;
+    }
+
+    /**
+     * La guía del realineamiento, como un skill hermano del de LaraPack:
+     * cuando un agente llega a un proyecto que se desvió, la encuentra donde
+     * busca los skills y empieza por `larapack:realign status`. Con un
+     * destino que no es un directorio de skills (`--path=AGENTS.md`) no se
+     * adivina otro: el bloque de AGENTS.md apunta a la guía del paquete.
+     */
+    private function realignGuide(InputInterface $input, OutputInterface $output, string $path): void
+    {
+        if ($input->getOption('no-realign')) {
+            return;
+        }
+
+        $target = Skill::realignTargetFor($path);
+
+        if ($target === null) {
+            $output->writeln('  La guía del realineamiento sigue en el paquete: docs/realign/README.md (punto de entrada: larapack:realign status).');
+
+            return;
+        }
+
+        $result = Skill::installRealign($target, (bool) $input->getOption('force'));
+
+        if ($result['reason'] === 'ya existe') {
+            $output->writeln($result['written']
+                ? "  <info>Guía del realineamiento al día:</info> {$result['target']}"
+                : "  <comment>La guía del realineamiento existe y difiere del paquete:</comment> {$result['target']}\n"
+                    .'  Usa --force para sobrescribirla.');
+
+            return;
+        }
+
+        $output->writeln("  <info>Guía del realineamiento instalada:</info> {$result['target']}");
     }
 
     /**

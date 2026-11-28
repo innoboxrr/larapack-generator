@@ -158,6 +158,54 @@ final class GitHooksTest extends TestCase
         }
     }
 
+    /**
+     * Varias consolas a la vez (9.4.0): lo que una rama no debe empujar a las
+     * demás es un contrato que no corresponde a lo generado.
+     */
+    public function test_un_laraimport_cambiado_sin_volver_a_importar_no_entra(): void
+    {
+        $contract = fn (string $type): string => (string) json_encode(['models' => [['name' => 'Tag', 'props' => [['name' => 'label', 'type' => $type]]]]], JSON_PRETTY_PRINT);
+        $import = fn (): array => $this->project->run([PHP_BINARY, 'vendor/bin/builder', 'larapack:import', '--root='.$this->project->path, '--force']);
+
+        $this->install();
+        $this->project->write('laraimport.json', $contract('string'));
+        $this->assertSame(0, $import()['code']);
+        $this->project->git('add', '--all');
+        $this->assertSame(0, $this->commit('generado')['code']);
+
+        $this->project->write('laraimport.json', $contract('text'));
+        $this->project->git('add', 'laraimport.json');
+        $stale = $this->commit('el contrato, sin importar');
+
+        $this->assertSame(1, $stale['code']);
+        $this->assertStringContainsString('[contract-outdated] laraimport.json', $stale['stderr']);
+        $this->assertStringContainsString('larapack:import --force', $stale['stderr']);
+
+        $this->assertSame(0, $import()['code']);
+        $this->project->git('add', '--all');
+        $imported = $this->commit('el contrato y lo que genera');
+
+        $this->assertSame(0, $imported['code'], $imported['stderr']);
+    }
+
+    public function test_un_manifiesto_a_medio_fusionar_no_entra(): void
+    {
+        $this->install();
+        $this->project->write('laraimport.json', (string) json_encode(['models' => [['name' => 'Tag', 'props' => [['name' => 'label', 'type' => 'string']]]]]));
+        $this->assertSame(0, $this->project->run([PHP_BINARY, 'vendor/bin/builder', 'larapack:import', '--root='.$this->project->path])['code']);
+        $this->project->git('add', '--all');
+        $this->assertSame(0, $this->commit('generado')['code']);
+
+        $manifest = (string) file_get_contents($this->project->path.'/.larapack/manifest.json');
+        $this->project->write('.larapack/manifest.json', "<<<<<<< HEAD\n{$manifest}=======\n{$manifest}>>>>>>> otra\n");
+        $this->project->git('add', '--all');
+        $conflicted = $this->commit('con los marcadores dentro');
+
+        $this->assertSame(1, $conflicted['code']);
+        $this->assertStringContainsString('[manifest-unreadable] .larapack/manifest.json', $conflicted['stderr']);
+        $this->assertStringContainsString('larapack:reconcile', $conflicted['stderr']);
+    }
+
     public function test_un_commit_limpio_entra_y_uno_con_logica_en_el_controlador_no(): void
     {
         $this->install();
@@ -331,6 +379,46 @@ final class GitHooksTest extends TestCase
 
             $fixed = $this->project->run(['git', 'push', '--quiet', 'origin', 'HEAD:refs/heads/main'], '', [], true);
             $this->assertSame(0, $fixed['code'], $fixed['stderr']);
+        } finally {
+            (new HookProjectRemover)($remote);
+        }
+    }
+
+    /**
+     * Auditoría de seguridad de 9.4.0. El push miraba «los commits que no
+     * tiene ningún remoto»: empujados antes a otra rama —que por no ser HEAD
+     * no se comprueba—, al empujar la de verdad ya los tenía un remoto y
+     * salía sin mirar nada.
+     */
+    public function test_el_push_frena_lo_que_ya_se_empujo_a_otra_rama_del_remoto(): void
+    {
+        $remote = $this->project->path.'-remote.git';
+        mkdir($remote);
+        $this->project->run(['git', 'init', '--quiet', '--bare', $remote]);
+
+        try {
+            $this->install();
+            $this->project->git('remote', 'add', 'origin', $remote);
+            $this->commitWithoutHooks('limpio');
+            $this->project->git('branch', '-M', 'main');
+            $this->assertSame(0, $this->project->run(['git', 'push', '--quiet', 'origin', 'main'], '', [], true)['code']);
+            $this->project->git('fetch', '--quiet', 'origin');
+
+            // El commit malo, en otra rama; se empuja estando en main.
+            $this->project->git('checkout', '--quiet', '-b', 'aparte');
+            $this->project->controller(false);
+            $this->commitWithoutHooks('con lógica, sin hook');
+            $this->project->git('checkout', '--quiet', 'main');
+            $aside = $this->project->run(['git', 'push', '--quiet', 'origin', 'aparte'], '', [], true);
+            $this->assertSame(0, $aside['code'], $aside['stderr']);
+            $this->project->git('fetch', '--quiet', 'origin');
+
+            // Ahora un remoto ya lo tiene. main avanza hasta él y se empuja.
+            $this->project->git('merge', '--quiet', '--ff-only', 'aparte');
+            $push = $this->project->run(['git', 'push', '--quiet', 'origin', 'main'], '', [], true);
+
+            $this->assertNotSame(0, $push['code']);
+            $this->assertStringContainsString('lo que vas a empujar se sale del contrato', $push['stderr']);
         } finally {
             (new HookProjectRemover)($remote);
         }

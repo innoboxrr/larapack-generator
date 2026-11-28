@@ -5,8 +5,10 @@ namespace Innoboxrr\LarapackGenerator\Commands;
 use Innoboxrr\LarapackGenerator\Commands\Concerns\TargetsProject;
 use Innoboxrr\LarapackGenerator\Support\BranchProtection;
 use Innoboxrr\LarapackGenerator\Support\CiGate;
+use Innoboxrr\LarapackGenerator\Support\Files;
 use Innoboxrr\LarapackGenerator\Support\Guard;
 use Innoboxrr\LarapackGenerator\Support\HandRolledLock;
+use Innoboxrr\LarapackGenerator\Support\NamedApproval;
 use Innoboxrr\LarapackGenerator\Support\UnifiedDiff;
 use RuntimeException;
 use Symfony\Component\Console\Command\Command;
@@ -44,6 +46,12 @@ use UnexpectedValueException;
  * Con --runs-on el job corre en los runners del proyecto; sin él, en el
  * alojado de GitHub, y si otros workflows corren en otro sitio, lo dice.
  *
+ * Con --approval escribe además `.github/workflows/larapack-approve.yml`, el
+ * workflow de aprobación sin terminal (NamedApproval): una persona lo lanza a
+ * mano en Actions y las excepciones quedan aprobadas a su nombre y con la
+ * corrida. Es la única vía sin terminal; sin él, se aprueba en la terminal.
+ * CODEOWNERS lo cubre aunque no exista, para que nadie añada uno a su gusto.
+ *
  * Si el workflow no se puede escribir (difiere y no hay --force), no se
  * escribe nada: tampoco CODEOWNERS. Un intento fallido no deja el
  * repositorio a medias.
@@ -63,6 +71,7 @@ class CiCommand extends Command
             ->addOption('owner', null, InputOption::VALUE_REQUIRED | InputOption::VALUE_IS_ARRAY, 'Dueño en CODEOWNERS (repetible): @usuario, @organización/equipo o un correo')
             ->addOption('runs-on', null, InputOption::VALUE_REQUIRED | InputOption::VALUE_IS_ARRAY, 'Etiqueta del runner (repetible) o una lista JSON: --runs-on=self-hosted --runs-on=linux, o --runs-on=\'["self-hosted","linux"]\'. Sin ella, '.CiGate::DEFAULT_RUNNER)
             ->addOption('enforce-admins', null, InputOption::VALUE_NEGATABLE, 'En el ruleset y en la orden de protección: que tampoco un administrador se salte la puerta (de fábrica; --no-enforce-admins lo quita)', true)
+            ->addOption('approval', null, InputOption::VALUE_NONE, 'Escribe también '.NamedApproval::WORKFLOW.': el workflow de aprobación sin terminal, que lanza a mano una persona en GitHub Actions')
             ->addOption('check', null, InputOption::VALUE_NONE, 'No escribe nada: pregunta a GitHub si la rama por defecto exige el check «'.CiGate::JOB.'»')
             ->addOption('repo', null, InputOption::VALUE_REQUIRED, 'Con --check: dueño/repositorio (de fábrica, el remoto origin o GITHUB_REPOSITORY)')
             ->addOption('branch', null, InputOption::VALUE_REQUIRED, 'Con --check: la rama (de fábrica, la rama por defecto según GitHub)')
@@ -122,7 +131,7 @@ class CiCommand extends Command
             $ok = $this->files($root, [
                 CiGate::WORKFLOW => CiGate::workflow($root, $branch, $runsOn),
                 BranchProtection::RULESET_FILE => BranchProtection::rulesetJson($enforceAdmins),
-            ], $dryRun, (bool) $input->getOption('force'), $output);
+            ] + ($input->getOption('approval') ? [NamedApproval::WORKFLOW => CiGate::approvalWorkflow($root, $runsOn)] : []), $dryRun, (bool) $input->getOption('force'), $output);
             // Si el workflow no se escribe, CODEOWNERS tampoco: se enseña lo
             // que se añadiría y nada más.
             $codeowners = $this->codeowners($root, $owners, $dryRun || ! $ok, $output);
@@ -297,7 +306,8 @@ class CiCommand extends Command
             '     el workflow corra una vez: en la web, el check «'.CiGate::JOB.'» sólo se ofrece cuando GitHub ya lo vio.',
             '  2. Si hay excepciones #[HandRolled], aprobarlas una vez, revisar el candado y comitearlo:',
             '     larapack:hand-rolled list, y larapack:hand-rolled approve --all (o una a una).',
-            '     '.HandRolledLock::PATH.' es la aprobación: un agente no lo edita.',
+            '     '.HandRolledLock::PATH.' es la aprobación: un agente no lo edita. Sin terminal (sólo una persona):',
+            '     el workflow de aprobación ('.NamedApproval::WORKFLOW.', con --approval), lanzado a mano en Actions.',
         ]);
 
         $this->protectionGuide($root, $repository, $branch ?? 'RAMA', $enforceAdmins, '  3. ', $output);
@@ -398,7 +408,7 @@ class CiCommand extends Command
             return Command::FAILURE;
         }
 
-        foreach (['dry-run', 'force', 'owner', 'runs-on'] as $option) {
+        foreach (['dry-run', 'force', 'owner', 'runs-on', 'approval'] as $option) {
             $value = $input->getOption($option);
 
             if ($value === true || (is_array($value) && $value !== [])) {
@@ -555,6 +565,10 @@ class CiCommand extends Command
 
     private function write(string $file, string $contents): void
     {
+        // `.github/workflows` (o el archivo) como enlace hacia fuera: el
+        // workflow se escribiría donde apunte.
+        Files::guard($file);
+
         $directory = dirname($file);
 
         if (! is_dir($directory) && ! mkdir($directory, 0777, true) && ! is_dir($directory)) {

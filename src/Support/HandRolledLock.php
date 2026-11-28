@@ -37,12 +37,19 @@ use RuntimeException;
  * mismo producen el mismo archivo byte a byte, y el diff de una revisión sólo
  * enseña lo que cambió.
  *
+ * Desde 9.4.0 una entrada puede llevar `approved_by` y `approved_run`: la
+ * cuenta de GitHub de la persona que la aprobó sin terminal y la corrida del
+ * workflow de aprobación en que lo hizo (NamedApproval), para que quien
+ * revisa el diff lo vea y la CI lo compruebe. Lo aprobado en la terminal no
+ * lo lleva: quien aprueba es quien comitea. Una versión anterior lo ignora
+ * al leer.
+ *
  * @phpstan-import-type MethodOutline from PhpOutline
  * @phpstan-import-type ClassOutline from PhpOutline
  * @phpstan-import-type AttributeOutline from PhpOutline
  * @phpstan-import-type Token from PhpOutline
  *
- * @phpstan-type Approval array{reason: string, fingerprint: string|null}
+ * @phpstan-type Approval array{reason: string, fingerprint: string|null, approved_by?: string|null, approved_run?: string|null}
  */
 final class HandRolledLock
 {
@@ -108,7 +115,21 @@ final class HandRolledLock
                 throw new RuntimeException(self::PATH." aprueba dos veces {$target}.");
             }
 
-            $approved[$target] = ['reason' => $reason, 'fingerprint' => $fingerprint];
+            $approver = $entry['approved_by'] ?? null;
+
+            if ($approver !== null && (! is_string($approver) || trim($approver) === '')) {
+                throw new RuntimeException(self::PATH." tiene un `approved_by` que no es un nombre (posición {$index}).");
+            }
+
+            $run = $entry['approved_run'] ?? null;
+
+            if ($run !== null && (! is_string($run) || preg_match('#^https://\S+$#', $run) !== 1)) {
+                throw new RuntimeException(self::PATH." tiene un `approved_run` que no es la dirección de una corrida (posición {$index}).");
+            }
+
+            $approved[$target] = ['reason' => $reason, 'fingerprint' => $fingerprint]
+                + ($approver === null ? [] : ['approved_by' => $approver])
+                + ($run === null ? [] : ['approved_run' => $run]);
         }
 
         return $approved;
@@ -121,6 +142,10 @@ final class HandRolledLock
     {
         $file = self::path($root);
         $directory = dirname($file);
+
+        // Ni el candado ni su directorio a través de un enlace que saque del
+        // proyecto: se escribiría la aprobación en un archivo ajeno.
+        Files::guard($file, $root);
 
         // Otro proceso puede crearlo entre la pregunta y el mkdir(): lo que
         // importa es que exista después, lo haya creado quien lo haya creado.
@@ -149,10 +174,30 @@ final class HandRolledLock
         $entries = [];
 
         foreach ($approved as $target => $approval) {
-            $entries[] = ['target' => (string) $target, 'reason' => $approval['reason'], 'fingerprint' => $approval['fingerprint']];
+            $entries[] = ['target' => (string) $target, 'reason' => $approval['reason'], 'fingerprint' => $approval['fingerprint']]
+                + (isset($approval['approved_by']) ? ['approved_by' => $approval['approved_by']] : [])
+                + (isset($approval['approved_run']) ? ['approved_run' => $approval['approved_run']] : []);
         }
 
         return json_encode($entries, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR)."\n";
+    }
+
+    /**
+     * La línea del candado en que empieza la entrada de un objetivo (la de su
+     * `target`), o 1 si no está: donde se ancla una anotación del PR.
+     */
+    public static function lineOf(string $root, string $target): int
+    {
+        $raw = is_file(self::path($root)) ? Files::read(self::path($root)) : '';
+        $needle = '"target": '.json_encode($target, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+
+        foreach (preg_split('/\R/', $raw) ?: [] as $index => $line) {
+            if (str_contains($line, $needle)) {
+                return $index + 1;
+            }
+        }
+
+        return 1;
     }
 
     /**

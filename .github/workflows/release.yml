@@ -20,7 +20,10 @@ jobs:
         # La puerta vive aqui y no solo en el reutilizable de innoboxrr/.github:
         # que un push con un test roto no publique es una garantia de este
         # repositorio, y tiene que poder leerse en el. A mano siempre se puede.
-        if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+        # Y solo el Tests de un push a este repositorio: `branches` casa con el
+        # nombre de la rama de cabeza, tambien la `master` de un fork, y un PR
+        # desde ahi con Tests en verde publicaba la VERSION de master.
+        if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_repository.full_name == github.repository)
         runs-on: ubuntu-latest
         permissions:
             contents: read

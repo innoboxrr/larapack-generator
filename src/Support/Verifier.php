@@ -2,6 +2,7 @@
 
 namespace Innoboxrr\LarapackGenerator\Support;
 
+use Innoboxrr\LarapackGenerator\Exceptions\MakerException;
 use Innoboxrr\LarapackGenerator\Support\Import\Actions;
 use Innoboxrr\LarapackGenerator\Support\Import\Endpoints;
 
@@ -59,7 +60,7 @@ final class Verifier
     public const MANIFEST_CHECKS = [
         'empty-manifest', 'missing-file', 'customised', 'inconsistent-entity', 'route-prefix',
         'route-not-declared', 'endpoint-missing', 'immutable-write', 'secret-exposed',
-        'endpoint-tests-outdated', ...ContractDrift::CHECKS,
+        'endpoint-tests-outdated', ...ContractDrift::CHECKS, ...MergeDrift::CHECKS,
     ];
 
     /**
@@ -68,7 +69,7 @@ final class Verifier
      * no se entra, cada acción pregunta a la política y el listado pasa por su
      * ManagedFilter.
      */
-    private const ENDPOINT_TESTS = [
+    public const ENDPOINT_TESTS = [
         'cada_accion_requiere_sesion' => null,
         'cada_accion_pregunta_a_la_politica' => null,
         'index_pasa_por_su_managed_filter' => 'index',
@@ -120,10 +121,32 @@ final class Verifier
         // lo consulta por modelo y por archivo, y releerlo del disco en cada
         // consulta hacía que un proyecto grande tardara minutos.
         $live = $this->manifest;
-        $this->manifest = $live->snapshot();
+
+        // Uno que no se puede leer —un merge a medio resolver— no es uno
+        // vacío: es un error, y lo demás que deja un merge se sigue mirando.
+        try {
+            $this->manifest = $live->snapshot();
+
+            // Uno de una versión posterior del formato se lee, pero lo que
+            // trae de nuevo no se entiende: dar por bueno el código contra él
+            // sería comprobar menos de lo que el manifiesto dice.
+            if ($this->manifest->formatVersion() > Manifest::VERSION) {
+                throw MakerException::manifestTooNewToRead(Manifest::RELATIVE_PATH, $this->manifest->formatVersion(), Manifest::VERSION);
+            }
+        } catch (MakerException $e) {
+            $this->manifest = $live;
+
+            return [
+                $this->finding(self::ERROR, MergeDrift::MANIFEST_UNREADABLE, null, Manifest::RELATIVE_PATH, $e->getMessage()),
+                ...(new MergeDrift($live->root(), null))->run(),
+            ];
+        }
 
         try {
-            return $this->checks();
+            return [
+                ...(new MergeDrift($live->root(), $this->manifest))->run(),
+                ...$this->checks(),
+            ];
         } finally {
             $this->manifest = $live;
         }
@@ -145,6 +168,9 @@ final class Verifier
             return [
                 ...$this->checkFilesExist(['']),
                 ...$this->checkCustomisations(['']),
+                // Si el contrato declara modelos y el manifiesto no tiene
+                // ninguno, se dice: no es «un paquete que sólo integra».
+                ...(new ContractDrift($this->manifest))->run([]),
             ];
         }
 

@@ -2,6 +2,8 @@
 
 namespace Innoboxrr\LarapackGenerator\Support;
 
+use Innoboxrr\LarapackGenerator\Support\Realign\Exceptions;
+
 /**
  * `verify` sobre un proyecto entero: la raíz y sus paquetes locales.
  *
@@ -42,12 +44,21 @@ final class ProjectVerification
     private ProjectSources $sources;
 
     /**
+     * Raíz de un paquete => su nombre (nameOf()).
+     *
+     * @var array<string, string>
+     */
+    private array $names = [];
+
+    /**
      * @param  list<string>  $packages  raíces absolutas a las que acotar; vacío, todas
+     * @param  Exceptions|null  $exceptions  las excepciones con las que se revisa; null, las de la raíz
      */
     public function __construct(
         private readonly string $root,
         private readonly array $packages = [],
         private readonly bool $withPackages = true,
+        private readonly ?Exceptions $exceptions = null,
     ) {
         $this->sources = new ProjectSources($root);
     }
@@ -79,8 +90,32 @@ final class ProjectVerification
     }
 
     /**
+     * Los ámbitos que se miden: la raíz del proyecto y, salvo
+     * `withPackages: false`, cada paquete local que está dentro de ella,
+     * acotados a lo nombrado en --package. Es lo que recorre
+     * `larapack:validate` para validar el contrato de cada uno, con los
+     * mismos nombres que `verify`.
+     *
+     * @return list<array{package: string|null, path: string, root: string}>
+     */
+    public function scopes(): array
+    {
+        $scopes = [];
+
+        foreach ([$this->sources->root(), ...($this->withPackages ? $this->packageRoots() : [])] as $root) {
+            if (! $this->selected($root) || ($root !== $this->sources->root() && ! $this->inside($root))) {
+                continue;
+            }
+
+            $scopes[] = ['package' => $this->packageOf($root), 'path' => $this->pathOf($root), 'root' => $root];
+        }
+
+        return $scopes;
+    }
+
+    /**
      * @param  array<int, string>  $only  sólo estas comprobaciones; vacío, todas
-     * @return array{findings: list<ScopedFinding>, summary: list<Scope>}
+     * @return array{findings: list<ScopedFinding>, summary: list<Scope>, exceptions: list<array{target: string, reason: string, fingerprint: string|null, status: string}>}
      */
     public function run(array $only = []): array
     {
@@ -120,7 +155,35 @@ final class ProjectVerification
             fn (array $finding): bool => $this->selected($this->rootOfPackage($finding['package']))
         ));
 
-        return ['findings' => $findings, 'summary' => $this->summary($findings, $verified)];
+        // Las excepciones del realineamiento aprobadas por el dueño
+        // (Exceptions): lo que cubren pasa a info diciéndolo, y lo aprobado
+        // que ya no cubre nada se avisa como lo de #[HandRolled].
+        $exceptions = $this->exceptions ?? Exceptions::forRoot($root);
+        $ran = $only === [] ? Verifier::CHECKS : array_values($only);
+
+        // Lo que dijo verify, antes de revisarlo: el estado de una excepción
+        // de una entidad se juzga con su hallazgo de hoy. Acotado a unos
+        // paquetes, lo que no salió puede ser de otro: no cuenta como visto.
+        $exceptions->observe($findings, $this->packages === [] && $this->withPackages ? $ran : []);
+
+        $changes = $exceptions->review($findings);
+        $reviewed = [];
+
+        foreach ($findings as $index => $finding) {
+            $reviewed[] = isset($changes[$index])
+                ? ['level' => $changes[$index]['level'], 'message' => $changes[$index]['message']] + $finding
+                : $finding;
+        }
+
+        $findings = $reviewed;
+
+        if ($only === [] || in_array(ControllerShape::HAND_ROLLED_STALE, $only, true)) {
+            foreach ($exceptions->staleFindings($ran, fn (string $file): bool => $this->selected($this->ownerOf($file))) as $stale) {
+                $findings[] = $stale + ['package' => null];
+            }
+        }
+
+        return ['findings' => $findings, 'summary' => $this->summary($findings, $verified), 'exceptions' => $exceptions->all()];
     }
 
     /**
@@ -206,9 +269,16 @@ final class ProjectVerification
      */
     private function nameOf(string $root): string
     {
+        // Se pregunta por cada hallazgo y por cada paquete (rootOfPackage()):
+        // sin recordarlo, el composer.json de cada paquete se leía y se
+        // decodificaba hallazgos × paquetes veces.
+        if (isset($this->names[$root])) {
+            return $this->names[$root];
+        }
+
         $name = ProjectSources::composer($root)['name'] ?? null;
 
-        return is_string($name) && $name !== '' ? $name : $this->pathOf($root);
+        return $this->names[$root] = is_string($name) && $name !== '' ? $name : $this->pathOf($root);
     }
 
     private function inside(string $directory): bool

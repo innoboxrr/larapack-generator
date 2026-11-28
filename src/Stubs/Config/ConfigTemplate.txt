@@ -11,7 +11,9 @@ return [
 	'notification_via' => ['mail'],
 
 	// Dónde se guarda el archivo exportado. `local` funciona en cualquier
-	// aplicación; en producción, normalmente `s3`.
+	// aplicación; en producción, normalmente `s3`. Los dos firman un enlace
+	// que caduca. `public` no: su enlace no caduca y lo abre cualquiera que
+	// lo tenga. Nadie borra los archivos de `exports/`: hazlo tú.
 	'export_disk' => 'local',
 
 ];

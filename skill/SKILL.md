@@ -115,6 +115,10 @@ Lo que conviene saber sin tener que leer el esquema entero:
 | `controllers` | En la raíz: endpoints sin modelo (un escritorio, un asistente, un webhook). |
 | `immutable` | La fila no cambia una vez creada: sin `update`, `delete`, `restore` ni `forceDelete`, y el modelo lanza si algo lo intenta. Crear sigue permitido. |
 | `props[].secret` | Nunca sale por la API: va a `$hidden`, fuera de la exportación y de la tabla. Se escribe, no se lee. |
+| `props[].length` / `precision` + `scale` / `use_current` | Longitud de `string`/`char`, dígitos de `decimal`, `->useCurrent()` de una fecha. Sin ellas, lo de Laravel. |
+| `indexes[]` | Índices del modelo: `{"columns": [...], "unique": true, "name": "…"}`. Nunca se quita uno que no esté aquí. |
+| `table` | La tabla tal cual, sin prefijo: sólo para adoptar una que ya existe con otro nombre. |
+| `endpoints[].route_name` | El nombre de la ruta (relativo al archivo), para conservar uno que ya llama el front. |
 | `authenticatable` | El modelo es el usuario que inicia sesión: hereda de `Illuminate\Foundation\Auth\User`, con `Notifiable`, `HasApiTokens` e `isAdmin()` (lee `config('auth.admins')`). `password` y `remember_token` van a `$hidden` y fuera de la tabla y la exportación. Exige declarar `email` y `password`. |
 
 ### Las claves ajenas restringen por omisión
@@ -504,6 +508,15 @@ generado con su hash. Detecta:
 - **`endpoint-tests-outdated`** (aviso): un `<Modelo>EndpointsTest` de antes de
   9.1, sin las pruebas que cierran la autorización. No se regenera solo:
   guarda lo que le añadiste, bórralo, `larapack:import` y vuelve a pegarlo.
+- **`contract-outdated`** (error): lo generado de un modelo corresponde a otro
+  contrato. Cambiaste el `laraimport.json` (o lo cambió un merge) y no volviste
+  a importar; o declara un modelo sin generar; o el manifiesto registra uno que
+  ya no declara. `larapack:import --force` —tras un merge,
+  `larapack:reconcile`— y revisa lo que conserve por estar editado.
+- **`manifest-unreadable`**, **`merge-conflict`**, **`migration-duplicate`**,
+  **`route-duplicate`** (error): lo que deja un `git merge` mal resuelto. No
+  edites el manifiesto ni borres migraciones para que pase: ver «Si trabajas
+  en paralelo con otras consolas».
 - **`model-lists-outdated`** (aviso): las listas del modelo (`$fillable`,
   `$export_cols`, `casts()`…) no llevan lo que declara el `laraimport.json` de
   la raíz. Pasa con un modelo editado a mano al añadir una columna.
@@ -598,6 +611,74 @@ en `AGENTS.md`—, la comprobación la haces tú con la lista de abajo.
 ```
 
 Si algo falla, la tarea no ha terminado.
+
+### Si trabajas en paralelo con otras consolas
+
+Varias consolas a la vez sobre el mismo proyecto, cada una en su rama. Lo
+generado sale del contrato: dos ramas no fusionan lo generado, fusionan el
+contrato y vuelven a generar.
+
+En tu rama:
+
+- Trabaja en **tu** rama o worktree; no compartas directorio con otra consola.
+- Después de **cada** cambio del `laraimport.json`, `larapack:import --force`.
+  Un laraimport cambiado sin importar es `contract-outdated`, y el hook de git
+  no te deja comitearlo.
+- No edites lo generado que no es un hueco, y declara (`endpoints`,
+  `controllers`) antes que escribir a mano: lo declarado se fusiona por nombre,
+  lo escrito a mano línea a línea.
+- No corras `larapack:realign diagnose` ni `plan` si otra rama lleva el
+  realineamiento de ese ámbito: su estado no se fusiona.
+
+Si te toca fusionar (traer la rama de integración a la tuya, o integrar):
+
+```
+git merge --no-ff --no-commit <rama>
+larapack:reconcile --format=json       # ok: true → sigue; si no, lee scopes[].pending
+larapack:verify --strict --format=json
+# las pruebas del proyecto
+git add -A && git commit
+```
+
+- **Nunca resuelvas a mano un conflicto en `laraimport.json` ni en
+  `.larapack/manifest.json`**, ni te quedes con «lo nuestro» o «lo suyo»:
+  `larapack:reconcile` fusiona el contrato por nombres y recompone el
+  manifiesto de las dos ramas. Tampoco resuelvas el conflicto de un archivo
+  generado sin editar: lo regenera él.
+- Lo que deja en `pending` no es tuyo decidirlo solo: el mismo endpoint o la
+  misma columna declarados distinto en dos ramas (deja en `laraimport.json` lo
+  que diga el dueño de esa decisión y vuelve a correrlo), o un conflicto en
+  código escrito a mano (lo resuelve quien lo escribió; si eres tú, conserva
+  las dos intenciones).
+- No borres una migración para quitar un `migration-duplicate`: `reconcile`
+  retira la que trae la rama que entra si es segura; si no, lo dice, y decide
+  una persona.
+- `larapack:reconcile --check` no escribe: dice si queda algo por reconciliar.
+
+## Realinear un proyecto que se desvió
+
+## Realinear un proyecto existente
+
+Si el proyecto ya existe y lo que hay en disco no es lo que generaría su
+contrato —una versión vieja de LaraPack, código editado fuera de los huecos,
+controladores y modelos escritos a mano, o ni siquiera hay contrato—, no lo
+arregles a mano ni con un `import --force` a ciegas: **realinéalo**.
+
+```bash
+larapack:realign status        # siempre primero: dice si hay un realineamiento en curso y qué sigue
+larapack:realign diagnose      # sin plan: compara el proyecto con lo que generaría su contrato
+larapack:realign plan
+larapack:realign next          # el siguiente paso, con su playbook y su comprobación
+larapack:realign check <id>    # sólo esto da un paso por hecho
+larapack:realign done          # sólo esto da el realineamiento por terminado: sale con 0, o dice qué falta
+```
+
+Lo determinista lo hace `larapack:realign apply`; lo guiado lo haces tú con el
+playbook que da `next`; las decisiones las toma el dueño (`decide`) y las
+excepciones las aprueba él (`larapack:hand-rolled approve`), nunca tú. Nada del
+realineamiento escribe migraciones ni cambia nombres de ruta. La guía para
+agentes es el skill `larapack-realign` (lo instala `larapack:skill` junto a
+éste) y la completa, `docs/realign/README.md` del paquete.
 
 ## Regenerar
 
@@ -818,6 +899,11 @@ valor)`, que va a `bulk.update` con sólo ese campo.
   `immutable`. Lo borrado a mano queda como deriva para siempre.
 - **Exponer un secreto en el Resource "sólo para depurar".** `larapack:verify`
   falla con `secret-exposed`, y tiene razón.
+- **Resolver a mano un conflicto de git en `laraimport.json` o en el
+  manifiesto.** Quedarse con un lado deja un contrato que no es el de nadie y
+  un manifiesto que miente. `larapack:reconcile`.
+- **Cambiar el `laraimport.json` y no volver a importar.** `verify` falla con
+  `contract-outdated`: el código y el contrato dicen cosas distintas.
 - **Corregir el código generado en vez del JSON.** El siguiente `--force` lo
   conservará, sí, pero el contrato y el código ya no dicen lo mismo.
 - **Olvidar `<model>_id` en las reglas de `Update`.** `authorize()` y

@@ -1,10 +1,12 @@
 {
-    "CiGate": 97.1,
+    "CiGate": 97.3,
     "ControllerShape": 97.3,
-    "Guard": 96.6,
+    "Guard": 97.1,
     "HandRolledLock": 99.0,
     "LegacyFix": 90.6,
     "LegacySecurity": 95.4,
+    "NamedApproval": 98.4,
+    "Navigation": 93.1,
     "PhpOutline": 96.0,
     "Verifier": 97.1
 }

@@ -26,15 +26,21 @@ class ShowRequest extends FormRequest
 
     public function rules(): array
     {
+        // `list`: Rule::in valida los valores, no las claves, y with() toma
+        // una clave de texto por el nombre de la relación. Sin ella,
+        // `load_relations[otra.relacion]=<una cargable>` cargaba una relación
+        // que no está en la lista.
         return [
             'load_relations' => [
                 'nullable',
                 'array',
+                'list',
                 Rule::in(PascalCaseModelName::$loadable_relations)
             ],
             'load_counts' => [
                 'nullable',
                 'array',
+                'list',
                 Rule::in(PascalCaseModelName::$loadable_counts)
             ],
             'snake_case_model_name_id' => 'required|numeric'
@@ -64,8 +70,8 @@ class ShowRequest extends FormRequest
     {
 
         $camelCaseModelName = PascalCaseModelName::where('id', $this->snake_case_model_name_id)
-            ->with($this->load_relations ?? [])
-            ->withCount($this->load_counts ?? [])
+            ->with(array_values((array) $this->input('load_relations', [])))
+            ->withCount(array_values((array) $this->input('load_counts', [])))
             ->firstOrFail();
 
         return new PascalCaseModelNameResource($camelCaseModelName);

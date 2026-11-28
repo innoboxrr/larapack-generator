@@ -16,17 +16,37 @@ use Innoboxrr\LarapackGenerator\Support\Import\Actions;
  * archivo se ha personalizado, lo cual es legítimo y esperado. Lo que no es
  * legítimo es que falte.
  *
- * @phpstan-type FileEntry array{stub: string, hash: string}
+ * @phpstan-type FileEntry array{stub: string, hash: string, generator?: string, state?: string}
  * @phpstan-type Bucket array{namespace: string, files: array<string, FileEntry>}
  * @phpstan-type StoredDeclaration array{actions?: array<int, string>, immutable?: bool, secret?: array<int, string>, endpoints?: array<int, array<string, mixed>>, controller?: bool}
- * @phpstan-type ModelEntry array{namespace?: string, files?: array<string, FileEntry>, declaration?: StoredDeclaration}
- * @phpstan-type ManifestData array{version: int, package: Bucket, models: array<string, ModelEntry>}
+ * @phpstan-type ModelEntry array{namespace?: string, contract?: string, files?: array<string, FileEntry>, declaration?: StoredDeclaration}
+ * @phpstan-type ManifestData array{version: int, package: Bucket, models: array<string, ModelEntry>, pivots?: array<string, string>}
  */
 final class Manifest
 {
-    public const VERSION = 1;
+    /**
+     * Versión del formato. La 2 (9.4.0) añade a cada archivo, sin quitar
+     * nada de la 1:
+     *
+     *  - `generator`: la versión del generador que lo escribió o lo adoptó.
+     *    Sin ella, un archivo que difiere de la plantilla actual no dice si
+     *    es porque la plantilla cambió o porque alguien lo editó.
+     *  - `state`: `adopted` si el archivo no lo escribió el generador sino
+     *    que se adoptó como si lo hubiera escrito (`larapack:realign
+     *    adopt`). Ausente significa `generated`.
+     *
+     * Un manifiesto de la versión 1 se sigue leyendo igual —sus archivos no
+     * dicen versión ni estado—, y la siguiente escritura lo deja en la 2. Uno
+     * de una versión posterior se lee, pero no se escribe: lo que no se
+     * entiende se perdería al reescribirlo.
+     */
+    public const VERSION = 2;
 
-    private const RELATIVE_PATH = '.larapack/manifest.json';
+    public const GENERATED = 'generated';
+
+    public const ADOPTED = 'adopted';
+
+    public const RELATIVE_PATH = '.larapack/manifest.json';
 
     /**
      * El contenido congelado de una instantánea; null en un manifiesto vivo.
@@ -68,6 +88,12 @@ final class Manifest
      * @var (\Closure(string, string): bool)|null
      */
     private static ?\Closure $move = null;
+
+    /**
+     * Lo que puede traer `namespace`: vacío o un namespace de PHP, con o sin
+     * el separador final.
+     */
+    private const NAMESPACE = '/^(?:[A-Za-z_\x80-\xff][A-Za-z0-9_\x80-\xff]*(?:\\\\[A-Za-z_\x80-\xff][A-Za-z0-9_\x80-\xff]*)*\\\\?)?\z/';
 
     public function __construct(private ?string $root = null) {}
 
@@ -211,13 +237,97 @@ final class Manifest
             return self::EMPTY;
         }
 
-        $decoded = json_decode(Files::read($this->path()), true);
+        $content = Files::read($this->path());
 
-        if (! is_array($decoded) || ! isset($decoded['models'])) {
+        // Vacío es vacío. Pero uno con contenido que no se puede decodificar
+        // no lo es: lo normal es un merge de git a medio resolver, y darlo
+        // por vacío hacía que `verify` sólo avisara de que no había nada
+        // registrado y que la siguiente importación lo reescribiera desde
+        // cero, perdiendo el registro de todo lo generado.
+        if (trim($content) === '') {
             return self::EMPTY;
         }
 
+        $decoded = json_decode($content, true);
+
+        if (! is_array($decoded)) {
+            throw MakerException::manifestUnreadable($this->path(), self::unreadableReason($content));
+        }
+
+        if (! isset($decoded['models'])) {
+            return self::EMPTY;
+        }
+
+        // Un manifiesto sin versión, o con una que no es un número, es de la
+        // forma 1: así nacieron todos.
+        $decoded['version'] = is_int($decoded['version'] ?? null) ? $decoded['version'] : 1;
+
+        $this->assertSafePaths($decoded);
+
         return $decoded + self::EMPTY;
+    }
+
+    /**
+     * El manifiesto es un archivo del proyecto, y lo que trae se usa después
+     * para escribir: sus claves son rutas que se leen, se reescriben
+     * (`larapack:fix`, `realign apply`) y se comparan, y su `namespace` va a
+     * un `use` del trait de relaciones.
+     *
+     * Con `"../../otro/Models/Post.php"` registrado como el modelo,
+     * `larapack:fix relation-missing` añadía la relación a un trait de fuera
+     * del proyecto; con `"namespace": "X;\nsystem(…);//"`, lo que seguía al
+     * `;` quedaba como código al principio del trait. El generador sólo anota
+     * rutas relativas a la raíz y namespaces de PHP; otra cosa es un
+     * manifiesto editado, y no se interpreta.
+     *
+     * @param  array<mixed>  $decoded
+     */
+    private function assertSafePaths(array $decoded): void
+    {
+        $buckets = [$decoded['package'] ?? null, ...array_values(is_array($decoded['models']) ? $decoded['models'] : [])];
+
+        foreach ($buckets as $bucket) {
+            if (! is_array($bucket)) {
+                continue;
+            }
+
+            foreach (is_array($bucket['files'] ?? null) ? array_keys($bucket['files']) : [] as $relative) {
+                if (! Files::isRelativeInside((string) $relative)) {
+                    throw MakerException::unsafeManifestPath($this->path(), (string) $relative);
+                }
+            }
+
+            $namespace = $bucket['namespace'] ?? '';
+
+            if (! is_string($namespace) || preg_match(self::NAMESPACE, $namespace) !== 1) {
+                throw MakerException::unsafeManifestNamespace($this->path(), is_string($namespace) ? $namespace : (string) json_encode($namespace));
+            }
+        }
+    }
+
+    /**
+     * Por qué no se pudo leer, dicho para quien tiene que arreglarlo.
+     */
+    private static function unreadableReason(string $content): string
+    {
+        return MergeMarkers::in($content)
+            ? 'tiene marcadores de conflicto de git (<<<<<<<)'
+            : 'no es JSON válido ('.json_last_error_msg().')';
+    }
+
+    /**
+     * Si el manifiesto está en disco y se puede leer. Uno ausente o vacío se
+     * lee (no registra nada); uno a medio fusionar, no.
+     */
+    public function unreadable(): ?string
+    {
+        try {
+            $this->readFromDisk();
+
+            return null;
+        } catch (MakerException $e) {
+            return $e->getMessage();
+        }
     }
 
     /**
@@ -235,21 +345,287 @@ final class Manifest
     {
         $manifest = $this->read();
 
-        $bucket = $model === '' ? 'package' : 'models';
-        $entry = [
-            'stub' => $this->stubName($stub),
+        $this->put($manifest, $model, $namespace, $file, [
+            'stub' => $this->stubKey($stub),
             'hash' => $this->hash($file),
-        ];
+            'generator' => GeneratorVersion::current(),
+        ]);
 
-        if ($bucket === 'package') {
+        $this->write($manifest);
+    }
+
+    /**
+     * Anota como gestionado un archivo que el generador no escribió en esta
+     * corrida: uno escrito a mano que coincide con lo que generaría el
+     * contrato, o uno generado cuyo registro se había perdido. Se anota el
+     * hash de lo que hay en disco —así `--force` lo podrá regenerar y
+     * `verify` lo dará por no editado— y `state: adopted`, para que se sepa
+     * siempre que no salió del generador.
+     *
+     * `$stub` es el nombre relativo a Stubs/ (`Model/ModelTemplate.txt`) o
+     * la ruta del stub.
+     *
+     * Quién decide que es seguro adoptarlo no es el manifiesto: es el
+     * diagnóstico de `larapack:realign`, que lo compara con lo regenerado.
+     *
+     * `$hashOf`, si se da, es el archivo cuyo hash se anota en vez del de
+     * `$file`: adoptar algo escrito a mano «como editado» anota el hash de lo
+     * que generaría el contrato, así `verify` lo ve personalizado y `--force`
+     * no lo toca nunca.
+     */
+    public function adopt(string $model, string $namespace, string $file, string $stub, ?string $hashOf = null): void
+    {
+        $manifest = $this->read();
+
+        $this->put($manifest, $model, $namespace, $file, [
+            'stub' => $this->stubKey($stub),
+            'hash' => $this->hash($hashOf ?? $file),
+            'generator' => GeneratorVersion::current(),
+            'state' => self::ADOPTED,
+        ]);
+
+        $this->write($manifest);
+    }
+
+    /**
+     * Vuelve a anotar un archivo registrado con el hash de lo que hay en
+     * disco y la versión actual del generador, conservando su stub y su
+     * estado: un archivo generado cuyo hash es de antes de pasarlo por Pint
+     * sigue siendo generado. `$generator` lo anota además; sin él, sólo el
+     * hash.
+     *
+     * @return bool si estaba registrado
+     */
+    public function refresh(string $file, bool $generator = true): bool
+    {
+        // array_merge y no `+`: la entrada conserva el orden de sus claves
+        // (stub, hash, generator, state). Con `+` el stub pasaba al final, y
+        // en el diff del manifiesto la entrada parecía haber perdido el stub.
+        return $this->updateEntry($file, fn (array $entry): array => array_merge($entry, ['hash' => $this->hash($file)],
+            $generator ? ['generator' => GeneratorVersion::current()] : []));
+    }
+
+    /**
+     * Anota la versión actual del generador en un archivo registrado que no
+     * la dice (los de un manifiesto v1), sin tocar su hash: es lo que se hace
+     * con lo heredado que el diagnóstico encuentra igual que lo que generaría
+     * hoy el contrato fuera de sus huecos. Uno que ya dice su versión no se
+     * toca.
+     *
+     * @return bool si se anotó
+     */
+    public function stamp(string $file): bool
+    {
+        $stamped = false;
+
+        $this->updateEntry($file, function (array $entry) use (&$stamped): array {
+            if (isset($entry['generator'])) {
+                return $entry;
+            }
+
+            $stamped = true;
+
+            return $entry + ['generator' => GeneratorVersion::current()];
+        });
+
+        return $stamped;
+    }
+
+    /**
+     * Pasa el registro de un archivo a otro dueño (un modelo, o el paquete
+     * con ''), con su stub, su hash, su versión y su estado. Es lo que
+     * corresponde al módulo de la interfaz que registró un modelo que se
+     * retiró del contrato y que hoy genera otro.
+     *
+     * @return bool si estaba registrado
+     */
+    public function move(string $file, string $model, string $namespace): bool
+    {
+        $manifest = $this->read();
+        $relative = $this->relative($file);
+        $entry = $manifest['package']['files'][$relative] ?? null;
+        unset($manifest['package']['files'][$relative]);
+
+        foreach ($manifest['models'] as $owner => $bucket) {
+            if (isset($bucket['files'][$relative])) {
+                $entry ??= $bucket['files'][$relative];
+                unset($manifest['models'][$owner]['files'][$relative]);
+            }
+        }
+
+        if ($entry === null) {
+            return false;
+        }
+
+        $this->put($manifest, $model, $namespace, $file, $entry);
+        $this->write($manifest);
+
+        return true;
+    }
+
+    /**
+     * El namespace con el que se registran los archivos de un modelo (o del
+     * paquete, con ''), o null si el manifiesto no lo conoce.
+     */
+    public function namespaceOf(string $model): ?string
+    {
+        $manifest = $this->read();
+        $namespace = $model === '' ? $manifest['package']['namespace'] : ($manifest['models'][$model]['namespace'] ?? null);
+
+        return is_string($namespace) ? $namespace : null;
+    }
+
+    /**
+     * @param  callable(FileEntry): FileEntry  $change
+     */
+    private function updateEntry(string $file, callable $change): bool
+    {
+        $manifest = $this->read();
+        $relative = $this->relative($file);
+        $found = false;
+
+        if (isset($manifest['package']['files'][$relative])) {
+            $manifest['package']['files'][$relative] = $change($manifest['package']['files'][$relative]);
+            $found = true;
+        }
+
+        foreach ($manifest['models'] as $model => $entry) {
+            if (isset($entry['files'][$relative])) {
+                $manifest['models'][$model]['files'][$relative] = $change($entry['files'][$relative]);
+                $found = true;
+            }
+        }
+
+        if ($found) {
+            $this->write($manifest);
+        }
+
+        return $found;
+    }
+
+    /**
+     * Mueve el registro de un archivo a otra ruta, conservando su stub, su
+     * hash, su versión y su estado: una migración renombrada a mano sigue
+     * siendo la misma migración. Si el contenido cambió además de la ruta,
+     * el hash viejo hace que `verify` la siga viendo editada, que es cierto.
+     *
+     * @return bool si había algo que mover
+     */
+    public function relink(string $from, string $to): bool
+    {
+        $manifest = $this->read();
+        $from = $this->relative($from);
+        $to = $this->relative($to);
+        $moved = false;
+
+        if (isset($manifest['package']['files'][$from])) {
+            $manifest['package']['files'][$to] = $manifest['package']['files'][$from];
+            unset($manifest['package']['files'][$from]);
+            $moved = true;
+        }
+
+        foreach ($manifest['models'] as $model => $entry) {
+            if (isset($entry['files'][$from])) {
+                $manifest['models'][$model]['files'][$to] = $entry['files'][$from];
+                unset($manifest['models'][$model]['files'][$from]);
+                $moved = true;
+            }
+        }
+
+        if ($moved) {
+            $this->write($manifest);
+        }
+
+        return $moved;
+    }
+
+    /**
+     * Olvida un archivo: deja de estar gestionado. Es lo que corresponde a
+     * uno que se borró a propósito (de un modelo retirado del contrato);
+     * el archivo en disco, si existe, no se toca.
+     *
+     * @return bool si estaba registrado
+     */
+    public function drop(string $file): bool
+    {
+        $manifest = $this->read();
+        $relative = $this->relative($file);
+        $dropped = false;
+
+        if (isset($manifest['package']['files'][$relative])) {
+            unset($manifest['package']['files'][$relative]);
+            $dropped = true;
+        }
+
+        foreach ($manifest['models'] as $model => $entry) {
+            if (isset($entry['files'][$relative])) {
+                unset($manifest['models'][$model]['files'][$relative]);
+                $dropped = true;
+            }
+        }
+
+        if ($dropped) {
+            $this->write($manifest);
+        }
+
+        return $dropped;
+    }
+
+    /**
+     * El registro completo de un archivo, con su versión y su estado ya
+     * resueltos (los de un manifiesto v1 no los traen), o null si el
+     * manifiesto no lo conoce.
+     *
+     * @return array{model: string, stub: string, hash: string, generator: string|null, state: string}|null
+     */
+    public function entryOf(string $file): ?array
+    {
+        $relative = $this->relative($file);
+        $manifest = $this->read();
+
+        $candidates = ['' => $manifest['package']['files'][$relative] ?? null];
+
+        foreach ($manifest['models'] as $model => $entry) {
+            $candidates[(string) $model] = $entry['files'][$relative] ?? null;
+        }
+
+        foreach ($candidates as $model => $entry) {
+            if ($entry !== null) {
+                return [
+                    'model' => (string) $model,
+                    'stub' => $entry['stub'],
+                    'hash' => $entry['hash'],
+                    'generator' => $entry['generator'] ?? null,
+                    'state' => $entry['state'] ?? self::GENERATED,
+                ];
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * La versión del formato tal como está en disco (o en la copia de la
+     * corrida): 1 en un manifiesto anterior a 9.4.0.
+     */
+    public function formatVersion(): int
+    {
+        return $this->read()['version'];
+    }
+
+    /**
+     * @param  ManifestData  $manifest
+     * @param  FileEntry  $entry
+     */
+    private function put(array &$manifest, string $model, string $namespace, string $file, array $entry): void
+    {
+        if ($model === '') {
             $manifest['package']['namespace'] = $namespace;
             $manifest['package']['files'][$this->relative($file)] = $entry;
         } else {
             $manifest['models'][$model]['namespace'] = $namespace;
             $manifest['models'][$model]['files'][$this->relative($file)] = $entry;
         }
-
-        $this->write($manifest);
     }
 
     /**
@@ -296,6 +672,91 @@ final class Manifest
             'endpoints' => $declared['endpoints'] ?? [],
             'controller' => (bool) ($declared['controller'] ?? false),
         ];
+    }
+
+    /**
+     * Anota con qué contrato se generó cada pieza (ContractFingerprint): la
+     * huella de cada modelo y de cada `controllers[]` en su entrada, y las de
+     * los pivotes, que no tienen entrada propia, en `pivots`.
+     *
+     * Sólo se anota la de un modelo que el manifiesto ya conoce: una entrada
+     * con la huella y sin archivos sería una entidad a la que le falta todo.
+     * Los pivotes se sustituyen enteros: son los del laraimport de la corrida.
+     *
+     * @param  array<string, string>  $models  nombre => huella
+     * @param  array<string, string>|null  $pivots  nombre => huella; null, no se tocan
+     */
+    public function stampContracts(array $models, ?array $pivots = null): void
+    {
+        $manifest = $this->read();
+
+        foreach ($models as $model => $fingerprint) {
+            if (isset($manifest['models'][$model])) {
+                $manifest['models'][$model]['contract'] = $fingerprint;
+            }
+        }
+
+        if ($pivots !== null) {
+            if ($pivots === []) {
+                unset($manifest['pivots']);
+            } else {
+                $manifest['pivots'] = $pivots;
+            }
+        }
+
+        $this->write($manifest);
+    }
+
+    /**
+     * La huella del contrato con el que se generó un modelo, o null si no la
+     * dice: lo generó una versión anterior a 9.4.0, o un comando suelto
+     * (`larapack:full-model`) sin laraimport.
+     */
+    public function contractOf(string $model): ?string
+    {
+        $contract = $this->read()['models'][$model]['contract'] ?? null;
+
+        return is_string($contract) ? $contract : null;
+    }
+
+    /**
+     * @return array<string, string> pivote => huella
+     */
+    public function pivotContracts(): array
+    {
+        return $this->read()['pivots'] ?? [];
+    }
+
+    /**
+     * Si alguna pieza dice con qué contrato se generó: desde entonces el
+     * manifiesto se puede comparar con el laraimport.
+     */
+    public function tracksContract(): bool
+    {
+        $manifest = $this->read();
+
+        foreach ($manifest['models'] as $entry) {
+            if (isset($entry['contract'])) {
+                return true;
+            }
+        }
+
+        return ($manifest['pivots'] ?? []) !== [];
+    }
+
+    /**
+     * Sustituye el contenido entero por uno ya compuesto: el que
+     * `larapack:reconcile` recompone de las dos ramas de una fusión
+     * (ManifestMerge). Se escribe como siempre: ordenado y de forma atómica.
+     *
+     * @param  array<string, mixed>  $manifest
+     */
+    public function replace(array $manifest): void
+    {
+        /** @var ManifestData $manifest */
+        $manifest = $manifest + self::EMPTY;
+
+        $this->write($manifest);
     }
 
     public function forget(string $model): void
@@ -467,7 +928,16 @@ final class Manifest
         // parecer modificado por haber pasado por git en Windows. Uno que no
         // se puede leer falla: con '' su hash no coincidía y pasaba por editado
         // a mano.
-        return hash('sha256', str_replace("\r\n", "\n", Files::read($file)));
+        return self::hashOf(Files::read($file));
+    }
+
+    /**
+     * El hash de un contenido que no está en disco: el de un archivo en otra
+     * rama, que `larapack:reconcile` lee de git.
+     */
+    public static function hashOf(string $content): string
+    {
+        return hash('sha256', str_replace("\r\n", "\n", $content));
     }
 
     private function relative(string $file): string
@@ -476,6 +946,17 @@ final class Manifest
         $file = str_replace('\\', '/', $file);
 
         return str_starts_with($file, $root.'/') ? substr($file, strlen($root) + 1) : $file;
+    }
+
+    /**
+     * El nombre con el que se guarda un stub: una ruta absoluta se recorta
+     * a lo que cuelga de Stubs/ (stubName); un nombre ya relativo
+     * (`Model/ModelTemplate.txt`, el que da el diagnóstico de `realign`) se
+     * guarda tal cual.
+     */
+    private function stubKey(string $stub): string
+    {
+        return preg_match('#^(/|[A-Za-z]:[/\\\\])#', $stub) === 1 ? $this->stubName($stub) : str_replace('\\', '/', $stub);
     }
 
     /**
@@ -526,9 +1007,22 @@ final class Manifest
     {
         $directory = dirname($path);
 
+        // `.larapack` enlazado a otro directorio: el manifiesto se escribiría
+        // (y su temporal) fuera del proyecto. El manifiesto mismo como enlace
+        // no importa: rename() sustituye el enlace, no escribe a través de él.
+        Files::assertInside(dirname($directory), $directory);
+
         if (! is_dir($directory) && ! @mkdir($directory, 0777, true) && ! is_dir($directory)) {
             throw MakerException::directoryNotCreated($directory);
         }
+
+        // Uno escrito por una versión posterior del formato no se reescribe:
+        // lo que esta versión no conoce se perdería en silencio.
+        if ($manifest['version'] > self::VERSION) {
+            throw MakerException::manifestTooNew($path, $manifest['version'], self::VERSION);
+        }
+
+        $manifest['version'] = self::VERSION;
 
         ksort($manifest['models']);
         ksort($manifest['package']['files']);
@@ -537,9 +1031,21 @@ final class Manifest
             if (isset($model['files'])) {
                 ksort($model['files']);
             }
+
+            // Las claves de una entrada, siempre en el mismo orden: el de
+            // inserción depende de la historia (qué se anotó antes), y dos
+            // ramas que llegan a lo mismo por caminos distintos tienen que
+            // escribir el mismo archivo byte a byte.
+            $model = self::ordered($model, self::MODEL_KEYS);
         }
 
         unset($model);
+
+        if (isset($manifest['pivots'])) {
+            ksort($manifest['pivots']);
+        }
+
+        $manifest = self::ordered($manifest, self::TOP_KEYS);
 
         $json = json_encode($manifest, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR)."\n";
         $temporary = $path.'.'.getmypid().'.'.bin2hex(random_bytes(4)).'.tmp';
@@ -567,6 +1073,38 @@ final class Manifest
         }
 
         throw MakerException::manifestNotWritten($path, self::lastError(), $temporary);
+    }
+
+    /**
+     * El orden en que se escriben las claves; las que esta versión no conoce
+     * van detrás, por nombre.
+     */
+    private const TOP_KEYS = ['version', 'package', 'pivots', 'models'];
+
+    private const MODEL_KEYS = ['namespace', 'contract', 'declaration', 'files'];
+
+    /**
+     * @template T of array<string, mixed>
+     *
+     * @param  T  $entry
+     * @param  list<string>  $order
+     * @return T
+     */
+    private static function ordered(array $entry, array $order): array
+    {
+        $sorted = [];
+
+        foreach ($order as $key) {
+            if (array_key_exists($key, $entry)) {
+                $sorted[$key] = $entry[$key];
+            }
+        }
+
+        $rest = array_diff_key($entry, $sorted);
+        ksort($rest);
+
+        /** @var T */
+        return $sorted + $rest;
     }
 
     private static function lastError(): string

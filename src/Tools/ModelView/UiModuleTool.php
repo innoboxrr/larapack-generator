@@ -3,6 +3,7 @@
 namespace Innoboxrr\LarapackGenerator\Tools\ModelView;
 
 use Innoboxrr\LarapackGenerator\Support\Declaration;
+use Innoboxrr\LarapackGenerator\Support\Files;
 use Innoboxrr\LarapackGenerator\Support\Import\Endpoints;
 use Innoboxrr\LarapackGenerator\Support\Literal;
 use Innoboxrr\LarapackGenerator\Support\Translations;
@@ -366,7 +367,7 @@ abstract class UiModuleTool extends Tool implements ModelArtifact
             $content
         );
 
-        file_put_contents($file, $content);
+        Files::write($file, $content);
     }
 
     // ENDPOINTS DECLARADOS
@@ -671,7 +672,7 @@ abstract class UiModuleTool extends Tool implements ModelArtifact
             $content = str_replace($marker, $replacement, $content);
         }
 
-        file_put_contents($file, $content);
+        Files::write($file, $content);
     }
 
     /**

@@ -3,7 +3,9 @@
 namespace Innoboxrr\LarapackGenerator\Tools\ModelTraits;
 
 use Innoboxrr\LarapackGenerator\Exceptions\MakerException;
+use Innoboxrr\LarapackGenerator\Support\Files;
 use Innoboxrr\LarapackGenerator\Support\Generation;
+use Innoboxrr\LarapackGenerator\Support\Import\Relations;
 use Innoboxrr\LarapackGenerator\Tools\ModelArtifact;
 use Innoboxrr\LarapackGenerator\Tools\Tool;
 
@@ -111,7 +113,7 @@ class ModelTraitsTool extends Tool implements ModelArtifact
             if ($this->simulated($templateFile, $assignmentTraitFile)) {
                 return $this;
             }
-            if (copy($templateFile, $assignmentTraitFile)) {
+            if (Files::copy($templateFile, $assignmentTraitFile)) {
                 $this->replaceData($assignmentTraitFile);
             } else {
                 throw MakerException::copyFailed($templateFile, $assignmentTraitFile);
@@ -129,7 +131,7 @@ class ModelTraitsTool extends Tool implements ModelArtifact
             if ($this->simulated($templateFile, $mutatorsTraitFile)) {
                 return $this;
             }
-            if (copy($templateFile, $mutatorsTraitFile)) {
+            if (Files::copy($templateFile, $mutatorsTraitFile)) {
                 $this->replaceData($mutatorsTraitFile);
             } else {
                 throw MakerException::copyFailed($templateFile, $mutatorsTraitFile);
@@ -147,7 +149,7 @@ class ModelTraitsTool extends Tool implements ModelArtifact
             if ($this->simulated($templateFile, $operationsTraitFile)) {
                 return $this;
             }
-            if (copy($templateFile, $operationsTraitFile)) {
+            if (Files::copy($templateFile, $operationsTraitFile)) {
                 $this->applyBlocks($operationsTraitFile);
                 $this->replaceData($operationsTraitFile);
                 $this->applyEndpoints($operationsTraitFile);
@@ -213,7 +215,7 @@ class ModelTraitsTool extends Tool implements ModelArtifact
             if ($this->simulated($templateFile, $relationsTraitFile)) {
                 return $this;
             }
-            if (copy($templateFile, $relationsTraitFile)) {
+            if (Files::copy($templateFile, $relationsTraitFile)) {
                 // Los traits se copian sin pasar por generate(), así que los
                 // bloques de metas se resuelven aquí.
                 $this->applyBlocks($relationsTraitFile);
@@ -242,8 +244,7 @@ class ModelTraitsTool extends Tool implements ModelArtifact
 
         // Iterar a través de las relaciones
         foreach ($relations as $relation) {
-            $relationType = $relation['type'];   // belongsTo, hasMany, etc.
-            $relatedModel = $relation['related']; // Modelo relacionado (por ejemplo, User)
+            $relatedModel = Relations::hasRelated($relation) ? (string) $relation['related'] : null; // Modelo relacionado (por ejemplo, User); null en un morphTo
             $relationName = $relation['name'];   // Nombre de la relación (por ejemplo, user)
             // El documento resuelve el namespace: null significa que el modelo
             // relacionado se declara en este mismo laraimport, es decir que vive
@@ -257,8 +258,13 @@ class ModelTraitsTool extends Tool implements ModelArtifact
             // Generar el código de la relación
             $relationsCode .= "    public function {$relationName}()\n";
             $relationsCode .= "    {\n";
-            $relationsCode .= "        return \$this->{$relationType}({$relatedModel}::class);\n";
+            $relationsCode .= '        return '.Relations::call($relation).";\n";
             $relationsCode .= "    }\n\n";
+
+            // Un morphTo no nombra ningún modelo: no hay nada que importar.
+            if ($relatedModel === null) {
+                continue;
+            }
 
             // Agregar el import del modelo relacionado, si aún no está en la lista
             $importStatement = "use {$relatedNamespace}\\{$relatedModel};";
@@ -285,7 +291,7 @@ class ModelTraitsTool extends Tool implements ModelArtifact
         $fileContent = str_replace('//EDIT//', rtrim($relationsCode, "\n"), $fileContent);
 
         // Guardar el archivo modificado
-        file_put_contents($traitFile, $fileContent);
+        Files::write($traitFile, $fileContent);
     }
 
     private function createStorageTrait(): static
@@ -296,7 +302,7 @@ class ModelTraitsTool extends Tool implements ModelArtifact
             if ($this->simulated($templateFile, $storageTraitFile)) {
                 return $this;
             }
-            if (copy($templateFile, $storageTraitFile)) {
+            if (Files::copy($templateFile, $storageTraitFile)) {
                 $this->applyBlocks($storageTraitFile);
                 $this->replaceData($storageTraitFile);
             } else {

@@ -23,6 +23,17 @@ class CreateEvent
         public mixed $response,
         public ?string $locale = null,
     ) {
+        // Lo que el modelo oculta —una columna `secret`, la contraseña— no
+        // viaja en el evento, ni su `_confirmation`: llegaba en claro a
+        // cualquier listener, y uno en cola lo dejaba escrito en `jobs` y en
+        // `failed_jobs`. Quien lo necesite lo lee del modelo.
+        $hidden = $this->camelCaseModelName->getHidden();
+
+        $this->data = array_diff_key($this->data, array_flip([
+            ...$hidden,
+            ...array_map(fn (string $name): string => $name . '_confirmation', $hidden),
+        ]));
+
         // El idioma de quien lanza el evento, para lo que se haga despues con
         // el. Antes valia 'en' y el constructor llamaba a App::setLocale: cada
         // alta, edicion o borrado pasaba a ingles el resto de la peticion.

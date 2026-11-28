@@ -2,6 +2,7 @@
 
 namespace Innoboxrr\LarapackGenerator\Tests\Feature;
 
+use Innoboxrr\LarapackGenerator\Support\GeneratorVersion;
 use Innoboxrr\LarapackGenerator\Support\Manifest;
 use Innoboxrr\LarapackGenerator\Tests\Support\FakeProject;
 use Innoboxrr\LarapackGenerator\Tests\TestCase;
@@ -31,7 +32,7 @@ final class IdempotencyTest extends TestCase
 
         $manifest = json_decode($this->project->read('.larapack/manifest.json'), true);
 
-        $this->assertSame(1, $manifest['version']);
+        $this->assertSame(2, $manifest['version']);
         $this->assertArrayHasKey('Product', $manifest['models']);
         $this->assertSame('TestVendor\\TestPkg\\', $manifest['models']['Product']['namespace']);
 
@@ -39,6 +40,9 @@ final class IdempotencyTest extends TestCase
 
         $this->assertSame('Model/ModelTemplate.txt', $file['stub']);
         $this->assertMatchesRegularExpression('/^[a-f0-9]{64}$/', $file['hash']);
+        // Desde la versión 2: quién lo escribió. Sin `state`, es generado.
+        $this->assertSame(GeneratorVersion::current(), $file['generator']);
+        $this->assertArrayNotHasKey('state', $file);
     }
 
     /**

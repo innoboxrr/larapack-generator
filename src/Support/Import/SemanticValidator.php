@@ -43,6 +43,9 @@ final class SemanticValidator
             ...self::duplicateModels($models),
             ...self::duplicateProps($models),
             ...self::duplicatePivots($pivots),
+            ...self::tables($models, $pivots),
+            ...self::columnShapes($models),
+            ...self::indexes($models),
             ...self::foreignKeys($models, $pivots),
             ...self::relations($models),
             ...self::ruleFields($models),
@@ -51,7 +54,7 @@ final class SemanticValidator
             ...self::secrets($models, $raw['models'] ?? []),
             ...self::metas($models, $raw['models'] ?? []),
             ...self::display($models),
-            ...self::authenticatable($models),
+            ...self::authenticatable($models, $raw['models'] ?? []),
             ...self::prefixedRules($document),
             ...self::referentialActions($models, $pivots),
             ...self::endpoints($models, $document['controllers'] ?? []),
@@ -115,6 +118,18 @@ final class SemanticValidator
         $names = [];
         $routeNames = [];
         $routes = [];
+
+        // El nombre final de cada ruta —el declarado o, sin él, el que se
+        // deriva— se junta antes de mirar ninguno: dos rutas con el mismo
+        // nombre chocan vaya la declarada antes o después. Hasta 9.4.0 un
+        // `route_name` seguido de un endpoint que derivaba ese nombre pasaba,
+        // y route() resolvía a la última.
+        $finalRoutes = [];
+
+        foreach ($owner['endpoints'] ?? [] as $position => $endpoint) {
+            $finalRoutes[Endpoints::declaredRouteName($endpoint)][] = $position;
+        }
+
         $abilities = [];
         $idParameter = self::snake($owner['name']).'_id';
 
@@ -140,6 +155,24 @@ final class SemanticValidator
 
             $routeNames[$routeName] ??= $name;
 
+            // Un `route_name` declarado (para conservar el nombre de una ruta
+            // escrita a mano) tampoco puede repetirse —ni con otro declarado
+            // ni con uno derivado—, ni ser el de una acción CRUD que siga
+            // existiendo: route() devolvería la otra. Dos derivados iguales ya
+            // se dicen arriba.
+            $final = Endpoints::declaredRouteName($endpoint);
+            $first = $finalRoutes[$final][0];
+            $firstEndpoint = $owner['endpoints'][$first];
+
+            if ($first !== $position && (isset($endpoint['route_name']) || isset($firstEndpoint['route_name']))) {
+                $field = isset($endpoint['route_name']) ? 'route_name' : 'name';
+                $findings[] = self::error("{$at}/{$field}", "'{$name}' y '{$firstEndpoint['name']}' se llaman igual, '{$final}': el front no podría llamar a uno de los dos.");
+            }
+
+            if (isset($endpoint['route_name']) && $actions !== null && in_array($final, array_map(fn (string $action): string => Actions::routeName($action), $actions), true)) {
+                $findings[] = self::error("{$at}/route_name", "'{$final}' es el nombre de ruta de una acción CRUD de {$owner['name']}: las dos rutas se llamarían igual. Quita la acción con `routes` o elige otro nombre.");
+            }
+
             // Con un nombre inválido no se sigue mirando la habilidad: por
             // omisión es el propio nombre, y repetiría el mismo error.
             $validName = true;
@@ -160,7 +193,11 @@ final class SemanticValidator
 
             $routes[$route] = true;
 
-            if (in_array($uri, Endpoints::crudUris(), true)) {
+            // Sólo tapa una ruta CRUD que exista: un controllers[] no tiene
+            // ninguna, y un modelo sólo las de sus acciones. Hasta 9.4.0 se
+            // rechazaba siempre, y una ruta escrita a mano `.../create` de un
+            // controlador sin modelo no se podía adoptar conservando su URI.
+            if ($actions !== null && in_array($uri, array_map(fn (string $action): string => Endpoints::kebab($action), $actions), true)) {
                 $findings[] = self::error("{$at}/uri", "La URI '{$uri}' es la de una acción CRUD: la ruta CRUD se registra antes y taparía este endpoint.");
             }
 
@@ -242,7 +279,7 @@ final class SemanticValidator
         foreach ($endpoints as $position => $endpoint) {
             $uri = Endpoints::uri($endpoint);
 
-            if (! preg_match('/^\{([a-z][a-z0-9_]*)\??\}/', $uri, $parameter) || $parameter[1] === $numeric($endpoint)) {
+            if (! preg_match('/^\{([A-Za-z_][A-Za-z0-9_]*)\??\}/', $uri, $parameter) || $parameter[1] === $numeric($endpoint)) {
                 continue;
             }
 
@@ -257,7 +294,7 @@ final class SemanticValidator
                 // Una petición de verdad al de después: sus parámetros con un
                 // valor que su propia ruta aceptaría.
                 $request = (string) preg_replace_callback(
-                    '/\{([a-z][a-z0-9_]*)\??\}/',
+                    '/\{([A-Za-z_][A-Za-z0-9_]*)\??\}/',
                     fn (array $match): string => $match[1] === $numeric($later) ? '1' : 'x',
                     Endpoints::uri($later)
                 );
@@ -472,10 +509,13 @@ final class SemanticValidator
      * Un usuario que inicia sesión necesita con qué entrar: su correo y su
      * contraseña. Sin ellos el modelo se genera, pero nadie puede usarlo.
      *
+     * Y se avisa de lo que, de un usuario, no debería llegar de un formulario.
+     *
      * @param  array<int, array<string, mixed>>  $models
+     * @param  array<int|string, mixed>  $raw
      * @return list<Finding>
      */
-    private static function authenticatable(array $models): array
+    private static function authenticatable(array $models, array $raw): array
     {
         $findings = [];
 
@@ -492,6 +532,35 @@ final class SemanticValidator
                         'level' => self::ERROR,
                         'path' => "/models/{$index}/props",
                         'message' => "{$model['name']} es authenticatable y no declara `{$required}`: sin él nadie puede iniciar sesión.",
+                    ];
+                }
+            }
+
+            // Lo que decide quién ha verificado su correo o quién sigue con la
+            // sesión abierta no es un dato del formulario. `creatable` y
+            // `updatable` valen true por omisión, así que se avisa mientras el
+            // laraimport no diga, con todas las letras, qué quiere.
+            foreach ($model['props'] ?? [] as $position => $prop) {
+                if (! in_array($prop['name'], ['email_verified_at', 'remember_token'], true)) {
+                    continue;
+                }
+
+                $written = $raw[$index]['props'][$position] ?? [];
+
+                if (is_array($written) && ($written['fillable'] ?? null) === false) {
+                    continue;
+                }
+
+                $open = array_values(array_filter(
+                    ['creatable', 'updatable'],
+                    fn (string $key): bool => ! is_array($written) || ! array_key_exists($key, $written)
+                ));
+
+                if ($open !== []) {
+                    $findings[] = [
+                        'level' => self::WARNING,
+                        'path' => "/models/{$index}/props/{$position}",
+                        'message' => "'{$prop['name']}' de {$model['name']} se puede escribir desde la API (".implode(' y ', $open).' valen true por omisión): quien pueda editar un usuario lo cambia. Declara `"fillable": false`, o `creatable` y `updatable` con lo que decidas.',
                     ];
                 }
             }
@@ -926,8 +995,11 @@ final class SemanticValidator
     {
         $tables = [];
 
+        $derived = [];
+
         foreach ($models as $model) {
-            $tables[self::tableOf($model['name'])] = $model['name'];
+            $tables[self::tableFor($model)] = $model['name'];
+            $derived[self::tableOf($model['name'])] = $model;
         }
 
         $findings = [];
@@ -942,6 +1014,18 @@ final class SemanticValidator
 
                 if (! isset($tables[$prop['constraint']])) {
                     // Apuntar fuera del archivo es normal: users, por ejemplo.
+                    // Pero apuntar a la tabla DEDUCIDA de un modelo que declara
+                    // otra es casi seguro una errata: esa tabla no existe.
+                    $other = $derived[$prop['constraint']] ?? null;
+
+                    if ($other !== null && isset($other['table'])) {
+                        $findings[] = [
+                            'level' => self::WARNING,
+                            'path' => "/models/{$index}/props/{$position}/constraint",
+                            'message' => "'{$prop['constraint']}' sería la tabla de {$other['name']}, pero {$other['name']} declara table '{$other['table']}': escribe ésa en constraint.",
+                        ];
+                    }
+
                     continue;
                 }
 
@@ -1062,7 +1146,7 @@ final class SemanticValidator
 
         foreach ($models as $index => $model) {
             foreach ($model['load_relations'] as $position => $relation) {
-                if (in_array($relation['related'], $declared, true)) {
+                if (! Relations::hasRelated($relation) || in_array($relation['related'], $declared, true)) {
                     continue;
                 }
 
@@ -1167,6 +1251,163 @@ final class SemanticValidator
     private static function tableOf(string $model): string
     {
         return TablePrefix::tableOf($model);
+    }
+
+    /**
+     * La tabla de un modelo del documento: la que declara `table`, o la que
+     * se deduce de su nombre (sin prefijo, como se escribe en `constraint`).
+     *
+     * @param  array<string, mixed>  $model
+     */
+    public static function tableFor(array $model): string
+    {
+        return isset($model['table']) && is_string($model['table']) && $model['table'] !== ''
+            ? $model['table']
+            : self::tableOf((string) $model['name']);
+    }
+
+    /**
+     * Los tipos en los que tiene sentido cada medida de columna.
+     */
+    public const LENGTH_TYPES = ['string', 'char'];
+
+    public const PRECISION_TYPES = ['decimal'];
+
+    public const USE_CURRENT_TYPES = ['timestamp', 'timestampTz', 'dateTime', 'dateTimeTz'];
+
+    /**
+     * Dos modelos con la misma tabla —declarada o deducida— crearían dos veces
+     * la misma tabla; una tabla declarada que coincide con un pivote, igual.
+     *
+     * @param  array<int, array<string, mixed>>  $models
+     * @param  array<int, array<string, mixed>>  $pivots
+     * @return list<Finding>
+     */
+    private static function tables(array $models, array $pivots): array
+    {
+        $findings = [];
+        $seen = [];
+
+        foreach ($pivots as $pivot) {
+            $seen[(string) $pivot['name']] = 'el pivote '.$pivot['name'];
+        }
+
+        foreach ($models as $index => $model) {
+            $table = self::tableFor($model);
+
+            if (isset($seen[$table])) {
+                $findings[] = self::error("/models/{$index}/table", "{$model['name']} usa la tabla '{$table}', que ya es de {$seen[$table]}: se crearía dos veces.");
+            }
+
+            $seen[$table] = $model['name'];
+        }
+
+        return $findings;
+    }
+
+    /**
+     * `length`, `precision`, `scale` y `use_current` sólo significan algo en
+     * ciertos tipos. En otro, el generador escribiría una migración que Laravel
+     * no acepta o que ignora el dato en silencio: se dice antes.
+     *
+     * @param  array<int, array<string, mixed>>  $models
+     * @return list<Finding>
+     */
+    private static function columnShapes(array $models): array
+    {
+        $findings = [];
+
+        foreach ($models as $index => $model) {
+            foreach ($model['props'] as $position => $prop) {
+                $at = "/models/{$index}/props/{$position}";
+                $type = (string) $prop['type'];
+
+                if (isset($prop['length']) && ! in_array($type, self::LENGTH_TYPES, true)) {
+                    $findings[] = self::error("{$at}/length", "'{$prop['name']}' es {$type}: length sólo vale en ".implode(' y ', self::LENGTH_TYPES).'.');
+                }
+
+                foreach (['precision', 'scale'] as $key) {
+                    if (isset($prop[$key]) && ! in_array($type, self::PRECISION_TYPES, true)) {
+                        $findings[] = self::error("{$at}/{$key}", "'{$prop['name']}' es {$type}: {$key} sólo vale en decimal.");
+                    }
+                }
+
+                if (isset($prop['scale']) && ! isset($prop['precision'])) {
+                    $findings[] = self::error("{$at}/scale", "'{$prop['name']}' declara scale sin precision: Laravel los recibe en ese orden, decimal('{$prop['name']}', precision, scale).");
+                }
+
+                if (isset($prop['scale'], $prop['precision']) && $prop['scale'] > $prop['precision']) {
+                    $findings[] = self::error("{$at}/scale", "'{$prop['name']}': scale ({$prop['scale']}) no puede pasar de precision ({$prop['precision']}); la base rechazaría la columna.");
+                }
+
+                if (! empty($prop['use_current'])) {
+                    if (! in_array($type, self::USE_CURRENT_TYPES, true)) {
+                        $findings[] = self::error("{$at}/use_current", "'{$prop['name']}' es {$type}: use_current sólo vale en ".implode(', ', self::USE_CURRENT_TYPES).'.');
+                    }
+
+                    if (($prop['default'] ?? null) !== null) {
+                        $findings[] = self::error("{$at}/use_current", "'{$prop['name']}' declara use_current y default: son dos valores por omisión para la misma columna. Quita uno.");
+                    }
+                }
+            }
+        }
+
+        return $findings;
+    }
+
+    /**
+     * Un índice sólo puede nombrar columnas que existan, y dos índices con las
+     * mismas columnas (o el mismo nombre) chocarían en la base.
+     *
+     * @param  array<int, array<string, mixed>>  $models
+     * @return list<Finding>
+     */
+    private static function indexes(array $models): array
+    {
+        $findings = [];
+
+        foreach ($models as $index => $model) {
+            $columns = [...array_column($model['props'], 'name'), 'id', 'created_at', 'updated_at', 'deleted_at'];
+
+            foreach ($model['props'] as $prop) {
+                if (in_array($prop['type'], ['morphs', 'nullableMorphs'], true)) {
+                    $columns[] = $prop['name'].'_type';
+                    $columns[] = $prop['name'].'_id';
+                }
+            }
+
+            $byColumns = [];
+            $byName = [];
+
+            foreach ((array) ($model['indexes'] ?? []) as $position => $declared) {
+                $at = "/models/{$index}/indexes/{$position}";
+                $names = array_values(array_map('strval', (array) ($declared['columns'] ?? [])));
+
+                foreach ($names as $column) {
+                    if (! in_array($column, $columns, true)) {
+                        $findings[] = self::error("{$at}/columns", "El índice nombra '{$column}', que no es columna de {$model['name']}.");
+                    }
+                }
+
+                $key = (! empty($declared['unique']) ? 'unique:' : 'index:').implode(',', $names);
+
+                if (isset($byColumns[$key])) {
+                    $findings[] = self::error($at, "{$model['name']} declara dos veces el mismo índice sobre ".implode(', ', $names).'.');
+                }
+
+                $byColumns[$key] = true;
+
+                if (isset($declared['name'])) {
+                    if (isset($byName[$declared['name']])) {
+                        $findings[] = self::error("{$at}/name", "{$model['name']} declara dos índices llamados '{$declared['name']}'.");
+                    }
+
+                    $byName[$declared['name']] = true;
+                }
+            }
+        }
+
+        return $findings;
     }
 
     private static function snake(string $value): string

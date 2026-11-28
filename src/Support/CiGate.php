@@ -63,14 +63,10 @@ final class CiGate
      */
     public static function workflow(string $root, ?string $branch, array $runsOn = []): string
     {
-        $application = self::isApplication($root);
-        [$php, $why] = self::phpVersion($root);
-        $locked = is_file(self::join($root, 'composer.lock'));
-        $extensions = self::extensions($root);
         $branches = $branch === null ? '[main, master]' : '['.self::yamlScalar($branch).']';
-        $binary = $application ? 'php artisan' : 'php vendor/bin/builder';
+        $binary = self::binary($root);
 
-        $lines = [
+        return implode("\n", [
             'name: LaraPack',
             '',
             '# Generado por `larapack:ci`. El contrato de LaraPack como puerta de la rama:',
@@ -87,13 +83,67 @@ final class CiGate
             '    verify:',
             '        name: '.self::JOB,
             '        runs-on: '.self::runsOnYaml($runsOn),
-            '        # Sólo lectura: verify no escribe nada, y el último paso sólo lee',
-            '        # las reglas de la rama.',
+            '        # Sólo lectura: verify no escribe nada, y los dos últimos pasos sólo',
+            '        # leen las reglas de la rama y las corridas de aprobación.',
             '        permissions:',
             '            contents: read',
+            '            actions: read',
             '',
             '        steps:',
+            ...self::setupSteps($root, history: true),
+            '            - name: Contrato de LaraPack',
+            "              run: {$binary} larapack:verify --strict --format=json",
+            '',
+            ...self::reconcileStep($binary),
+            '',
+            ...self::styleStep($root),
+            ...self::namedApprovalsStep($binary),
+            '',
+            ...self::protectionStep($binary),
+        ])."\n";
+    }
+
+    /**
+     * El workflow de aprobación sin terminal (NamedApproval), con la misma
+     * preparación que el de la puerta.
+     *
+     * @param  list<string>  $runsOn  las etiquetas del runner (runsOn()); vacío, el alojado
+     */
+    public static function approvalWorkflow(string $root, array $runsOn = []): string
+    {
+        return NamedApproval::workflow(self::binary($root), self::setupSteps($root), self::runsOnYaml($runsOn));
+    }
+
+    /**
+     * Cómo se llama a LaraPack en el proyecto: Artisan en una aplicación, el
+     * binario en un paquete.
+     */
+    private static function binary(string $root): string
+    {
+        return self::isApplication($root) ? 'php artisan' : 'php vendor/bin/builder';
+    }
+
+    /**
+     * Los pasos que dejan el proyecto listo para correr LaraPack: el código,
+     * PHP con las extensiones que declara, `.env` si es una aplicación y las
+     * dependencias.
+     *
+     * @return list<string>
+     */
+    private static function setupSteps(string $root, bool $history = false): array
+    {
+        [$php, $why] = self::phpVersion($root);
+        $locked = is_file(self::join($root, 'composer.lock'));
+        $extensions = self::extensions($root);
+
+        $lines = [
             '            - uses: actions/checkout@v5',
+            ...($history ? [
+                '              with:',
+                '                  # Con historial: larapack:reconcile --check compara las dos ramas',
+                '                  # de la fusión, y sin sus commits no tiene qué comparar.',
+                '                  fetch-depth: 0',
+            ] : []),
             '',
             '            - uses: shivammathur/setup-php@v2',
             '              with:',
@@ -104,7 +154,7 @@ final class CiGate
             '',
         ];
 
-        if ($application && is_file(self::join($root, '.env.example'))) {
+        if (self::isApplication($root) && is_file(self::join($root, '.env.example'))) {
             $lines = [...$lines,
                 '            # Artisan arranca la aplicación; verify no toca la base ni usa APP_KEY.',
                 '            - name: Preparar .env',
@@ -113,15 +163,84 @@ final class CiGate
             ];
         }
 
-        return implode("\n", [...$lines,
+        return [...$lines,
             '            - name: Instalar dependencias',
             '              run: composer '.($locked ? 'install' : 'update').' --prefer-dist --no-interaction --no-progress',
             '',
-            '            - name: Contrato de LaraPack',
-            "              run: {$binary} larapack:verify --strict --format=json",
+        ];
+    }
+
+    /**
+     * El paso que comprueba que la fusión está reconciliada. En un pull
+     * request el job corre sobre el commit de fusión con la rama destino: sus
+     * dos padres son las dos ramas, y `larapack:reconcile --check` ve lo que
+     * `verify` no puede ver mirando sólo el árbol (lo que una rama generó y
+     * una resolución a mano dejó sin registrar). Sin fusión —un push normal,
+     * un squash— no tiene nada que comparar y pasa.
+     *
+     * @return list<string>
+     */
+    private static function reconcileStep(string $binary): array
+    {
+        return [
+            '            # Varias ramas a la vez: que entre las dos de esta fusión no quede nada',
+            '            # por reconciliar (el laraimport, el manifiesto, migraciones repetidas).',
+            '            - name: Fusión reconciliada',
+            '              if: ${{ !cancelled() }}',
+            "              run: {$binary} larapack:reconcile --check",
+        ];
+    }
+
+    /**
+     * El paso de estilo, sólo si el proyecto requiere Pint: lo generado ya
+     * sale formateado, y lo que escribe cada consola a mano tiene que leerse
+     * igual. Un proyecto que no lo requiere no gana un paso que fallaría.
+     *
+     * @return list<string>
+     */
+    private static function styleStep(string $root): array
+    {
+        $composer = self::readJson(self::join($root, 'composer.json')) ?? [];
+        $requires = (is_array($composer['require'] ?? null) ? $composer['require'] : [])
+            + (is_array($composer['require-dev'] ?? null) ? $composer['require-dev'] : []);
+
+        if (! isset($requires['laravel/pint'])) {
+            return [];
+        }
+
+        return [
+            '            # El mismo estilo para lo que escribe cada consola.',
+            '            - name: Estilo (Pint)',
+            '              if: ${{ !cancelled() }}',
+            '              run: vendor/bin/pint --test',
             '',
-            ...self::protectionStep($binary),
-        ])."\n";
+        ];
+    }
+
+    /**
+     * El paso que enseña en el PR cada aprobación sin terminal del candado
+     * (`approved_by`) y comprueba con GitHub que su corrida es la del
+     * workflow de aprobación, lanzada a mano por esa persona.
+     *
+     * Sale como anotación sobre la línea del candado —en el diff del PR,
+     * donde mira quien revisa— y falla el job si alguna no se puede
+     * comprobar: una aprobación con un nombre y una corrida inventados no
+     * entra. Corre también si verify falló (`!cancelled()`).
+     *
+     * @return list<string>
+     */
+    private static function namedApprovalsStep(string $binary): array
+    {
+        return [
+            '            # Cada aprobación sin terminal del candado (approved_by), a la vista en',
+            '            # el diff del PR y comprobada con GitHub: la corrida tiene que ser la del',
+            '            # workflow de aprobación, lanzada a mano por quien dice. Si no, falla.',
+            '            - name: Aprobaciones sin terminal',
+            '              if: ${{ !cancelled() }}',
+            '              env:',
+            '                  GH_TOKEN: ${{ github.token }}',
+            "              run: {$binary} larapack:hand-rolled list --format=github",
+        ];
     }
 
     /**
@@ -185,7 +304,7 @@ final class CiGate
         $labels = [];
 
         foreach ($values as $label) {
-            if (! is_string($label) || preg_match('/^[A-Za-z0-9._-]{1,100}$/', $label) !== 1) {
+            if (! is_string($label) || preg_match('/^[A-Za-z0-9._-]{1,100}\z/', $label) !== 1) {
                 throw new UnexpectedValueException('--runs-on: «'.(is_string($label) ? $label : json_encode($label)).'» no es una etiqueta de runner (letras, dígitos, ., _ y -).');
             }
 
@@ -413,15 +532,40 @@ final class CiGate
 
     /**
      * Lo que tiene que revisar el dueño: el candado de las excepciones, y lo
-     * que sostiene la puerta —este workflow y el propio CODEOWNERS—. Si el
-     * workflow o CODEOWNERS se pudieran cambiar sin su revisión, quitar la
-     * puerta costaría un commit.
+     * que sostiene la puerta —los workflows y CODEOWNERS—. Si se pudieran
+     * cambiar sin su revisión, quitar la puerta costaría un commit.
+     *
+     *  - **Todos los workflows** (`/.github/workflows/`), no sólo el de la
+     *    puerta y el de aprobación (que van además con su línea, por si el
+     *    proyecto le da el directorio a otro dueño). El check que exige la
+     *    rama se llama como el job, y cualquier workflow puede declarar un
+     *    job con ese nombre que no compruebe nada, o correr con permisos de
+     *    escritura. El de aprobación va aunque el proyecto no lo tenga.
+     *  - **Los hooks de git versionados** (`/.githooks/`): un `exit 0` al
+     *    principio del pre-commit lo desactiva para todos los clones, y nada
+     *    local lo impide; que al menos lo vea el dueño en el PR.
+     *  - **Las tres rutas donde GitHub busca CODEOWNERS**, no sólo la que el
+     *    proyecto usa: GitHub lee la primera que existe (`.github/`, la raíz,
+     *    `docs/`), así que en un proyecto con el suyo en la raíz bastaba
+     *    crear un `.github/CODEOWNERS` vacío —que no era de nadie— para
+     *    dejar el candado sin dueño en el siguiente PR.
+     *
+     * El orden importa: en CODEOWNERS gana la última línea que coincide, y el
+     * directorio va antes que sus archivos.
      *
      * @return list<string>
      */
     public static function ownedPaths(string $codeowners): array
     {
-        return ['/'.HandRolledLock::PATH, '/'.self::WORKFLOW, '/'.$codeowners];
+        return array_values(array_unique([
+            '/.github/workflows/',
+            '/'.GitHooks::DIRECTORY.'/',
+            '/'.HandRolledLock::PATH,
+            '/'.self::WORKFLOW,
+            '/'.NamedApproval::WORKFLOW,
+            '/'.$codeowners,
+            ...array_map(fn (string $candidate): string => '/'.$candidate, self::CODEOWNERS),
+        ]));
     }
 
     /**
@@ -528,6 +672,9 @@ final class CiGate
             ['-f', 'required_status_checks[contexts][]='.self::JOB],
             ['-F', 'enforce_admins='.($enforceAdmins ? 'true' : 'false')],
             ['-F', 'required_pull_request_reviews[require_code_owner_reviews]=true'],
+            // Sin esto una revisión vale para lo que se empuje después: se
+            // aprueba el PR y luego se cambia el candado.
+            ['-F', 'required_pull_request_reviews[dismiss_stale_reviews]=true'],
             ['-F', 'required_pull_request_reviews[required_approving_review_count]=1'],
             ['-F', 'restrictions=null'],
         ];

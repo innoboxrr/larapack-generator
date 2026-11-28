@@ -3,7 +3,6 @@
 namespace Innoboxrr\LarapackGenerator\Support\Import;
 
 use Innoboxrr\LarapackGenerator\Exceptions\MakerException;
-use Innoboxrr\LarapackGenerator\Support\TablePrefix;
 
 /**
  * Un laraimport ya validado y normalizado.
@@ -161,6 +160,8 @@ final class ImportDocument
                         $document['models'][$index]['props'][$position]['datatable'] = false;
                     }
                 }
+
+                $document['models'][$index]['indexes'] = self::withUniqueEmail($document['models'][$index]);
             }
 
             if (! empty($model['metas'])) {
@@ -176,7 +177,9 @@ final class ImportDocument
 
         foreach ($document['models'] as $index => $model) {
             foreach ($model['load_relations'] as $position => $relation) {
-                if (! empty($relation['namespace'])) {
+                // Un morphTo sin `related` no nombra un modelo: no hay
+                // namespace que resolver.
+                if (! empty($relation['namespace']) || ! Relations::hasRelated($relation)) {
                     continue;
                 }
 
@@ -189,6 +192,35 @@ final class ImportDocument
         }
 
         return $document;
+    }
+
+    /**
+     * Los índices de un usuario que inicia sesión, con el único del correo.
+     *
+     * Se inicia sesión por el correo, e isAdmin() decide por él quién
+     * administra: sin índice único, quien pudiera escribir el suyo tomaba el
+     * de un administrador. Laravel lo trae en su tabla `users`; la que crea
+     * LaraPack no lo traía. Si el laraimport ya declara ese índice, no se
+     * repite, y en una tabla que ya lo tiene la migración no lo añade.
+     *
+     * @param  array<string, mixed>  $model
+     * @return list<array<string, mixed>>
+     */
+    private static function withUniqueEmail(array $model): array
+    {
+        $indexes = array_values((array) ($model['indexes'] ?? []));
+
+        if (! in_array('email', array_column($model['props'] ?? [], 'name'), true)) {
+            return $indexes;
+        }
+
+        foreach ($indexes as $index) {
+            if (! empty($index['unique']) && array_values((array) ($index['columns'] ?? [])) === ['email']) {
+                return $indexes;
+            }
+        }
+
+        return [...$indexes, ['columns' => ['email'], 'unique' => true]];
     }
 
     /**
@@ -299,7 +331,7 @@ final class ImportDocument
 
         foreach ($models as $model) {
             $byName[$model['name']] = $model;
-            $byTable[TablePrefix::tableOf($model['name'])] = $model['name'];
+            $byTable[SemanticValidator::tableFor($model)] = $model['name'];
         }
 
         $sorted = [];

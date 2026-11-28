@@ -42,9 +42,11 @@ final class ModelRegionsTest extends TestCase
 
         $this->assertSame(['export_cols' => ["'discount_id'", "'scholarship_award_id'", "'late_fee_rule_id'"]], $result['added']);
         $this->assertSame([], $result['skipped']);
+        // En la posición del contrato, delante de `created_by_user_id`: al
+        // final, el diagnóstico lo veía editado fuera de los huecos.
         $this->assertSame(str_replace(
             "'period_key', 'created_by_user_id',\n",
-            "'period_key', 'created_by_user_id', 'discount_id', 'scholarship_award_id', 'late_fee_rule_id',\n",
+            "'period_key', 'discount_id', 'scholarship_award_id', 'late_fee_rule_id', 'created_by_user_id',\n",
             $real
         ), $result['code']);
 
@@ -197,6 +199,73 @@ PHP;
 
         $this->assertSame($code, $result['code']);
         $this->assertStringContainsString('más de una vez', $result['skipped'][0]['reason']);
+    }
+
+    /**
+     * Lo que falta va en la posición que le da el contrato, no al final: el
+     * diagnóstico compara el modelo con el regenerado y un `$export_cols` con
+     * las columnas en otro orden lo veía `edited_outside` (9 de 11 pasos
+     * guiados de un proyecto real diferían sólo en eso). Y el orden de
+     * `$export_cols` es el de las columnas del Excel.
+     */
+    public function test_lo_que_falta_va_en_el_orden_del_contrato_en_una_linea(): void
+    {
+        $code = "<?php\n\nclass Post\n{\n    public static \$export_cols = ['id', 'title', 'created_at'];\n}\n";
+
+        $result = ModelRegions::sync($code, self::expected([
+            'export_cols' => ['id', 'slug', 'title', 'body', 'created_at', 'updated_at'],
+        ]), 'm.php');
+
+        $this->assertStringContainsString("\$export_cols = ['id', 'slug', 'title', 'body', 'created_at', 'updated_at'];", $result['code']);
+        $this->assertSame(['export_cols' => ["'slug'", "'body'", "'updated_at'"]], $result['added']);
+    }
+
+    public function test_lo_que_falta_al_principio_va_delante_y_una_por_linea_con_comentarios(): void
+    {
+        $code = <<<'PHP'
+<?php
+
+class Post
+{
+    protected $fillable = [
+        'title', // el título
+        'published',
+    ];
+}
+PHP;
+
+        $result = ModelRegions::sync($code, self::expected([
+            'fillable' => ['author_id', 'title', 'body', 'published'],
+        ]), 'm.php');
+
+        $this->assertStringContainsString(
+            "    protected \$fillable = [\n        'author_id',\n        'title', // el título\n        'body',\n        'published',\n    ];",
+            $result['code']
+        );
+    }
+
+    public function test_un_cast_que_falta_va_en_el_orden_del_contrato(): void
+    {
+        $code = "<?php\n\nclass Post\n{\n    protected function casts(): array\n    {\n        return [\n            'meta' => 'json',\n            'flag' => 'boolean',\n        ];\n    }\n}\n";
+
+        $result = ModelRegions::sync($code, self::expected([
+            'casts' => ['meta' => "'json'", 'amount' => "'decimal:2'", 'flag' => "'boolean'", 'seen_at' => "'datetime'"],
+        ]), 'm.php');
+
+        $this->assertStringContainsString(
+            "            'meta' => 'json',\n            'amount' => 'decimal:2',\n            'flag' => 'boolean',\n            'seen_at' => 'datetime',\n        ];",
+            $result['code']
+        );
+    }
+
+    public function test_lo_que_sobra_no_mueve_lo_que_falta_fuera_de_su_sitio(): void
+    {
+        $code = "<?php\n\nclass Post\n{\n    protected \$fillable = ['legacy', 'title', 'published'];\n}\n";
+
+        $result = ModelRegions::sync($code, self::expected(['fillable' => ['slug', 'title', 'body', 'published']]), 'm.php');
+
+        $this->assertStringContainsString("\$fillable = ['legacy', 'slug', 'title', 'body', 'published'];", $result['code']);
+        $this->assertSame(['fillable' => ['legacy']], $result['extra']);
     }
 
     public function test_las_cadenas_literales_se_leen_con_sus_comillas(): void

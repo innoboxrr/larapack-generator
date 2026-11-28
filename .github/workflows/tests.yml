@@ -25,6 +25,10 @@ jobs:
     windows-guard:
         name: Guardia en Windows (Git Bash)
         runs-on: windows-latest
+        # Una prueba que espera a un proceso que no termina dejaba el job seis
+        # horas colgado sin decir en cuál: con tope y --debug, falla pronto y
+        # nombra la prueba.
+        timeout-minutes: 30
 
         steps:
             - uses: actions/checkout@v5
@@ -44,7 +48,8 @@ jobs:
 
             - name: Pruebas de la guardia y de los hooks
               shell: bash
-              run: vendor/bin/phpunit --no-progress --filter 'GuardTest|GuardHandRolledTest|AgentHooksTest|SkillTest|AgentAdaptersTest|GitBypassTest|GitHooksTest|GuardDoctorTest'
+              timeout-minutes: 20
+              run: vendor/bin/phpunit --debug --filter 'GuardTest|GuardHandRolledTest|AgentHooksTest|SkillTest|AgentAdaptersTest|GitBypassTest|GitHooksTest|GuardDoctorTest'
 
             - name: El hook real, como lo lanza Claude Code
               shell: bash

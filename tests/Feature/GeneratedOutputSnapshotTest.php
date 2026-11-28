@@ -119,6 +119,13 @@ final class GeneratedOutputSnapshotTest extends TestCase
             $relative = substr(str_replace('\\', '/', $file->getPathname()), strlen($root) + 1);
             $content = str_replace("\r\n", "\n", (string) file_get_contents($file->getPathname()));
 
+            // Desde la versión 2 del manifiesto, cada archivo dice qué versión
+            // del generador lo escribió: cambia en cada publicación sin que
+            // cambie nada de lo generado.
+            if ($relative === '.larapack/manifest.json') {
+                $content = (string) preg_replace('/"generator": "[^"]*"/', '"generator": "VERSION"', $content);
+            }
+
             // El nombre de una migración lleva la hora a la que se generó; lo
             // que se compara es qué migración es y qué contiene.
             $hashes[$this->withoutTimestamps($relative)] = hash('sha256', $this->withoutTimestamps($content));

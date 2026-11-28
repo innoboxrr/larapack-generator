@@ -28,6 +28,13 @@ use RuntimeException;
  *    propiedad declarada una sola vez en la clase, con `= [ ... ];`, o el
  *    método casts() cuyo cuerpo es sólo `return [ ... ];`— y se inserta en
  *    su sitio. El resto del archivo queda byte a byte.
+ *  - Lo que falta va en la POSICIÓN que le da el contrato —detrás de la
+ *    entrada del contrato que la precede y ya está, o delante de la primera
+ *    que está—, no al final: el diagnóstico del realineamiento compara el
+ *    modelo con el regenerado, y una lista con lo mismo en otro orden la veía
+ *    `edited_outside` (en un proyecto real, 9 de 11 pasos guiados de modelo
+ *    diferían sólo en eso). Además el orden de `$export_cols` es el de las
+ *    columnas del Excel: no es formato.
  *  - Si una región no se reconoce con certeza (no existe, está dos veces,
  *    lleva expresiones que no son cadenas literales, un spread, `array()`), no
  *    se toca y se devuelve en `skipped`, con la orden manual exacta.
@@ -35,7 +42,8 @@ use RuntimeException;
  *
  * @phpstan-import-type Expected from ModelLists
  *
- * @phpstan-type Region array{open: int, close: int, items: list<array{start: int, end: int, key: string|null, value: string}>, comma: int|null}
+ * @phpstan-type Item array{start: int, end: int, key: string|null, value: string, comma: int|null}
+ * @phpstan-type Region array{open: int, close: int, items: list<Item>}
  * @phpstan-type Skip array{region: string, reason: string, manual: string}
  * @phpstan-type Result array{code: string, added: array<string, list<string>>, skipped: list<Skip>, differs: array<string, array{expected: string, actual: string}>, extra: array<string, list<string>>}
  */
@@ -104,9 +112,14 @@ final class ModelRegions
                 continue;
             }
 
-            $entries = array_map(fn (string $name): string => "'{$name}'", $missing);
-            $insertions[] = self::insertion($code, $tokens, $region, $entries);
-            $added[$property] = $entries;
+            $entries = [];
+
+            foreach ($missing as $name) {
+                $entries[$name] = "'{$name}'";
+            }
+
+            array_push($insertions, ...self::insertions($code, $tokens, $region, $present, $wanted, $entries));
+            $added[$property] = array_values($entries);
         }
 
         self::casts($code, $tokens, $expected['casts'], $file, $insertions, $added, $skipped, $differs, $extra);
@@ -173,6 +186,7 @@ final class ModelRegions
             }
 
             $present = [];
+            $keys = [];
 
             foreach ($region['items'] as $item) {
                 $key = $item['key'] === null ? null : self::literal($item['key']);
@@ -182,6 +196,7 @@ final class ModelRegions
                 }
 
                 $present[$key] = trim($item['value']);
+                $keys[] = $key;
             }
         } catch (RuntimeException $e) {
             if ($wanted !== []) {
@@ -211,9 +226,14 @@ final class ModelRegions
             return;
         }
 
-        $entries = array_map(fn (string $name, string $cast): string => "'{$name}' => {$cast}", array_keys($missing), $missing);
-        $insertions[] = self::insertion($code, $tokens, $region, $entries);
-        $added['casts'] = $entries;
+        $entries = [];
+
+        foreach ($missing as $name => $cast) {
+            $entries[(string) $name] = "'{$name}' => {$cast}";
+        }
+
+        array_push($insertions, ...self::insertions($code, $tokens, $region, $keys, array_map('strval', array_keys($wanted)), $entries));
+        $added['casts'] = array_values($entries);
     }
 
     /**
@@ -229,18 +249,86 @@ final class ModelRegions
     }
 
     /**
-     * Dónde y qué insertar para que las entradas queden al final de la lista,
-     * con la forma que ya tiene: en la misma línea si las entradas van en una,
-     * una por línea si van así, y en una línea propia si la lista está vacía
-     * (como la deja el generador pasado por Pint). Devuelve el offset, cuánto
-     * se sustituye a partir de él y el texto.
+     * Dónde y qué insertar para que cada entrada que falta quede en la
+     * posición que le da el contrato: detrás de la entrada del contrato que
+     * la precede y ya está en la lista; si ninguna la precede, delante de la
+     * primera que está; y si no está ninguna (o la lista está vacía), al
+     * final. Lo que sobra (`extra`) se queda donde está. Cada grupo de
+     * entradas seguidas va en una sola inserción.
+     *
+     * @param  array<int, PhpToken>  $tokens
+     * @param  Region  $region
+     * @param  list<string>  $present  la clave de cada entrada de la región, en su orden
+     * @param  list<string>  $wanted  las claves del contrato, en su orden
+     * @param  array<string, string>  $entries  clave => texto de lo que falta
+     * @return list<array{0: int, 1: int, 2: string}>
+     */
+    private static function insertions(string $code, array $tokens, array $region, array $present, array $wanted, array $entries): array
+    {
+        $position = [];
+
+        foreach ($present as $index => $key) {
+            $position[$key] ??= $index;
+        }
+
+        $after = [];
+        $before = [];
+        $anchor = null;
+
+        foreach ($wanted as $key) {
+            if (isset($position[$key])) {
+                $anchor = $position[$key];
+            } elseif (isset($entries[$key])) {
+                if ($anchor === null) {
+                    $before[] = $entries[$key];
+                } else {
+                    $after[$anchor][] = $entries[$key];
+                }
+            }
+        }
+
+        $first = null;
+
+        foreach ($wanted as $key) {
+            if (isset($position[$key])) {
+                $first = $position[$key];
+
+                break;
+            }
+        }
+
+        if ($first === null) {
+            return $before === [] ? [] : [self::atEnd($code, $tokens, $region, $before)];
+        }
+
+        $insertions = [];
+
+        if ($before !== []) {
+            $insertions[] = self::before($code, $region['items'], $first, $before);
+        }
+
+        foreach ($after as $index => $group) {
+            $insertions[] = $index === count($region['items']) - 1
+                ? self::atEnd($code, $tokens, $region, $group)
+                : self::after($code, $tokens, $region['items'], $index, $group);
+        }
+
+        return $insertions;
+    }
+
+    /**
+     * Las entradas al final de la lista, con la forma que ya tiene: en la
+     * misma línea si las entradas van en una, una por línea si van así, y en
+     * una línea propia si la lista está vacía (como la deja el generador
+     * pasado por Pint). Devuelve el offset, cuánto se sustituye a partir de
+     * él y el texto.
      *
      * @param  array<int, PhpToken>  $tokens
      * @param  Region  $region
      * @param  list<string>  $entries
      * @return array{0: int, 1: int, 2: string}
      */
-    private static function insertion(string $code, array $tokens, array $region, array $entries): array
+    private static function atEnd(string $code, array $tokens, array $region, array $entries): array
     {
         $close = $tokens[$region['close']]->pos;
 
@@ -259,15 +347,60 @@ final class ModelRegions
         $sameLine = count($items) === 1 || self::lineOf($code, $items[count($items) - 2]['start']) === self::lineOf($code, $last['start']);
         $indent = self::indentAt($code, $last['start']);
 
-        if ($region['comma'] !== null) {
+        if ($last['comma'] !== null) {
             return $sameLine
-                ? [$region['comma'] + 1, 0, ' '.implode(', ', $entries).',']
-                : [self::endOfLine($code, $tokens, $region['comma'] + 1), 0, implode('', array_map(fn (string $entry): string => "\n{$indent}{$entry},", $entries))];
+                ? [$last['comma'] + 1, 0, ' '.implode(', ', $entries).',']
+                : [self::endOfLine($code, $tokens, $last['comma'] + 1), 0, implode('', array_map(fn (string $entry): string => "\n{$indent}{$entry},", $entries))];
         }
 
         return $sameLine
             ? [$last['end'], 0, ', '.implode(', ', $entries)]
             : [$last['end'], 0, implode('', array_map(fn (string $entry): string => ",\n{$indent}{$entry}", $entries))];
+    }
+
+    /**
+     * Las entradas detrás de una que no es la última —que por eso lleva su
+     * coma—: en su misma línea si la siguiente va en ella, y si no, una por
+     * línea detrás de la suya (y de su comentario `// …`).
+     *
+     * @param  array<int, PhpToken>  $tokens
+     * @param  list<Item>  $items
+     * @param  list<string>  $entries
+     * @return array{0: int, 1: int, 2: string}
+     */
+    private static function after(string $code, array $tokens, array $items, int $index, array $entries): array
+    {
+        $comma = (int) $items[$index]['comma'];
+
+        if (self::lineOf($code, $items[$index]['start']) === self::lineOf($code, $items[$index + 1]['start'])) {
+            return [$comma + 1, 0, ' '.implode(', ', $entries).','];
+        }
+
+        $indent = self::indentAt($code, $items[$index]['start']);
+
+        return [self::endOfLine($code, $tokens, $comma + 1), 0, implode('', array_map(fn (string $entry): string => "\n{$indent}{$entry},", $entries))];
+    }
+
+    /**
+     * Las entradas delante de una: en su misma línea si la lista va en una,
+     * y si no, cada una en una línea propia con la sangría de la suya.
+     *
+     * @param  list<Item>  $items
+     * @param  list<string>  $entries
+     * @return array{0: int, 1: int, 2: string}
+     */
+    private static function before(string $code, array $items, int $index, array $entries): array
+    {
+        $start = $items[$index]['start'];
+        $neighbour = $items[$index + 1] ?? $items[$index - 1] ?? null;
+
+        if ($neighbour === null || self::lineOf($code, $neighbour['start']) === self::lineOf($code, $start)) {
+            return [$start, 0, implode(', ', $entries).', '];
+        }
+
+        $indent = self::indentAt($code, $start);
+
+        return [$start, 0, implode('', array_map(fn (string $entry): string => "{$entry},\n{$indent}", $entries))];
     }
 
     /**
@@ -448,21 +581,19 @@ final class ModelRegions
         $start = null;
         $arrow = null;
         $lastSignificant = null;
-        $comma = null;
 
         for ($index = $open + 1; isset($tokens[$index]); $index++) {
             $token = $tokens[$index];
 
             if ($depth === 0 && ($token->text === ']' || $token->text === ',')) {
                 if ($start !== null && $lastSignificant !== null) {
-                    $items[] = self::item($tokens, $start, $lastSignificant, $arrow, $name);
-                    $comma = $token->text === ',' ? $token->pos : null;
+                    $items[] = self::item($tokens, $start, $lastSignificant, $arrow, $name) + ['comma' => $token->text === ',' ? $token->pos : null];
                 } elseif ($token->text === ',') {
                     throw new RuntimeException("\${$name} tiene una coma sin entrada");
                 }
 
                 if ($token->text === ']') {
-                    return ['open' => $open, 'close' => $index, 'items' => $items, 'comma' => $items === [] ? null : $comma];
+                    return ['open' => $open, 'close' => $index, 'items' => $items];
                 }
 
                 $start = null;
@@ -487,7 +618,6 @@ final class ModelRegions
             }
 
             $start ??= $index;
-            $comma = null;
 
             if ($depth === 0 && $token->is(T_DOUBLE_ARROW) && $arrow === null) {
                 $arrow = $index;

@@ -89,6 +89,22 @@ final class GuardHandRolledTest extends TestCase
             "php artisan larapack:hand-\\\nrolled revoke X",
             "php artisan larapack:hand-rolled \"appr\\\nove\" --all",
             "php artisan l:h appr''ove --all",
+            // La vía sin terminal de una persona (OwnerConfirmation): la
+            // variable y la opción. Un agente no la usa, ni junta ni por
+            // partes.
+            'LARAPACK_APPROVER="Ana Pérez" php artisan larapack:hand-rolled approve --all --approver="Ana Pérez"',
+            'env LARAPACK_APPROVER=Ana php vendor/bin/builder l:h approve X --approver Ana',
+            'export LARAPACK_APPROVER=Ana',
+            'export larapack_approver=Ana && echo listo',
+            'php artisan larapack:x --approver=Ana',
+            "bash -c 'LARAPACK_APPROVER=Ana make deploy'",
+            // Una terminal fabricada por otro programa: el agente escribiría
+            // él mismo la frase de confirmación (OwnerConfirmation).
+            "python3 -c \"import pty; pty.spawn(['php','artisan','larapack:hand-rolled','approve','--all'])\"",
+            'python3 ptyapprove.py php builder larapack:hand-rolled approve --all',
+            "expect -c 'spawn php artisan larapack:hand-rolled revoke X; send \"retiro 1\\r\"'",
+            'unbuffer php artisan l:h approve X',
+            "perl -e 'system(\"php\", \"artisan\", \"larapack:hand-rolled\", \"approve\", \"--all\")'",
             // Cuatro shells anidadas: la guardia no lee tan adentro, y lo que
             // no lee lo bloquea (Guard::shellScan()).
             "bash -c 'bash -c \"bash -c \\\"bash -c php\\\\ artisan\\\\ larapack:hand-rolled\\\\ approve\\\"\"'",
@@ -126,6 +142,9 @@ final class GuardHandRolledTest extends TestCase
             'cp .env.example .env',
             "php -r 'echo PHP_VERSION;'",
             'echo hand-rolled.lock',
+            // Leer o buscar la variable no la usa.
+            'grep -rn LARAPACK_APPROVER docs',
+            'echo "$LARAPACK_APPROVER"',
         ];
     }
 

@@ -706,4 +706,25 @@ final class LegacyFixTest extends TestCase
         $this->assertNull($skipped);
         $this->assertStringContainsString("        format as protected;\n    }\n\n    /**\n     * Los accessors", $code);
     }
+
+    public function test_lo_que_llega_por_un_enlace_de_fuera_de_la_raiz_no_se_reescribe(): void
+    {
+        // `app/Http` enlazado a otro proyecto (auditoría de seguridad de
+        // 9.4.0): se lee, pero arreglarlo es cosa de quien corre fix en él.
+        $outside = $this->root.'-fuera';
+        $this->resource("\$this->resource->setAppends(\$request->get('appends'));");
+        rename($this->root.'/app/Http', $outside);
+        symlink($outside, $this->root.'/app/Http');
+        $before = (string) file_get_contents($outside.'/Resources/PostResource.php');
+
+        try {
+            [$skipped, $code] = $this->fix(self::RESOURCE);
+
+            $this->assertSame('Está fuera de la raíz del proyecto (llega por un repositorio `path` de composer.json o por un enlace simbólico): no se reescribe desde aquí. Corre larapack:fix con --root en su proyecto.', $skipped);
+            $this->assertSame($before, $code);
+        } finally {
+            unlink($this->root.'/app/Http');
+            $this->remove($outside);
+        }
+    }
 }

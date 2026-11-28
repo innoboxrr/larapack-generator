@@ -45,6 +45,36 @@ class MakerException extends Exception
         return new self("No se pudo leer {$file}.");
     }
 
+    public static function writeFailed(string $file): self
+    {
+        return new self("No se pudo escribir {$file}.");
+    }
+
+    /**
+     * La ruta lleva fuera del proyecto: por un enlace simbólico plantado en
+     * él, o porque un archivo del proyecto (el manifiesto, el plan del
+     * realineamiento) nombra una ruta con `..` o absoluta.
+     */
+    public static function outsideProject(string $path, string $where): self
+    {
+        return new self("{$path} lleva fuera del proyecto, a {$where}: no se escribe ni se borra a través de un enlace simbólico ni de una ruta que sale de la raíz. Si es lo que quieres, hazlo a mano.");
+    }
+
+    public static function unsafeManifestPath(string $manifest, string $path): self
+    {
+        return new self("{$manifest} nombra una ruta que sale del proyecto («{$path}»): un manifiesto sólo lleva rutas relativas a la raíz, sin `..`. Alguien lo ha editado a mano; corrígelo antes de seguir.");
+    }
+
+    public static function unsafeManifestNamespace(string $manifest, string $namespace): self
+    {
+        return new self("{$manifest} trae un namespace que no es de PHP («{$namespace}»): va tal cual a los `use` que escribe `larapack:fix`. Alguien lo ha editado a mano; corrígelo antes de seguir.");
+    }
+
+    public static function invalidNamespace(string $file, string $namespace): self
+    {
+        return new self("{$file}: «{$namespace}» no es un namespace de PHP (autoload.psr-4). Va tal cual al `namespace` de cada archivo generado; tiene que ser como \"Acme\\\\Blog\\\\\" (identificadores separados por \\\\, con el separador final).");
+    }
+
     /**
      * El manifiesto no se pudo escribir ni reintentándolo. Si hay temporal, es
      * lo registrado en la corrida: moverlo encima del manifiesto lo recupera.
@@ -54,6 +84,27 @@ class MakerException extends Exception
         return new self($pending === null
             ? "No se pudo escribir {$manifest} ({$reason})."
             : "No se pudo escribir {$manifest} ({$reason}), ni reintentándolo: otro proceso lo tiene bloqueado. Lo registrado en esta corrida está en {$pending}; cuando se libere, muévelo encima de {$manifest}. Sin eso, lo que se generó queda sin registrar y --force lo tomará por editado a mano.");
+    }
+
+    /**
+     * Un manifiesto que existe y no se puede leer no es un manifiesto vacío:
+     * tratarlo como tal hacía que la siguiente importación lo reescribiera
+     * desde cero y se perdiera el registro de todo lo generado. Lo habitual
+     * es un merge de git a medio resolver.
+     */
+    public static function manifestUnreadable(string $manifest, string $reason): self
+    {
+        return new self("El manifiesto {$manifest} no se puede leer: {$reason}. No se ha tocado nada. Si viene de un merge, `larapack:reconcile` lo recompone a partir de las dos ramas; si no, recupéralo de git.");
+    }
+
+    public static function manifestTooNew(string $manifest, int $found, int $supported): self
+    {
+        return new self("{$manifest} está en la versión {$found} del formato, y este LaraPack sólo escribe hasta la {$supported}: reescribirlo perdería lo que no entiende. Actualiza innoboxrr/larapack-generator.");
+    }
+
+    public static function manifestTooNewToRead(string $manifest, int $found, int $supported): self
+    {
+        return new self("{$manifest} está en la versión {$found} del formato, y este LaraPack entiende hasta la {$supported}: lo escribió una versión posterior y lo que no conoce no se comprueba. Actualiza innoboxrr/larapack-generator.");
     }
 
     public static function invalidComposerJson(string $file, string $reason): self

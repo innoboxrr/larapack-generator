@@ -3,9 +3,11 @@
 namespace Innoboxrr\LarapackGenerator\Tools\PivotMigration;
 
 use Innoboxrr\LarapackGenerator\Exceptions\MakerException;
+use Innoboxrr\LarapackGenerator\Support\Files;
 use Innoboxrr\LarapackGenerator\Support\Generation;
 use Innoboxrr\LarapackGenerator\Support\MigrationTimestamp;
 use Innoboxrr\LarapackGenerator\Support\TablePrefix;
+use Innoboxrr\LarapackGenerator\Tools\Migration\Schema\SchemaHistory;
 use Innoboxrr\LarapackGenerator\Tools\Tool;
 
 class PivotMigrationTool extends Tool
@@ -38,6 +40,19 @@ class PivotMigrationTool extends Tool
         // La que ya exista para esta tabla: con la hora en el nombre, importar
         // otra vez creaba una segunda migración de la misma tabla.
         $migrationFile = $this->migrationFile($this->migrationPath, 'create_'.TablePrefix::table($migrationName).'_table');
+
+        // La tabla ya la crea otra migración, con otro nombre (un pivote escrito
+        // a mano y adoptado con `realign infer`, 9.4.0): una segunda creación
+        // fallaría con «table already exists». Es la misma regla que las
+        // migraciones de modelo.
+        $state = (new SchemaHistory($this->migrationPath))->table(TablePrefix::table($migrationName));
+
+        if (! file_exists($migrationFile) && $state->exists && $state->creator !== null) {
+            Generation::record('skipped', $state->creator, $this->migrationTemplatePath.'/MigrationTemplate.txt', 'la tabla '.TablePrefix::table($migrationName).' ya la crea esta migración, que no generó LaraPack: el esquema lo decide ella');
+
+            return false;
+        }
+
         if (! file_exists($migrationFile)) {
             $templateFile = $this->migrationTemplatePath.'/MigrationTemplate.txt';
             if (Generation::isDryRun()) {
@@ -45,7 +60,7 @@ class PivotMigrationTool extends Tool
 
                 return true;
             }
-            if (copy($templateFile, $migrationFile)) {
+            if (Files::copy($templateFile, $migrationFile)) {
                 $this->replaceMigrationData($migrationFile);
                 if (self::isFromJsonImporter()) {
                     $this->processFileWithJson($migrationFile);
@@ -73,7 +88,7 @@ class PivotMigrationTool extends Tool
         // Solo proceder en caso de los archivos no existan
         if (! file_exists($migrationFile)) {
             $templateFile = $this->migrationTemplatePath.'/DropTemplate.txt';
-            if (copy($templateFile, $migrationFile)) {
+            if (Files::copy($templateFile, $migrationFile)) {
                 $this->replaceMigrationData($migrationFile);
             } else {
                 throw MakerException::copyFailed($templateFile, $migrationFile);
@@ -89,7 +104,7 @@ class PivotMigrationTool extends Tool
     {
         $content = self::contents($migrationFile);
         $content = str_replace('migration_name', TablePrefix::table($this->migrationName), $content);
-        file_put_contents($migrationFile, $content);
+        Files::write($migrationFile, $content);
     }
 
     protected function processFileWithJson(string $migrationFile): void
@@ -98,7 +113,7 @@ class PivotMigrationTool extends Tool
         $fileContent = self::contents($migrationFile);
         $columnsSchema = $this->generateMigrationColumns($pivot['props']);
         $updatedFileContent = str_replace('//EDIT//', $columnsSchema, $fileContent);
-        file_put_contents($migrationFile, $updatedFileContent);
+        Files::write($migrationFile, $updatedFileContent);
     }
 
     /**

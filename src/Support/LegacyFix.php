@@ -273,7 +273,31 @@ final class LegacyFix
             $this->planRelations();
         }
 
+        $this->dropOutside();
+
         return $this->report;
+    }
+
+    /**
+     * Lo que está fuera de la raíz no se reescribe.
+     *
+     * Las fuentes salen del composer.json del proyecto (ProjectSources): un
+     * repositorio `path` con `../*` o una ruta absoluta, o un `src` que es un
+     * enlace simbólico, llevan a directorios de fuera, y `larapack:fix`
+     * reescribía ahí los archivos de otro proyecto. Se leen —verify mide lo
+     * que el proyecto carga—, pero arreglarlos es cosa de quien corre el
+     * comando en su raíz. El realineamiento ya los dejaba fuera (Scopes).
+     */
+    private function dropOutside(): void
+    {
+        foreach (array_keys($this->fixes) as $file) {
+            if (Files::isInside($this->root, $file)) {
+                continue;
+            }
+
+            $this->revert($file, 'Está fuera de la raíz del proyecto (llega por un repositorio `path` de composer.json o por un enlace simbólico): no se reescribe desde aquí. Corre larapack:fix con --root en su proyecto.');
+            unset($this->fixes[$file], $this->originals[$file]);
+        }
     }
 
     // RELATION-MISSING
@@ -500,7 +524,7 @@ final class LegacyFix
                 mkdir(dirname($file), 0777, true);
             }
 
-            file_put_contents($file, $code);
+            Files::write($file, $code);
         }
 
         $formatted = false;
@@ -531,7 +555,7 @@ final class LegacyFix
                     }
 
                     $original = $this->originals[$member] ?? null;
-                    $original === null ? unlink($member) : file_put_contents($member, $original);
+                    $original === null ? unlink($member) : Files::write($member, $original);
                     $this->revert($member, $reason);
                 }
             }

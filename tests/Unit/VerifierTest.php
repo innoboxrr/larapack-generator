@@ -489,4 +489,40 @@ final class VerifierTest extends TestCase
 
         $this->assertSame([], $this->messages('route-not-declared'));
     }
+
+    // LO QUE DEJA UN MERGE (auditoría de 9.4.0)
+
+    public function test_un_conflicto_sin_resolver_se_ve_con_un_manifiesto_legible(): void
+    {
+        $this->write('laraimport.json', "{\n<<<<<<< HEAD\n\"a\": 1\n=======\n\"a\": 2\n>>>>>>> otra\n}\n");
+
+        $this->assertSame([[
+            'merge-conflict', null, 'laraimport.json',
+            'Tiene un conflicto de git sin resolver (línea 2). Si es el laraimport o un archivo generado sin editar, `larapack:reconcile` lo resuelve; si es código escrito a mano, lo resuelve quien lo escribió.',
+        ]], $this->findings(['merge-conflict']));
+    }
+
+    public function test_un_manifiesto_ilegible_es_un_error_y_lo_demas_del_merge_se_sigue_mirando(): void
+    {
+        $this->write('.larapack/manifest.json', "{\n<<<<<<< HEAD\n}\n=======\n}\n>>>>>>> otra\n");
+        $this->write('laraimport.json', "<<<<<<< HEAD\n=======\n>>>>>>> otra\n");
+
+        $findings = (new Verifier(new Manifest($this->root)))->run(['manifest-unreadable', 'merge-conflict']);
+
+        $this->assertSame([['manifest-unreadable', '.larapack/manifest.json'], ['merge-conflict', 'laraimport.json']], array_map(
+            fn (array $f): array => [$f['check'], $f['file']],
+            $findings
+        ));
+        $this->assertSame('error', $findings[0]['level']);
+    }
+
+    public function test_un_manifiesto_de_una_version_posterior_no_se_da_por_bueno(): void
+    {
+        $this->manifest['version'] = Manifest::VERSION + 1;
+
+        $this->assertSame([[
+            'manifest-unreadable', null, '.larapack/manifest.json',
+            '.larapack/manifest.json está en la versión '.(Manifest::VERSION + 1).' del formato, y este LaraPack entiende hasta la '.Manifest::VERSION.': lo escribió una versión posterior y lo que no conoce no se comprueba. Actualiza innoboxrr/larapack-generator.',
+        ]], $this->findings([]));
+    }
 }

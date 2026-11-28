@@ -2,12 +2,6 @@
 
 namespace Innoboxrr\LarapackGenerator\Support;
 
-use FilesystemIterator;
-use RecursiveCallbackFilterIterator;
-use RecursiveDirectoryIterator;
-use RecursiveIteratorIterator;
-use SplFileInfo;
-
 /**
  * Dónde está el código PHP de un proyecto y de sus paquetes locales, sin
  * cargar su autoloader.
@@ -25,19 +19,19 @@ use SplFileInfo;
  *    ruta real.
  *  - De cada raíz, sus directorios PSR-4; sin composer.json, o sin PSR-4,
  *    `app` y `src`.
- *  - Dentro, todos los .php salvo vendor, node_modules y los directorios
- *    ocultos.
+ *  - De cada raíz, además, lo que carga por `classmap` o PSR-0: un
+ *    `lib/Http/Controllers` enrutado no deja de ser un controlador.
+ *  - Dentro, todos los .php salvo el `vendor/` y el `node_modules/` de cada
+ *    raíz y los directorios ocultos; los directorios enlazados se siguen.
  *
- * Lo que queda fuera de la guardia, a propósito: sólo se miran las clases que
- * cuelgan de `Http/Controllers`, `Http/Requests` y `Http/Resources`. Un
- * componente de Livewire, un recurso o una página de Filament, o un
- * controlador colocado fuera de `Http/Controllers` (un `Actions/`, un
- * `Handlers/`) no siguen el patrón que se comprueba: no reciben un FormRequest
- * ni delegan en su `handle()`, sino que validan, autorizan y responden con el
- * ciclo de vida de su propio framework. Exigirles `return $request->handle();`
- * sería un falso positivo en cada archivo, y la única salida sería un
- * #[HandRolled] por clase que no diría nada. Si algún día tienen su propia
- * forma comprobable, será otra comprobación, no ésta ensanchada.
+ * Lo que queda fuera de la guardia, a propósito: un componente de Livewire o
+ * un recurso o una página de Filament no siguen el patrón que se comprueba
+ * —validan, autorizan y responden con el ciclo de vida de su framework—, y
+ * exigirles `return $request->handle();` sería un falso positivo en cada
+ * archivo. Una clase del proyecto de fuera de `Http/Controllers` (un
+ * `Actions/`, un `Handlers/`) sí se comprueba desde 9.4.0 cuando un
+ * `routes/*.php` la pone como acción (ControllerShape::checkRouteActions):
+ * dejarla fuera era la forma más corta de saltarse verify.
  */
 final class ProjectSources
 {
@@ -61,6 +55,13 @@ final class ProjectSources
      * @var array<string, list<string>>
      */
     private array $autoload = [];
+
+    /**
+     * Los prefijos de $autoload, del más largo al más corto (locate()).
+     *
+     * @var list<string>|null
+     */
+    private ?array $prefixes = null;
 
     /**
      * @var list<string>
@@ -160,6 +161,15 @@ final class ProjectSources
      * minúsculas), con las mismas exclusiones que phpFiles(): ruta real =>
      * ruta tal como se recorrió. Un directorio que no existe no tiene ninguno.
      *
+     * Lo que se salta es lo que instalan composer y npm —el `vendor/` y el
+     * `node_modules/` de la raíz del proyecto o de un paquete local— y los
+     * directorios ocultos. Un `vendor` en cualquier otro sitio es código del
+     * proyecto: `src/Http/Controllers/vendor/` lo carga PSR-4 como cualquier
+     * otro directorio, y saltárselo por el nombre dejaba fuera de `verify`
+     * todo controlador que se guardara ahí. Un directorio enlazado se
+     * recorre como lo recorre el autoloader; uno ya visitado (por su ruta
+     * real) no se repite, así que un enlace circular no cuelga nada.
+     *
      * @param  list<string>  $extensions
      * @return array<string, string>
      */
@@ -170,21 +180,53 @@ final class ProjectSources
         }
 
         $files = [];
-        $iterator = new RecursiveIteratorIterator(new RecursiveCallbackFilterIterator(
-            new RecursiveDirectoryIterator($directory, FilesystemIterator::SKIP_DOTS),
-            fn (SplFileInfo $file): bool => ! $file->isDir()
-                || ! (in_array($file->getFilename(), self::SKIPPED_DIRECTORIES, true) || str_starts_with($file->getFilename(), '.'))
-        ));
-
-        foreach ($iterator as $file) {
-            /** @var SplFileInfo $file */
-            if (in_array(strtolower($file->getExtension()), $extensions, true)) {
-                $path = str_replace('\\', '/', $file->getPathname());
-                $files[(string) ($file->getRealPath() ?: $path)] = $path;
-            }
-        }
+        $visited = [];
+        $this->walk(rtrim(str_replace('\\', '/', $directory), '/'), $extensions, $files, $visited);
 
         return $files;
+    }
+
+    /**
+     * @param  list<string>  $extensions
+     * @param  array<string, string>  $files
+     * @param  array<string, true>  $visited
+     */
+    private function walk(string $directory, array $extensions, array &$files, array &$visited): void
+    {
+        $real = realpath($directory);
+
+        if ($real === false || isset($visited[$real])) {
+            return;
+        }
+
+        $visited[$real] = true;
+
+        foreach (scandir($directory) ?: [] as $entry) {
+            if ($entry === '.' || $entry === '..') {
+                continue;
+            }
+
+            $path = $directory.'/'.$entry;
+
+            if (is_dir($path)) {
+                if (! str_starts_with($entry, '.') && ! $this->isInstalled($real, $entry)) {
+                    $this->walk($path, $extensions, $files, $visited);
+                }
+            } elseif (in_array(strtolower(pathinfo($entry, PATHINFO_EXTENSION)), $extensions, true)) {
+                $files[str_replace('\\', '/', (string) (realpath($path) ?: $path))] = $path;
+            }
+        }
+    }
+
+    /**
+     * Si `$entry`, dentro de `$parent` (ruta real), es donde composer o npm
+     * instalan lo de terceros: `vendor` o `node_modules` justo bajo la raíz
+     * del proyecto o de un paquete local.
+     */
+    private function isInstalled(string $parent, string $entry): bool
+    {
+        return in_array($entry, self::SKIPPED_DIRECTORIES, true)
+            && in_array(str_replace('\\', '/', $parent), $this->roots(), true);
     }
 
     /**
@@ -221,13 +263,17 @@ final class ProjectSources
     public function locate(string $class): ?string
     {
         $autoload = $this->autoload();
-        $prefixes = array_keys($autoload);
 
-        // El prefijo más largo primero: `App\Models\` gana a `App\`.
-        usort($prefixes, fn (string $a, string $b): int => strlen($b) <=> strlen($a));
+        // Ordenados una vez, no en cada búsqueda: verify busca la clase de
+        // cada request de cada controlador.
+        if ($this->prefixes === null) {
+            $this->prefixes = array_map('strval', array_keys($autoload));
 
-        foreach ($prefixes as $prefix) {
-            $prefix = (string) $prefix;
+            // El prefijo más largo primero: `App\Models\` gana a `App\`.
+            usort($this->prefixes, fn (string $a, string $b): int => strlen($b) <=> strlen($a));
+        }
+
+        foreach ($this->prefixes as $prefix) {
 
             if (! self::hasPrefix($class, $prefix)) {
                 continue;
@@ -399,6 +445,27 @@ final class ProjectSources
                     }
 
                     $this->sources[] = $absolute;
+                }
+            }
+        }
+
+        // Lo que composer carga por classmap o PSR-0 también es código del
+        // proyecto, aunque no tenga prefijo PSR-4 con el que localizar una
+        // clase: un `lib/Http/Controllers` en `autoload.classmap` se
+        // enruta igual que uno de `src/`.
+        foreach ($this->roots as $root) {
+            $autoload = (array) (self::composer($root)['autoload'] ?? []);
+            $extra = [...array_values((array) ($autoload['classmap'] ?? []))];
+
+            foreach ((array) ($autoload['psr-0'] ?? []) as $directories) {
+                $extra = [...$extra, ...array_values((array) $directories)];
+            }
+
+            foreach ($extra as $directory) {
+                $absolute = is_string($directory) ? realpath($root.'/'.$directory) : false;
+
+                if ($absolute !== false && is_dir($absolute)) {
+                    $this->sources[] = str_replace('\\', '/', $absolute);
                 }
             }
         }
