@@ -45,6 +45,20 @@ final class ContractExtensionsValidationTest extends TestCase
                 ['name' => 'one', 'method' => 'get', 'route_name' => 'same', 'authorize' => 'authenticated'],
                 ['name' => 'two', 'method' => 'post', 'route_name' => 'same', 'authorize' => 'authenticated'],
             ]]]], '/controllers/0/endpoints/1/route_name'],
+            // El orden no importa: un nombre declarado que coincide con el
+            // derivado de otro endpoint choca vaya antes o después.
+            'route_name declarado antes del derivado que coincide' => [$model([['name' => 'name', 'type' => 'string']], ['endpoints' => [
+                ['name' => 'loadRoster', 'method' => 'post', 'route_name' => 'import.roster'],
+                ['name' => 'importRoster', 'method' => 'post'],
+            ]]), '/models/0/endpoints/1/name'],
+            'route_name declarado después del derivado que coincide' => [$model([['name' => 'name', 'type' => 'string']], ['endpoints' => [
+                ['name' => 'importRoster', 'method' => 'post'],
+                ['name' => 'loadRoster', 'method' => 'post', 'route_name' => 'import.roster'],
+            ]]), '/models/0/endpoints/1/route_name'],
+            'route_name declarado antes del derivado en controllers' => [['models' => [['name' => 'Item', 'props' => [['name' => 'name', 'type' => 'string']]]], 'controllers' => [['name' => 'Desk', 'endpoints' => [
+                ['name' => 'loadRoster', 'method' => 'post', 'route_name' => 'import.roster', 'authorize' => 'authenticated'],
+                ['name' => 'importRoster', 'method' => 'post', 'authorize' => 'authenticated'],
+            ]]]], '/controllers/0/endpoints/1/name'],
             'route_name de una acción CRUD' => [$model([['name' => 'name', 'type' => 'string']], ['endpoints' => [['name' => 'publish', 'method' => 'post', 'route_name' => 'update']]]), '/models/0/endpoints/0/route_name'],
         ];
     }

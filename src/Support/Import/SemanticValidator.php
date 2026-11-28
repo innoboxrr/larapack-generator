@@ -117,8 +117,19 @@ final class SemanticValidator
         $findings = [];
         $names = [];
         $routeNames = [];
-        $declaredRoutes = [];
         $routes = [];
+
+        // El nombre final de cada ruta —el declarado o, sin él, el que se
+        // deriva— se junta antes de mirar ninguno: dos rutas con el mismo
+        // nombre chocan vaya la declarada antes o después. Hasta 9.4.0 un
+        // `route_name` seguido de un endpoint que derivaba ese nombre pasaba,
+        // y route() resolvía a la última.
+        $finalRoutes = [];
+
+        foreach ($owner['endpoints'] ?? [] as $position => $endpoint) {
+            $finalRoutes[Endpoints::declaredRouteName($endpoint)][] = $position;
+        }
+
         $abilities = [];
         $idParameter = self::snake($owner['name']).'_id';
 
@@ -145,22 +156,21 @@ final class SemanticValidator
             $routeNames[$routeName] ??= $name;
 
             // Un `route_name` declarado (para conservar el nombre de una ruta
-            // escrita a mano) tampoco puede repetirse, ni ser el de una acción
-            // CRUD que siga existiendo: route() devolvería la otra.
-            if (isset($endpoint['route_name'])) {
-                $declared = Endpoints::declaredRouteName($endpoint);
+            // escrita a mano) tampoco puede repetirse —ni con otro declarado
+            // ni con uno derivado—, ni ser el de una acción CRUD que siga
+            // existiendo: route() devolvería la otra. Dos derivados iguales ya
+            // se dicen arriba.
+            $final = Endpoints::declaredRouteName($endpoint);
+            $first = $finalRoutes[$final][0];
+            $firstEndpoint = $owner['endpoints'][$first];
 
-                if (isset($declaredRoutes[$declared])) {
-                    $findings[] = self::error("{$at}/route_name", "'{$name}' y '{$declaredRoutes[$declared]}' se llaman igual, '{$declared}': el front no podría llamar a uno de los dos.");
-                }
+            if ($first !== $position && (isset($endpoint['route_name']) || isset($firstEndpoint['route_name']))) {
+                $field = isset($endpoint['route_name']) ? 'route_name' : 'name';
+                $findings[] = self::error("{$at}/{$field}", "'{$name}' y '{$firstEndpoint['name']}' se llaman igual, '{$final}': el front no podría llamar a uno de los dos.");
+            }
 
-                $declaredRoutes[$declared] ??= $name;
-
-                if ($actions !== null && in_array($declared, array_map(fn (string $action): string => Actions::routeName($action), $actions), true)) {
-                    $findings[] = self::error("{$at}/route_name", "'{$declared}' es el nombre de ruta de una acción CRUD de {$owner['name']}: las dos rutas se llamarían igual. Quita la acción con `routes` o elige otro nombre.");
-                }
-            } else {
-                $declaredRoutes[$routeName] ??= $name;
+            if (isset($endpoint['route_name']) && $actions !== null && in_array($final, array_map(fn (string $action): string => Actions::routeName($action), $actions), true)) {
+                $findings[] = self::error("{$at}/route_name", "'{$final}' es el nombre de ruta de una acción CRUD de {$owner['name']}: las dos rutas se llamarían igual. Quita la acción con `routes` o elige otro nombre.");
             }
 
             // Con un nombre inválido no se sigue mirando la habilidad: por
