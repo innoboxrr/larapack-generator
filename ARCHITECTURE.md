@@ -602,7 +602,8 @@ nueva se enchufa sin registrar un comando. Cada acción declara qué opciones us
 3. [`ScopeClassifier`](src/Support/Realign/ScopeClassifier.php) compara cada
    archivo con su par regenerado —una migración, por el nombre sin la fecha—
    con [`FileComparison`](src/Support/Realign/FileComparison.php) (bytes,
-   tokens sin espacios con comentarios, JSON por valor) y, lo que sigue
+   tokens sin espacios con comentarios, JSON por valor, el resto por líneas
+   sin indentación ni espacio final) y, lo que sigue
    distinto, con [`PintPass`](src/Support/Realign/PintPass.php) (la copia por
    la misma Pint). Lo distinto se separa por piezas
    (`FileComparison::members`) contra [`Holes`](src/Support/Realign/Holes.php).

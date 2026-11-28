@@ -72,6 +72,37 @@ final class FileComparisonTest extends TestCase
         ));
     }
 
+    public function test_en_un_texto_el_espacio_dentro_de_una_linea_no_es_formato(): void
+    {
+        // Dentro de una cadena, en el texto de JSX o entre operadores, un
+        // espacio cambia lo que hace el código.
+        $pairs = [
+            ["notifySuccess(t('Changes saved'))\n", "notifySuccess(t('Changessaved'))\n"],
+            ["const line = parts.join(' ')\n", "const line = parts.join('')\n"],
+            ["const total = a - -b\n", "const total = a--b\n"],
+            ["<p>Hola mundo</p>\n", "<p>Holamundo</p>\n"],
+            ["<p>Hola mundo</p>\n", "<p>Hola\nmundo</p>\n"],
+        ];
+
+        foreach ($pairs as [$current, $regenerated]) {
+            $this->assertSame(FileComparison::DIFFERENT, FileComparison::compare($current, $regenerated, 'text'), $current);
+        }
+    }
+
+    public function test_en_un_texto_finales_de_linea_indentacion_y_espacio_final_son_formato(): void
+    {
+        $code = "export default function Show() {\n    return <p>{t('Changes saved')}</p>\n}\n";
+        $formatted = "export default function Show() {  \r\n\treturn <p>{t('Changes saved')}</p>\r\n}\r\n\r\n";
+
+        $this->assertSame(FileComparison::FORMAT, FileComparison::compare($formatted, $code, 'text'));
+    }
+
+    public function test_un_json_que_no_se_puede_leer_se_compara_como_texto(): void
+    {
+        $this->assertSame(FileComparison::DIFFERENT, FileComparison::compare("{\"a\": \"x y\",}\n", "{\"a\": \"xy\",}\n", 'json'));
+        $this->assertSame(FileComparison::FORMAT, FileComparison::compare("{\n\t\"a\": \"x y\",\n}\n", "{\n  \"a\": \"x y\",\n}", 'json'));
+    }
+
     public function test_un_use_de_trait_dentro_de_la_clase_no_se_reordena(): void
     {
         $a = "<?php\nclass X\n{\n    use B;\n    use A;\n}\n";
@@ -80,11 +111,14 @@ final class FileComparisonTest extends TestCase
         $this->assertSame(FileComparison::DIFFERENT, FileComparison::compare($a, $b, 'php'));
     }
 
-    public function test_json_por_valor_y_texto_sin_espacios(): void
+    public function test_json_por_valor_y_texto_por_lineas(): void
     {
         $this->assertSame(FileComparison::FORMAT, FileComparison::compare('{"b": 1, "a": [1, 2]}', "{\n  \"a\": [1,2],\n  \"b\": 1\n}", 'json'));
         $this->assertSame(FileComparison::DIFFERENT, FileComparison::compare('{"a": [2, 1]}', '{"a": [1, 2]}', 'json'));
-        $this->assertSame(FileComparison::FORMAT, FileComparison::compare("export default {\n  a: 1\n}", 'export default { a: 1 }', 'text'));
+        $this->assertSame(FileComparison::FORMAT, FileComparison::compare("export default {\n\ta: 1\n}\n", "export default {\n  a: 1\n}", 'text'));
+        // Juntar o partir líneas no se da por formato: sin analizar el
+        // lenguaje no se sabe si el salto estaba dentro de una cadena.
+        $this->assertSame(FileComparison::DIFFERENT, FileComparison::compare("export default {\n  a: 1\n}", 'export default { a: 1 }', 'text'));
         $this->assertSame(FileComparison::DIFFERENT, FileComparison::compare('a: 1', 'a: 2', 'text'));
         $this->assertSame('json', FileComparison::kindOf('package.json'));
         $this->assertSame('text', FileComparison::kindOf('index.jsx'));

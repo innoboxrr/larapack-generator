@@ -99,9 +99,9 @@ está en el informe (`report`, la ruta de `report.json`).
 | Clase | Qué es | Categoría | Paso |
 |---|---|---|---|
 | `identical` | Byte a byte lo que generaría el contrato. | cumple; si el manifiesto tiene otro hash o no lo conoce, `deterministic` | `adopt` |
-| `format_only` | Igual salvo formato: espacios, coma final, orden de imports, o igual tras pasar el archivo por la misma Pint. También el mismo código con **otros comentarios**, marcado `comments: true` (salvo en lo que nadie editó, que es `version_delta`, y en un hueco entero, que es `hole_edited`). | igual que `identical` | `adopt` |
+| `format_only` | Igual salvo formato: en PHP, espacios, coma final, orden de imports, o igual tras pasar el archivo por la misma Pint; en lo demás (jsx, tsx, vue, js, ts, md), sólo finales de línea, indentación y espacio al final de línea. **Otros comentarios no son formato** (ver abajo). | igual que `identical` | `adopt` |
 | `version_delta` | Nadie lo editó (su hash es el del manifiesto) y difiere: la plantilla cambió (`cause: generator`, escrito por una versión anterior o sin versión) o el contrato cambió (`cause: contract`). | `deterministic` | `regenerate` |
-| `hole_edited` | Editado sólo dentro de sus [huecos](#los-huecos). Es lo correcto. | cumple | — |
+| `hole_edited` | Editado sólo dentro de sus [huecos](#los-huecos). Es lo correcto. También un PHP registrado y editado con el mismo código y **otros comentarios** (`comments: true`): son del usuario y se conservan. | cumple | — |
 | `edited_outside` | Editado fuera de sus huecos. La entrada dice qué piezas (`members`: métodos, propiedades, `use`). | `guided` | `edited-outside` |
 | `missing` | No está en disco. Si el contrato lo sigue pidiendo y se borró, `decision`; si es de un modelo retirado del contrato (`cause: retired`), el contrato no lo volvería a generar (`not_regenerated`) o es una migración registrada dos veces cuya otra copia sigue ahí (`superseded`), `deterministic` (`prune`); si el contrato lo pide y nunca se generó, `deterministic` (`regenerate`). | según el caso | `missing`, `prune`, `regenerate` |
 | `renamed` | El manifiesto lo conoce con otra ruta: una migración renombrada a mano, o el mismo contenido en el mismo directorio. | `deterministic` | `relink` |
@@ -113,9 +113,22 @@ está en el informe (`report`, la ruta de `report.json`).
 **Cómo se decide «igual salvo formato».** Primero byte a byte; después por
 tokens (lo que no cambia el código: espacios, comas finales, el orden de los
 `use`); después pasando el archivo del proyecto por la misma Pint con el mismo
-`pint.json`. Un archivo con el mismo código y otros comentarios es
-`format_only` con `comments: true`: adoptarlo deja que un `import --force`
-posterior ponga los comentarios de la plantilla ([adopt.md](adopt.md#riesgos)).
+`pint.json`. En lo que no es PHP no hay tokens: sólo cuentan como formato los
+finales de línea, la indentación y el espacio al final de cada línea (y las
+líneas en blanco del final). Un espacio dentro de una línea —en una cadena,
+en el texto de JSX, entre dos operadores (`a - -b` frente a `a--b`)— o una
+línea partida en dos es una edición: ante la duda, distinto, porque dar por
+formato una edición la adopta y el siguiente `import --force` la borra. Lo que
+reformatea Prettier más allá de la indentación sale, por eso, como editado.
+
+**El mismo código con otros comentarios** (PHP) no es formato. Adoptarlo
+dejaría que un `import --force` reemplace los comentarios y docblocks del
+usuario por los de la plantilla, así que no se adopta: en un archivo registrado
+y editado es `hole_edited` con `comments: true` —cumple, no da paso, y su hash
+sigue siendo el de antes, así que `--force` no lo toca—; en lo que nadie editó
+es `version_delta` (la plantilla cambió sus comentarios), y en lo que el
+manifiesto no conoce, `untracked` (lo decide alguien). Si se quieren los
+comentarios de la plantilla, se borra el archivo y se vuelve a importar.
 
 **Un archivo editado y de una versión anterior** no se puede separar en «lo
 que editaste» y «lo que cambió la plantilla» sin las plantillas viejas: se

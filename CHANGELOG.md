@@ -416,6 +416,32 @@ tercer diagnóstico.
 archivos, sus hallazgos y sus órdenes). La caché ocupó 176 MB en
 school-management y 24 MB en expediente.
 
+### El realineamiento ya no da por formato lo que es una edición
+
+Lo que el diagnóstico da por `format_only` se adopta sin preguntar
+(`apply --deterministic`), y lo adoptado lo vuelve a escribir el siguiente
+`import --force`. Dos ediciones pasaban por formato y se perdían así:
+
+- **En jsx, tsx, vue, js, ts y md** la comparación quitaba todo el espacio,
+  también el de dentro de una línea: `t('Changes saved')` frente a
+  `t('Changessaved')`, `join(' ')` frente a `join('')`, `a - -b` frente a
+  `a--b`. Ahora sólo son formato los finales de línea, la indentación y el
+  espacio al final de cada línea; lo demás es una edición. Lo que reformatea
+  Prettier más allá de la indentación sale como editado, no como formato: es el
+  lado seguro.
+- **En PHP, el mismo código con otros comentarios** se adoptaba como formato
+  (`comments: true`), y `--force` borraba después los comentarios y docblocks
+  del usuario. Ya no se adopta: en un archivo registrado y editado es
+  `hole_edited` —cumple, no da paso, y `--force` no lo toca—; en lo que el
+  manifiesto no conoce, `untracked` (una decisión). Un JSON que no se puede
+  leer se compara por líneas, como el texto.
+
+Las pruebas (`RealignFormatTest`) hacen el ciclo entero —diagnose, plan,
+`apply --deterministic`, `import --force`— con un `ShowView.jsx` y una
+`IndexRequest` editados, y la edición sobrevive.
+([diagnose.md](docs/realign/diagnose.md#las-clases-de-archivo),
+[adopt.md](docs/realign/adopt.md#riesgos)).
+
 ### Al actualizar a 9.4.0
 
 - **Nada cambia si no se usa `larapack:realign`.** El esquema del contrato

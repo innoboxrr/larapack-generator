@@ -14,18 +14,19 @@ use Innoboxrr\LarapackGenerator\Support\Files;
  *  2. Iguales salvo formato: en PHP, la misma secuencia de tokens sin
  *     espacios, con los comentarios sin espacios dentro, sin la coma final
  *     de una lista y con los `use` de la cabecera ordenados —lo que cambia
- *     Pint—; en JSON, el mismo valor; en lo demás, el mismo texto sin
- *     espacios. Lo que esto no reconoce lo intenta después Diagnosis pasando
- *     el archivo del proyecto por la misma Pint (PintPass).
+ *     Pint—; en JSON, el mismo valor; en lo demás (jsx, vue, ts, md…),
+ *     las mismas líneas salvo la indentación y el espacio al final de cada
+ *     una (lines()). Lo que esto no reconoce lo intenta después Diagnosis
+ *     pasando el archivo del proyecto por la misma Pint (PintPass).
  *  3. Distintos: y entonces members() dice qué piezas cambiaron, para saber
  *     si la edición cae dentro de los huecos (Holes).
  *
- * Entre el 2 y el 3, COMMENTS: el mismo código y otros comentarios. El
- * realineamiento lo trata como formato (es lo que pide su definición), pero
- * se distingue porque adoptar un archivo así deja que un `--force` reemplace
- * esos comentarios por los de la plantilla; ScopeClassifier lo marca
- * (`comments: true`) y, en lo que nadie editó o en un hueco, no lo trata
- * como formato.
+ * Entre el 2 y el 3, COMMENTS (sólo PHP): el mismo código y otros
+ * comentarios. No es formato: adoptarlo dejaría que un `--force` reemplace
+ * los comentarios y docblocks del usuario por los de la plantilla.
+ * ScopeClassifier lo trata como una edición que cumple —se conserva, sin
+ * adoptar— salvo en lo que nadie editó (un salto de plantilla) y en lo que
+ * el manifiesto no conoce (una decisión).
  *
  * @phpstan-type Piece array{0: int|string, 1: string}
  */
@@ -119,17 +120,35 @@ final class FileComparison
             $decoded = json_decode($content, true);
 
             return $decoded === null && trim($content) !== 'null'
-                ? (string) preg_replace('/\s+/', '', $content)
+                ? self::lines($content)
                 : (string) json_encode(self::sortKeys($decoded));
         }
 
         if ($kind === 'text') {
-            return (string) preg_replace('/\s+/', '', $content);
+            return self::lines($content);
         }
 
         [$head, $imports, $rest] = self::header(self::tokens($content, $comments));
 
         return implode(' ', [...$head, ...$imports, ...$rest]);
+    }
+
+    /**
+     * Un texto que no es PHP (jsx, tsx, vue, js, ts, md…) sin lo que es
+     * formato con certeza: la indentación, el espacio al final de cada línea
+     * y las líneas en blanco del final. El espacio dentro de una línea no se
+     * toca: en una cadena, en el texto de JSX o entre dos operadores
+     * (`a - -b` y `a--b`) cambia lo que hace el código, y sin un analizador
+     * de cada lenguaje no se distingue. Tampoco se juntan ni se parten
+     * líneas. Ante la duda, distinto: dar por formato una edición la adopta
+     * y el siguiente `--force` la borra.
+     */
+    private static function lines(string $content): string
+    {
+        return implode("\n", array_map(
+            fn (string $line): string => trim($line, " \t"),
+            explode("\n", rtrim($content, " \t\n"))
+        ));
     }
 
     /**

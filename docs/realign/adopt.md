@@ -107,10 +107,13 @@ para `relink`, cuando ya no sale ni como renombrado ni como borrado; para
 **Bajos**: sólo cambia el manifiesto, y se deshace con git
 (`git restore .larapack/manifest.json`).
 
-- **Adoptar un `format_only` marcado `comments: true`** deja que un
-  `import --force` posterior reemplace esos comentarios por los de la
-  plantilla. Si importan, adóptalo como editado: añade un cambio en un hueco, o
-  decídelo como `untracked-edited`.
+- **Un archivo con otros comentarios no se adopta.** Adoptarlo dejaría que un
+  `import --force` posterior reemplace los comentarios del usuario por los de
+  la plantilla, así que el diagnóstico no lo da por formato: lo conserva como
+  editado (`hole_edited`, `comments: true`), o lo deja a una decisión si el
+  manifiesto no lo conoce ([diagnose.md](diagnose.md#las-clases-de-archivo)).
+  Tampoco se adopta un jsx, vue o ts que difiere en algo más que finales de
+  línea, indentación o espacio al final de línea.
 - **Adoptar como editado algo escrito a mano** (`untracked-edited` → `adopt`)
   hace que `--force` no lo regenere nunca: si después se quiere lo generado,
   hay que borrarlo y volver a importar.

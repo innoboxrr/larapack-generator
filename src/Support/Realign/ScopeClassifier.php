@@ -191,13 +191,15 @@ final class ScopeClassifier
             $entries[$index] = match ($after) {
                 FileComparison::IDENTICAL, FileComparison::FORMAT => $this->resolve($entry, FileClass::FORMAT_ONLY, 'igual tras pasarlo por la Pint del proyecto'),
                 // Sólo comentarios en lo que nadie editó es la plantilla que
-                // cambió sus comentarios (version_delta), y en un hueco
-                // entero, el hueco. Lo demás es formato —como lo define el
-                // realineamiento— y se marca, porque adoptarlo deja que
-                // --force reemplace esos comentarios.
-                FileComparison::COMMENTS => $entry['hash_current'] === true || ($entry['tracked'] && Holes::wholeFile((string) $entry['stub']))
+                // cambió sus comentarios (version_delta); en lo que el
+                // manifiesto no conoce, lo decide alguien (untracked), y en
+                // un hueco entero, el hueco. En lo demás son del usuario: no
+                // es formato, porque adoptarlo dejaría que --force los
+                // reemplace por los de la plantilla. Cumple y se conserva
+                // como editado (el hash viejo hace que --force no lo toque).
+                FileComparison::COMMENTS => $entry['hash_current'] === true || ! $entry['tracked'] || Holes::wholeFile((string) $entry['stub'])
                     ? $this->different($entry, $current, $regenerated)
-                    : $this->resolve($entry + ['comments' => true], FileClass::FORMAT_ONLY, 'el mismo código; sólo cambian los comentarios'),
+                    : $this->resolve($entry + ['comments' => true], FileClass::HOLE_EDITED, 'el mismo código con otros comentarios: son del usuario y se conservan'),
                 default => $this->different($entry, $current, $regenerated),
             };
         }
@@ -265,7 +267,7 @@ final class ScopeClassifier
         }
 
         if ($comparison === FileComparison::FORMAT) {
-            return [$this->resolve($entry, FileClass::FORMAT_ONLY, 'igual salvo espacios, comentarios u orden de imports'), null];
+            return [$this->resolve($entry, FileClass::FORMAT_ONLY, 'igual salvo espacios u orden de imports'), null];
         }
 
         return [$entry, [$absolute, $regenerated, $comparison]];

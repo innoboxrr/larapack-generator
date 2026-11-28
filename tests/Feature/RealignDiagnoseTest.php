@@ -108,19 +108,20 @@ final class RealignDiagnoseTest extends TestCase
         $this->assertSame(1, $diagnosis['totals']['classes'][FileClass::HOLE_EDITED]);
     }
 
-    public function test_solo_comentarios_es_formato_y_se_marca(): void
+    public function test_solo_comentarios_no_es_formato_y_se_conserva(): void
     {
         // 158 IndexRequest de school-management: el arreglo de `managed`
-        // hecho a mano con sus propios comentarios.
+        // hecho a mano con sus propios comentarios. Adoptarlo dejaría que
+        // --force los borre: cumple como editado, sin paso.
         $index = 'src/Http/Requests/Post/IndexRequest.php';
         $this->edit($index, 'protected function prepareForValidation', "// Lo dejamos así a propósito.\n    protected function prepareForValidation");
 
-        $this->realign('diagnose');
-        $entry = $this->entry($index);
+        $diagnosis = $this->realign('diagnose');
 
-        $this->assertSame(FileClass::FORMAT_ONLY, $entry['class'] ?? null);
-        $this->assertTrue($entry['comments'] ?? null);
-        $this->assertSame('adopt', $entry['type'] ?? null);
+        $this->assertNull($this->entry($index));
+        $this->assertSame(1, $diagnosis['totals']['classes'][FileClass::HOLE_EDITED]);
+        $this->assertSame(0, $diagnosis['totals']['classes'][FileClass::FORMAT_ONLY] ?? 0);
+        $this->assertSame($diagnosis['totals']['files'], $diagnosis['totals']['conforming']);
     }
 
     public function test_una_migracion_registrada_dos_veces_se_olvida_la_que_falta(): void
