@@ -93,6 +93,8 @@ final class Diagnosis
             }
 
             unset($counts[FileClass::ABSENT]);
+            // Lo que cumple, sin lo `absent` (que no cuenta en `total`).
+            $breakdown = self::breakdown($entries);
 
             $report['scopes'][$scope['path']] = [
                 'package' => $scope['package'],
@@ -106,7 +108,8 @@ final class Diagnosis
                 'diagnosed_at' => $now,
                 'counts' => $counts,
                 'total' => array_sum($counts),
-                'conforming' => count(array_filter($entries, fn (array $entry): bool => $entry['category'] === null)),
+                'conforming' => $breakdown['conforming'],
+                'breakdown' => $breakdown,
                 // Un ámbito sin contrato que el dueño aprobó dejar fuera de
                 // LaraPack (una excepción `no-contract`): el plan no lo vuelve
                 // a proponer.
@@ -148,6 +151,40 @@ final class Diagnosis
         $this->state->saveReport($report);
 
         return ['format_version' => RealignState::FORMAT_VERSION] + $report;
+    }
+
+    /**
+     * Cómo se reparte `total`: lo que cumple (`conforming`: sin paso
+     * pendiente —idéntico o igual salvo formato y ya registrado con su hash,
+     * editado sólo en sus huecos, o con excepción aprobada—), lo que es
+     * igual a lo regenerado pero el manifiesto no registra con su hash
+     * (`to_adopt`: el paso `adopt`), lo que pide otro paso (`other_steps`) y
+     * lo que queda fuera de alcance (`out_of_scope`). Suma `total`. Es lo
+     * que explica que «cumplen» sea menos que `identical`: un archivo
+     * idéntico cumple sólo cuando el manifiesto lo sabe.
+     *
+     * @param  list<array{class: string, category: string|null, type: string|null}>  $entries
+     * @return array{conforming: int, to_adopt: int, other_steps: int, out_of_scope: int}
+     */
+    public static function breakdown(array $entries): array
+    {
+        $breakdown = ['conforming' => 0, 'to_adopt' => 0, 'other_steps' => 0, 'out_of_scope' => 0];
+
+        foreach ($entries as $entry) {
+            if ($entry['class'] === FileClass::ABSENT) {
+                continue;
+            }
+
+            $key = match (true) {
+                $entry['category'] === null => 'conforming',
+                $entry['category'] === Category::OUT_OF_SCOPE => 'out_of_scope',
+                $entry['type'] === 'adopt' && in_array($entry['class'], [FileClass::IDENTICAL, FileClass::FORMAT_ONLY], true) => 'to_adopt',
+                default => 'other_steps',
+            };
+            $breakdown[$key]++;
+        }
+
+        return $breakdown;
     }
 
     /**

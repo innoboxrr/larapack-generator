@@ -317,7 +317,18 @@ final class ApplyOperation implements RealignOperation
         }
 
         foreach ($entry['skipped'] as $skipped) {
-            $result->skipped($skipped['file'], $skipped['reason'], ['step' => $stepOf($skipped['file'])]);
+            $step = $stepOf($skipped['file']);
+            $owner = $this->ownerOf($check, $skipped, $step, $context);
+
+            // Lo que `larapack:fix` salta y no es de este paso (en
+            // route-closure, un closure que no es el fallback de la SPA) lo
+            // resuelve otro paso del plan, una decisión: no es trabajo que
+            // le quede a éste, y el paso puede quedar hecho sin él. Se dice
+            // a cuál le toca. Si el plan no tiene ese paso, queda saltado y
+            // el paso, a medias.
+            $owner === null
+                ? $result->skipped($skipped['file'], $skipped['reason'], ['step' => $step])
+                : $result->unchanged($skipped['file'], "No es de este paso: lo resuelve {$owner} ({$skipped['reason']})", ['step' => $step, 'deferred_to' => $owner]);
         }
 
         if ($entry['unchanged'] > 0) {
@@ -331,6 +342,40 @@ final class ApplyOperation implements RealignOperation
         if ($check === 'resource-appends' && $entry['fixed'] !== []) {
             $result->note('Los Resources arreglados ignoran `appends[]` hasta que declaras en $appendable los accessors que pide la interfaz (`larapack:fix resource-appends --dry-run` los propone).');
         }
+    }
+
+    /**
+     * El id del paso del plan que resuelve lo que `larapack:fix` saltó, si
+     * es de otro tipo que `fix` (StepTypes::forFinding con el mensaje de
+     * verify, que es la razón que da LegacyFix) y el plan lo tiene en el
+     * mismo ámbito que el paso `fix`; null si es de este paso.
+     *
+     * @param  array{file: string, reason: string}  $skipped
+     */
+    private function ownerOf(string $check, array $skipped, string $stepId, OperationContext $context): ?string
+    {
+        $type = StepTypes::forFinding(['check' => $check, 'message' => $skipped['reason']]);
+
+        if ($type === null || $type === 'fix') {
+            return null;
+        }
+
+        $steps = (array) (($context->state->plan() ?? [])['steps'] ?? []);
+        $scope = null;
+
+        foreach ($steps as $step) {
+            if (is_array($step) && ($step['id'] ?? null) === $stepId) {
+                $scope = $step['scope']['path'] ?? null;
+            }
+        }
+
+        foreach ($steps as $step) {
+            if (is_array($step) && ($step['type'] ?? null) === $type && ($step['scope']['path'] ?? null) === $scope && is_string($step['id'] ?? null)) {
+                return $step['id'];
+            }
+        }
+
+        return null;
     }
 
     /**

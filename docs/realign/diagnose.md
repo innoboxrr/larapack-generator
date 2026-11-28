@@ -61,9 +61,10 @@ Después, `larapack:realign plan` lo convierte en pasos ([plan.md](plan.md)).
 La de texto, para una persona:
 
 ```
-  app (núcleo): 412 archivos, 380 cumplen
-  billing: 96 archivos, 41 cumplen
+  app (núcleo): 412 archivos, 330 cumplen, 50 por adoptar, 20 con otro paso, 12 fuera de alcance
+  billing: 96 archivos, 41 cumplen, 30 por adoptar, 15 con otro paso, 10 fuera de alcance
   legacy-reports: 0 archivos, 0 cumplen (sin contrato: no hay con qué comparar)
+  «cumplen»: sin paso pendiente —idénticos o iguales salvo formato que el manifiesto ya registra con su hash, …
 
   Archivos por clase:
     identical            380  Byte a byte lo que generaría el contrato.
@@ -79,9 +80,18 @@ La de texto, para una persona:
   Informe: .larapack/realign/report.json. Siguiente: larapack:realign plan
 ```
 
-- **«cumplen»** son `identical`, `format_only` y `hole_edited`: lo que ya es lo
-  que el contrato pide (lo `identical` con el manifiesto viejo cumple, pero
-  además pide un `adopt`).
+- **«cumplen»** es lo que no tiene paso pendiente: `identical` y
+  `format_only` que el manifiesto ya registra con su hash actual,
+  `hole_edited` y lo que tiene una excepción aprobada. Un `identical` o
+  `format_only` que el manifiesto no registra con su hash (formateado después
+  de generar, o de otra versión) es ya lo que el contrato pide pero **todavía
+  no cumple**: cuenta en **«por adoptar»** —el paso `adopt`, que sólo anota el
+  manifiesto—. Por eso «cumplen» puede ser mucho menos que `identical` en la
+  lista de clases: en una copia de un proyecto 7.x, 1 185 cumplían con 2 844
+  `identical`, casi todos por adoptar.
+- Los cuatro números suman los archivos del ámbito: **cumplen**, **por
+  adoptar**, **con otro paso** (`regenerate`, `edited-outside`, `missing`…) y
+  **fuera de alcance** (`migration_history`, `not_regenerated`).
 - Un ámbito **«no se pudo regenerar»** dice por qué: casi siempre, un contrato
   que no valida con esta versión. Ese ámbito no se compara y el plan pide la
   decisión `contract-invalid`.
@@ -91,7 +101,9 @@ La de texto, para una persona:
 La de `--format=json` lleva lo mismo con números: `{format_version, ok,
 action, generator, generated_at, totals: {classes, categories, conforming,
 files}, verify, scopes: [{package, path, contract, manifest, manifest_version,
-regeneration, counts, total, conforming}], report}`. El detalle de cada archivo
+regeneration, counts, total, conforming, breakdown}], report}`. `breakdown` es
+`{conforming, to_adopt, other_steps, out_of_scope}`, el reparto de `total` de
+la salida de texto. El detalle de cada archivo
 está en el informe (`report`, la ruta de `report.json`).
 
 ## Las clases de archivo
@@ -126,9 +138,16 @@ dejaría que un `import --force` reemplace los comentarios y docblocks del
 usuario por los de la plantilla, así que no se adopta: en un archivo registrado
 y editado es `hole_edited` con `comments: true` —cumple, no da paso, y su hash
 sigue siendo el de antes, así que `--force` no lo toca—; en lo que nadie editó
-es `version_delta` (la plantilla cambió sus comentarios), y en lo que el
-manifiesto no conoce, `untracked` (lo decide alguien). Si se quieren los
+es `version_delta` (la plantilla cambió sus comentarios), en lo que el
+manifiesto no conoce, `untracked` (lo decide alguien), y en una migración,
+`migration_history` (no se reescribe nunca). Si se quieren los
 comentarios de la plantilla, se borra el archivo y se vuelve a importar.
+
+**La clasificación no depende de lo que escribe `adopt`.** `diagnose`,
+`check` y la comprobación que hace `adopt` antes de anotar cada archivo usan la
+misma clasificación (ScopeClassifier), y lo que `adopt` cambia —el hash del
+manifiesto y la versión, que pasa a ser la actual— no cambia la clase: lo que
+diagnose da por formato y adopt anota, `check` lo sigue viendo formato.
 
 **Un archivo editado y de una versión anterior** no se puede separar en «lo
 que editaste» y «lo que cambió la plantilla» sin las plantillas viejas: se
@@ -142,9 +161,19 @@ README del paquete, escrita como datos en `src/Support/Realign/Holes.php`:
 
 - **Archivo entero**: los traits del modelo, un Resource, un listener, un
   observer, una factoría, una política y una prueba.
-- **Un método**: en una request, `rules()`; en un ManagedFilter, `canView()`.
-  Un hueco de método admite además `use` nuevos en la cabecera (el código del
-  hueco trae los suyos).
+- **Un método**: en una request, los ganchos de validación que la plantilla
+  deja vacíos —`rules()`, `messages()`, `attributes()`,
+  `prepareForValidation()` y `passedValidation()`; en `IndexRequest`, todos
+  menos `prepareForValidation()`, que fuerza `managed`—; en la request de un
+  endpoint, `prepareForValidation()` y `rules()`, y además `authorize()` y
+  `handle()` si es de un endpoint sin modelo (nacen cerrado y con
+  `abort(501)`: lo regenerado lo dice); en un ManagedFilter, `canView()`; en
+  el AuthServiceProvider, `defineGates()`. Un hueco de método admite además
+  `use` nuevos en la cabecera (el código del hueco trae los suyos).
+
+La lista es la de las plantillas: `tests/Unit/HolesTest` la cruza con lo que
+cada plantilla deja vacío para el usuario y con la tabla del README, y una
+plantilla nueva con un hueco sin declarar falla ahí.
 
 Lo que cambie en cualquier otro método, una propiedad o un `use` de otro
 archivo está fuera: `edited_outside`, con las piezas en `members`.
