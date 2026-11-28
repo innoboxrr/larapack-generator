@@ -590,7 +590,9 @@ nueva se enchufa sin registrar un comando. Cada acción declara qué opciones us
 
 1. [`Scopes`](src/Support/Realign/Scopes.php) da los ámbitos: la raíz y cada
    paquete local (los mismos de `ProjectSources`) con contrato o manifiesto
-   propio.
+   propio. Si la raíz no usa LaraPack (ni contrato ni manifiesto), cada
+   paquete local es un ámbito aunque tampoco tenga nada: su `no-contract`,
+   su código sin gestionar y sus controladores son suyos.
 2. [`Regeneration`](src/Support/Realign/Regeneration.php) regenera el
    contrato de cada uno en `.larapack/realign/cache/<ámbito>/<clave>/`: copia
    el `composer.json`, el `laraimport.json` y el `pint.json` y corre
