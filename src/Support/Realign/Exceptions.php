@@ -4,8 +4,10 @@ namespace Innoboxrr\LarapackGenerator\Support\Realign;
 
 use Innoboxrr\LarapackGenerator\Support\Files;
 use Innoboxrr\LarapackGenerator\Support\HandRolledLock;
+use Innoboxrr\LarapackGenerator\Support\ProjectVerification;
 use Innoboxrr\LarapackGenerator\Support\Verifier;
 use RuntimeException;
+use Throwable;
 
 /**
  * Las excepciones del realineamiento: lo que se decide dejar como está
@@ -45,12 +47,18 @@ use RuntimeException;
  *         {"target": "realign:route-closure:routes/web.php#get('/csp-report')",
  *          "type": "route-closure", "check": "route-closure", "scope": ".", "file": "routes/web.php",
  *          "subject": "get('/csp-report')", "line": 84, "step": "route-closure@.",
- *          "reason": "…", "fingerprint": "sha256:…", "requested_at": "…"}
+ *          "message": "…", "reason": "…", "fingerprint": "sha256:…", "requested_at": "…"}
  *       ]
  *     }
  *
- * @phpstan-type Request array{target: string, type: string, check: string|null, scope: string, file: string, subject: string|null, line: int|null, step: string|null, reason: string, fingerprint: string|null, requested_at: string}
- * @phpstan-type Approval array{reason: string, fingerprint: string|null}
+ * `message` es el del hallazgo que se pidió exceptuar (desde 9.4.0; null en
+ * lo que no sale de un hallazgo). Lo escribe quien pide, así que no aprueba
+ * nada: al aprobar el de un hallazgo sin archivo (`model:`), el dueño ve el
+ * hallazgo **de hoy** —verify se corre— y se aprueba su huella, no la de la
+ * solicitud (statements()).
+ *
+ * @phpstan-type Request array{target: string, type: string, check: string|null, scope: string, file: string, subject: string|null, line: int|null, step: string|null, message: string|null, reason: string, fingerprint: string|null, requested_at: string}
+ * @phpstan-type Approval array{reason: string, fingerprint: string|null, approved_by?: string|null}
  * @phpstan-type Item array{type?: string|null, scope?: string|null, file?: string|null, check?: string|null, model?: string|null, message?: string|null}
  */
 final class Exceptions
@@ -108,6 +116,21 @@ final class Exceptions
      * @var array<string, true>
      */
     private array $used = [];
+
+    /**
+     * Los mensajes de hoy de los hallazgos de verify sin archivo (los de una
+     * entidad), por su objetivo, de las comprobaciones ya vistas (observe()).
+     *
+     * @var array<string, string>
+     */
+    private array $statements = [];
+
+    /**
+     * Las comprobaciones cuyos hallazgos ya se vieron.
+     *
+     * @var array<string, true>
+     */
+    private array $observed = [];
 
     public function __construct(private readonly RealignState $state)
     {
@@ -264,7 +287,7 @@ final class Exceptions
      *  - `reason-changed`: aprobada con otra razón que la de su solicitud;
      *  - `code-changed`: aprobada sobre otro código (la huella no coincide);
      *  - `stale`: aprobada sobre algo que ya no existe (un closure que no
-     *    está).
+     *    está, el hallazgo de una entidad que verify ya no dice).
      */
     public function status(string $target): string
     {
@@ -279,13 +302,8 @@ final class Exceptions
             return self::REASON_CHANGED;
         }
 
-        $parts = ExceptionTargets::parse($target);
-
-        // La de una entidad se juzga con su hallazgo (verify), no aquí.
-        if ($parts !== null && str_starts_with($parts['file'], 'model:')) {
-            return self::APPROVED;
-        }
-
+        // La de una entidad, como las demás: con la huella de su hallazgo de
+        // hoy (statements()). Antes salía siempre aprobada.
         $current = $this->fingerprint($target);
 
         return match (true) {
@@ -296,15 +314,96 @@ final class Exceptions
     }
 
     /**
-     * La huella actual de lo que cubre un objetivo (con caché).
+     * La huella actual de lo que cubre un objetivo (con caché). La de un
+     * hallazgo sin archivo (`model:`) es la de su mensaje de hoy, y null si
+     * verify ya no lo dice.
      */
     public function fingerprint(string $target): ?string
     {
+        if (self::isStatement($target)) {
+            $message = $this->statement($target);
+
+            return $message === null ? null : ExceptionTargets::statementFingerprint($message);
+        }
+
         if (! array_key_exists($target, $this->fingerprints)) {
             $this->fingerprints[$target] = ExceptionTargets::fingerprint($this->root, $target);
         }
 
         return $this->fingerprints[$target];
+    }
+
+    /**
+     * Si el objetivo es el de un hallazgo sin archivo (el de una entidad).
+     */
+    public static function isStatement(string $target): bool
+    {
+        $parts = ExceptionTargets::parse($target);
+
+        return $parts !== null && str_starts_with($parts['file'], 'model:');
+    }
+
+    /**
+     * El mensaje de hoy del hallazgo sin archivo que nombra el objetivo, o
+     * null si verify ya no lo dice. Si su comprobación aún no se vio, corre
+     * verify con ella (una vez).
+     */
+    public function statement(string $target): ?string
+    {
+        $parts = ExceptionTargets::parse($target);
+
+        if ($parts === null || ! self::isStatement($target)) {
+            return null;
+        }
+
+        $check = $parts['check'] ?? $parts['type'];
+
+        if (! in_array($check, Verifier::CHECKS, true)) {
+            return null;
+        }
+
+        if (! isset($this->observed[$check])) {
+            // Se marca antes: la verificación vuelve a este objeto (observe(),
+            // all()) y no debe correrse dentro de sí misma.
+            $this->observed[$check] = true;
+
+            try {
+                (new ProjectVerification($this->root, exceptions: $this))->run([$check]);
+            } catch (Throwable) {
+                // Sin verify (un proyecto sin contrato legible) no hay
+                // hallazgo de hoy: no se aprueba ni se da por aprobada.
+            }
+        }
+
+        return $this->statements[$target] ?? null;
+    }
+
+    /**
+     * Lo que dijo verify, tal cual (antes de review()): de cada hallazgo sin
+     * archivo, su mensaje por su objetivo. `$ran`, las comprobaciones que se
+     * corrieron: de ellas, lo que no salga ya no está.
+     *
+     * @param  array<int, array{level: string, check: string, model: string|null, file: string|null, message: string}>  $findings
+     * @param  array<int, string>  $ran
+     */
+    public function observe(array $findings, array $ran): void
+    {
+        foreach ($ran as $check) {
+            $this->observed[$check] = true;
+        }
+
+        foreach ($findings as $finding) {
+            if (($finding['file'] ?? null) !== null && $finding['file'] !== '') {
+                continue;
+            }
+
+            $target = $this->targetOf(['type' => StepTypes::forFinding($finding), 'check' => $finding['check'],
+                'model' => $finding['model'], 'message' => $finding['message']]);
+
+            if ($target !== null) {
+                $this->statements[$target] = $finding['message'];
+            }
+        }
     }
 
     /**
@@ -505,6 +604,7 @@ final class Exceptions
                 'subject' => is_string($parts['subject'] ?? null) ? $parts['subject'] : null,
                 'line' => is_int($request['line'] ?? null) ? $request['line'] : null,
                 'step' => is_string($request['step'] ?? null) ? $request['step'] : null,
+                'message' => is_string($request['message'] ?? null) ? $request['message'] : null,
                 'reason' => self::sanitise($request['reason']),
                 'fingerprint' => is_string($request['fingerprint'] ?? null) ? $request['fingerprint'] : null,
                 'requested_at' => is_string($request['requested_at'] ?? null) ? $request['requested_at'] : '',

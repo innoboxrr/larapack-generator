@@ -37,12 +37,18 @@ use RuntimeException;
  * mismo producen el mismo archivo byte a byte, y el diff de una revisión sólo
  * enseña lo que cambió.
  *
+ * Desde 9.4.0 una entrada puede llevar `approved_by`: el nombre de la persona
+ * que la aprobó sin terminal (`LARAPACK_APPROVER` y `--approver`,
+ * OwnerConfirmation), para que quien revisa el diff lo vea. Lo aprobado en
+ * la terminal no lo lleva: quien aprueba es quien comitea. Una versión
+ * anterior lo ignora al leer.
+ *
  * @phpstan-import-type MethodOutline from PhpOutline
  * @phpstan-import-type ClassOutline from PhpOutline
  * @phpstan-import-type AttributeOutline from PhpOutline
  * @phpstan-import-type Token from PhpOutline
  *
- * @phpstan-type Approval array{reason: string, fingerprint: string|null}
+ * @phpstan-type Approval array{reason: string, fingerprint: string|null, approved_by?: string|null}
  */
 final class HandRolledLock
 {
@@ -108,7 +114,13 @@ final class HandRolledLock
                 throw new RuntimeException(self::PATH." aprueba dos veces {$target}.");
             }
 
-            $approved[$target] = ['reason' => $reason, 'fingerprint' => $fingerprint];
+            $approver = $entry['approved_by'] ?? null;
+
+            if ($approver !== null && (! is_string($approver) || trim($approver) === '')) {
+                throw new RuntimeException(self::PATH." tiene un `approved_by` que no es un nombre (posición {$index}).");
+            }
+
+            $approved[$target] = ['reason' => $reason, 'fingerprint' => $fingerprint] + ($approver === null ? [] : ['approved_by' => $approver]);
         }
 
         return $approved;
@@ -149,7 +161,8 @@ final class HandRolledLock
         $entries = [];
 
         foreach ($approved as $target => $approval) {
-            $entries[] = ['target' => (string) $target, 'reason' => $approval['reason'], 'fingerprint' => $approval['fingerprint']];
+            $entries[] = ['target' => (string) $target, 'reason' => $approval['reason'], 'fingerprint' => $approval['fingerprint']]
+                + (isset($approval['approved_by']) ? ['approved_by' => $approval['approved_by']] : []);
         }
 
         return json_encode($entries, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR)."\n";

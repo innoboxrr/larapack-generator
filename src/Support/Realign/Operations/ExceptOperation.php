@@ -105,6 +105,9 @@ final class ExceptOperation implements RealignOperation
                     'subject' => $element['subject'],
                     'line' => $element['line'],
                     'step' => (string) $step['id'],
+                    // El hallazgo, para que el dueño lo vea al aprobar. No
+                    // aprueba nada: lo escribe quien pide (Exceptions).
+                    'message' => $element['message'] ?? null,
                     'reason' => $reason,
                     'fingerprint' => $element['fingerprint'],
                     'requested_at' => $now,
@@ -129,7 +132,7 @@ final class ExceptOperation implements RealignOperation
      * por qué no se puede nombrar.
      *
      * @param  array<string, mixed>  $step
-     * @return list<array{target: string, file: string, check: string|null, subject: string|null, line: int|null, fingerprint: string|null}|array{skip: string, file: string|null}>
+     * @return list<array{target: string, file: string, check: string|null, subject: string|null, line: int|null, fingerprint: string|null, message?: string|null}|array{skip: string, file: string|null}>
      */
     private function elements(array $step, string $root): array
     {
@@ -150,21 +153,21 @@ final class ExceptOperation implements RealignOperation
 
             $check = is_string($finding['check'] ?? null) ? $finding['check'] : null;
             $file = is_string($finding['file'] ?? null) ? $finding['file'] : null;
+            $message = is_string($finding['message'] ?? null) ? $finding['message'] : null;
 
             if ($type === 'route-closure') {
-                $elements[] = $this->closure($finding, $root);
+                $elements[] = $this->closure($finding, $root) + ['message' => $message];
 
                 continue;
             }
 
             if ($file !== null) {
-                $elements[] = $this->element(ExceptionTargets::forFile($type, $check, $file), $file, $check, null, null, $root);
+                $elements[] = $this->element(ExceptionTargets::forFile($type, $check, $file), $file, $check, null, null, $root) + ['message' => $message];
 
                 continue;
             }
 
             $model = is_string($finding['model'] ?? null) ? $finding['model'] : null;
-            $message = is_string($finding['message'] ?? null) ? $finding['message'] : null;
 
             if ($model === null || $message === null) {
                 $elements[] = ['skip' => 'El hallazgo no dice de qué archivo ni de qué modelo es: no se puede nombrar con exactitud.', 'file' => null];
@@ -174,7 +177,7 @@ final class ExceptOperation implements RealignOperation
 
             $target = ExceptionTargets::forStatement($type, $check, $model, $message);
             $elements[] = ['target' => $target, 'file' => 'model:'.$model, 'check' => $check, 'subject' => null, 'line' => null,
-                'fingerprint' => ExceptionTargets::statementFingerprint($message)];
+                'fingerprint' => ExceptionTargets::statementFingerprint($message), 'message' => $message];
         }
 
         foreach ([...(array) ($details['files'] ?? []), ...(array) ($details['unmanaged'] ?? [])] as $entry) {

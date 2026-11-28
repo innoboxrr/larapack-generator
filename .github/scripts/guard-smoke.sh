@@ -143,6 +143,13 @@ for form in unix windows; do
     grep -q 'dueño del proyecto' "$WORK/stderr" || fail "[$form] el mensaje no dice quién aprueba: $(cat "$WORK/stderr")"
     echo "ok [$form] aprobar una excepción: 2 (bloquea)"
 
+    # La vía sin terminal de una persona (LARAPACK_APPROVER + --approver)
+    # también: el filtro de la shell la deja pasar a la guardia porque
+    # `--approver` contiene `approve`.
+    code=0; run_pre "$form" 'LARAPACK_APPROVER=Ana php vendor/bin/builder larapack:x --approver=Ana' || code=$?
+    [ "$code" = 2 ] || fail "[$form] la vía sin terminal debe salir con 2 y salió con $code: $(cat "$WORK/stderr")"
+    echo "ok [$form] la vía sin terminal (--approver): 2 (bloquea)"
+
     run_pre "$form" 'git status' || fail "[$form] una orden cualquiera no debe bloquear (código $?): $(cat "$WORK/stderr")"
     echo "ok [$form] orden cualquiera: 0"
 

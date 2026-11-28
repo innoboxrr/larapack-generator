@@ -481,7 +481,7 @@ final class Guard
             $eval = ($words[0] ?? null) === 'eval';
 
             foreach ($words as $index => $word) {
-                if ($invoked && in_array($word, ['approve', 'revoke'], true)) {
+                if (($invoked && in_array($word, ['approve', 'revoke'], true)) || self::namesApprover($word)) {
                     $approves = true;
                 }
 
@@ -569,6 +569,24 @@ final class Guard
     private static function isLockName(string $word): bool
     {
         return preg_match(self::LOCK_NAME, self::lexical(self::normalise($word))) === 1;
+    }
+
+    /**
+     * La vía sin terminal de una persona para aprobar (OwnerConfirmation):
+     * la opción `--approver` o dar valor a `LARAPACK_APPROVER` —con `export`,
+     * con `env`, delante de otra orden—. Leerla o buscarla (`grep
+     * LARAPACK_APPROVER`, `echo "$LARAPACK_APPROVER"`) no la usa. En Windows
+     * las variables no distinguen mayúsculas: aquí tampoco.
+     *
+     * La variable sola no aprueba nada —`approve` pide también la opción—, y
+     * el filtro de la shell del hook sólo le pasa a la guardia las órdenes con
+     * `approve` (AgentHooks::preCommand()), que `--approver` contiene: lo que
+     * importa es que la opción no pase nunca.
+     */
+    private static function namesApprover(string $word): bool
+    {
+        return preg_match('/^--approver(=|$)/', $word) === 1
+            || preg_match('/(^|[^A-Za-z0-9_])'.OwnerConfirmation::APPROVER_ENV.'=/i', $word) === 1;
     }
 
     /**

@@ -6,10 +6,12 @@ use Innoboxrr\LarapackGenerator\Support\BranchProtection;
 use Innoboxrr\LarapackGenerator\Support\Declaration;
 use Innoboxrr\LarapackGenerator\Support\Generation;
 use Innoboxrr\LarapackGenerator\Support\MigrationTimestamp;
+use Innoboxrr\LarapackGenerator\Support\OwnerConfirmation;
 use Innoboxrr\LarapackGenerator\Support\ProjectRoot;
 use Innoboxrr\LarapackGenerator\Support\Realign\Apply\ConcernMove;
 use Innoboxrr\LarapackGenerator\Support\Realign\Operations\Operations;
 use Innoboxrr\LarapackGenerator\Support\Realign\Operations\ScopeReference;
+use Innoboxrr\LarapackGenerator\Tests\Support\FakeOwnerTerminal;
 use Innoboxrr\LarapackGenerator\Tests\Support\FakeProject;
 use Innoboxrr\LarapackGenerator\Tests\Support\Larapack;
 use PHPUnit\Framework\TestCase as BaseTestCase;
@@ -30,12 +32,27 @@ abstract class TestCase extends BaseTestCase
         Operations::reset();
         ScopeReference::forget();
         ConcernMove::reset();
+        OwnerConfirmation::useTerminal(null);
 
         if (isset($this->project)) {
             $this->project->cleanup();
         }
 
         parent::tearDown();
+    }
+
+    /**
+     * El dueño del proyecto delante de su terminal: lo que `larapack:hand-rolled
+     * approve` o `revoke` le pregunte, lo contesta (con `$answer`, o con la
+     * frase que pide la pregunta). Devuelve la terminal, con lo que se le
+     * enseñó.
+     */
+    protected function ownerAtTerminal(?string $answer = null): FakeOwnerTerminal
+    {
+        $terminal = new FakeOwnerTerminal($answer);
+        OwnerConfirmation::useTerminal(fn (): FakeOwnerTerminal => $terminal);
+
+        return $terminal;
     }
 
     /**
