@@ -94,7 +94,7 @@ que escribe uno lo lee el siguiente.
 | `fix` | Lo mismo que `larapack:fix <comprobación> --package=<paquete>`. | Lo que no tiene la forma generada. | Medio |
 | `endpoint-tests` | Las pruebas que faltan en cada `<Modelo>EndpointsTest`. | Nunca quita ni cambia un método. | Bajo |
 | `controller-concern` | Mueve un trait de `Http/Controllers/Concerns` a `Http/Requests/Concerns` y reescribe sus nombres. | El que usa un controlador. | Bajo |
-| `model-lists` | Lo que falta en las listas del modelo. | Nunca quita ni cambia. | Medio |
+| `model-lists` | Lo que falta en las listas del modelo, salvo las de asignación en masa. | Nunca quita ni cambia; no abre `$fillable`, `$creatable` ni `$updatable`. | Medio |
 | `pin-foreign-keys` | `on_delete`/`on_update` en `laraimport.json`. | Nunca una migración ni la base. | Bajo |
 
 ### regenerate
@@ -192,9 +192,18 @@ clase (relativo). Si el manifiesto lo registraba, el registro lo sigue.
 
 ### model-lists
 
-Completa `$fillable`, `$creatable`, `$updatable`, `$export_cols` y `casts()` de
-un modelo editado con lo que declara el contrato (`ModelRegions`, lo mismo que
-`import --force` con un modelo editado).
+Completa `$hidden`, `$export_cols`, `$loadable_relations`, `$loadable_counts`
+y `casts()` de un modelo editado con lo que declara el contrato
+(`ModelRegions`, lo mismo que `import --force` con un modelo editado).
+
+- **`$fillable`, `$creatable` y `$updatable` no los completa sola**: lo que
+  falta ahí abriría la asignación en masa de una columna, y el proyecto pudo
+  sacarla a propósito (en un proyecto real, `clinics.is_test`, excluida para
+  que nadie se saliera de las cuentas con un `update`); además el contrato pudo
+  salir de `infer`. Lo salta diciendo qué columna y las dos salidas: añadirla a
+  mano si debe escribirse por la API, o declararla en el contrato con
+  `fillable: false` (o `creatable`/`updatable`) y diagnosticar otra vez. El
+  paso no queda hecho hasta que el modelo y el contrato dicen lo mismo.
 
 - **Sólo añade**: nunca quita lo que el contrato ya no declara ni cambia un
   cast distinto (son avisos `info` de verify, y decisiones del dueño). Una
@@ -205,7 +214,8 @@ un modelo editado con lo que declara el contrato (`ModelRegions`, lo mismo que
   comentarios—. Así el diagnóstico siguiente ve el modelo igual a lo
   regenerado y no `edited_outside`. El orden no es sólo formato: el de
   `$export_cols` es el de las columnas de la exportación.
-- Riesgo medio: cambia qué se asigna en masa y cómo se convierte una columna.
+- Riesgo medio: cambia qué columnas salen en la exportación y la respuesta, y
+  cómo se convierte una columna; qué se asigna en masa lo decide una persona.
 
 ### pin-foreign-keys
 

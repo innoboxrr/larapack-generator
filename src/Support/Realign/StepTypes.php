@@ -143,7 +143,7 @@ final class StepTypes
             'category' => Category::DETERMINISTIC,
             'title' => 'Poner las listas del modelo al día con el contrato',
             'risk' => self::MEDIUM,
-            'why' => 'Las listas del modelo (fillable, casts, export_cols) no dicen lo que el contrato. Se añade lo que falta, lo mismo que hace `import --force` con un modelo editado; nunca se quita ni se cambia nada. Cambia qué se asigna y cómo se convierte una columna. Lo que no se localiza con certeza se salta con la orden manual.',
+            'why' => 'Las listas del modelo (casts, export_cols, hidden, fillable) no dicen lo que el contrato. Se añade lo que falta, lo mismo que hace `import --force` con un modelo editado; nunca se quita ni se cambia nada. A fillable, creatable y updatable no se añade solo: abriría la asignación en masa de una columna que el proyecto pudo sacar a propósito, y se salta diciendo cómo decidirlo. Lo que no se localiza con certeza se salta con la orden manual.',
             'reversible' => true,
             'run' => 'larapack:realign apply {id}',
             'playbook' => 'model-lists',

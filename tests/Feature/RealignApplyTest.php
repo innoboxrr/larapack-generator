@@ -241,7 +241,7 @@ final class RealignApplyTest extends TestCase
 
     public function test_completa_las_listas_de_un_modelo_editado(): void
     {
-        $this->edit(self::MODEL, "protected \$fillable = [\n        'title', 'published', 'user_id'", "protected \$fillable = [\n        'title', 'user_id'");
+        $this->edit(self::MODEL, "public static \$export_cols = [\n        'title', 'published'", "public static \$export_cols = [\n        'title'");
         $this->prepare();
 
         $id = 'model-lists@.';
@@ -249,8 +249,32 @@ final class RealignApplyTest extends TestCase
 
         $this->realign('apply', ['targets' => [$id]]);
 
-        $this->assertMatchesRegularExpression("/protected \\\$fillable = \\[[^\\]]*'published'/", $this->project->read(self::MODEL));
+        $this->assertMatchesRegularExpression("/public static \\\$export_cols = \\[[^\\]]*'published'/", $this->project->read(self::MODEL));
         $this->assertTrue($this->realign('check', ['targets' => [$id]])['done']);
+    }
+
+    /**
+     * Lo que abre la asignación en masa no se añade solo: una columna que el
+     * proyecto sacó de $fillable a propósito volvería a escribirse desde una
+     * petición. Lo encontró la prueba sobre un proyecto real (`is_test`,
+     * excluida a propósito de las listas del modelo).
+     */
+    public function test_no_abre_la_asignacion_en_masa_de_una_columna_sin_que_nadie_lo_decida(): void
+    {
+        $this->edit(self::MODEL, "protected \$fillable = [\n        'title', 'published', 'user_id'", "protected \$fillable = [\n        'title', 'user_id'");
+        $this->prepare();
+        $before = $this->project->read(self::MODEL);
+        $id = 'model-lists@.';
+
+        $result = $this->realign('apply', ['targets' => [$id]], Command::FAILURE);
+
+        $this->assertSame($before, $this->project->read(self::MODEL));
+        $reasons = implode("\n", array_column($result['skipped'], 'reason'));
+        $this->assertStringContainsString("\$fillable: no se añade solo 'published'", $reasons);
+        $this->assertStringContainsString('`fillable: false`', $reasons);
+        // Ni $creatable ni $updatable: no faltaba nada en ellas.
+        $this->assertStringNotContainsString('$creatable', $reasons);
+        $this->assertFalse($this->realign('check', ['targets' => [$id]], Command::FAILURE)['done']);
     }
 
     /**
@@ -262,7 +286,7 @@ final class RealignApplyTest extends TestCase
     public function test_las_listas_completadas_no_dejan_el_modelo_editado_fuera_de_sus_huecos(): void
     {
         $generated = $this->project->read(self::MODEL);
-        $this->edit(self::MODEL, "protected \$fillable = [\n        'title', 'published', 'user_id'", "protected \$fillable = [\n        'title', 'user_id'");
+        $this->edit(self::MODEL, "public static \$export_cols = [\n        'title', 'published'", "public static \$export_cols = [\n        'title'");
         $this->prepare();
 
         $this->assertSame('edited_outside', $this->entry(self::MODEL)['class'] ?? null);

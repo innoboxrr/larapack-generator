@@ -52,6 +52,12 @@ use Innoboxrr\LarapackGenerator\Support\UnifiedDiff;
  */
 final class ApplyOperation implements RealignOperation
 {
+    /**
+     * Las listas del modelo que, al crecer, dejan escribir una columna desde
+     * una petición. `model-lists` no las completa sola.
+     */
+    public const OPENS_WRITES = ['fillable', 'creatable', 'updatable'];
+
     private const MIGRATION = '#(^|/)database/migrations/[^/]+\.php$#';
 
     /**
@@ -526,14 +532,35 @@ final class ApplyOperation implements RealignOperation
                 continue;
             }
 
-            $sync = ModelRegions::sync(Files::read($absolute), ModelLists::expected($declared), $reference->relative($file));
+            $code = Files::read($absolute);
+            $expected = ModelLists::expected($declared);
+
+            // Lo que abre la asignación en masa no se añade solo: una columna
+            // que el proyecto quitó a propósito de $fillable (un `is_test`, un
+            // rol, un saldo) volvería a poder escribirse desde una petición, y
+            // el contrato pudo salir de `infer`. Se dice y se deja al dueño.
+            $opening = ModelLists::expected($declared);
+            $withheld = ModelRegions::sync($code, $opening, $reference->relative($file))['added'];
+            $withheld = array_intersect_key($withheld, array_flip(self::OPENS_WRITES));
+
+            foreach (self::OPENS_WRITES as $list) {
+                $expected[$list] = [];
+            }
+
+            foreach ($withheld as $region => $entries) {
+                $result->skipped($file, "\${$region}: no se añade solo ".implode(', ', $entries)
+                    .': abriría su asignación en masa. Si debe escribirse por la API, añádelo a mano a $'.$region
+                    .'; si no, declara en laraimport.json esa columna con `'.$region.': false` y corre larapack:realign diagnose.', $extra);
+            }
+
+            $sync = ModelRegions::sync($code, $expected, $reference->relative($file));
 
             foreach ($sync['skipped'] as $skip) {
                 $result->skipped($file, "{$skip['region']}: {$skip['reason']} A mano: {$skip['manual']}", $extra);
             }
 
             if ($sync['added'] === []) {
-                if ($sync['skipped'] === []) {
+                if ($sync['skipped'] === [] && $withheld === []) {
                     $result->unchanged($file, 'Sus listas ya tienen lo que declara el contrato.', $extra);
                 }
 

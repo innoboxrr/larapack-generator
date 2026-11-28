@@ -110,7 +110,7 @@ final class RealignProfilesTest extends TestCase
 
         $this->edit($test, "use Innoboxrr\\SearchSurge\\Search\\Support\\FilterRegistry;\n", '');
         $generatedModel = $this->project->read('src/Models/Post.php');
-        $this->edit('src/Models/Post.php', "protected \$fillable = [\n        'title', 'published', 'user_id'", "protected \$fillable = [\n        'title', 'user_id'");
+        $this->edit('src/Models/Post.php', "public static \$export_cols = [\n        'title', 'published'", "public static \$export_cols = [\n        'title'");
         $this->retiredModel('StaffMember');
         $this->concernUsedOnlyByRequests();
         $controller = 'src/Http/Controllers/Clinic/CatalogCodesController.php';
@@ -134,7 +134,7 @@ final class RealignProfilesTest extends TestCase
         $this->assertStringContainsString('"on_delete": "cascade"', $this->project->read('laraimport.json'));
         $this->assertStringContainsString("->onDelete('cascade')", $this->project->read($migration));
         $this->assertStringContainsString('test_post_cada_accion_requiere_sesion', $this->project->read($test));
-        $this->assertMatchesRegularExpression("/protected \\\$fillable = \\[[^\\]]*'published'/", $this->project->read('src/Models/Post.php'));
+        $this->assertMatchesRegularExpression("/public static \\\$export_cols = \\[[^\\]]*'published'/", $this->project->read('src/Models/Post.php'));
         $this->assertFileExists($this->path('src/Http/Requests/Concerns/ChecksClinic.php'));
         $this->assertFileDoesNotExist($this->path('src/Http/Controllers/Concerns/ChecksClinic.php'));
 

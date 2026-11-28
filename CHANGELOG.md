@@ -247,6 +247,12 @@ Cada uno tiene una prueba que falla sin el arreglo.
 - **`verify` no da por comprobado un manifiesto de una versión posterior del formato.** Escribirlo ya se negaba;
   leerlo no, y lo que esa versión añade no se comprobaba. Ahora es el error `manifest-unreadable`, con la versión
   encontrada y hasta cuál se entiende.
+- **`model-lists` no abre la asignación en masa sola.** `apply` completaba `$fillable`, `$creatable` y `$updatable`
+  con lo que declara el contrato. La prueba sobre un proyecto real lo encontró: una columna sacada a propósito de las
+  listas (para que un `update` no pudiera cambiarla) volvía a poder escribirse desde una petición, como un paso
+  determinista que nadie revisa, y el contrato pudo salir de `infer`. Ahora lo salta diciendo qué columna y las dos
+  salidas (añadirla a mano, o declararla `fillable: false` en el contrato); `$hidden`, `casts()`, `$export_cols` y
+  las listas de carga se siguen completando.
 - **Aceptar sin probar también desde el workflow de aprobación.** `accept-untested` sin terminal sólo valía dentro
   de la corrida de aprobación, y el workflow que escribe `larapack:ci --approval` no lo corría: no había camino. Trae
   ahora las entradas `untested` (ids, uno por línea) y `untested_note`, los acepta a nombre de quien lanzó la corrida
