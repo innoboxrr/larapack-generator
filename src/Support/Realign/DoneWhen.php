@@ -20,7 +20,9 @@ use Innoboxrr\LarapackGenerator\Support\Verifier;
  *    regenerado (la misma ScopeClassifier del diagnóstico), queda en una de
  *    las clases de `accept` (o en ninguna de `reject`); con `tracked` y
  *    `hash_current`, además registrado y con el hash del manifiesto; con
- *    `resolved`, sin paso pendiente (cumple o tiene excepción).
+ *    `resolved`, sin paso pendiente (cumple o tiene excepción). Un archivo
+ *    que cubre una excepción aprobada sobre el código de hoy cumple, sea
+ *    cual sea su clase: es lo que se decidió dejar como está.
  *  - `unmanaged`: ninguno de los archivos sigue siendo código sin gestionar
  *    (se declaró en el contrato o se aprobó como excepción).
  *  - `contract`: el laraimport del ámbito valida.
@@ -235,6 +237,16 @@ final class DoneWhen
             }
 
             $entry = $classifier->classify($file);
+
+            // Una excepción aprobada sobre el código de hoy lo cierra: la
+            // clase sigue siendo la que se exceptuó (edited_outside, untracked)
+            // y pedirle otra haría que el paso no terminara nunca. Si el
+            // código cambia, la huella caduca, ya no lo cubre y vuelve a
+            // contar su clase.
+            if (isset($entry['excepted'])) {
+                continue;
+            }
+
             $class = $entry['class'];
             $problem = match (true) {
                 $accept !== [] && ! in_array($class, $accept, true) => "es {$class} ({$entry['reason']}); se espera ".implode(' o ', $accept),

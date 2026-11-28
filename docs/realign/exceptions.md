@@ -109,6 +109,18 @@ vendor/bin/builder larapack:realign check route-closure@.
 
   Un `--target` que no es ningún elemento de esos pasos es un error que dice
   cuáles hay, no una corrida vacía. Sólo lo acepta `except`.
+- **Aprobada, cierra el elemento en su paso**, también en los de
+  clasificación (`edited-outside`, `missing`, `untracked-edited`): `check` y
+  `realign done` lo dan por hecho aunque el archivo siga editado fuera de los
+  huecos o borrado, y `diagnose`/`plan` no lo vuelven a abrir. Hasta 9.4.0 un
+  `edited-outside` aprobado seguía fallando con «(excepción aprobada); se
+  espera identical o format_only o hole_edited» y el paso no terminaba nunca.
+  Si el código cambia, la huella caduca y el paso se reabre.
+- **Antes de pedirla para un archivo editado fuera de los huecos, mira si la
+  plantilla de hoy ya trae lo editado** (el playbook `edited-outside`): el
+  `bindValue` contra la inyección de fórmulas de los Exports de 7.x/8.x ya
+  viene en la plantilla desde 9.0.0, y lo correcto es copiar lo regenerado,
+  no exceptuarlo.
 - Se pueden mezclar decisiones: llevar unos closures a un controlador
   (`closure-to-controller`) y pedir la excepción sólo para los legítimos. El
   paso queda hecho cuando verify ya no encuentra ninguno sin resolver.

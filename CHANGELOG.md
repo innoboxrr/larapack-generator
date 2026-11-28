@@ -29,6 +29,27 @@ una por pieza; lo que hay que hacer al actualizar, al final de la versión.
 - **`brief` ve las aprobaciones caducadas sin solicitud**, igual que `done`, y `done` y `brief` rechazan
   argumentos que no usan.
 
+### Una excepción aprobada cierra su paso de clasificación
+
+- **Encontrado en una prueba de autonomía** sobre una copia de un proyecto 7.x: el paso
+  `edited-outside:Export@.` agrupaba 60 Exports con un `bindValue` propio fuera de los huecos. Se pidieron las 60
+  excepciones (`larapack:realign except`) y el dueño las aprobó, pero `check` seguía fallando en las 60 con
+  «(excepción aprobada); se espera identical o format_only o hole_edited»: el `done_when` de clasificación miraba
+  la clase del archivo, que aprobada o no sigue siendo `edited_outside`. Ni el paso ni `realign done` terminaban.
+- **Ahora** el clasificador marca con `excepted` (el objetivo) lo que cubre una excepción aprobada sobre el
+  código de hoy, y el `done_when` de clasificación lo da por cumplido sea cual sea su clase. Vale para los tres
+  pasos de clasificación exceptuables (`edited-outside`, `missing`, `untracked-edited`); `diagnose` y `plan` no
+  lo reabren y `realign done` lo cuenta igual. Si el archivo cambia, la huella caduca, deja de cubrirlo y el
+  paso se reabre.
+- **El `bindValue` de los Exports viejos no se exceptúa: se regenera.** La plantilla de Export trae la protección
+  contra la inyección de fórmulas desde 9.0.0 (`WithCustomValueBinder`, hereda `DefaultValueBinder` y guarda como
+  texto lo que empieza por `=`, lo único que PhpSpreadsheet convierte en fórmula en el xlsx exportado). El
+  playbook `edited-outside` y docs/realign/exceptions.md dicen ahora que, cuando lo editado ya viene en la
+  plantilla de hoy, lo correcto es copiar lo regenerado.
+- **Al actualizar.** Nada que hacer: un paso de clasificación con todas sus excepciones aprobadas pasa en el
+  próximo `larapack:realign check`. Si se exceptuaron Exports por su `bindValue`, mejor copiar lo regenerado y
+  que el dueño retire esas aprobaciones (`larapack:hand-rolled revoke`).
+
 ### `larapack:realign`: el núcleo del realineamiento
 
 Llevar de vuelta al contrato un proyecto que empezó (o no) con LaraPack y se

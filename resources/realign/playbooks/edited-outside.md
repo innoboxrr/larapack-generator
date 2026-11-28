@@ -89,6 +89,22 @@ corre `larapack:realign diagnose` y `larapack:realign plan` y vuelve a pedir
 4. **Si una pieza no cabe en ningún hueco** y no se puede declarar en el
    contrato, no la fuerces: es una excepción y la decide el dueño
    (`larapack:realign except`). Déjala anotada en el informe del paso.
+   **Antes, mira si la plantilla de hoy ya la trae**: entonces no es tuya,
+   es la plantilla vieja, y lo correcto es copiar lo regenerado (paso 3), no
+   exceptuar. El caso de siempre es la **protección contra la inyección de
+   fórmulas de un Export** (un `bindValue` con `WithCustomValueBinder`,
+   escrito a mano en proyectos de 7.x y 8.x): desde 9.0.0 la plantilla de
+   Export la trae —hereda `DefaultValueBinder` y guarda como texto lo que
+   empieza por `=`, que es lo único que PhpSpreadsheet convierte en fórmula
+   en el xlsx que se exporta—. Exceptuar 60 Exports deja 60 aprobaciones que
+   caducan al primer cambio y fuera del generador para siempre; copiar lo
+   regenerado deja la misma protección y el archivo, otra vez, de LaraPack.
+   Sólo si la tuya hace algo que la de la plantilla no (y que el xlsx
+   necesita), es una excepción.
+   Una excepción **aprobada** sobre el código de hoy da el archivo por
+   hecho en `check` (y en `realign done`) aunque siga editado fuera de los
+   huecos; si el archivo vuelve a cambiar, la aprobación caduca y el paso se
+   reabre hasta que el dueño la apruebe otra vez.
 5. **Corre las pruebas del proyecto antes y después.** Si no se pueden correr
    (sin `vendor`, sin base de datos), el paso no se da por hecho aunque
    `check` pase: ver «Sin pruebas» en la guía de los pasos guiados
