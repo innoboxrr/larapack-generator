@@ -59,9 +59,12 @@ final class MergeDrift
 
     /**
      * Donde vive lo generado que no es una clase: se recorre entero, porque
-     * una migración o un archivo de rutas escritos a mano también se fusionan.
+     * una migración o un archivo de rutas escritos a mano también se
+     * fusionan, y porque los archivos de idioma (`lang/`, `resources/…/locales/`)
+     * no están en el manifiesto: los comparten todos los modelos, cada rama
+     * les añade sus claves al final y chocan siempre.
      */
-    private const DIRECTORIES = ['routes', 'database/migrations', 'database/factories', 'tests', 'config', 'lang'];
+    private const DIRECTORIES = ['routes', 'database/migrations', 'database/factories', 'tests', 'config', 'lang', 'resources'];
 
     /**
      * Más que esto no es código ni estado: un volcado, un binario.

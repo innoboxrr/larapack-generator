@@ -98,6 +98,7 @@ final class CiCommandTest extends TestCase
         $this->assertSame([
             'composer update --prefer-dist --no-interaction --no-progress',
             'php vendor/bin/builder larapack:verify --strict --format=json',
+            'php vendor/bin/builder larapack:reconcile --check',
             'php vendor/bin/builder larapack:hand-rolled list --format=github',
             'php vendor/bin/builder larapack:ci --check --format=github',
         ], $this->runs($job));
@@ -139,6 +140,7 @@ final class CiCommandTest extends TestCase
             'test -f .env || cp .env.example .env',
             'composer install --prefer-dist --no-interaction --no-progress',
             'php artisan larapack:verify --strict --format=json',
+            'php artisan larapack:reconcile --check',
             'php artisan larapack:hand-rolled list --format=github',
             'php artisan larapack:ci --check --format=github',
         ], $this->runs($job));

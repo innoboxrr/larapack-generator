@@ -333,6 +333,10 @@ final class SwarmMergeTest extends TestCase
             'app/Models/Traits/Operations/TicketOperations.php',
         ]);
 
+        // La comprobación de la CI sobre la última fusión, ya reconciliada.
+        [$code, $report] = $project->reconcile('--check');
+        $this->assertSame(0, $code, (string) json_encode($report, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+
         // Reconciliar otra vez no cambia nada.
         [$code] = $project->reconcile();
         $this->assertSame(0, $code);
@@ -422,6 +426,87 @@ final class SwarmMergeTest extends TestCase
         $this->assertSame(0, $code);
         $this->assertSame([], $project->failingChecks());
         $this->assertSameAsRegenerated($project);
+    }
+
+    /**
+     * Los archivos de idioma son uno por ámbito, los comparten todos los
+     * modelos y no están en el manifiesto: cada rama añade sus claves al
+     * final y chocan siempre. Lo encontró la segunda pasada de la auditoría:
+     * quedaban con los marcadores dentro y ni `reconcile` ni `verify` lo veían.
+     */
+    public function test_con_interfaz_los_archivos_de_idioma_se_fusionan_clave_a_clave(): void
+    {
+        $seed = $this->clones[] = SwarmProject::seedInterface();
+        $project = $this->clones[] = $seed->clone();
+
+        $project->merge('ui-order');
+        $project->reconcile();
+        $project->commit('ui-order');
+
+        $conflicts = $project->merge('ui-note');
+        $locales = ['resources/react/src/locales/en.json', 'resources/react/src/locales/es.json', 'resources/vue/src/locales/en.json', 'resources/vue/src/locales/es.json'];
+
+        $this->assertEqualsCanonicalizing(['.larapack/manifest.json', 'laraimport.json', ...$locales], $conflicts);
+
+        // Sin reconciliar, comiteado tal cual: verify lo dice de cada uno.
+        $unreconciled = $this->clones[] = $seed->clone();
+        $unreconciled->merge('ui-order');
+        $unreconciled->commit('ui-order');
+        $unreconciled->merge('ui-note');
+        $unreconciled->commit('ui-note, con los marcadores dentro');
+        [, $report] = $unreconciled->verify();
+        $flagged = array_column(array_filter($report['findings'], fn (array $finding): bool => $finding['check'] === 'merge-conflict'), 'file');
+        $this->assertSame([], array_diff($locales, $flagged));
+
+        [$code, $report] = $project->reconcile();
+        $project->commit('ui-note');
+
+        $this->assertSame(0, $code, (string) json_encode($report, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+        $this->assertSame([], $project->failingChecks());
+
+        // Las claves de los dos modelos, y las mismas que generando de cero.
+        $fresh = $this->clones[] = $project->regenerated();
+
+        foreach ($locales as $locale) {
+            $merged = (array) json_decode($project->read($locale), true);
+            $expected = (array) json_decode($fresh->read($locale), true);
+
+            $this->assertArrayHasKey('Order', $merged, $locale);
+            $this->assertArrayHasKey('Note', $merged, $locale);
+
+            ksort($merged);
+            ksort($expected);
+            $this->assertSame($expected, $merged, $locale);
+        }
+
+        $this->assertSameAsRegenerated($project, edited: $locales);
+    }
+
+    public function test_una_traduccion_que_las_dos_ramas_escribieron_distinto_la_decide_una_persona(): void
+    {
+        $seed = $this->clones[] = SwarmProject::seedInterface();
+        $locale = 'resources/react/src/locales/es.json';
+
+        foreach (['ui-order' => 'Cliente', 'ui-note' => 'Clienta'] as $branch => $translation) {
+            $seed->git('checkout', '-q', $branch);
+            $seed->replaceIn($locale, '/"Customer": ""/', '"Customer": "'.$translation.'"');
+            $seed->commit("{$branch}: traduce Customer");
+        }
+
+        $seed->git('checkout', '-q', 'main');
+        $project = $this->clones[] = $seed->clone();
+        $project->merge('ui-order');
+        $project->reconcile();
+        $project->commit('ui-order');
+        $project->merge('ui-note');
+
+        [$code, $report] = $project->reconcile();
+        $text = (string) json_encode($report, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+
+        $this->assertNotSame(0, $code);
+        $this->assertStringContainsString($locale.': las dos ramas tradujeron distinto', $text);
+        $this->assertStringContainsString('Cliente', $text);
+        $this->assertStringContainsString('Clienta', $text);
     }
 
     public function test_el_ensayo_no_escribe_nada(): void

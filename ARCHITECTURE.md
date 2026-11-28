@@ -596,7 +596,7 @@ el laraimport declara de él. `larapack:import` la anota en el manifiesto
   exacta lleva el contexto (todo lo del documento que no es `models`,
   `controllers` ni `pivots`) y, de cada clave ajena, qué modelo declara la
   tabla a la que apunta: es lo único que una herramienta lee de otro modelo
-  al generar (`SwarmChecksTest::test_solo_la_migracion_y_la_factory_leen_de_otros_modelos`
+  al generar ([`tests/Feature/SwarmChecksTest.php`](tests/Feature/SwarmChecksTest.php)
   falla si eso deja de ser cierto).
 - Son **dos huellas en una** (`escrito.resuelto`) y basta que coincida una
   (`ContractFingerprint::matches`): la de lo escrito no cambia al actualizar
@@ -626,9 +626,12 @@ llama a [`Reconciler`](src/Support/Merge/Reconciler.php), que por ámbito:
    del generador y se deja para regenerar (`Reconciler` comprueba además que
    lo que hay en disco es lo que dejó la fusión —`GitMerge::cleanMerge`— y
    no algo que alguien tocó después);
-3. retira las migraciones repetidas que trae la rama que entra
+3. fusiona clave a clave los archivos de idioma en conflicto (`lang/`,
+   `resources/…/locales/`): los comparten todos los modelos, no están en el
+   manifiesto y `Translations` sólo les añade claves al final;
+4. retira las migraciones repetidas que trae la rama que entra
    (`MergeDrift::migrationCollisions`), si son generadas y sin editar;
-4. corre `larapack:import --force` en un proceso aparte, sólo si algo cambió
+5. corre `larapack:import --force` en un proceso aparte, sólo si algo cambió
    o las huellas no coinciden.
 
 [`GitMerge`](src/Support/Merge/GitMerge.php) da las dos ramas: en una fusión
@@ -638,7 +641,7 @@ marcar como resuelto lo que la reconciliación resolvió. Con `--check` nada
 se escribe y que haya algo que hacer ya es el fallo.
 
 La prueba es [`tests/EndToEnd/SwarmMergeTest.php`](tests/EndToEnd/SwarmMergeTest.php):
-dieciséis ramas, `git merge` de verdad, cinco órdenes, y al final cada
+diecisiete ramas, `git merge` de verdad, cinco órdenes, y al final cada
 archivo generado igual al que el contrato fusionado genera de cero.
 
 ---

@@ -22,7 +22,57 @@ final class SwarmProject
         'hand-good', 'hand-bad', 'payment', 'refund', 'manual-migration', 'contract-only',
     ];
 
-    private function __construct(public readonly string $path) {}
+    public const INTERFACE_BRANCHES = ['ui-order', 'ui-note'];
+
+    /**
+     * @param  list<string>  $ui  la interfaz con la que se genera (`vue`, `react`)
+     * @param  list<string>  $branches
+     */
+    private function __construct(public readonly string $path, private readonly array $ui = [], private readonly array $branches = self::BRANCHES) {}
+
+    /**
+     * Un paquete con interfaz Vue y React y dos ramas que añaden cada una un
+     * modelo: lo que se mide son los archivos que comparten todos los modelos
+     * del ámbito y no están en el manifiesto (los de idioma).
+     */
+    public static function seedInterface(): self
+    {
+        $project = new self(self::temporary(), ['vue', 'react'], self::INTERFACE_BRANCHES);
+
+        $project->write('composer.json', self::json(['name' => 'acme/crm', 'type' => 'library', 'autoload' => ['psr-4' => ['Acme\\Crm\\' => 'src/']]]));
+        $project->write('laraimport.json', self::json(['models' => [
+            ['name' => 'Customer', 'props' => [['name' => 'name', 'type' => 'string', 'datatable' => true]]],
+        ]]));
+        $project->import('.', force: false);
+        $project->initialise('Enjambre');
+        $project->commit('base');
+
+        foreach (['ui-order' => 'Order', 'ui-note' => 'Note'] as $branch => $model) {
+            $project->git('checkout', '-q', '-b', $branch, 'main');
+            $project->declare('.', fn (array &$d) => $d['models'][] = ['name' => $model, 'props' => [
+                ['name' => 'title', 'type' => 'string', 'datatable' => true],
+                ['name' => 'customer_id', 'type' => 'foreignId', 'constraint' => 'customers'],
+            ]]);
+            $project->commit($branch);
+        }
+
+        $project->git('checkout', '-q', 'main');
+
+        return $project;
+    }
+
+    private function initialise(string $name): void
+    {
+        if (! is_dir($this->path.'/.git')) {
+            $this->git('init', '-q', '-b', 'main');
+        }
+
+        $this->git('config', 'user.email', 'enjambre@example.test');
+        $this->git('config', 'user.name', $name);
+        $this->git('config', 'commit.gpgsign', 'false');
+        // Sin esto, en Windows git reescribe los finales de línea al clonar.
+        $this->git('config', 'core.autocrlf', 'false');
+    }
 
     /**
      * El proyecto base, ya generado y comiteado en `main`, con una rama por
@@ -37,12 +87,7 @@ final class SwarmProject
             $project->import($scope, force: false);
         }
 
-        $project->git('init', '-q', '-b', 'main');
-        $project->git('config', 'user.email', 'enjambre@example.test');
-        $project->git('config', 'user.name', 'Enjambre');
-        $project->git('config', 'commit.gpgsign', 'false');
-        // Sin esto, en Windows git reescribe los finales de línea al clonar.
-        $project->git('config', 'core.autocrlf', 'false');
+        $project->initialise('Enjambre');
         $project->commit('base');
 
         foreach (self::BRANCHES as $branch) {
@@ -61,17 +106,14 @@ final class SwarmProject
      */
     public function clone(): self
     {
-        $clone = new self(self::temporary());
+        $clone = new self(self::temporary(), $this->ui, $this->branches);
         rmdir($clone->path);
 
         self::process(['git', 'clone', '-q', $this->path, $clone->path], dirname($clone->path));
 
-        $clone->git('config', 'user.email', 'integrador@example.test');
-        $clone->git('config', 'user.name', 'Integrador');
-        $clone->git('config', 'commit.gpgsign', 'false');
-        $clone->git('config', 'core.autocrlf', 'false');
+        $clone->initialise('Integrador');
 
-        foreach (self::BRANCHES as $branch) {
+        foreach ($this->branches as $branch) {
             $clone->git('branch', '-q', $branch, 'origin/'.$branch);
         }
 
@@ -253,7 +295,7 @@ final class SwarmProject
     public function import(string $scope = '.', bool $force = true): void
     {
         $root = $this->path.($scope === '.' ? '' : '/'.$scope);
-        [$code, $output] = $this->builder('larapack:import', $root.'/laraimport.json', '--root='.$root, ...($force ? ['--force'] : []));
+        [$code, $output] = $this->builder('larapack:import', $root.'/laraimport.json', '--root='.$root, ...($force ? ['--force'] : []), ...array_map(fn (string $ui): string => '--'.$ui, $this->ui));
 
         if ($code !== 0) {
             throw new RuntimeException("larapack:import en {$scope} terminó con {$code}:\n{$output}");
@@ -405,10 +447,14 @@ final class SwarmProject
      */
     public function regenerated(): self
     {
-        $fresh = new self(self::temporary());
+        $fresh = new self(self::temporary(), $this->ui, $this->branches);
 
         foreach (['.', 'packages/billing', 'packages/catalog'] as $scope) {
             $prefix = $scope === '.' ? '' : $scope.'/';
+
+            if (! $this->has($prefix.'laraimport.json')) {
+                continue;
+            }
 
             $fresh->write($prefix.'composer.json', $this->read($prefix.'composer.json'));
             $fresh->write($prefix.'laraimport.json', $this->read($prefix.'laraimport.json'));

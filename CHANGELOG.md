@@ -16,7 +16,7 @@ una por pieza; lo que hay que hacer al actualizar, al final de la versión.
 ### Varias consolas a la vez: la auditoría de enjambre
 
 Diez o veinte agentes sobre el mismo proyecto, cada uno en su rama, que luego se integran con `git merge`. Se
-construyó el escenario (una aplicación y dos paquetes locales, dieciséis ramas con los cambios típicos, fusiones
+construyó el escenario (una aplicación y dos paquetes locales, diecisiete ramas con los cambios típicos, fusiones
 reales en cinco órdenes) y se midió qué pasa al integrar. La guía es [docs/swarm.md](docs/swarm.md); la prueba,
 `tests/EndToEnd/SwarmMergeTest.php`.
 
@@ -29,6 +29,9 @@ reales en cinco órdenes) y se midió qué pasa al integrar. La guía es [docs/s
   registrado», y el siguiente `import --force` lo reescribía desde cero: se perdía el registro de todo lo generado.
 - **Resolver el conflicto quedándose con un lado no se detectaba.** El manifiesto de una rama con el contrato de
   la otra, o los dos de la misma: los modelos de la otra rama quedaban en disco como código que «nadie generó».
+- **Con interfaz, los archivos de idioma chocan siempre** (`resources/…/locales/*.json`: uno por ámbito, fuera
+  del manifiesto, y cada rama les añade sus claves al final), y comiteados con los marcadores dentro no los veía
+  ni `verify`. Lo encontró la segunda pasada.
 - **Cambiar el `laraimport.json` sin volver a importar pasaba `validate` y `verify --strict`** si el cambio no
   tocaba las listas del modelo (un `string` que pasa a `text`, un `nullable`). El manifiesto no decía con qué
   contrato se generó.
@@ -37,7 +40,8 @@ reales en cinco órdenes) y se midió qué pasa al integrar. La guía es [docs/s
 
 - **`larapack:reconcile`**, el paso del integrador después de `git merge --no-ff --no-commit <rama>`. Por ámbito:
   fusiona el laraimport **por nombres** (modelos, columnas, endpoints, `controllers[]`, pivotes; las listas de
-  valores, como conjuntos), recompone el manifiesto de los de las dos ramas, retira la migración repetida que
+  valores, como conjuntos), recompone el manifiesto de los de las dos ramas, fusiona clave a clave los archivos
+  de idioma, retira la migración repetida que
   trae la rama que entra (generada y sin editar) y corre `import --force` donde haga falta. Un archivo que las
   dos ramas regeneraron sin editar se regenera aunque tenga marcadores; uno que alguna editó se conserva y se
   lista. Lo que las dos ramas declararon distinto, o escribieron en el mismo hueco, no se decide: queda en

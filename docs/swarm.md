@@ -6,7 +6,7 @@ LaraPack en ese modo de trabajo, qué hace cada consola antes de empujar, qué
 hace quien integra y qué **no** se puede garantizar desde el paquete.
 
 Sale de la auditoría de enjambre de 9.4.0: un proyecto (una aplicación y dos
-paquetes locales), dieciséis ramas con los cambios típicos y fusiones reales
+paquetes locales), diecisiete ramas con los cambios típicos y fusiones reales
 en cinco órdenes distintos. Está hecha prueba en
 [`SwarmMergeTest`](../tests/EndToEnd/SwarmMergeTest.php); las ramas las
 describe [`SwarmProject`](../tests/Support/SwarmProject.php).
@@ -50,6 +50,7 @@ chocan casi siempre, aunque sus cambios sean independientes:
 | Añaden cada una una columna al mismo modelo | Además, el modelo y su factory |
 | Añaden la misma columna | Lo mismo, y quedan **dos migraciones** que la añaden |
 | Declaran el mismo endpoint | Además, su request, su test y el archivo de rutas |
+| Generan con interfaz (`--vue`, `--react`) | Además, los archivos de idioma (`resources/…/locales/*.json`): uno por ámbito, fuera del manifiesto, y cada rama les añade sus claves al final |
 | Tocan ámbitos distintos (la aplicación y un paquete, o dos paquetes) | Nada |
 | Una añade un modelo y la otra una columna a otro | Nada |
 
@@ -64,6 +65,8 @@ Y resolver ese conflicto a mano dejaba, sin que nada avisara:
   generó», con sus rutas respondiendo.
 - **Un laraimport cambiado sin volver a importar** —un `string` que pasa a
   `text`, un `nullable`— dejaba `validate` y `verify --strict` en verde.
+- **Los archivos de idioma con los marcadores dentro** —JSON roto— no los
+  veía nadie: no están en el manifiesto.
 
 ## Cada consola, antes de empujar
 
@@ -134,24 +137,28 @@ Por cada ámbito (la raíz y cada paquete local), en este orden:
    unión. De un archivo que las dos volvieron a generar se mira si en cada
    rama estaba tal como salió del generador:
    - en las dos: no lleva trabajo de nadie. Se deja la versión nuestra y el
-     paso 4 lo regenera con el contrato fusionado, aunque el archivo tenga
+     paso 5 lo regenera con el contrato fusionado, aunque el archivo tenga
      marcadores de conflicto;
    - en una sola, o en ninguna: alguien lo editó. Se conserva como editado y
      se lista en «revisa».
 
    Si el manifiesto que hay se puede leer (git lo fusionó solo, o alguien ya
    lo resolvió), se parte de él y sólo se le devuelve lo que perdió.
-3. **Las migraciones repetidas.** Dos migraciones que crean la misma tabla o
+3. **Los archivos de idioma** (`lang/<idioma>.json`,
+   `resources/…/locales/<idioma>.json`) en conflicto, clave a clave: las
+   traducciones de las dos ramas. Una clave que las dos tradujeron distinto
+   la escribió una persona, y queda pendiente.
+4. **Las migraciones repetidas.** Dos migraciones que crean la misma tabla o
    añaden la misma columna: se retira la que **trae la rama que entra**, si
-   la generó LaraPack y nadie la editó. El paso 4 escribe una alteración con
+   la generó LaraPack y nadie la editó. El paso 5 escribe una alteración con
    lo que falte. La de nuestra rama no se toca —puede haber corrido—, y una
    escrita a mano tampoco: si la repetida es una de esas, queda pendiente.
    `--keep-migrations` no retira ninguna.
-4. **`larapack:import --force`** con el contrato fusionado, sólo en los
+5. **`larapack:import --force`** con el contrato fusionado, sólo en los
    ámbitos donde algo cambió o lo generado no corresponde al contrato.
 
 Lo que deja pendiente, siempre con el archivo y el motivo: un conflicto en
-código escrito a mano, lo que las dos ramas declararon distinto, una
+código escrito a mano, lo que las dos ramas declararon o tradujeron distinto, una
 migración repetida que no puede retirar, el estado del realineamiento o el
 candado en conflicto.
 

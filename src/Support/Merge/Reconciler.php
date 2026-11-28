@@ -36,11 +36,12 @@ use Innoboxrr\LarapackGenerator\Support\Realign\Regeneration;
  *  2. El manifiesto. Se recompone de los de las dos ramas (ManifestMerge);
  *     si el que hay se lee, se parte de él y sólo se le devuelve lo que
  *     perdió. Lo que las dos ramas regeneraron sin editar se deja marcado
- *     como no editado para que el paso 4 lo reescriba.
- *  3. Las migraciones repetidas. Dos migraciones generadas, nacidas en las
- *     ramas de esta fusión, que crean la misma tabla o añaden la misma
- *     columna se retiran: el paso 4 escribe una con lo que falte.
- *  4. `larapack:import --force` con el contrato fusionado.
+ *     como no editado para que el paso 5 lo reescriba.
+ *  3. Los archivos de idioma en conflicto, clave a clave (`locales()`).
+ *  4. Las migraciones repetidas. La que trae la rama que entra, si es
+ *     generada y nadie la editó, se retira cuando repite una tabla o una
+ *     columna: el paso 5 escribe una con lo que falte.
+ *  5. `larapack:import --force` con el contrato fusionado.
  *
  * Nunca toca un archivo editado a mano, nunca comitea y, con `dryRun`, no
  * escribe. Correrla dos veces da lo mismo que correrla una.
@@ -131,6 +132,7 @@ final class Reconciler
 
         $contractOk = $this->contract($contract, $report);
         $manifestOk = $this->manifest($root, $report);
+        $this->locales($root, $report);
 
         if ($manifestOk) {
             $this->migrations($root, $report);
@@ -314,6 +316,82 @@ final class Reconciler
         }
 
         return true;
+    }
+
+    /**
+     * Los archivos de idioma del ámbito (`lang/<idioma>.json`,
+     * `resources/…/locales/<idioma>.json`) que quedaron en conflicto.
+     *
+     * No están en el manifiesto: son uno por ámbito, los comparten todos los
+     * modelos y el generador sólo les añade claves al final, sin tocar las
+     * que hay (Translations). Por eso dos ramas que generan cada una su
+     * modelo chocan siempre en ellos, y por eso se fusionan clave a clave:
+     * las de las dos ramas, y de una clave que las dos tradujeron distinto
+     * —eso lo escribió una persona— decide una persona.
+     *
+     * @param  ScopeReport  $report
+     */
+    private function locales(string $root, array &$report): void
+    {
+        if ($this->sides === null || $this->git === null) {
+            return;
+        }
+
+        $conflicted = array_map(
+            fn (array $finding): string => $root.'/'.$finding['file'],
+            (new MergeDrift($root, null))->conflicts()
+        );
+
+        foreach (array_unique([...$this->unmerged, ...$conflicted]) as $file) {
+            if (! str_starts_with($file, $root.'/') || preg_match('#/(lang|locales)/[^/]+\.json$#', $file) !== 1 || ! is_file($file)) {
+                continue;
+            }
+
+            $relative = substr($file, strlen($root) + 1);
+
+            if (! MergeMarkers::in(Files::read($file))) {
+                // Ya lo resolvió alguien: sólo falta decírselo a git.
+                $this->resolved[$file] = true;
+
+                continue;
+            }
+
+            $ours = $this->git->show($this->sides['ours'], $file);
+            $theirs = $this->git->show($this->sides['theirs'], $file);
+
+            if ($ours === null || $theirs === null) {
+                continue;
+            }
+
+            $merge = ContractMerge::mergeJson($this->git->show($this->sides['base'], $file), $ours, $theirs);
+
+            if ($merge['json'] === null) {
+                $report['pending'][] = "{$relative} no se pudo fusionar: {$merge['error']}.";
+
+                continue;
+            }
+
+            if ($merge['conflicts'] !== []) {
+                foreach ($merge['conflicts'] as $conflict) {
+                    $report['pending'][] = sprintf(
+                        '%s: las dos ramas tradujeron distinto %s (nuestra: %s; la otra: %s). Deja la que valga y vuelve a correr `larapack:reconcile`.',
+                        $relative,
+                        self::short(ltrim($conflict['path'], '/')),
+                        self::short($conflict['ours']),
+                        self::short($conflict['theirs']),
+                    );
+                }
+
+                continue;
+            }
+
+            $report['actions'][] = "{$relative}: fusionado clave a clave (las traducciones de las dos ramas).";
+
+            if (! $this->dryRun) {
+                file_put_contents($file, $merge['json']);
+                $this->resolved[$file] = true;
+            }
+        }
     }
 
     /**
