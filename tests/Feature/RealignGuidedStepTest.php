@@ -200,10 +200,16 @@ final class RealignGuidedStepTest extends TestCase
         $this->assertStringContainsString('request-handle: '.self::REQUEST, $check['remaining'][0]);
         $this->assertStringContainsString('no define handle()', $check['remaining'][0]);
 
-        // 3. Bien.
+        // 3. Bien, pero sin las pruebas del proyecto: hecho a falta de ellas.
         $this->write(self::REQUEST, $this->request(withHandle: true));
 
         $check = $this->realign('check', ['targets' => [self::STEP]]);
+        $this->assertTrue($check['ok']);
+        $this->assertFalse($check['done']);
+        $this->assertSame(Planner::UNTESTED, $this->step(self::STEP)['status']);
+
+        // 4. Con ellas: hecho.
+        $check = $this->realign('check', ['targets' => [self::STEP], '--tested' => 'php artisan test --filter=ReportTest']);
         $this->assertTrue($check['done']);
         $this->assertSame(Planner::DONE, $this->step(self::STEP)['status']);
 

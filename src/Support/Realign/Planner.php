@@ -40,6 +40,16 @@ final class Planner
     public const DONE = 'done';
 
     /**
+     * Hecho a falta de su prueba: el `done_when` pasa, pero el paso cambia
+     * comportamiento (StepTypes::changesBehaviour()) y nadie registró que se
+     * probara (`check --tested`, o la orden de pruebas configurada). Para
+     * moverse por el plan cuenta como hecho (finished()); para terminar, no:
+     * `larapack:realign done` falla mientras quede uno, salvo que el dueño lo
+     * acepte (`accept-untested`).
+     */
+    public const UNTESTED = 'untested';
+
+    /**
      * Lo que se calcula al leer y no se guarda.
      */
     public const BLOCKED = 'blocked';
@@ -184,12 +194,12 @@ final class Planner
      */
     public static function effectiveStatus(array $step, array $byId): string
     {
-        if (($step['status'] ?? self::PENDING) === self::DONE) {
-            return self::DONE;
+        if (in_array($step['status'] ?? self::PENDING, [self::DONE, self::UNTESTED], true)) {
+            return (string) $step['status'];
         }
 
         foreach ((array) ($step['depends_on'] ?? []) as $dependency) {
-            if (isset($byId[$dependency]) && ($byId[$dependency]['status'] ?? self::PENDING) !== self::DONE
+            if (isset($byId[$dependency]) && ! self::finished($byId[$dependency])
                 && ! (Navigation::conditions((string) ($byId[$dependency]['type'] ?? '')) && Navigation::allows($step, $byId[$dependency]))) {
                 return self::BLOCKED;
             }
@@ -200,6 +210,18 @@ final class Planner
         }
 
         return self::PENDING;
+    }
+
+    /**
+     * Si el paso ya no es trabajo de quien sigue el plan: hecho, o hecho a
+     * falta de su prueba (lo que falta lo hace quien tenga el entorno, o lo
+     * acepta el dueño).
+     *
+     * @param  Step  $step
+     */
+    public static function finished(array $step): bool
+    {
+        return in_array($step['status'] ?? self::PENDING, [self::DONE, self::UNTESTED], true);
     }
 
     /**
@@ -430,7 +452,7 @@ final class Planner
                 $steps[$index] = Navigation::escalate($steps[$index], ['note' => (string) ($before['escalated']['note'] ?? ''), 'at' => (string) ($before['escalated']['at'] ?? $now)]);
             }
 
-            if (($before['status'] ?? null) === self::DONE) {
+            if (self::finished($before)) {
                 // Una decisión tomada sigue tomada; un paso hecho cuyo
                 // problema vuelve a salir se reabre.
                 if ($steps[$index]['category'] === Category::DECISION && (isset($before['decision']) || isset($before['decisions']))) {
@@ -456,14 +478,20 @@ final class Planner
             }
         }
 
-        // Lo que ya no sale: hecho (por quien sea) o ya estaba hecho.
+        // Lo que ya no sale: hecho (por quien sea) o ya estaba hecho. Si
+        // cambia comportamiento, nadie vio pasar su prueba: queda sin probar,
+        // no hecho (un agente sin pruebas que no corrió check acababa aquí
+        // con el paso `done`).
         foreach ($old as $step) {
             unset($step['last_check']);
 
-            if (($step['status'] ?? null) !== self::DONE) {
-                $step['status'] = self::DONE;
+            if (! self::finished($step)) {
+                $untested = StepTypes::changesBehaviour($step);
+                $step['status'] = $untested ? self::UNTESTED : self::DONE;
                 $step['history'] = [...(is_array($step['history'] ?? null) ? $step['history'] : []),
-                    ['at' => $now, 'event' => 'resolved', 'detail' => 'El diagnóstico ya no lo encuentra.']];
+                    ['at' => $now, 'event' => 'resolved', 'detail' => $untested
+                        ? 'El diagnóstico ya no lo encuentra, pero cambia comportamiento y nadie registró su prueba: queda sin probar (larapack:realign check '.$step['id'].' --tested="<orden>").'
+                        : 'El diagnóstico ya no lo encuentra.']];
             }
 
             $steps[] = $step;

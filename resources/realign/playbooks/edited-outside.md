@@ -109,10 +109,11 @@ corre `larapack:realign diagnose` y `larapack:realign plan` y vuelve a pedir
    hecho en `check` (y en `realign done`) aunque siga editado fuera de los
    huecos; si el archivo vuelve a cambiar, la aprobación caduca y el paso se
    reabre hasta que el dueño la apruebe otra vez.
-5. **Corre las pruebas del proyecto antes y después.** Si no se pueden correr
-   (sin `vendor`, sin base de datos), el paso no se da por hecho aunque
-   `check` pase: ver «Sin pruebas» en la guía de los pasos guiados
-   (`docs/realign/guided.md`).
+5. **Corre las pruebas del proyecto antes y después.** Si el paso mueve
+   autorización o validación (requests, controladores, políticas), `check`
+   sólo lo da por hecho con su prueba (`--tested="<orden>"`); si no se pueden
+   correr (sin `vendor`, sin base de datos), lo deja `untested`: ver «Sin
+   pruebas» en la guía de los pasos guiados (`docs/realign/guided.md`).
 
 ## Cuándo copiar lo regenerado es la salida correcta, y cuándo no
 

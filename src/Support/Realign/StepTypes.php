@@ -311,6 +311,70 @@ final class StepTypes
     ];
 
     /**
+     * Los pasos guiados que cambian comportamiento: no se dan por hechos sin
+     * la prueba del proyecto (`check --tested`, o la orden configurada que
+     * `check` corre). Sin ella quedan `untested` (Planner::UNTESTED).
+     *
+     * Tipo => true, o la lista de familias de plantilla (`subject`) que lo
+     * cambian. Un controlador llevado a su request cambia el orden
+     * autorizar/validar (un 422 que pasa a 403, un 404 que pasa a 403); una
+     * ruta declarada o retirada cambia lo que responde; cerrar un agujero lo
+     * cambia a propósito. De lo editado fuera, lo de requests, controladores
+     * y políticas mueve autorización o validación; lo demás (las listas de
+     * un modelo, un recurso) lo juzga la comparación con lo regenerado.
+     *
+     * @var array<string, true|list<string>>
+     */
+    public const BEHAVIOUR = [
+        'controller-shape' => true,
+        'declared-routes' => true,
+        'security' => true,
+        'edited-outside' => ['Requests', 'Controller', 'Policy'],
+    ];
+
+    /**
+     * Las decisiones cuya opción lleva a mover código con comportamiento: un
+     * closure a su controlador, un #[HandRolled] a su request, un
+     * controlador a mano declarado en el contrato (su handle() pasa a un
+     * hueco). Un guiado que se le pasó al dueño (`escalate`) cuenta con
+     * `refactor` si su tipo está en BEHAVIOUR.
+     *
+     * @var array<string, list<string>>
+     */
+    public const BEHAVIOUR_OPTIONS = [
+        'route-closure' => ['refactor'],
+        'hand-rolled' => ['refactor'],
+        'unmanaged-http' => ['declare'],
+    ];
+
+    /**
+     * Si el paso, tal como está (y en una decisión, con lo decidido), cambia
+     * comportamiento y por eso necesita su prueba para darse por hecho.
+     *
+     * @param  array<string, mixed>  $step
+     */
+    public static function changesBehaviour(array $step): bool
+    {
+        $type = (string) ($step['type'] ?? '');
+        $guided = self::BEHAVIOUR[$type] ?? false;
+        $byType = $guided === true || (is_array($guided) && in_array($step['subject'] ?? null, $guided, true));
+
+        if (($step['category'] ?? null) !== Category::DECISION) {
+            return ($step['category'] ?? null) === Category::GUIDED && $byType;
+        }
+
+        $chosen = Navigation::chosen($step);
+
+        // Un guiado que se le pasó al dueño: cambia si se hace (`refactor`),
+        // o si se hizo sin que nadie lo decidiera.
+        if (is_array($step['escalated'] ?? null)) {
+            return $byType && ($chosen === [] || in_array('refactor', $chosen, true));
+        }
+
+        return array_intersect($chosen, self::BEHAVIOUR_OPTIONS[$type] ?? []) !== [];
+    }
+
+    /**
      * @return StepType
      */
     public static function get(string $type): array

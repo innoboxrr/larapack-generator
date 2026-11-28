@@ -148,7 +148,7 @@ final class OperationRunner
             foreach ($byId as $step) {
                 if (in_array($step['type'] ?? null, $handles, true)
                     && ($packages === [] || in_array($step['scope']['path'] ?? null, $packages, true))
-                    && Planner::effectiveStatus($step, $byId) !== Planner::DONE
+                    && ! Planner::finished($step)
                     && Planner::effectiveStatus($step, $byId) !== Planner::BLOCKED
                     && ! isset($step['deferred'])
                     && self::decidedFor($step, $operation->name())) {
@@ -176,8 +176,8 @@ final class OperationRunner
 
             $status = Planner::effectiveStatus($step, $byId);
 
-            if ($status === Planner::DONE) {
-                throw new RuntimeException("El paso {$id} ya está hecho.");
+            if (Planner::finished($step)) {
+                throw new RuntimeException("El paso {$id} ya está hecho".($status === Planner::UNTESTED ? ' (sin probar)' : '').'.');
             }
 
             if ($status === Planner::BLOCKED) {

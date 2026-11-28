@@ -36,7 +36,7 @@ final class RealignDoneTest extends TestCase
 
         $this->assertTrue($done['ok']);
         $this->assertTrue($done['done']);
-        $this->assertSame(['steps' => 0, 'decisions' => 0, 'exceptions' => 0, 'validate' => 0, 'verify' => 0], $done['counts']);
+        $this->assertSame(['steps' => 0, 'decisions' => 0, 'untested' => 0, 'exceptions' => 0, 'validate' => 0, 'verify' => 0], $done['counts']);
         $this->assertSame([], $done['reasons']);
     }
 

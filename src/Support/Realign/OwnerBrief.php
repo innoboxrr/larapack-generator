@@ -96,6 +96,14 @@ final class OwnerBrief
         }
 
         $exceptions = $this->exceptions($byId, $scopes);
+        // Hecho sin probar: lo prueba quien tenga el entorno, o lo acepta el
+        // dueño (accept-untested). Aceptarlo es suyo, como aprobar.
+        $untested = array_values(array_map(fn (array $step): array => [
+            'id' => (string) $step['id'], 'title' => (string) $step['title'], 'scope' => (string) ($step['scope']['path'] ?? '.'),
+            'files' => Navigation::files($step), 'why' => (string) ($step['risk']['why'] ?? ''),
+            'check' => 'larapack:realign check '.self::argument((string) $step['id']).' --tested="<la orden de pruebas que pasó>"',
+            'accept' => 'larapack:realign accept-untested '.self::argument((string) $step['id']).' --note="por qué y cuándo se probará"',
+        ], array_filter($steps, fn (array $step): bool => ($step['status'] ?? null) === Planner::UNTESTED)));
         // Un paso decidido cuyas excepciones esperan aprobación espera al
         // dueño, no al agente.
         $waiting = array_filter(array_column($exceptions, 'step'), 'is_string');
@@ -113,14 +121,16 @@ final class OwnerBrief
             'summary' => [
                 'decisions' => count($decisions),
                 'exceptions' => count($exceptions),
+                'untested' => count($untested),
                 'review_minutes' => $minutes,
                 'meanwhile' => count($meanwhile),
-                'if_nothing_is_decided' => $decisions === [] && $exceptions === []
+                'if_nothing_is_decided' => $decisions === [] && $exceptions === [] && $untested === []
                     ? 'No hay nada que espere al dueño.'
                     : 'Nada se rompe ni cambia en producción: estos pasos se quedan pendientes, sus hallazgos siguen como avisos y larapack:verify --strict sigue fallando, así que el realineamiento no termina. El agente sigue con lo que no depende del dueño ('.count($meanwhile).' pasos) y se detiene aquí.',
             ],
             'decisions' => $decisions,
             'exceptions' => $exceptions,
+            'untested' => $untested,
             'meanwhile' => $meanwhile,
             'resume' => [
                 'command' => 'larapack:realign status',
@@ -173,6 +183,10 @@ final class OwnerBrief
         $lines[] = '## Resumen';
         $lines[] = '';
         $lines[] = "- **{$summary['decisions']} ".($summary['decisions'] === 1 ? 'decisión' : 'decisiones')."** y **{$summary['exceptions']} ".($summary['exceptions'] === 1 ? 'excepción' : 'excepciones').'** esperan al dueño. Revisión estimada: **≈ '.$summary['review_minutes'].' min**.';
+
+        if (($summary['untested'] ?? 0) > 0) {
+            $lines[] = "- **{$summary['untested']} ".($summary['untested'] === 1 ? 'paso' : 'pasos').' sin probar**: hechos, pero nadie vio pasar sus pruebas (abajo, en «Sin probar»).';
+        }
         $lines[] = '- Si no se decide: '.$summary['if_nothing_is_decided'];
         $lines[] = "- Mientras tanto, el agente puede seguir con **{$summary['meanwhile']}** pasos que no dependen del dueño.";
         $lines[] = '- Cuando termines, avisa al agente: retoma con `'.$brief['resume']['command'].'`.';
@@ -210,6 +224,26 @@ final class OwnerBrief
                 $lines[] = '';
                 $lines[] = '```bash';
                 $lines[] = $exception['command'];
+                $lines[] = '```';
+                $lines[] = '';
+            }
+        }
+
+        if ($brief['untested'] !== []) {
+            $lines[] = '## Sin probar ('.count($brief['untested']).')';
+            $lines[] = '';
+            $lines[] = 'Hechos a falta de su prueba: cambian comportamiento (un 422 que pasa a 403, un 404 que pasa a 403) y nadie registró que las pruebas del proyecto pasaran. El realineamiento no termina mientras sigan así. Quien tenga el entorno corre las pruebas y, si pasan, la primera orden; si no se pueden probar y lo aceptas así, la segunda, en tu terminal: queda en el plan con tu nota.';
+            $lines[] = '';
+
+            foreach ($brief['untested'] as $step) {
+                $lines[] = '### `'.$step['id'].'`';
+                $lines[] = '';
+                $lines[] = '- '.$step['title'].' · `'.$step['scope'].'` · '.$step['why'];
+                $lines[] = '- Archivos: '.implode(', ', array_map(fn (string $file): string => '`'.$file.'`', array_slice($step['files'], 0, self::SHOWN))).(count($step['files']) > self::SHOWN ? ' …' : '');
+                $lines[] = '';
+                $lines[] = '```bash';
+                $lines[] = $step['check'];
+                $lines[] = $step['accept'];
                 $lines[] = '```';
                 $lines[] = '';
             }
@@ -357,13 +391,13 @@ final class OwnerBrief
         $dependents = [];
 
         foreach ($byId as $other) {
-            if (in_array($id, (array) ($other['depends_on'] ?? []), true) && ($other['status'] ?? null) !== Planner::DONE) {
+            if (in_array($id, (array) ($other['depends_on'] ?? []), true) && ! Planner::finished($other)) {
                 $dependents[] = (string) $other['id'];
             }
         }
 
         $waits = array_values(array_filter((array) ($step['depends_on'] ?? []),
-            fn (mixed $dependency): bool => is_string($dependency) && isset($byId[$dependency]) && ($byId[$dependency]['status'] ?? null) !== Planner::DONE));
+            fn (mixed $dependency): bool => is_string($dependency) && isset($byId[$dependency]) && ! Planner::finished($byId[$dependency])));
         $type = (string) $step['type'];
 
         return [

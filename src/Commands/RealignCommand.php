@@ -4,10 +4,12 @@ namespace Innoboxrr\LarapackGenerator\Commands;
 
 use Innoboxrr\LarapackGenerator\Commands\Concerns\TargetsProject;
 use Innoboxrr\LarapackGenerator\Commands\Concerns\WritesJson;
+use Innoboxrr\LarapackGenerator\Support\OwnerConfirmation;
 use Innoboxrr\LarapackGenerator\Support\Realign\Category;
 use Innoboxrr\LarapackGenerator\Support\Realign\Completion;
 use Innoboxrr\LarapackGenerator\Support\Realign\Diagnosis;
 use Innoboxrr\LarapackGenerator\Support\Realign\DoneWhen;
+use Innoboxrr\LarapackGenerator\Support\Realign\Exceptions;
 use Innoboxrr\LarapackGenerator\Support\Realign\FileClass;
 use Innoboxrr\LarapackGenerator\Support\Realign\Navigation;
 use Innoboxrr\LarapackGenerator\Support\Realign\Operations\OperationRunner;
@@ -15,6 +17,7 @@ use Innoboxrr\LarapackGenerator\Support\Realign\Operations\Operations;
 use Innoboxrr\LarapackGenerator\Support\Realign\OwnerBrief;
 use Innoboxrr\LarapackGenerator\Support\Realign\Planner;
 use Innoboxrr\LarapackGenerator\Support\Realign\Playbooks;
+use Innoboxrr\LarapackGenerator\Support\Realign\ProjectTests;
 use Innoboxrr\LarapackGenerator\Support\Realign\RealignActions;
 use Innoboxrr\LarapackGenerator\Support\Realign\RealignState;
 use Innoboxrr\LarapackGenerator\Support\Realign\Scopes;
@@ -49,6 +52,7 @@ use Symfony\Component\Console\Output\OutputInterface;
  *     decide <id> <opción> [--target=…]  registra una decisión, entera o por elemento
  *     defer/undefer <id>  aplaza un paso o lo devuelve al orden
  *     escalate <id>  pasa un guiado al dueño como decisión
+ *     accept-untested <id>  el dueño acepta sin probar lo que quedó untested
  *     done       el criterio de terminado: falla y dice qué falta (Completion)
  *     brief      lo que espera al dueño, en un documento (OwnerBrief)
  *     playbook [<nombre>]   los playbooks del paquete, o uno sin rellenar
@@ -62,17 +66,17 @@ class RealignCommand extends Command
     use TargetsProject;
     use WritesJson;
 
-    private const READS = ['diagnose', 'plan', 'status', 'next', 'show', 'check', 'decide', 'defer', 'undefer', 'escalate', 'done', 'brief', 'playbook', 'help'];
+    private const READS = ['diagnose', 'plan', 'status', 'next', 'show', 'check', 'decide', 'defer', 'undefer', 'escalate', 'accept-untested', 'done', 'brief', 'playbook', 'help'];
 
     protected function configure(): void
     {
         $this->addRootOption();
 
         $this->setName('larapack:realign')
-            ->setDescription('Realinea con el contrato un proyecto que se desvió: diagnose, plan, status, next, show, check, decide, defer, undefer, escalate, done, brief, playbook y las operaciones adopt, apply, infer y except')
+            ->setDescription('Realinea con el contrato un proyecto que se desvió: diagnose, plan, status, next, show, check, decide, defer, undefer, escalate, accept-untested, done, brief, playbook y las operaciones adopt, apply, infer y except')
             ->setHelp(RealignActions::helpText())
-            ->addArgument('action', InputArgument::OPTIONAL, 'diagnose, plan, status, next, show, check, decide, defer, undefer, escalate, done, brief, playbook, adopt, apply, infer, except o help', 'help')
-            ->addArgument('targets', InputArgument::OPTIONAL | InputArgument::IS_ARRAY, 'next (opcional), show, check, defer, undefer, escalate: el id del paso; decide: el id y la opción; playbook: su nombre; help: una acción; adopt/apply/infer/except: ids de paso (vacío, todos los que sepa hacer)')
+            ->addArgument('action', InputArgument::OPTIONAL, 'diagnose, plan, status, next, show, check, decide, defer, undefer, escalate, accept-untested, done, brief, playbook, adopt, apply, infer, except o help', 'help')
+            ->addArgument('targets', InputArgument::OPTIONAL | InputArgument::IS_ARRAY, 'next (opcional), show, check, defer, undefer, escalate, accept-untested: el id del paso; decide: el id y la opción; playbook: su nombre; help: una acción; adopt/apply/infer/except: ids de paso (vacío, todos los que sepa hacer)')
             ->addOption('format', null, InputOption::VALUE_REQUIRED, 'Formato de salida: txt o json', 'txt')
             ->addOption('package', null, InputOption::VALUE_REQUIRED | InputOption::VALUE_IS_ARRAY, 'Sólo este paquete local (directorio, ruta o nombre de Composer), o `app` para el núcleo. Repetible')
             ->addOption('jobs', null, InputOption::VALUE_REQUIRED, 'diagnose y done: cuántas regeneraciones a la vez', '4')
@@ -80,7 +84,9 @@ class RealignCommand extends Command
             ->addOption('dry-run', null, InputOption::VALUE_NONE, 'Operaciones que escriben: dice qué haría sin escribir nada')
             ->addOption('allow-dirty', null, InputOption::VALUE_NONE, 'Operaciones que escriben: escribe aunque el árbol git tenga cambios sin comitear (no se podrá deshacer con git)')
             ->addOption('option', null, InputOption::VALUE_REQUIRED | InputOption::VALUE_IS_ARRAY, 'Operaciones que escriben: clave=valor para la operación. Repetible')
-            ->addOption('note', null, InputOption::VALUE_REQUIRED, 'decide, defer, escalate: por qué (queda en el plan)')
+            ->addOption('note', null, InputOption::VALUE_REQUIRED, 'decide, defer, escalate, accept-untested: por qué (queda en el plan)')
+            ->addOption('tested', null, InputOption::VALUE_REQUIRED, 'check: la orden de pruebas del proyecto que se corrió y pasó (queda en el plan); sin ella, un paso que cambia comportamiento queda untested')
+            ->addOption('approver', null, InputOption::VALUE_REQUIRED, 'accept-untested sin terminal: el nombre de la persona que acepta, igual que en la variable '.OwnerConfirmation::APPROVER_ENV.' (queda en el plan)')
             ->addOption('deterministic', null, InputOption::VALUE_NONE, 'apply: todos los pasos deterministas pendientes, en el orden del plan (sin ids hay que pedirlo así)')
             ->addOption('target', null, InputOption::VALUE_REQUIRED | InputOption::VALUE_IS_ARRAY, 'decide: sólo para este elemento del paso (su archivo); except: sólo este elemento de los pasos, por su objetivo (realign:…) o su archivo. Repetible');
     }
@@ -133,6 +139,7 @@ class RealignCommand extends Command
                 'show' => $this->show($input, $output, $root, $targets),
                 'defer', 'undefer' => $this->defer($input, $output, $root, $targets, $action === 'defer'),
                 'escalate' => $this->escalate($input, $output, $root, $targets),
+                'accept-untested' => $this->acceptUntested($input, $output, $root, $targets),
                 'check' => $this->check($input, $output, $root, $targets),
                 'decide' => $this->decide($input, $output, $root, $targets),
                 'done' => $this->done($input, $output, $root),
@@ -156,7 +163,7 @@ class RealignCommand extends Command
         $accepted = RealignActions::options($action);
         $unexpected = [];
 
-        foreach (['package', 'no-cache', 'dry-run', 'allow-dirty', 'option', 'note', 'deterministic', 'target'] as $option) {
+        foreach (['package', 'no-cache', 'dry-run', 'allow-dirty', 'option', 'note', 'deterministic', 'target', 'tested', 'approver'] as $option) {
             $value = $input->getOption($option);
 
             if ($value !== false && $value !== null && $value !== [] && ! in_array($option, $accepted, true)) {
@@ -335,7 +342,7 @@ class RealignCommand extends Command
         $plan = $state->plan();
         $steps = $this->stepsIn($plan, $this->scopePaths($input, $root));
         $byId = $this->byId($plan);
-        $byStatus = array_fill_keys([Planner::PENDING, Planner::AWAITING_DECISION, Planner::DECIDED, Planner::BLOCKED, Planner::DONE], 0);
+        $byStatus = array_fill_keys([Planner::PENDING, Planner::AWAITING_DECISION, Planner::DECIDED, Planner::BLOCKED, Planner::UNTESTED, Planner::DONE], 0);
         $byCategory = [];
 
         foreach ($steps as $step) {
@@ -363,7 +370,8 @@ class RealignCommand extends Command
             'last_check' => $checks[0] ?? null,
             'awaiting_owner' => $this->awaitingOwner($steps, $byId),
             'deferred' => array_values(array_map(fn (array $step): array => ['id' => $step['id'], 'title' => $step['title'], 'note' => $step['deferred']['note'] ?? null, 'at' => $step['deferred']['at'] ?? null],
-                array_filter($steps, fn (array $step): bool => is_array($step['deferred'] ?? null) && ($step['status'] ?? null) !== Planner::DONE))),
+                array_filter($steps, fn (array $step): bool => is_array($step['deferred'] ?? null) && ! Planner::finished($step)))),
+            'untested' => $this->untested($steps),
             'plan' => $plan === null ? null : $this->relative($state->planPath(), $root),
         ];
 
@@ -386,8 +394,8 @@ class RealignCommand extends Command
         }
 
         if ($plan !== null) {
-            $output->writeln(sprintf("\n  %d pasos: %d hechos, %d pendientes, %d esperan decisión, %d decididos, %d bloqueados.",
-                count($steps), $byStatus[Planner::DONE], $byStatus[Planner::PENDING], $byStatus[Planner::AWAITING_DECISION], $byStatus[Planner::DECIDED], $byStatus[Planner::BLOCKED]));
+            $output->writeln(sprintf("\n  %d pasos: %d hechos, %d sin probar, %d pendientes, %d esperan decisión, %d decididos, %d bloqueados.",
+                count($steps), $byStatus[Planner::DONE], $byStatus[Planner::UNTESTED], $byStatus[Planner::PENDING], $byStatus[Planner::AWAITING_DECISION], $byStatus[Planner::DECIDED], $byStatus[Planner::BLOCKED]));
 
             foreach ($byCategory as $category => $counts) {
                 $output->writeln(sprintf('    %-17s %s', Category::LABELS[$category] ?? $category, implode(', ', array_map(fn (string $status, int $count): string => "{$status}: {$count}", array_keys($counts), $counts))));
@@ -410,6 +418,14 @@ class RealignCommand extends Command
 
                 foreach ($document['deferred'] as $deferred) {
                     $output->writeln('    '.$deferred['id'].' — '.OutputFormatter::escape((string) $deferred['note']));
+                }
+            }
+
+            if ($document['untested'] !== []) {
+                $output->writeln("\n  <comment>Sin probar (".count($document['untested']).')</comment>: hechos a falta de su prueba; done no termina mientras sigan así. Con las pruebas en verde, check --tested; si no se pueden correr, lo acepta el dueño:');
+
+                foreach ($document['untested'] as $untested) {
+                    $output->writeln('    '.$untested['id'].' — '.$untested['check'].'  ·  '.$untested['accept']);
                 }
             }
 
@@ -437,16 +453,20 @@ class RealignCommand extends Command
         $step = $this->nextStep($steps, $byId);
 
         if ($step === null) {
-            $left = array_values(array_filter($steps, fn (array $step): bool => Planner::effectiveStatus($step, $byId) !== Planner::DONE));
+            $left = array_values(array_filter($steps, fn (array $step): bool => ! Planner::finished($step)));
 
             if ($left !== []) {
                 return $this->waiting($input, $output, $left, $byId);
             }
 
             if ($this->wantsJson($input)) {
-                $this->writeJson($output, ['format_version' => RealignState::FORMAT_VERSION, 'ok' => true, 'action' => 'next', 'done' => true, 'step' => null]);
+                $this->writeJson($output, ['format_version' => RealignState::FORMAT_VERSION, 'ok' => true, 'action' => 'next', 'done' => true, 'step' => null, 'untested' => $this->untested($steps)]);
             } else {
                 $output->writeln('  <info>No queda nada pendiente.</info> Confírmalo con un diagnóstico nuevo: larapack:realign diagnose && larapack:realign plan');
+
+                if ($this->untested($steps) !== []) {
+                    $output->writeln('  <comment>Pero hay '.count($this->untested($steps)).' sin probar</comment>: larapack:realign status los lista.');
+                }
             }
 
             return Command::SUCCESS;
@@ -494,11 +514,12 @@ class RealignCommand extends Command
                 + (isset($step['playbook']) ? ['fallback' => ['playbook' => Playbooks::resolve((string) $step['playbook']), 'instructions' => Playbooks::render($step)]] : []),
         };
         $check = 'larapack:realign check '.$step['id'];
+        $tests = ['required' => StepTypes::changesBehaviour($step), 'command' => (new ProjectTests((string) root_path()))->command(), 'tested' => $step['tested'] ?? null];
         $meanwhile = $meanwhile === null ? null : ['id' => $meanwhile['id'], 'title' => $meanwhile['title'], 'category' => $meanwhile['category'], 'show' => 'larapack:realign next '.$meanwhile['id']];
 
         if ($this->wantsJson($input)) {
             $this->writeJson($output, ['format_version' => RealignState::FORMAT_VERSION, 'ok' => true, 'action' => $action, 'done' => false,
-                'step' => $step + ['effective_status' => $status], 'how' => $how, 'check' => $check,
+                'step' => $step + ['effective_status' => $status], 'how' => $how, 'check' => $check, 'tests' => $tests,
                 'done_when' => Playbooks::describeCondition((array) $step['done_when']), 'blocked_by' => $blockedBy, 'meanwhile' => $meanwhile]);
 
             return Command::SUCCESS;
@@ -509,7 +530,7 @@ class RealignCommand extends Command
         $output->writeln('  '.OutputFormatter::escape((string) $step['description']));
         $output->writeln('  Riesgo: '.OutputFormatter::escape((string) $step['risk']['why']));
 
-        if ($status === Planner::DONE || $blockedBy !== []) {
+        if (Planner::finished($step) || $blockedBy !== []) {
             $output->writeln('  <comment>Estado: '.$status.($blockedBy === [] ? '' : '; espera a: '.implode(', ', $blockedBy)).'</comment>');
         }
 
@@ -543,6 +564,12 @@ class RealignCommand extends Command
         $output->writeln("\n  Está hecho cuando ".OutputFormatter::escape(Playbooks::describeCondition((array) $step['done_when'])));
         $output->writeln("  Compruébalo con: {$check}");
 
+        if ($tests['required']) {
+            $output->writeln('  <comment>Cambia comportamiento:</comment> corre las pruebas del proyecto antes y después. '.($tests['command'] === null
+                ? 'Con ellas en verde: '.$check.' --tested="<la orden que corriste>"; sin ellas, check lo deja sin probar (untested).'
+                : 'check corre la orden del proyecto ('.OutputFormatter::escape($tests['command']).') y sólo lo da por hecho si pasa.'));
+        }
+
         if ($meanwhile !== null) {
             $output->writeln("\n  Esta decisión es del dueño: preséntale las opciones y espera a que decida. Mientras, sigue con lo que no depende de ella: "
                 .$meanwhile['show'].' — '.OutputFormatter::escape((string) $meanwhile['title']));
@@ -560,33 +587,85 @@ class RealignCommand extends Command
             return $this->reportFailure($input, $output, 'check necesita el id de un paso: larapack:realign check <id>.');
         }
 
+        $declared = $input->getOption('tested');
+
+        if (is_string($declared) && trim($declared) === '') {
+            return $this->reportFailure($input, $output, '--tested necesita la orden de pruebas que se corrió y pasó: --tested="php artisan test --filter=…".',
+                extra: ['format_version' => RealignState::FORMAT_VERSION, 'action' => 'check']);
+        }
+
         $state = new RealignState($root);
         $plan = $this->requirePlan($root);
         $index = $this->indexOf($plan, $targets[0]);
         $step = $plan['steps'][$index];
         $result = (new DoneWhen($root))->check($step);
         $now = gmdate('c');
+        // Lo que cambia comportamiento no se da por hecho sin su prueba: la
+        // que declara quien la corrió, o la orden del proyecto, que se corre
+        // aquí (ProjectTests). Sin ninguna, queda sin probar.
+        $needsTests = StepTypes::changesBehaviour($step);
+        $tests = null;
+        $tested = null;
 
-        $plan['steps'][$index]['last_check'] = ['id' => $step['id'], 'at' => $now, 'done' => $result['done'], 'remaining' => count($result['remaining'])];
+        if ($result['done'] && $needsTests && is_string($declared)) {
+            $tested = ['via' => 'declared', 'command' => trim($declared), 'at' => $now];
+        } elseif ($result['done'] && $needsTests && ($configured = (new ProjectTests($root))->command()) !== null) {
+            $tests = (new ProjectTests($root))->run($configured);
 
-        if ($result['done'] && ($step['status'] ?? null) !== Planner::DONE) {
+            if ($tests['exit'] === 0) {
+                $tested = ['via' => 'config', 'command' => $configured, 'at' => $now];
+            } else {
+                $result['done'] = false;
+                $result['remaining'][] = "Las pruebas del proyecto fallan ({$configured}, sale con {$tests['exit']}): el paso cambia comportamiento y no se da por hecho. El final de la salida está en `tests.output`.";
+            }
+        }
+
+        $untested = $result['done'] && $needsTests && $tested === null;
+        $was = $step['status'] ?? Planner::PENDING;
+        $status = $result['done'] ? ($untested ? Planner::UNTESTED : Planner::DONE) : Planner::PENDING;
+        $plan['steps'][$index]['last_check'] = ['id' => $step['id'], 'at' => $now, 'done' => $result['done'] && ! $untested, 'remaining' => count($result['remaining'])]
+            + ($untested ? ['untested' => true] : []);
+
+        if ($tested !== null) {
+            $plan['steps'][$index]['tested'] = $tested;
+            unset($plan['steps'][$index]['untested_accepted']);
+        }
+
+        if ($status === Planner::DONE && ($was !== Planner::DONE || $tested !== null)) {
             $plan['steps'][$index]['status'] = Planner::DONE;
-            $plan['steps'][$index]['history'][] = ['at' => $now, 'event' => 'done', 'detail' => 'Comprobado: '.Playbooks::describeCondition((array) $step['done_when'])];
-        } elseif (! $result['done'] && ($step['status'] ?? null) === Planner::DONE) {
+            $plan['steps'][$index]['history'][] = ['at' => $now, 'event' => 'done', 'detail' => 'Comprobado: '.Playbooks::describeCondition((array) $step['done_when'])
+                .($tested === null ? '' : ' Probado ('.($tested['via'] === 'config' ? 'la orden del proyecto' : 'lo declara quien lo hizo').'): '.$tested['command'].'.')];
+        } elseif ($status === Planner::UNTESTED && $was === Planner::PENDING) {
+            // Uno ya hecho y probado no pierde su prueba por comprobarlo otra vez.
+            $plan['steps'][$index]['status'] = Planner::UNTESTED;
+            $plan['steps'][$index]['history'][] = ['at' => $now, 'event' => 'untested', 'detail' => 'Comprobado sin probar: '.Playbooks::describeCondition((array) $step['done_when'])];
+        } elseif ($status === Planner::PENDING && Planner::finished($step)) {
             $plan['steps'][$index]['status'] = Planner::PENDING;
+            unset($plan['steps'][$index]['tested'], $plan['steps'][$index]['untested_accepted']);
             $plan['steps'][$index]['history'][] = ['at' => $now, 'event' => 'reopened', 'detail' => 'La comprobación ya no pasa.'];
         }
 
         $state->savePlan($plan);
+        $final = (string) $plan['steps'][$index]['status'];
+        $warning = $final === Planner::UNTESTED
+            ? "SIN PROBAR: {$step['id']} cambia comportamiento y nadie registró su prueba. "
+                .'Queda `untested`: hecho a falta de la prueba, y `larapack:realign done` no termina mientras quede así. '
+                .'Corre las pruebas del proyecto y, si pasan: larapack:realign check '.$step['id'].' --tested="<la orden que corriste>" '
+                .'(o registra la orden en '.RealignState::DIRECTORY.'/config.json y check la corre). Si no se pueden correr, dilo en tu informe: '
+                .'aceptarlo sin probar lo decide el dueño (larapack:realign accept-untested '.$step['id'].' --note="…").'
+            : null;
 
         if ($this->wantsJson($input)) {
-            $this->writeJson($output, ['format_version' => RealignState::FORMAT_VERSION, 'ok' => $result['done'], 'action' => 'check', 'id' => $step['id']] + $result);
+            $this->writeJson($output, ['format_version' => RealignState::FORMAT_VERSION, 'ok' => $result['done'], 'action' => 'check', 'id' => $step['id'],
+                'done' => $final === Planner::DONE, 'status' => $final] + $result + ['tests' => $tests] + ($warning === null ? [] : ['warning' => $warning]));
 
             return $result['done'] ? Command::SUCCESS : Command::FAILURE;
         }
 
         if ($result['done']) {
-            $output->writeln("  <info>Hecho:</info> {$step['id']} · siguiente: larapack:realign next");
+            $output->writeln($warning === null
+                ? "  <info>Hecho:</info> {$step['id']} · siguiente: larapack:realign next"
+                : '  <comment>'.OutputFormatter::escape($warning).'</comment>');
 
             return Command::SUCCESS;
         }
@@ -599,6 +678,12 @@ class RealignCommand extends Command
 
         if (count($result['remaining']) > 50) {
             $output->writeln('    … y '.(count($result['remaining']) - 50).' más (--format=json los da todos).');
+        }
+
+        if ($tests !== null && $tests['exit'] !== 0) {
+            $output->writeln('
+  Final de la salida de las pruebas:
+'.OutputFormatter::escape($tests['output']));
         }
 
         return Command::FAILURE;
@@ -679,6 +764,95 @@ class RealignCommand extends Command
     }
 
     /**
+     * El dueño acepta sin probar un paso que quedó `untested`: lo confirma
+     * él, como una aprobación (OwnerConfirmation), en su terminal o
+     * nombrándose sin ella, y queda en el plan con su nota, su nombre si lo
+     * dio y la hora, a la vista en el diff y en lo que lista `done`.
+     *
+     * @param  list<string>  $targets
+     */
+    private function acceptUntested(InputInterface $input, OutputInterface $output, string $root, array $targets): int
+    {
+        $extra = ['format_version' => RealignState::FORMAT_VERSION, 'action' => 'accept-untested'];
+
+        if (count($targets) !== 1) {
+            return $this->reportFailure($input, $output, 'accept-untested necesita el id de un paso: larapack:realign accept-untested <id> --note="por qué".', extra: $extra);
+        }
+
+        $note = Exceptions::sanitise((string) $input->getOption('note'));
+
+        if ($note === '') {
+            return $this->reportFailure($input, $output, 'accept-untested necesita --note: por qué se acepta sin probar y cuándo se probará. Queda en el plan.', extra: $extra);
+        }
+
+        $state = new RealignState($root);
+        $plan = $this->requirePlan($root);
+        $index = $this->indexOf($plan, $targets[0]);
+        $step = $plan['steps'][$index];
+
+        if (($step['status'] ?? null) !== Planner::UNTESTED) {
+            return $this->reportFailure($input, $output, "El paso {$step['id']} no está sin probar (está ".($step['status'] ?? Planner::PENDING).'): sólo se acepta lo que check o plan dejaron `untested`.', extra: $extra);
+        }
+
+        $option = $input->getOption('approver');
+        $named = OwnerConfirmation::namedApprover(is_string($option) ? $option : null);
+
+        if ($named['error'] !== null) {
+            return $this->reportFailure($input, $output, $named['error'], extra: $extra);
+        }
+
+        $summary = [
+            '  Aceptar SIN PROBAR '.$step['id'].' — '.Exceptions::sanitise((string) $step['title']),
+            '  Cambia comportamiento: '.Exceptions::sanitise((string) $step['risk']['why']),
+            '  Archivos: '.Exceptions::sanitise(implode(', ', array_slice(Navigation::files($step), 0, 10))).(count(Navigation::files($step)) > 10 ? '…' : ''),
+            '  Nota: «'.$note.'»',
+            '  Nadie vio pasar sus pruebas; queda hecho con tu aceptación en '.RealignState::DIRECTORY.'/plan.json, y done deja de pedirlas.',
+        ];
+        $via = 'approver';
+
+        if ($named['approver'] === null) {
+            $terminal = OwnerConfirmation::openTerminal();
+
+            if ($terminal === null) {
+                return $this->reportFailure($input, $output, 'Aceptar un paso sin probar lo confirma el dueño del proyecto en su terminal, y este proceso no tiene ninguna (/dev/tty): no se cambió nada. '
+                    .'Si eres un agente, no lo intentes por otra vía: déjalo en tu informe (larapack:realign brief lo junta para el dueño). '
+                    .'Una persona sin terminal se nombra: '.OwnerConfirmation::APPROVER_ENV.'="Su nombre" y --approver="Su nombre", y el nombre queda en el plan.', extra: $extra);
+            }
+
+            $phrase = 'acepto sin probar';
+            $terminal->write(implode("\n", $summary)."\n\n  Si eres el dueño del proyecto y lo aceptas tú, escribe «{$phrase}»: ");
+            $answer = $terminal->readLine();
+            $terminal->write("\n");
+
+            if ($answer === null || trim($answer) !== $phrase) {
+                return $this->reportFailure($input, $output, "No se confirmó (había que escribir «{$phrase}»): no se cambió nada.", extra: $extra);
+            }
+
+            $via = 'terminal';
+        } elseif (! $this->wantsJson($input)) {
+            $output->writeln(array_map(fn (string $line): string => OutputFormatter::escape($line), $summary));
+        }
+
+        $now = gmdate('c');
+        $accepted = ['note' => $note, 'at' => $now, 'via' => $via, 'by' => $named['approver'] === null ? null : Exceptions::sanitise($named['approver'])];
+        $plan['steps'][$index]['status'] = Planner::DONE;
+        $plan['steps'][$index]['untested_accepted'] = $accepted;
+        $plan['steps'][$index]['history'][] = ['at' => $now, 'event' => 'accepted-untested', 'detail' => 'Aceptado sin probar'
+            .($accepted['by'] === null ? ' (en la terminal del dueño)' : ' por '.$accepted['by']).': '.$note];
+        $state->savePlan($plan);
+
+        if ($this->wantsJson($input)) {
+            $this->writeJson($output, $extra + ['ok' => true, 'id' => $step['id'], 'status' => Planner::DONE, 'untested_accepted' => $accepted]);
+
+            return Command::SUCCESS;
+        }
+
+        $output->writeln("  <info>Aceptado sin probar:</info> {$step['id']}. Revisa el diff de ".RealignState::DIRECTORY.'/plan.json y comitéalo.');
+
+        return Command::SUCCESS;
+    }
+
+    /**
      * Lo que espera al dueño, en un documento: lo escribe en
      * .larapack/realign/brief.{md,json} y lo imprime (OwnerBrief).
      *
@@ -738,9 +912,13 @@ class RealignCommand extends Command
             $output->writeln('  <fg=gray>fuera, por decisión ('.OutputFormatter::escape((string) $declared['step']).'):</> '.OutputFormatter::escape((string) $declared['message']));
         }
 
+        foreach ($result['accepted_untested'] as $accepted) {
+            $output->writeln('  <comment>aceptado sin probar ('.OutputFormatter::escape((string) $accepted['id']).($accepted['by'] === null ? '' : ', '.OutputFormatter::escape((string) $accepted['by'])).'):</comment> '.OutputFormatter::escape((string) $accepted['note']));
+        }
+
         if ($result['done']) {
             $output->writeln('  <info>Terminado.</info> Nada pendiente en el plan, ninguna decisión ni excepción por aprobar, y validate y verify --strict en verde en cada ámbito.');
-            $output->writeln('  Lo que no comprueba LaraPack: que las pruebas del proyecto pasen.');
+            $output->writeln('  Las pruebas del proyecto no las corre done: las registró check en cada paso que cambia comportamiento (lo aceptado sin probar sale arriba).');
 
             return Command::SUCCESS;
         }
@@ -754,6 +932,7 @@ class RealignCommand extends Command
         $lines = [
             ...array_map(fn (array $row): string => 'paso '.$row['id'].' ('.$row['status'].'): '.$row['check'], $result['missing']['steps']),
             ...array_map(fn (array $row): string => 'decisión '.$row['id'].': '.$row['decide'], $result['missing']['decisions']),
+            ...array_map(fn (array $row): string => 'sin probar '.$row['id'].': '.$row['check'].'  ·  el dueño: '.$row['accept'], $result['missing']['untested']),
             ...array_map(fn (array $row): string => 'excepción '.$row['target'].' ('.$row['status'].')', $result['missing']['exceptions']),
             ...array_map(fn (array $row): string => 'validate '.$row['file'].' '.$row['path'].': '.$row['message'], $result['missing']['validate']),
             ...array_map(fn (array $row): string => 'verify '.$row['check'].' '.($row['file'] ?? $row['model'] ?? '').': '.$row['message'], $result['missing']['verify']),
@@ -891,12 +1070,35 @@ class RealignCommand extends Command
     {
         foreach ($steps as $step) {
             if (! isset($step['deferred']) && ! Navigation::handedOver($step) && ! Navigation::waitsForGuided($step, $byId)
-                && ! in_array(Planner::effectiveStatus($step, $byId), [Planner::DONE, Planner::BLOCKED, Planner::AWAITING_DECISION], true)) {
+                && ! in_array(Planner::effectiveStatus($step, $byId), [Planner::DONE, Planner::UNTESTED, Planner::BLOCKED, Planner::AWAITING_DECISION], true)) {
                 return $step;
             }
         }
 
         return null;
+    }
+
+    /**
+     * Lo que está sin probar: cada paso con la orden para darlo por probado y
+     * la del dueño para aceptarlo así.
+     *
+     * @param  list<array<string, mixed>>  $steps
+     * @return list<array{id: string, title: string, scope: string, at: string|null, check: string, accept: string}>
+     */
+    private function untested(array $steps): array
+    {
+        $rows = [];
+
+        foreach ($steps as $step) {
+            if (($step['status'] ?? null) === Planner::UNTESTED) {
+                $history = array_values(array_filter((array) ($step['history'] ?? []), fn (mixed $event): bool => is_array($event) && in_array($event['event'] ?? null, ['untested', 'resolved'], true)));
+                $rows[] = ['id' => (string) $step['id'], 'title' => (string) $step['title'], 'scope' => (string) ($step['scope']['path'] ?? '.'),
+                    'at' => $history === [] ? null : (string) ($history[count($history) - 1]['at'] ?? ''),
+                    'check' => 'larapack:realign check '.$step['id'].' --tested="<orden>"', 'accept' => 'larapack:realign accept-untested '.$step['id'].' --note="por qué"'];
+            }
+        }
+
+        return $rows;
     }
 
     /**
@@ -908,12 +1110,12 @@ class RealignCommand extends Command
      */
     private function blockedBy(array $step, array $byId): array
     {
-        if (($step['status'] ?? null) === Planner::DONE) {
+        if (Planner::finished($step)) {
             return [];
         }
 
         return array_values(array_filter(array_map('strval', (array) ($step['depends_on'] ?? [])), fn (string $id): bool => isset($byId[$id])
-            && ($byId[$id]['status'] ?? Planner::PENDING) !== Planner::DONE
+            && ! Planner::finished($byId[$id])
             && ! (Navigation::conditions((string) ($byId[$id]['type'] ?? '')) && Navigation::allows($step, $byId[$id]))));
     }
 
@@ -988,7 +1190,7 @@ class RealignCommand extends Command
         $step = $plan['steps'][$index];
         $now = gmdate('c');
 
-        if ($defer && ($step['status'] ?? null) === Planner::DONE) {
+        if ($defer && Planner::finished($step)) {
             return $this->reportFailure($input, $output, "El paso {$step['id']} ya está hecho: no hay nada que aplazar.", extra: $extra);
         }
 
@@ -1050,7 +1252,7 @@ class RealignCommand extends Command
                 $step['category'] === Category::DECISION ? 'Ya lo decide el dueño: larapack:realign show '.$step['id'].'.' : null, $extra);
         }
 
-        if (($step['status'] ?? null) === Planner::DONE) {
+        if (Planner::finished($step)) {
             return $this->reportFailure($input, $output, "El paso {$step['id']} ya está hecho.", extra: $extra);
         }
 
@@ -1273,7 +1475,7 @@ class RealignCommand extends Command
         foreach ($steps as $step) {
             // Lo aplazado y lo que ya sólo espera al dueño no se vuelve a dar.
             if (! isset($step['deferred']) && ! Navigation::handedOver($step) && ! Navigation::waitsForGuided($step, $byId)
-                && ! in_array(Planner::effectiveStatus($step, $byId), [Planner::DONE, Planner::BLOCKED], true)) {
+                && ! in_array(Planner::effectiveStatus($step, $byId), [Planner::DONE, Planner::UNTESTED, Planner::BLOCKED], true)) {
                 return $step;
             }
         }

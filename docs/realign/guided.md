@@ -24,9 +24,13 @@ next` las imprime **ya rellenadas** con los archivos, los hallazgos y las
 
 ```bash
 vendor/bin/builder larapack:realign next --format=json   # how.instructions es el playbook rellenado
-# … seguirlo al pie de la letra …
-vendor/bin/builder larapack:realign check <id>
+# … seguirlo al pie de la letra, con las pruebas del proyecto antes y después …
+vendor/bin/builder larapack:realign check <id> --tested="php artisan test --filter=…"
 ```
+
+`--tested` sólo en un paso que cambia comportamiento (`tests.required` en
+`next`), y sólo si las pruebas pasaron; sin ellas, `check <id>` a secas lo deja
+`untested` ([Sin pruebas](#sin-pruebas-cuando-no-se-pueden-correr-las-del-proyecto)).
 
 El playbook rellenado de **cualquier** paso, no sólo del siguiente —uno que
 está bloqueado, una decisión, uno ya hecho—:
@@ -126,6 +130,9 @@ corre su `done_when`. Para un controlador, es que verify no encuentre
 `controller-shape` ni `request-handle` en él; y `request-handle` cuenta aunque
 el hallazgo esté en la request y no en el controlador (una acción que delega
 en una request sin `handle()` tiene la forma correcta y falla al llamarla).
+Si el paso cambia comportamiento, además, con su prueba: `--tested` o la orden
+configurada; si no, queda `untested`
+([Sin pruebas](#sin-pruebas-cuando-no-se-pueden-correr-las-del-proyecto)).
 
 Mientras se trabaja, la orden de verify que trae el playbook mira sólo lo del
 paso:
@@ -144,33 +151,75 @@ handle()»). Se resuelve y se vuelve a comprobar.
 
 ## Sin pruebas: cuando no se pueden correr las del proyecto
 
-A veces no se pueden correr las pruebas del proyecto: no hay `vendor/` (el
-proyecto no tiene sus dependencias instaladas, o se realinea desde un clon del
-paquete), no hay base de datos, o falta un servicio que las pruebas necesitan.
-`check` sigue funcionando —no corre las pruebas: compara con lo regenerado o
-corre verify—, y por eso mismo **no basta**.
+La regla: **un paso que cambia comportamiento no se da por hecho sin su
+prueba**, y la herramienta lo lleva en el plan, no en la memoria de nadie.
+Cambian comportamiento (`StepTypes::BEHAVIOUR`):
 
-La regla: **un paso guiado que cambia comportamiento no se da por hecho sin
-su prueba.** Cambian comportamiento `controller-shape` (mover a una
-FormRequest cambia el orden autorizar/validar y puede cambiar un 404 o un
-422), `security`, `declared-routes` y cualquier `edited-outside` que mueva
-lógica, autorización o validación. No lo cambia un `edited-outside` que sólo
-copia lo regenerado sobre la plantilla vieja (`cause: edited_or_generator`,
-sin ningún `+` propio en el diff).
+- `controller-shape` (mover a una FormRequest cambia el orden
+  autorizar/validar y puede cambiar un 404 o un 422), `declared-routes` y
+  `security`;
+- `edited-outside` de las familias `Requests`, `Controller` y `Policy`
+  (`edited-outside:Requests@.`): mueven autorización o validación;
+- una decisión decidida con una opción que mueve código
+  (`StepTypes::BEHAVIOUR_OPTIONS`): `route-closure` → `refactor`
+  (`closure-to-controller`), `hand-rolled` → `refactor`, `unmanaged-http` →
+  `declare`, y un guiado pasado al dueño (`escalate`) → `refactor`.
 
-Si no puedes correrlas:
+`next` y `show` lo dicen en `tests.required`, con la orden configurada si la
+hay (`tests.command`).
+
+### El estado `untested`
+
+Un paso así sólo queda `done` con evidencia de prueba. Sin ella queda
+**`untested`**: hecho a falta de su prueba. `next` no lo vuelve a dar (lo que
+falta no es trabajo del plan), pero `status`, `brief` y `done` lo listan, y
+**`larapack:realign done` falla mientras quede uno**.
+
+| Qué pasa | Cómo queda |
+|---|---|
+| `check <id>` pasa y nadie registró la prueba | `untested`, con un aviso (`warning` en el JSON) que dice qué hacer. |
+| `check <id> --tested="<orden>"` pasa | `done`; la orden queda en el paso (`tested: {via: declared, command, at}`) y en su historia. |
+| `check <id>` pasa con la orden de pruebas configurada | `check` la corre: si sale con 0, `done` (`tested.via: config`); si no, el paso no está hecho y `check` da el final de la salida (`tests.output`). |
+| `plan` ya no encuentra lo que el paso pedía (`resolved`) | `untested`, no `done`: alguien lo cambió y nadie vio pasar la prueba. |
+| Vuelve a salir (`check` o `plan`) | `pending` otra vez (`reopened`); la prueba registrada se pierde. |
+| El dueño lo acepta así | `done`, con `untested_accepted: {note, at, via, by}` y la línea en `done` (`accepted_untested`). |
+
+`--tested` lleva **la orden que se corrió y pasó** (`--tested="php artisan
+test --filter=ReportTest"`): es la evidencia que lee el dueño. Úsala sólo si
+de verdad la corriste y pasó.
+
+### La orden de pruebas del proyecto, en la configuración
+
+Si el proyecto puede correr sus pruebas donde se realinea, regístralas una vez
+en `.larapack/realign/config.json` (se versiona con el plan) y `check` las
+corre él mismo en cada paso que cambia comportamiento, en la raíz del
+proyecto:
+
+```json
+{"format_version": 1, "tests": "php artisan test"}
+```
+
+Corre la orden entera: el paso no sabe qué pruebas cubren sus archivos.
+Acótala tú (`--filter`, una carpeta) si la suite es larga. La orden es del
+proyecto, como un script de Composer: la escribe una persona.
+
+### Si no puedes correrlas
 
 1. **Escribe la prueba igualmente** (el paso 1 de cada playbook: lo que
    responde hoy), aunque no puedas correrla, y comítala aparte diciendo que
    no se corrió: `pruebas antes de mover X (SIN CORRER: no hay base de datos)`.
 2. Haz el cambio y comítalo solo, con la marca en el mensaje:
    `realign: <id> (SIN PROBAR: <motivo>)`.
-3. **No corras `larapack:realign check <id>`** en ese paso: `check` lo
-   marcaría `done` en `plan.json` sin que nadie haya visto pasar la prueba. El
-   paso se queda `pending`, que es la verdad.
-4. Dilo en tu informe: la lista de pasos `SIN PROBAR`, con sus commits y qué
-   hace falta para probarlos. Quien tenga el entorno corre las pruebas y,
-   si pasan, `check`; si no, `git revert` del commit del paso.
+3. Corre `larapack:realign check <id>` **sin** `--tested`: comprueba la forma y
+   deja el paso `untested`, que es la verdad. No inventes una orden para
+   `--tested`, y no marques el paso hecho editando `plan.json` a mano.
+4. Si prefieres no hacerlo todavía, aplázalo con su razón
+   (`larapack:realign defer <id> --note="sin base de datos para probarlo"`):
+   sigue `pending` y `next` pasa al siguiente.
+5. Dilo en tu informe: `larapack:realign status` (`untested`) y
+   `larapack:realign brief` (la sección «Sin probar») dan la lista con la
+   orden de cada uno. Quien tenga el entorno corre las pruebas y, si pasan,
+   `check <id> --tested="…"`; si no, `git revert` del commit del paso.
 
 `next` vuelve a dar el mismo paso mientras siga pendiente. Para seguir con
 otros, aplaza el paso sin probar con su motivo
@@ -179,6 +228,21 @@ sigue `pending`, `next` lo salta, `status` lo lista en «Aplazados» y
 `undefer <id>` lo devuelve cuando haya entorno para probarlo. También puedes
 trabajar otro ámbito con `--package`, o parar y entregar el informe. No
 marques el paso hecho editando `plan.json` a mano.
+
+### Aceptarlo sin probar: lo decide el dueño
+
+```bash
+larapack:realign accept-untested <id> --note="se prueba en staging antes de desplegar"
+```
+
+Es como aprobar una excepción ([exceptions.md](exceptions.md)): lo confirma
+**el dueño**, en su terminal, viendo el paso, por qué cambia comportamiento,
+sus archivos y la nota, y escribiendo «acepto sin probar». Sin terminal (una
+CI de aprobación) se nombra: `LARAPACK_APPROVER="Su nombre"` y
+`--approver="Su nombre"`, y el nombre queda en el plan. La guardia de los
+agentes bloquea cualquier orden con `--approver` o que dé valor a
+`LARAPACK_APPROVER`. Un agente no lo corre: lo deja en su informe. Lo aceptado
+queda en `plan.json` (el diff que se revisa) y `done` lo sigue enseñando.
 
 ## Después de los pasos guiados: otra pasada
 

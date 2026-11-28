@@ -48,8 +48,9 @@ larapack:realign status --format=json
 5. **Otra pasada** `diagnose` → `plan` → `apply --deterministic` al terminar
    los guiados de un ámbito, y **siempre** después de copiar lo regenerado
    desde la caché o de cambiar el contrato. Vuelve al 4.
-6. Cuando `next` diga `done` tras esa pasada: `larapack:verify --strict
-   --format=json`, y entrega la lista de lo que quedó sin probar.
+6. Cuando `next` diga `done` tras esa pasada: `larapack:realign done
+   --format=json`, y entrega la lista de lo que quedó sin probar
+   (`missing.untested`).
 
 ## La receta
 
@@ -101,17 +102,23 @@ Para preparar una decisión sobre código sin contrato (`no-contract`,
 
 ## Sin pruebas
 
-Si no puedes correr las pruebas del proyecto (sin `vendor/`, sin base de
-datos), un paso guiado que cambia comportamiento **no se da por hecho**:
-escribe la prueba igual, comita el cambio solo con
-`realign: <id> (SIN PROBAR: <motivo>)`, **no corras `check`** en ese paso
-(lo marcaría hecho) y ponlo en la lista que entregas. Detalle en
+Un paso que cambia comportamiento (`tests.required` en `next`) sólo queda
+hecho con su prueba: `larapack:realign check <id> --tested="<la orden que
+corriste y pasó>"`, o la orden de `.larapack/realign/config.json`, que `check`
+corre él. Si no puedes correr las pruebas del proyecto (sin `vendor/`, sin
+base de datos): escribe la prueba igual, comita el cambio solo con
+`realign: <id> (SIN PROBAR: <motivo>)` y corre `check <id>` **sin**
+`--tested`: lo deja `untested`, que es la verdad, y `done` no termina mientras
+quede así. Nunca pongas en `--tested` una orden que no corriste. Aceptarlo sin
+probar (`accept-untested`) lo hace el dueño, no tú: entrega la lista
+(`status` → `untested`, o `brief`). Detalle en
 `<paquete>/docs/realign/guided.md`.
 
 ## Lo que nunca haces
 
 - **Decidir o aprobar por el dueño**: ni `larapack:realign decide` sin que te
-  lo pidan, ni `larapack:hand-rolled approve`/`revoke`, ni editar
+  lo pidan, ni `larapack:hand-rolled approve`/`revoke`, ni
+  `larapack:realign accept-untested`, ni editar
   `.larapack/hand-rolled.lock` o `.larapack/realign/plan.json` a mano, ni
   añadir `#[HandRolled]` para que verify pase.
 - **Escribir o reescribir una migración**, ni tocar la base.

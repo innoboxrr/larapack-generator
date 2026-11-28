@@ -22,7 +22,7 @@ agente o la CI.
 
 ```bash
 larapack:realign done                    # 0: terminado; 1: lo que falta, con la orden de cada cosa
-larapack:realign done --format=json      # `done`, `missing`, `counts`, `reasons`, `declared`
+larapack:realign done --format=json      # `done`, `missing`, `counts`, `reasons`, `declared`, `accepted_untested`
 larapack:realign done --package=billing  # sólo un ámbito (repetible; `app` para el núcleo)
 ```
 
@@ -36,6 +36,7 @@ elemento por elemento:
 |---|---|---|
 | `steps` | Un paso del plan sin hacer (pendiente, decidido y sin hacer, o bloqueado), con su `check`. Un `edited-outside` cuenta aunque `verify` no lo vea. | Quien hace el paso: `next` y `check`. |
 | `decisions` | Una decisión sin tomar, con su `decide`. | El dueño. Nunca un agente. |
+| `untested` | Un paso hecho sin probar (`untested`): cambia comportamiento y nadie registró que las pruebas del proyecto pasaran ([guided.md](guided.md#sin-pruebas-cuando-no-se-pueden-correr-las-del-proyecto)), con su `check … --tested` y su `accept`. | Quien tenga el entorno: `check <id> --tested="…"`. Si no se puede probar, el dueño: `accept-untested`. |
 | `exceptions` | Una excepción pedida y sin aprobar, o aprobada sobre otro código, con otra razón o sobre algo que ya no existe (`status`). | El dueño: `larapack:hand-rolled approve` (o `revoke`). |
 | `validate` | Un error o aviso de `larapack:validate --strict` en el contrato de cualquier ámbito (`file`). | Quien mantiene el contrato. |
 | `verify` | Un error o aviso de `larapack:verify --strict` (lo que cubre una excepción aprobada ya es `info` y no cuenta). | El paso que lo resuelve ([diagnose.md](diagnose.md#los-hallazgos-de-verify)). |
@@ -52,8 +53,11 @@ que se desvió después del último diagnóstico ni si el contrato valida. En un
 prueba de autonomía, un agente dio por terminado con `verify --strict` en
 verde y pasos `edited-outside` pendientes en el plan.
 
-Lo que `done` **no** comprueba son las pruebas del proyecto (ver
-[abajo](#qué-garantiza-y-qué-no)): córrelas también.
+Lo que `done` **no** hace es correr las pruebas del proyecto (ver
+[abajo](#qué-garantiza-y-qué-no)): las registra `check` en cada paso que
+cambia comportamiento, y `done` falla mientras uno siga `untested`. Lo que el
+dueño aceptó sin probar no falta, pero sale en `accepted_untested` (y en
+texto, «aceptado sin probar»), para que nadie lo tome por probado.
 
 **Un proyecto que se queda fuera de LaraPack** (sin contrato, decidido `keep`)
 no tiene manifiesto, y `verify --strict` siempre dirá `empty-manifest`. Ése es
@@ -172,7 +176,11 @@ protegida.
   autorización a `authorize()` hace que una petición sin permiso reciba 403 en
   vez de 422; regenerar un IndexRequest hace que un listado respete
   `managed`. Las pruebas del proyecto lo dicen; `verify`, no.
-- **Que las pruebas pasen**, ni que existan para lo escrito a mano.
+- **Que las pruebas pasen**, ni que existan para lo escrito a mano. Lo que
+  garantiza es que cada paso que cambia comportamiento tiene su prueba
+  registrada (la orden que declaró quien la corrió, o la de config.json que
+  corrió `check`) o la aceptación del dueño (`accepted_untested`); no que esa
+  orden cubra lo que cambió, ni que quien la declaró la corriera.
 - **Que el contrato diga lo que hace la base de producción.** El contrato se
   compara con el código y las migraciones del repositorio, no con la base: un
   cambio hecho en la base sin migración no se ve

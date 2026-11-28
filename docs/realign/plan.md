@@ -1,4 +1,4 @@
-# El plan y el estado: `plan`, `status`, `next`, `show`, `check`, `decide`, `defer`, `escalate`
+# El plan y el estado: `plan`, `status`, `next`, `show`, `check`, `decide`, `defer`, `escalate`, `accept-untested`
 
 Parte de [`larapack:realign`](README.md). Del diagnóstico a pasos que cualquiera
 puede retomar, con un criterio de terminado que no depende de la opinión de
@@ -19,6 +19,7 @@ nadie. Ninguna de estas acciones escribe código: sólo el estado en
 - [`decide`](#decide)
 - [`defer` y `undefer`](#defer-y-undefer)
 - [`escalate`](#escalate)
+- [`accept-untested`](#accept-untested)
 - [El estado en disco y los formatos JSON](#el-estado-en-disco-y-los-formatos-json)
 
 ## `plan`
@@ -53,11 +54,18 @@ Cada paso agrupa lo que se resuelve junto y lleva:
 | `decisions` | Lo decidido elemento por elemento (`decide --target`): `{<archivo>: {option, note, at}}`. Manda sobre `decision`. |
 | `deferred` | `{note, at}` si se aplazó ([`defer`](#defer-y-undefer)). |
 | `escalated` | `{from, note, at}` si un paso guiado se le pasó al dueño ([`escalate`](#escalate)). |
+| `tested` | `{via: declared\|config, command, at}`: la prueba con la que se dio por hecho un paso que cambia comportamiento ([`check`](#check)). |
+| `untested_accepted` | `{note, at, via: terminal\|approver, by}` si el dueño lo aceptó sin probar ([`accept-untested`](#accept-untested)). |
 
-Los estados: `pending`, `done`, `awaiting_decision` (una decisión sin decidir,
-o decidida sólo para algunos de sus elementos), `decided` (decidida entera, o
-cada elemento, y todavía sin cumplir) y `blocked` (calculado al leer: espera a
-un paso de `depends_on`). Aplazar no es un estado: el paso sigue en el suyo.
+Los estados: `pending`, `done`, `untested` (hecho a falta de su prueba: cambia
+comportamiento y nadie registró que las pruebas del proyecto pasaran;
+[guided.md](guided.md#sin-pruebas-cuando-no-se-pueden-correr-las-del-proyecto)),
+`awaiting_decision` (una decisión sin decidir, o decidida sólo para algunos de
+sus elementos), `decided` (decidida entera, o cada elemento, y todavía sin
+cumplir) y `blocked` (calculado al leer: espera a un paso de `depends_on`).
+Para moverse por el plan `untested` cuenta como hecho (no bloquea a nadie y
+`next` no lo da); para terminar, no. Aplazar no es un estado: el paso sigue en
+el suyo.
 
 ## Los tipos de paso
 
@@ -123,9 +131,12 @@ no espera: el agente sigue con lo que no depende de ella.
 Después de hacer pasos, diagnosticar y planificar otra vez **no pierde nada**:
 
 - un paso con el mismo `id` conserva su estado, su decisión y su historia;
-- uno hecho cuyo problema vuelve a salir se reabre (`reopened` en su
-  historia): alguien lo deshizo o una corrección lo cambió;
-- uno pendiente que ya no sale se cierra (`resolved`);
+- uno hecho (o sin probar) cuyo problema vuelve a salir se reabre
+  (`reopened` en su historia) y pierde la prueba registrada: alguien lo
+  deshizo o una corrección lo cambió;
+- uno pendiente que ya no sale se cierra (`resolved`): `done`, o `untested`
+  si cambia comportamiento —alguien lo hizo sin `check` y nadie vio pasar su
+  prueba—;
 - una decisión tomada sigue tomada, también la tomada por elemento;
 - lo aplazado sigue aplazado y lo pasado al dueño sigue siendo una decisión;
 - la última comprobación (`last_check`) **no** pasa: era de otro diagnóstico,
@@ -153,6 +164,9 @@ Además:
   detienen lo guiado y lo guiado que detienen. En texto: «Falta 1 decisión del
   dueño antes de seguir con lo guiado de app (2 pasos esperan): …».
 - **`deferred`**: lo aplazado, con su nota. Sigue pendiente.
+- **`untested`**: lo hecho sin probar, `[{id, title, scope, at, check,
+  accept}]`, con la orden para darlo por probado y la del dueño para
+  aceptarlo así. En texto: «Sin probar (N)».
 
 ## `next`
 
@@ -222,11 +236,28 @@ aplazado, se ve igual. No escribe nada.
 
 ```bash
 larapack:realign check <id> [--format=json]
+larapack:realign check <id> --tested="<la orden de pruebas que se corrió y pasó>"
 ```
 
 Corre el `done_when` del paso. Si pasa, lo marca `done`; si no, dice qué
 falta, elemento por elemento (`remaining`), y termina con código distinto de
 cero. **Hacer un paso, o ejecutar su orden, no lo marca hecho: sólo `check`.**
+
+Un paso que **cambia comportamiento** (`tests.required` en `next`; la lista
+en [guided.md](guided.md#sin-pruebas-cuando-no-se-pueden-correr-las-del-proyecto))
+necesita además su prueba:
+
+- con `--tested="<orden>"`, la que declara quien la corrió: queda `done` y la
+  orden en el paso (`tested`);
+- con la orden de pruebas del proyecto en `.larapack/realign/config.json`
+  (`{"format_version": 1, "tests": "php artisan test"}`), `check` la corre
+  en la raíz del proyecto: con 0, `done`; con otro código, no está hecho, lo
+  dice en `remaining` y da el final de la salida en `tests.output`;
+- sin ninguna de las dos, queda **`untested`**, sale con 0 y avisa
+  (`warning`): `larapack:realign done` no termina mientras siga así.
+
+`check` de un paso ya `done` no le quita su prueba; uno `untested` que vuelve
+a pasar con `--tested` queda `done`.
 
 | `kind` | Pasa cuando |
 |---|---|
@@ -305,6 +336,21 @@ como dice su playbook) y dejarlo como está —`hand-rolled` en un controlador
 `done_when` no cambia. Lo decide el dueño con `decide`; volver a planificar no
 lo pierde.
 
+## `accept-untested`
+
+```bash
+larapack:realign accept-untested <id> --note="por qué y cuándo se probará"
+```
+
+El dueño acepta sin probar un paso `untested`: queda `done` con
+`untested_accepted` (la nota, la hora y cómo se confirmó) y una línea en su
+historia, y `larapack:realign done` lo sigue enseñando (`accepted_untested`).
+Lo confirma **una persona**, como una aprobación: en su terminal, viendo el
+paso y la nota y escribiendo «acepto sin probar»; o sin terminal, nombrándose
+(`LARAPACK_APPROVER` y `--approver` con el mismo nombre, que queda en `by`).
+Un agente no lo corre: lo deja en su informe y en `brief`. La nota es
+obligatoria y sólo se acepta lo que está `untested`.
+
 ## Argumentos
 
 Un argumento que la acción no usa es un error, igual que una opción: `next
@@ -318,6 +364,7 @@ Antes, `next <id>` ignoraba el id y daba el siguiente.
   report.json        el último diagnóstico
   plan.json          los pasos, su estado y su historia
   exceptions.json    las excepciones pedidas, sin aprobar (exceptions.md)
+  config.json        opcional, lo escribe una persona: la orden de pruebas (check)
   brief.md, .json    lo que espera al dueño (owner.md); se rehace con brief
   infer/             los informes de infer (infer.md)
   .gitignore         deja fuera cache/
@@ -332,16 +379,21 @@ pide actualizar el paquete.
 - `diagnose --format=json` y `report.json`: [diagnose.md](diagnose.md#el-informe-reportjson).
 - `plan --format=json` y `status --format=json`: `{format_version, ok, action,
   diagnosed_at, planned_at, stale, totals, verify, steps: {total, by_status,
-  by_category}, next, last_check, awaiting_owner, deferred, plan}`. `stale`
+  by_category}, next, last_check, awaiting_owner, deferred, untested, plan}`. `stale`
   lista los ámbitos cuyo contrato o manifiesto cambió después del diagnóstico;
   `awaiting_owner` es `[{scope, package, decisions, guided}]` y `deferred`,
   `[{id, title, note, at}]`.
 - `next --format=json` y `show --format=json`: `{format_version, ok, action,
-  done, step, how, check, done_when, blocked_by, meanwhile}`; sin nada que
+  done, step, how, check, tests, done_when, blocked_by, meanwhile}`, con
+  `tests: {required, command, tested}`; sin nada que
   hacer ahora, `{…, done: false, step: null, waiting: {deferred, owner,
   blocked}}`.
-- `check --format=json`: `{format_version, ok, action, id, done, remaining,
-  kind}`.
+- `check --format=json`: `{format_version, ok, action, id, done, status,
+  remaining, kind, tests, warning?}`. `ok` es que la comprobación pasó; `done`,
+  que el paso quedó `done` (en uno `untested`, `ok: true, done: false`);
+  `tests` es `{command, exit, output}` si corrió la orden configurada, o null.
+- `accept-untested --format=json`: `{format_version, ok, action, id, status,
+  untested_accepted}`.
 - `decide --format=json`: `{format_version, ok, action, id, decision, targets,
   undecided, then, check}`.
 - `defer`/`undefer --format=json`: `{format_version, ok, action, id, deferred,

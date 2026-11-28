@@ -105,7 +105,7 @@ final class Navigation
         $waits = false;
 
         foreach ($byId as $other) {
-            if (($other['status'] ?? null) !== Planner::DONE && in_array($step['id'] ?? null, (array) ($other['depends_on'] ?? []), true)
+            if (! Planner::finished($other) && in_array($step['id'] ?? null, (array) ($other['depends_on'] ?? []), true)
                 && ($other['category'] ?? null) === Category::GUIDED) {
                 if (! self::allows($other, $step)) {
                     return false;

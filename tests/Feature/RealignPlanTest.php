@@ -168,7 +168,7 @@ final class RealignPlanTest extends TestCase
             }
             PHP);
 
-        $passing = $this->realign('check', ['targets' => [$id]]);
+        $passing = $this->realign('check', ['targets' => [$id], '--tested' => 'php artisan test']);
         $this->assertTrue($passing['done']);
         $this->assertSame(Planner::DONE, $this->step($id)['status']);
         $this->assertSame('done', end($this->step($id)['history'])['event']);
@@ -328,7 +328,7 @@ final class RealignPlanTest extends TestCase
     {
         $help = $this->realign('help');
 
-        $this->assertSame(['diagnose', 'plan', 'status', 'next', 'show', 'check', 'decide', 'defer', 'undefer', 'escalate', 'done', 'brief', 'playbook', 'adopt', 'apply', 'infer', 'except'], array_keys($help['actions']));
+        $this->assertSame(['diagnose', 'plan', 'status', 'next', 'show', 'check', 'decide', 'defer', 'undefer', 'escalate', 'accept-untested', 'done', 'brief', 'playbook', 'adopt', 'apply', 'infer', 'except'], array_keys($help['actions']));
         $this->assertSame(Category::ALL, $help['categories']);
         $this->assertSame('docs/realign/README.md', $help['guide']);
     }

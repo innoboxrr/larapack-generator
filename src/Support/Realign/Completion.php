@@ -27,7 +27,10 @@ use Innoboxrr\LarapackGenerator\Support\Verifier;
  *     el estado de `.larapack/realign/`), para que nada desviado después del
  *     último diagnóstico se escape y lo hecho o decidido se conserve.
  *  2. Mira el plan: cada paso que no está hecho es algo que falta —una
- *     decisión sin tomar va aparte, en `decisions`—.
+ *     decisión sin tomar va aparte, en `decisions`, y uno hecho a falta de su
+ *     prueba (`untested`: cambia comportamiento y nadie la registró), en
+ *     `untested`—. Lo que el dueño aceptó sin probar (`accept-untested`) ya
+ *     no falta: sale en `accepted_untested`, para que se vea.
  *  3. Mira las excepciones: cada una pedida y sin aprobar, o aprobada sobre
  *     otro código o sobre algo que ya no existe.
  *  4. `validate --strict` en cada ámbito con contrato (ProjectValidation).
@@ -43,13 +46,14 @@ use Innoboxrr\LarapackGenerator\Support\Verifier;
  * realineamiento no está terminado. Lo que se decide no hacer se decide
  * (`decide`) y, si se queda como está, con su excepción aprobada.
  *
- * Las pruebas del proyecto no las corre: eso lo dice la guía (verify.md).
+ * Las pruebas del proyecto no las corre: las registra `check` en cada paso
+ * que cambia comportamiento (`--tested`, o la orden de config.json).
  *
- * @phpstan-type Missing array{steps: list<array<string, mixed>>, decisions: list<array<string, mixed>>, exceptions: list<array<string, mixed>>, validate: list<array<string, mixed>>, verify: list<array<string, mixed>>}
+ * @phpstan-type Missing array{steps: list<array<string, mixed>>, decisions: list<array<string, mixed>>, untested: list<array<string, mixed>>, exceptions: list<array<string, mixed>>, validate: list<array<string, mixed>>, verify: list<array<string, mixed>>}
  */
 final class Completion
 {
-    public const KEYS = ['steps', 'decisions', 'exceptions', 'validate', 'verify'];
+    public const KEYS = ['steps', 'decisions', 'untested', 'exceptions', 'validate', 'verify'];
 
     public function __construct(
         private readonly string $root,
@@ -61,7 +65,7 @@ final class Completion
      * @param  list<string>  $packages  lo de --package, como lo escribió quien lo pide
      * @param  list<string>  $roots  sus raíces absolutas; vacío, todo el proyecto
      * @param  list<string>  $paths  sus rutas de ámbito (`.` para el núcleo); vacío, todas
-     * @return array{done: bool, missing: Missing, declared: list<array<string, mixed>>, counts: array<string, int>, reasons: list<string>, diagnosed_at: string|null}
+     * @return array{done: bool, missing: Missing, declared: list<array<string, mixed>>, accepted_untested: list<array<string, mixed>>, counts: array<string, int>, reasons: list<string>, diagnosed_at: string|null}
      */
     public function run(array $packages = [], array $roots = [], array $paths = []): array
     {
@@ -84,10 +88,22 @@ final class Completion
 
         $missing = array_fill_keys(self::KEYS, []);
         $declaredOut = [];
+        $accepted = [];
 
         foreach ($steps as $step) {
             $status = Planner::effectiveStatus($step, $byId);
             $path = (string) ($step['scope']['path'] ?? '.');
+
+            if ($status === Planner::UNTESTED) {
+                $missing['untested'][] = ['id' => $step['id'], 'title' => $step['title'] ?? null, 'category' => $step['category'] ?? null, 'status' => $status, 'scope' => $path,
+                    'check' => 'larapack:realign check '.$step['id'].' --tested="<orden>"', 'accept' => 'larapack:realign accept-untested '.$step['id'].' --note="por qué"'];
+
+                continue;
+            }
+
+            if ($status === Planner::DONE && is_array($step['untested_accepted'] ?? null)) {
+                $accepted[] = ['id' => $step['id'], 'title' => $step['title'] ?? null, 'scope' => $path] + $step['untested_accepted'];
+            }
 
             if ($status === Planner::DONE) {
                 if (($step['type'] ?? null) === 'no-contract') {
@@ -139,6 +155,7 @@ final class Completion
             'done' => array_sum($counts) === 0,
             'missing' => $missing,
             'declared' => $declared,
+            'accepted_untested' => $accepted,
             'counts' => $counts,
             'reasons' => self::reasons($counts),
             'diagnosed_at' => is_string($report['generated_at'] ?? null) ? $report['generated_at'] : null,
@@ -158,6 +175,7 @@ final class Completion
         $texts = [
             'steps' => '%d pasos del plan sin hacer (larapack:realign next)',
             'decisions' => '%d decisiones sin tomar: las toma el dueño (larapack:realign decide)',
+            'untested' => '%d pasos hechos sin probar: cambian comportamiento y nadie registró su prueba (larapack:realign check <id> --tested=…, o los acepta el dueño con accept-untested)',
             'exceptions' => '%d excepciones sin aprobar o que ya no cubren lo aprobado: las aprueba el dueño (larapack:hand-rolled approve)',
             'validate' => '%d errores o avisos de larapack:validate --strict',
             'verify' => '%d errores o avisos de larapack:verify --strict',
