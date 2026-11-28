@@ -550,24 +550,31 @@ final class Planner
             }
 
             if (self::finished($before)) {
-                // Una decisión tomada sigue tomada; un paso hecho cuyo
-                // problema vuelve a salir se reabre.
-                if ($steps[$index]['category'] === Category::DECISION && (isset($before['decision']) || isset($before['decisions']))) {
-                    continue;
-                }
-
                 // El mismo informe no lo vuelve a encontrar: es el que lo
                 // pedía. Volver a planificar sin volver a diagnosticar reabría
                 // lo que `check` acababa de cerrar, y status contaba un hecho
                 // menos y las decisiones que esperaban a ese paso como
                 // bloqueadas.
+                //
+                // Queda como estaba, no `done`: uno hecho a falta de su prueba
+                // (`untested`) pasaba a hecho con sólo planificar otra vez, y
+                // `done` lo daba por terminado. Y con lo que dice cómo se
+                // cerró: la prueba registrada y lo que aceptó el dueño.
                 if ($sameReport) {
-                    $steps[$index]['status'] = self::DONE;
+                    $steps[$index]['status'] = $before['status'];
 
-                    if (isset($before['last_check'])) {
-                        $steps[$index]['last_check'] = $before['last_check'];
+                    foreach (['last_check', 'tested', 'untested_accepted'] as $key) {
+                        if (isset($before[$key])) {
+                            $steps[$index][$key] = $before[$key];
+                        }
                     }
 
+                    continue;
+                }
+
+                // Una decisión tomada sigue tomada; un paso hecho cuyo
+                // problema vuelve a salir se reabre.
+                if ($steps[$index]['category'] === Category::DECISION && (isset($before['decision']) || isset($before['decisions']))) {
                     continue;
                 }
 
