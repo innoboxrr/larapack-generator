@@ -155,16 +155,17 @@ final class RealignStateTest extends TestCase
     public function test_un_formato_de_una_version_posterior_o_sin_version_no_se_lee_como_si_fuera_de_esta(): void
     {
         $path = $this->root.'/.larapack/realign/plan.json';
-        $message = fn (string $version): string => "{$path} está en un formato que esta versión de LaraPack no entiende (format_version {$version}). Actualiza innoboxrr/larapack-generator.";
+        $newer = "{$path} está en la versión 2 del formato, y este LaraPack entiende hasta la 1: lo escribió una versión posterior. Actualiza innoboxrr/larapack-generator.";
+        $unversioned = "{$path} no dice su `format_version` (un entero; hoy, 1): no es un archivo que haya escrito `larapack:realign`. Corrígelo, o bórralo y vuelve a generarlo.";
 
         $this->put('plan.json', (string) json_encode(['format_version' => RealignState::FORMAT_VERSION + 1, 'steps' => []]));
-        $this->assertSame($message('2'), $this->refused(fn () => $this->state()->plan()));
+        $this->assertSame($newer, $this->refused(fn () => $this->state()->plan()));
 
         $this->put('plan.json', '{"steps": []}');
-        $this->assertSame($message('null'), $this->refused(fn () => $this->state()->plan()));
+        $this->assertSame($unversioned, $this->refused(fn () => $this->state()->plan()));
 
         $this->put('plan.json', '{"format_version": "1", "steps": []}');
-        $this->assertSame($message('"1"'), $this->refused(fn () => $this->state()->plan()));
+        $this->assertSame($unversioned, $this->refused(fn () => $this->state()->plan()));
 
         // La de ahora y las anteriores, sí.
         $this->put('plan.json', '{"format_version": 1, "steps": []}');
@@ -174,7 +175,7 @@ final class RealignStateTest extends TestCase
 
         // El informe y la configuración, igual.
         $this->put('report.json', '{"format_version": 7}');
-        $this->assertStringContainsString('report.json está en un formato', $this->refused(fn () => $this->state()->report()));
+        $this->assertStringContainsString('report.json está en la versión 7 del formato', $this->refused(fn () => $this->state()->report()));
         $this->put('config.json', 'x');
         $this->assertStringContainsString('config.json no es JSON válido', $this->refused(fn () => $this->state()->config()));
     }

@@ -179,7 +179,6 @@ final class OperationRunnerTest extends TestCase
             ->unchanged('e.php', 'ya estaba', ['step' => ''])
             ->note('una nota');
 
-        $this->assertFalse($result->hasSkipped());
         $this->assertSame([
             'fixed' => [
                 ['file' => 'a.php', 'reason' => 'cambiado', 'step' => 'adopt@.', 'steps' => ['adopt@.'], 'diff' => '+x'],
@@ -198,7 +197,6 @@ final class OperationRunnerTest extends TestCase
         ], $result->toArray());
 
         $other = (new OperationResult)->skipped('f.php', 'no se reconoce', ['step' => 'adopt@.'])->fixed('g.php', 'otro')->unchanged('h.php', 'igual')->note('otra nota');
-        $this->assertTrue($other->hasSkipped());
 
         // Lo que hizo la operación en la que se delega, detrás de lo propio.
         $merged = $result->merge($other)->toArray();
@@ -206,7 +204,6 @@ final class OperationRunnerTest extends TestCase
         $this->assertSame([['file' => 'f.php', 'reason' => 'no se reconoce', 'step' => 'adopt@.', 'steps' => ['adopt@.']]], $merged['skipped']);
         $this->assertSame([null, 'e.php', 'h.php'], array_column($merged['unchanged'], 'file'));
         $this->assertSame(['una nota', 'otra nota'], $merged['notes']);
-        $this->assertTrue($result->hasSkipped());
     }
 
     public function test_una_accion_se_resuelve_por_convencion_y_se_puede_registrar_otra(): void

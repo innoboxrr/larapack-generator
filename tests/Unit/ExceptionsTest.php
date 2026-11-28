@@ -242,14 +242,15 @@ final class ExceptionsTest extends TestCase
 
         $path = $this->root.'/.larapack/realign/exceptions.json';
         $shape = "{$path} no tiene la forma de las solicitudes de excepción del realineamiento (un objeto con una lista `requests`). Corrígelo o bórralo y vuelve a pedirlas con `larapack:realign except`.";
-        $version = "{$path} está en un formato que esta versión de LaraPack no entiende. Actualiza innoboxrr/larapack-generator.";
+        $newer = "{$path} está en la versión 2 del formato, y este LaraPack entiende hasta la 1: lo escribió una versión posterior. Actualiza innoboxrr/larapack-generator.";
+        $version = "{$path} no dice su `format_version` (un entero; hoy, 1): no es un archivo que haya escrito `larapack:realign`. Corrígelo, o bórralo y vuelve a generarlo.";
 
         file_put_contents($path, 'no es JSON');
         $this->assertSame($shape, $this->refused(fn () => $this->exceptions()->requests()));
         file_put_contents($path, '{"format_version": 1, "requests": "no es una lista"}');
         $this->assertSame($shape, $this->refused(fn () => $this->exceptions()->requests()));
         $this->requestsFile([], 2);
-        $this->assertSame($version, $this->refused(fn () => $this->exceptions()->requests()));
+        $this->assertSame($newer, $this->refused(fn () => $this->exceptions()->requests()));
         $this->requestsFile([], '1');
         $this->assertSame($version, $this->refused(fn () => $this->exceptions()->requests()));
         file_put_contents($path, '{"requests": []}');
