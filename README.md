@@ -433,6 +433,40 @@ Lo que no cierra, dicho claro:
 La skill le explica además el mapa de lo que se genera, **dónde va la lógica de
 negocio**, qué no debe tocar y los errores frecuentes.
 
+### Varias consolas a la vez
+
+Diez o veinte agentes sobre el mismo proyecto, cada uno en su rama o en su
+worktree, que luego se integran. Lo generado sale del contrato, así que dos
+ramas no fusionan lo generado: fusionan **el contrato** y vuelven a generar.
+
+- **Cada consola**, antes de empujar: su rama, el ciclo de arriba entero
+  (`import --force` después de cada cambio del `laraimport.json`: si no, es el
+  error `contract-outdated`), `verify --strict` y las pruebas. No resuelve a
+  mano un conflicto en `laraimport.json` ni en `.larapack/manifest.json`, y
+  declara un endpoint antes que escribirlo a mano: lo declarado se fusiona por
+  nombre.
+- **Quien integra**, de una rama en una:
+
+  ```
+  git merge --no-ff --no-commit <rama>     # con conflictos o sin ellos
+  php artisan larapack:reconcile           # --dry-run dice lo que haría
+  php artisan larapack:verify --strict
+  git add -A && git commit
+  ```
+
+  `larapack:reconcile` fusiona el laraimport por nombres (modelos, columnas,
+  endpoints), recompone el manifiesto de las dos ramas, retira la migración
+  repetida que trae la rama que entra y vuelve a importar. Lo que no es suyo
+  decidir —el mismo endpoint declarado distinto en dos ramas, dos consolas en
+  el mismo hueco— lo deja nombrado y sale con error.
+- **La CI** (`larapack:ci`) corre `verify --strict` sobre la fusión del pull
+  request, `larapack:reconcile --check` y, si el proyecto usa Pint,
+  `pint --test`.
+
+La guía completa —qué se midió, qué hace cada paso, qué grados de libertad
+quedan entre consolas y qué no se puede garantizar desde el paquete— está en
+[docs/swarm.md](docs/swarm.md).
+
 ### Cómo pedirle las cosas
 
 Pide **dominio y comportamiento**, no archivos:
@@ -1305,7 +1339,9 @@ Sin cambios no se escribe nada, y con `--dry-run` sólo se dice. Las reglas
 Sigue dejándose a mano una migración de creación editada, porque lo escrito
 fuera del laraimport en ella no se puede leer con seguridad.
 
-El manifiesto debe versionarse con el proyecto.
+El manifiesto debe versionarse con el proyecto. Es un registro de hashes, y un
+hash no se fusiona: un conflicto de git en él no se resuelve a mano, lo
+recompone `larapack:reconcile` (ver [Varias consolas a la vez](#varias-consolas-a-la-vez)).
 
 ---
 
@@ -1364,6 +1400,11 @@ Contra el manifiesto:
 | `immutable-write` | error | Un camino de escritura en un modelo `immutable`, o su modelo sin la guarda que rechaza modificaciones. |
 | `secret-exposed` | error | Una columna `secret` fuera de `$hidden`, en la exportación, en el Resource o en la tabla. |
 | `endpoint-tests-outdated` | aviso | Un `<Modelo>EndpointsTest` sin alguna de las pruebas que cierran la autorización (`test_…_cada_accion_requiere_sesion`, `…_cada_accion_pregunta_a_la_politica` y, si hay listado, `…_index_pasa_por_su_managed_filter`): se generó antes de 9.1. Ese test no se regenera ni está en el manifiesto, así que no se reescribe: el mensaje dice cómo traerlas. |
+| `contract-outdated` | error | Contra el `laraimport.json` de la raíz, con la huella que la importación anota en el manifiesto (`"contract"`, 9.4.0): lo generado de un modelo corresponde a otro contrato —su declaración, el prefijo de tablas o el modelo al que apunta una de sus claves ajenas cambió y no se volvió a importar, a mano o al fusionar dos ramas—; el laraimport declara un modelo del que no hay nada generado; o el manifiesto registra uno que el laraimport ya no declara. Escribir lo mismo de otra forma (el valor por omisión dicho a mano, las claves en otro orden) no cuenta. Un manifiesto anterior a 9.4.0 no trae huella y no se compara hasta el primer `import --force`. |
+| `manifest-unreadable` | error | `.larapack/manifest.json` existe y no se puede leer: marcadores de conflicto de git o JSON roto. Antes se leía como vacío y la siguiente importación lo reescribía; ahora ningún comando lo toca, y `larapack:reconcile` lo recompone de las dos ramas. |
+| `merge-conflict` | error | Un conflicto de git sin resolver (`<<<<<<<`) en el laraimport, en un archivo de estado de `.larapack/`, en algo generado o en el código del proyecto. |
+| `migration-duplicate` | error | Dos migraciones que crean la misma tabla o añaden la misma columna sin que nada la quite entre medias, si al menos una la generó LaraPack: cada una corre sola y las dos juntas tumban `migrate`. Lo que no se lee con seguridad (un `if`, `Schema::hasColumn`, SQL crudo) no cuenta. |
+| `route-duplicate` | error | Un archivo de rutas generado que registra dos veces el mismo verbo y la misma URI: Laravel se queda con la última. |
 | `relation-missing` | aviso | Contra el mismo `laraimport.json`: una relación de `load_relations` que ni el modelo ni sus traits (`Models/Traits/*/<Modelo>*.php`) definen. El trait de relaciones se escribe una sola vez y es del proyecto, así que no la recibe al reimportar. El mensaje trae el método y el `use` exactos; `larapack:fix relation-missing` los añade al trait si es seguro. |
 | `model-lists-outdated` | aviso (info si sólo sobra o difiere) | Contra el `laraimport.json` de la raíz, sin regenerar: a `$fillable`, `$hidden`, `$creatable`, `$updatable`, `$export_cols`, `$loadable_relations`, `$loadable_counts` o `casts()` del modelo le falta lo que el contrato declara —típico de un modelo editado a mano tras añadir una columna—. `larapack:import --force` lo completa sin tocar el resto del modelo. Lo que sobra o un cast con otro valor sale como info y no se cambia solo. |
 
@@ -2866,6 +2907,8 @@ larapack:schema                  Emite el esquema del laraimport.
 larapack:verify                  Busca desviaciones respecto al manifiesto y en los controladores.
 larapack:fix                     Corrige index-managed y resource-appends, el fallback de la SPA de laravel-setup <= 7.2.0
                                  y las relaciones del laraimport que faltan en el trait (relation-missing).
+larapack:reconcile               Tras un git merge: fusiona el laraimport por nombres, recompone el manifiesto de las
+                                 dos ramas, retira las migraciones repetidas y vuelve a importar. --check sólo comprueba.
 larapack:audit                   Comprueba la línea base del ecosistema.
 larapack:skill                   Instala las instrucciones para un agente; con --hooks, la guardia.
 larapack:guard                   Hook para agentes: comprueba el archivo recién editado.

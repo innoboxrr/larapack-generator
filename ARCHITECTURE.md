@@ -21,12 +21,13 @@ que hay que arreglar.
 8. [`verify`](#verify)
 9. [La guardia y los hooks](#la-guardia-y-los-hooks)
 10. [`fix`](#fix)
-11. [`realign`](#realign)
-12. [`audit` y la línea base](#audit-y-la-línea-base)
-13. [Cómo se registra un comando](#cómo-se-registra-un-comando)
-14. [Principios de diseño](#principios-de-diseño)
-15. [Mapa de directorios](#mapa-de-directorios)
-16. [Dónde mirar para cada cambio](#dónde-mirar-para-cada-cambio)
+11. [`reconcile` y las fusiones](#reconcile-y-las-fusiones)
+12. [`realign`](#realign)
+13. [`audit` y la línea base](#audit-y-la-línea-base)
+14. [Cómo se registra un comando](#cómo-se-registra-un-comando)
+15. [Principios de diseño](#principios-de-diseño)
+16. [Mapa de directorios](#mapa-de-directorios)
+17. [Dónde mirar para cada cambio](#dónde-mirar-para-cada-cambio)
 
 ---
 
@@ -577,6 +578,71 @@ cambian el código de salida y nunca se escriben solas.
 
 ---
 
+## `reconcile` y las fusiones
+
+Varias ramas a la vez sobre el mismo proyecto (la guía de uso es
+[docs/swarm.md](docs/swarm.md)). La idea que lo ordena todo: lo generado es
+una función del contrato, así que una fusión no fusiona lo generado, fusiona
+el contrato y vuelve a generar. Hay tres piezas.
+
+**La huella del contrato.** [`ContractFingerprint`](src/Support/ContractFingerprint.php)
+calcula, por modelo, por `controllers[]` y por pivote, una huella de lo que
+el laraimport declara de él. `larapack:import` la anota en el manifiesto
+(`Manifest::stampContracts`: `models.<Modelo>.contract` y `pivots`) y
+`verify` la compara con la del laraimport que hay (`ContractDrift::CONTRACT_OUTDATED`).
+
+- Es **por pieza**, no del documento: con una sola, dos ramas que añaden
+  modelos distintos chocarían siempre en esa línea. Para que aun así sea
+  exacta lleva el contexto (todo lo del documento que no es `models`,
+  `controllers` ni `pivots`) y, de cada clave ajena, qué modelo declara la
+  tabla a la que apunta: es lo único que una herramienta lee de otro modelo
+  al generar (`SwarmChecksTest::test_solo_la_migracion_y_la_factory_leen_de_otros_modelos`
+  falla si eso deja de ser cierto).
+- Son **dos huellas en una** (`escrito.resuelto`) y basta que coincida una
+  (`ContractFingerprint::matches`): la de lo escrito no cambia al actualizar
+  el generador, la de lo resuelto no cambia al escribir lo mismo de otra
+  forma.
+- Sin `--force` sólo se anota la de los modelos nuevos: lo que ya existía no
+  se regeneró. Lo que edita el contrato para que diga lo que el código ya
+  hace (`pin-foreign-keys` del realineamiento) la vuelve a anotar.
+
+**Lo que `verify` mira de una fusión.** [`MergeDrift`](src/Support/MergeDrift.php)
+(`MergeDrift::CHECKS`), por ámbito y aunque el manifiesto no se lea:
+`manifest-unreadable`, `merge-conflict` ([`MergeMarkers`](src/Support/MergeMarkers.php)),
+`migration-duplicate` (con `MigrationReader`, sólo si alguna de las dos es
+generada) y `route-duplicate`. `Manifest::read` lanza
+(`MakerException::manifestUnreadable`) en vez de devolver un manifiesto vacío
+cuando el archivo tiene contenido que no se decodifica.
+
+**La reconciliación.** [`ReconcileCommand`](src/Commands/ReconcileCommand.php)
+llama a [`Reconciler`](src/Support/Merge/Reconciler.php), que por ámbito:
+
+1. fusiona el laraimport por nombres con [`ContractMerge`](src/Support/Merge/ContractMerge.php)
+   (tres vías sobre el JSON decodificado como objetos; lo que las dos ramas
+   cambiaron distinto vuelve como conflicto con su ruta y no se escribe);
+2. recompone el manifiesto con [`ManifestMerge`](src/Support/Merge/ManifestMerge.php):
+   tres vías por entradas, y de un archivo que las dos ramas regeneraron,
+   si en cada una tenía el hash que anotó esa rama. Si en las dos, es todo
+   del generador y se deja para regenerar (`Reconciler` comprueba además que
+   lo que hay en disco es lo que dejó la fusión —`GitMerge::cleanMerge`— y
+   no algo que alguien tocó después);
+3. retira las migraciones repetidas que trae la rama que entra
+   (`MergeDrift::migrationCollisions`), si son generadas y sin editar;
+4. corre `larapack:import --force` en un proceso aparte, sólo si algo cambió
+   o las huellas no coinciden.
+
+[`GitMerge`](src/Support/Merge/GitMerge.php) da las dos ramas: en una fusión
+en curso, `HEAD` y `MERGE_HEAD`; si no la hay y el último commit tiene dos
+padres, esos dos —lo que ve la CI de un pull request—. Sólo lee, salvo
+marcar como resuelto lo que la reconciliación resolvió. Con `--check` nada
+se escribe y que haya algo que hacer ya es el fallo.
+
+La prueba es [`tests/EndToEnd/SwarmMergeTest.php`](tests/EndToEnd/SwarmMergeTest.php):
+dieciséis ramas, `git merge` de verdad, cinco órdenes, y al final cada
+archivo generado igual al que el contrato fusionado genera de cero.
+
+---
+
 ## `realign`
 
 [`RealignCommand`](src/Commands/RealignCommand.php) (`larapack:realign`) lleva
@@ -870,6 +936,8 @@ que rompe está en [CONTRIBUTING](CONTRIBUTING.md#qué-cuenta-como-cambio-que-ro
 | [`src/Support/Realign/`](src/Support/Realign/) | `larapack:realign`: ámbitos, regeneración de referencia, clasificación, plan, comprobaciones, playbooks y, en `Operations/`, el contrato de las operaciones que escriben. |
 | [`resources/realign/playbooks/`](resources/realign/playbooks/) | Las instrucciones de cada tipo de paso guiado, que `larapack:realign next` rellena. |
 | [`docs/realign/`](docs/realign/) | La guía del realineamiento para quien lo ejecuta, persona o agente. |
+| [`src/Support/Merge/`](src/Support/Merge/) | `larapack:reconcile`: las dos ramas de una fusión, la fusión del contrato por nombres y la del manifiesto por entradas. |
+| [`docs/swarm.md`](docs/swarm.md) | Trabajar con varias consolas a la vez: qué hace cada una, qué hace quien integra y qué no se garantiza. |
 | [`src/Tools/`](src/Tools/) | Una herramienta por pieza generada, sobre `Tool`. |
 | [`src/Stubs/`](src/Stubs/) | Las plantillas, por área. |
 | [`src/Attributes/`](src/Attributes/) | `#[HandRolled]`, lo único que el código del proyecto importa del generador. |

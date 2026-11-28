@@ -115,11 +115,11 @@ final class ContractMerge
             $base = is_array($base) ? $base : [];
 
             if (self::named($ours) && self::named($theirs) && self::named($base)) {
-                return $this->namedList($base, $ours, $theirs, $path);
+                return $this->namedList(array_values($base), array_values($ours), array_values($theirs), $path);
             }
 
             if (self::scalars($ours) && self::scalars($theirs) && self::scalars($base)) {
-                return self::set($base, $ours, $theirs);
+                return self::set(array_values($base), array_values($ours), array_values($theirs));
             }
         }
 

@@ -678,9 +678,7 @@ final class Manifest
      */
     public function pivotContracts(): array
     {
-        $pivots = $this->read()['pivots'] ?? [];
-
-        return is_array($pivots) ? array_filter($pivots, is_string(...)) : [];
+        return $this->read()['pivots'] ?? [];
     }
 
     /**
@@ -992,7 +990,7 @@ final class Manifest
 
         unset($model);
 
-        if (isset($manifest['pivots']) && is_array($manifest['pivots'])) {
+        if (isset($manifest['pivots'])) {
             ksort($manifest['pivots']);
         }
 

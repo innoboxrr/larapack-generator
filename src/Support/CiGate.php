@@ -90,10 +90,13 @@ final class CiGate
             '            actions: read',
             '',
             '        steps:',
-            ...self::setupSteps($root),
+            ...self::setupSteps($root, history: true),
             '            - name: Contrato de LaraPack',
             "              run: {$binary} larapack:verify --strict --format=json",
             '',
+            ...self::reconcileStep($binary),
+            '',
+            ...self::styleStep($root),
             ...self::namedApprovalsStep($binary),
             '',
             ...self::protectionStep($binary),
@@ -127,7 +130,7 @@ final class CiGate
      *
      * @return list<string>
      */
-    private static function setupSteps(string $root): array
+    private static function setupSteps(string $root, bool $history = false): array
     {
         [$php, $why] = self::phpVersion($root);
         $locked = is_file(self::join($root, 'composer.lock'));
@@ -135,6 +138,12 @@ final class CiGate
 
         $lines = [
             '            - uses: actions/checkout@v5',
+            ...($history ? [
+                '              with:',
+                '                  # Con historial: larapack:reconcile --check compara las dos ramas',
+                '                  # de la fusión, y sin sus commits no tiene qué comparar.',
+                '                  fetch-depth: 0',
+            ] : []),
             '',
             '            - uses: shivammathur/setup-php@v2',
             '              with:',
@@ -157,6 +166,53 @@ final class CiGate
         return [...$lines,
             '            - name: Instalar dependencias',
             '              run: composer '.($locked ? 'install' : 'update').' --prefer-dist --no-interaction --no-progress',
+            '',
+        ];
+    }
+
+    /**
+     * El paso que comprueba que la fusión está reconciliada. En un pull
+     * request el job corre sobre el commit de fusión con la rama destino: sus
+     * dos padres son las dos ramas, y `larapack:reconcile --check` ve lo que
+     * `verify` no puede ver mirando sólo el árbol (lo que una rama generó y
+     * una resolución a mano dejó sin registrar). Sin fusión —un push normal,
+     * un squash— no tiene nada que comparar y pasa.
+     *
+     * @return list<string>
+     */
+    private static function reconcileStep(string $binary): array
+    {
+        return [
+            '            # Varias ramas a la vez: que entre las dos de esta fusión no quede nada',
+            '            # por reconciliar (el laraimport, el manifiesto, migraciones repetidas).',
+            '            - name: Fusión reconciliada',
+            '              if: ${{ !cancelled() }}',
+            "              run: {$binary} larapack:reconcile --check",
+        ];
+    }
+
+    /**
+     * El paso de estilo, sólo si el proyecto requiere Pint: lo generado ya
+     * sale formateado, y lo que escribe cada consola a mano tiene que leerse
+     * igual. Un proyecto que no lo requiere no gana un paso que fallaría.
+     *
+     * @return list<string>
+     */
+    private static function styleStep(string $root): array
+    {
+        $composer = self::readJson(self::join($root, 'composer.json')) ?? [];
+        $requires = (is_array($composer['require'] ?? null) ? $composer['require'] : [])
+            + (is_array($composer['require-dev'] ?? null) ? $composer['require-dev'] : []);
+
+        if (! isset($requires['laravel/pint'])) {
+            return [];
+        }
+
+        return [
+            '            # El mismo estilo para lo que escribe cada consola.',
+            '            - name: Estilo (Pint)',
+            '              if: ${{ !cancelled() }}',
+            '              run: vendor/bin/pint --test',
             '',
         ];
     }

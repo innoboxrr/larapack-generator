@@ -3,8 +3,8 @@
 namespace Innoboxrr\LarapackGenerator\Support\Realign\Operations;
 
 use Innoboxrr\LarapackGenerator\Exceptions\MakerException;
-use Innoboxrr\LarapackGenerator\Support\Files;
 use Innoboxrr\LarapackGenerator\Support\ContractFingerprint;
+use Innoboxrr\LarapackGenerator\Support\Files;
 use Innoboxrr\LarapackGenerator\Support\Import\ImportDocument;
 use Innoboxrr\LarapackGenerator\Support\LegacyFix;
 use Innoboxrr\LarapackGenerator\Support\Manifest;

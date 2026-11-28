@@ -13,6 +13,73 @@ contrato y la documentación para personas y agentes
 ([docs/realign/README.md](docs/realign/README.md)). Las secciones de abajo,
 una por pieza; lo que hay que hacer al actualizar, al final de la versión.
 
+### Varias consolas a la vez: la auditoría de enjambre
+
+Diez o veinte agentes sobre el mismo proyecto, cada uno en su rama, que luego se integran con `git merge`. Se
+construyó el escenario (una aplicación y dos paquetes locales, dieciséis ramas con los cambios típicos, fusiones
+reales en cinco órdenes) y se midió qué pasa al integrar. La guía es [docs/swarm.md](docs/swarm.md); la prueba,
+`tests/EndToEnd/SwarmMergeTest.php`.
+
+**Lo que fallaba:**
+
+- **Dos ramas del mismo ámbito chocan casi siempre** en `laraimport.json` y en `.larapack/manifest.json`, aunque
+  sus cambios sean independientes: las dos añaden su modelo o su columna al final de la misma lista. Con la misma
+  columna en las dos quedaban además dos migraciones que la añaden.
+- **Un manifiesto con marcadores de conflicto se leía como vacío.** `verify` sólo avisaba de que «no hay nada
+  registrado», y el siguiente `import --force` lo reescribía desde cero: se perdía el registro de todo lo generado.
+- **Resolver el conflicto quedándose con un lado no se detectaba.** El manifiesto de una rama con el contrato de
+  la otra, o los dos de la misma: los modelos de la otra rama quedaban en disco como código que «nadie generó».
+- **Cambiar el `laraimport.json` sin volver a importar pasaba `validate` y `verify --strict`** si el cambio no
+  tocaba las listas del modelo (un `string` que pasa a `text`, un `nullable`). El manifiesto no decía con qué
+  contrato se generó.
+
+**Lo que hay ahora:**
+
+- **`larapack:reconcile`**, el paso del integrador después de `git merge --no-ff --no-commit <rama>`. Por ámbito:
+  fusiona el laraimport **por nombres** (modelos, columnas, endpoints, `controllers[]`, pivotes; las listas de
+  valores, como conjuntos), recompone el manifiesto de los de las dos ramas, retira la migración repetida que
+  trae la rama que entra (generada y sin editar) y corre `import --force` donde haga falta. Un archivo que las
+  dos ramas regeneraron sin editar se regenera aunque tenga marcadores; uno que alguna editó se conserva y se
+  lista. Lo que las dos ramas declararon distinto, o escribieron en el mismo hueco, no se decide: queda en
+  `pending` con su ruta y el comando sale con error. `--dry-run` no escribe; `--check` además falla si hay algo
+  que hacer; `--keep-migrations` no retira ninguna. Sirve también sobre una fusión ya comiteada (lee las dos
+  ramas de los padres del commit). No comitea.
+- **El manifiesto dice con qué contrato se generó cada modelo** (`"contract"`, y `pivots`): una huella por pieza
+  que anota `larapack:import`. Son dos en una —lo escrito y lo resuelto— y basta que coincida una: actualizar el
+  generador no la cambia, y escribir lo mismo de otra forma tampoco. Es por modelo para que dos ramas que tocan
+  modelos distintos no choquen en esa línea, y lleva lo que un modelo toma de fuera (el prefijo de tablas, de
+  quién es la tabla a la que apunta una clave ajena).
+- **`verify` gana cinco comprobaciones, todas error:** `contract-outdated` (lo generado corresponde a otro
+  contrato, hay un modelo declarado sin generar o uno generado que ya no se declara), `manifest-unreadable`,
+  `merge-conflict` (marcadores sin resolver en el laraimport, en el estado de `.larapack/`, en lo generado o en
+  el código), `migration-duplicate` (dos migraciones que crean la misma tabla o añaden la misma columna, si
+  alguna es generada) y `route-duplicate` (la misma ruta dos veces en un archivo de rutas generado).
+- **Un manifiesto que no se puede leer ya no es un manifiesto vacío**: `Manifest::read` lanza, ningún comando lo
+  reescribe y el mensaje manda a `larapack:reconcile`.
+- **El manifiesto se escribe siempre igual**: las claves de cada entrada en un orden fijo (`namespace`,
+  `contract`, `declaration`, `files`), no en el de inserción. Dos ramas que llegan a lo mismo por caminos
+  distintos escriben el mismo archivo.
+- **La guardia y la CI lo exigen.** El hook de git comprueba también `laraimport.json` y el manifiesto cuando se
+  comitean: un contrato cambiado sin importar o un manifiesto a medio fusionar no salen de la consola. El hook de
+  fin de turno retiene al agente que editó el laraimport y no importó. El workflow de `larapack:ci` clona con
+  historial (`fetch-depth: 0`) y añade `larapack:reconcile --check` y, si el proyecto requiere `laravel/pint`,
+  `vendor/bin/pint --test`.
+- **Guía**: «Varias consolas a la vez» en el README y en la skill (qué hace cada consola antes de empujar, qué
+  hace quien integra) y `docs/swarm.md`, con lo medido, los grados de libertad que quedan entre consolas y lo que
+  no se puede garantizar desde el paquete.
+
+**Legibilidad entre consolas.** En los cinco órdenes de fusión, cada archivo generado queda idéntico, byte a byte,
+al que el contrato fusionado genera de cero. Lo que sigue siendo libre —y `docs/swarm.md` lo lista—: un
+controlador escrito a mano que delega bien no se exige declarar; el estilo de lo escrito a mano sólo lo fuerza
+Pint donde corre; el formato del `laraimport.json` al editarlo; el orden de modelos y columnas tras fusionar; y
+todo lo que va dentro de un hueco.
+
+**No se garantiza** (dicho en la guía): que dos consolas no decidan cosas incompatibles (se detecta, no se elige);
+que la lógica de los huecos de dos ramas sea coherente (lo dicen las pruebas del proyecto); que una migración
+retirada no hubiera corrido ya en una base compartida; nada de lo que sólo se ve comparando las dos ramas cuando
+se integra con *squash* o *rebase* en vez de con commit de fusión; y el estado de `larapack:realign` en dos ramas
+a la vez, que no se fusiona.
+
 ### Lo que encontró la segunda revisión, sobre lo integrado
 
 - **Una terminal fabricada no es una persona.** `pty.spawn` de Python, `script -c`, `expect` o `unbuffer` crean
@@ -988,6 +1055,12 @@ comportamiento que nadie vio pasar (un 422 que pasa a 403, un 404 que pasa a
   `realign:` como sobrantes).
 - **Versiona** `.larapack/realign/plan.json`, `exceptions.json` y, si la usas, `config.json` (la orden de pruebas que corre `check`); la caché
   (`.larapack/realign/cache/`) ya viene ignorada.
+- **Varias ramas a la vez**: un `larapack:import --force` anota en el manifiesto la huella del contrato de cada
+  modelo; hasta entonces `contract-outdated` no compara nada. Desde ahí, cambiar el `laraimport.json` sin
+  importar es un error de `verify`. Vuelve a correr `larapack:ci` para que el workflow lleve
+  `larapack:reconcile --check` (y `pint --test` si usas Pint), y `larapack:skill` para la guía. Tras un
+  `git merge`, `larapack:reconcile` en vez de resolver a mano el laraimport o el manifiesto
+  ([docs/swarm.md](docs/swarm.md)).
 - **Un `import` después de adoptar** puede escribir alteraciones (columnas,
   índices o un `->change()` si lo declarado difiere): `--dry-run` y revísalas
   antes de migrar.

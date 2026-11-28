@@ -463,6 +463,40 @@ final class GuardTest extends TestCase
     }
 
     /**
+     * Varias consolas a la vez (9.4.0): la que cambia el contrato y no vuelve
+     * a importar no termina el turno; las demás, que no lo tocaron, sí.
+     */
+    public function test_al_terminar_el_turno_retiene_a_quien_cambio_el_laraimport_y_no_importo(): void
+    {
+        $contract = $this->file('laraimport.json');
+        $author = $this->session();
+        $other = $this->session();
+
+        file_put_contents($contract, json_encode([
+            'models' => [[
+                'name' => 'Note',
+                'routes' => ['only' => ['policies', 'index', 'show']],
+                'props' => [['name' => 'name', 'type' => 'text']],
+            ]],
+        ]));
+
+        // Al editarlo no se le frena: importar es el paso siguiente.
+        $this->assertSame(Command::SUCCESS, $this->edit(['file_path' => $contract], 'Edit', null, $author));
+
+        $this->assertSame(GuardCommand::BLOCK, $this->stop($author));
+        $this->assertStringContainsString('contract-outdated', $this->stderr);
+        $this->assertStringContainsString('larapack:import --force', $this->stderr);
+
+        // La otra consola tocó otra cosa: el error no es de su sesión.
+        file_put_contents($this->file('README.md'), "# notas\n");
+        $this->edit(['file_path' => $this->file('README.md')], 'Write', null, $other);
+        $this->assertSame(Command::SUCCESS, $this->stop($other));
+
+        $this->assertSame(Command::SUCCESS, $this->runCommand('larapack:import', ['jsonPath' => $contract, '--force' => true]), $this->lastOutput);
+        $this->assertSame(Command::SUCCESS, $this->stop($author));
+    }
+
+    /**
      * Sin git ni registro de la sesión no hay forma de saber qué es de quién:
      * retiene todo, como antes.
      */

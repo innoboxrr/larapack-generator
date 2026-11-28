@@ -4,6 +4,7 @@ namespace Innoboxrr\LarapackGenerator\Support\Merge;
 
 use Innoboxrr\LarapackGenerator\Support\ContractFingerprint;
 use Innoboxrr\LarapackGenerator\Support\Files;
+use Innoboxrr\LarapackGenerator\Support\HandRolledLock;
 use Innoboxrr\LarapackGenerator\Support\Import\ImportDocument;
 use Innoboxrr\LarapackGenerator\Support\Manifest;
 use Innoboxrr\LarapackGenerator\Support\MergeDrift;
@@ -70,7 +71,7 @@ final class Reconciler
     private array $resolved = [];
 
     /**
-     * @param  (\Closure(string, list<string>): array{ok: bool, summary: string, error: string|null})|null  $import  cómo se corre la importación de un ámbito; null, con el `builder` del paquete
+     * @param  (\Closure(string, list<string>): array{ok: bool, summary: string, error: string|null, written: list<string>})|null  $import  cómo se corre la importación de un ámbito; null, con el `builder` del paquete
      */
     public function __construct(
         private readonly string $root,
@@ -149,7 +150,13 @@ final class Reconciler
 
         if (! $this->dryRun || $manifestOk) {
             foreach ($this->conflicts($root, $manifestOk) as $file) {
-                $report['pending'][] = "{$file} sigue con un conflicto de git: es código escrito a mano (o editado), y lo resuelve quien lo escribió. Después, `larapack:verify --strict`.";
+                $report['pending'][] = match (true) {
+                    // El estado del realineamiento lleva fechas y el id del
+                    // diagnóstico: dos ramas que diagnostican chocan siempre.
+                    str_starts_with($file, '.larapack/realign/') => "{$file} sigue con un conflicto de git: el realineamiento de un ámbito lo lleva una sola rama. Quédate con el de esa rama (`git checkout --ours|--theirs -- {$file}`) y vuelve a correr `larapack:realign diagnose` y `plan`.",
+                    $file === HandRolledLock::PATH => "{$file} sigue con un conflicto de git: son aprobaciones del dueño del proyecto, y las fusiona él (cada entrada es de una excepción; valen las de las dos ramas).",
+                    default => "{$file} sigue con un conflicto de git: es código escrito a mano (o editado), y lo resuelve quien lo escribió. Después, `larapack:verify --strict`.",
+                };
             }
         }
 
@@ -255,17 +262,20 @@ final class Reconciler
             return $readable;
         }
 
-        $decode = function (?string $commit) use ($file): ?array {
-            $decoded = json_decode((string) $this->git?->show($commit, $file), true);
+        $git = $this->git;
+        $sides = $this->sides;
+
+        $decode = function (?string $commit) use ($file, $git): ?array {
+            $decoded = json_decode((string) $git->show($commit, $file), true);
 
             return is_array($decoded) && isset($decoded['models']) ? $decoded : null;
         };
 
-        $ours = $decode($this->sides['ours']);
-        $theirs = $decode($this->sides['theirs']);
+        $ours = $decode($sides['ours']);
+        $theirs = $decode($sides['theirs']);
 
-        $contentAt = fn (string $side, string $relative): ?string => $this->git?->show($this->sides[$side] ?? null, $root.'/'.$relative);
-        $merge = ManifestMerge::merge($decode($this->sides['base']), $ours, $theirs, $contentAt);
+        $contentAt = fn (string $side, string $relative): ?string => $git->show($side === 'theirs' ? $sides['theirs'] : $sides['ours'], $root.'/'.$relative);
+        $merge = ManifestMerge::merge($decode($sides['base']), $ours, $theirs, $contentAt);
         $merged = $merge['manifest'];
 
         if ($merged === null) {
@@ -479,8 +489,7 @@ final class Reconciler
 
     /**
      * Si lo generado en el ámbito no corresponde a su laraimport: alguna
-     * pieza sin generar, con otra huella o —en un manifiesto anterior a
-     * 9.4.0— sin huella que comparar.
+     * pieza sin generar o con otra huella.
      */
     private function outdated(string $root): bool
     {
@@ -492,8 +501,18 @@ final class Reconciler
 
         $manifest = (new Manifest($root))->snapshot();
 
+        // Como `verify` (contract-outdated): un manifiesto que no anota
+        // huellas no se puede comparar, y un modelo sin huella tampoco.
+        if (! $manifest->tracksContract()) {
+            return false;
+        }
+
+        $known = $manifest->models();
+
         foreach ($declared['models'] as $model => $fingerprint) {
-            if (! ContractFingerprint::matches($manifest->contractOf($model), $fingerprint)) {
+            $recorded = $manifest->contractOf($model);
+
+            if (! in_array($model, $known, true) || ($recorded !== null && ! ContractFingerprint::matches($recorded, $fingerprint))) {
                 return true;
             }
         }
@@ -521,7 +540,7 @@ final class Reconciler
         }
 
         $ui = is_file($root.'/'.Manifest::RELATIVE_PATH) ? Regeneration::uiOf($root) : [];
-        $outcome = ($this->import ?? self::builder(...))($root, $ui);
+        $outcome = $this->import === null ? self::builder($root, $ui) : ($this->import)($root, $ui);
 
         if (! $outcome['ok']) {
             $report['pending'][] = 'larapack:import --force falló: '.($outcome['error'] ?? 'sin detalle').'.';
@@ -531,17 +550,16 @@ final class Reconciler
 
         $report['actions'][] = 'larapack:import --force'.implode('', array_map(fn (string $framework): string => ' --'.$framework, $ui)).': '.$outcome['summary'].'.';
 
-        // Lo que se regeneró o se creó dentro de la fusión entra en ella.
-        foreach ($outcome['written'] ?? [] as $written) {
-            if (is_string($written)) {
-                $this->resolved[$written] = true;
-            }
+        // Lo que se regeneró dentro de la fusión entra en ella con lo que
+        // quedó después de regenerar.
+        foreach ($outcome['written'] as $written) {
+            $this->resolved[$written] = true;
         }
     }
 
     /**
      * @param  list<string>  $ui
-     * @return array{ok: bool, summary: string, error: string|null, written?: list<string>}
+     * @return array{ok: bool, summary: string, error: string|null, written: list<string>}
      */
     private static function builder(string $root, array $ui): array
     {
@@ -551,7 +569,7 @@ final class Reconciler
         $process = @proc_open($command, [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes, $root);
 
         if (! is_resource($process)) {
-            return ['ok' => false, 'summary' => '', 'error' => 'no se pudo arrancar el generador'];
+            return ['ok' => false, 'summary' => '', 'error' => 'no se pudo arrancar el generador', 'written' => []];
         }
 
         fclose($pipes[0]);
@@ -563,7 +581,7 @@ final class Reconciler
         $document = json_decode($output, true);
 
         if ($code !== 0 || ! is_array($document) || ($document['ok'] ?? false) !== true) {
-            return ['ok' => false, 'summary' => '', 'error' => is_array($document) && is_string($document['error'] ?? null) ? $document['error'] : ($errors !== '' ? $errors : "terminó con código {$code}")];
+            return ['ok' => false, 'summary' => '', 'error' => is_array($document) && is_string($document['error'] ?? null) ? $document['error'] : ($errors !== '' ? $errors : "terminó con código {$code}"), 'written' => []];
         }
 
         $summary = is_array($document['summary'] ?? null) ? $document['summary'] : [];

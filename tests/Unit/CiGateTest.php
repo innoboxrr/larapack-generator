@@ -129,6 +129,10 @@ final class CiGateTest extends TestCase
 
                 steps:
                     - uses: actions/checkout@v5
+                      with:
+                          # Con historial: larapack:reconcile --check compara las dos ramas
+                          # de la fusión, y sin sus commits no tiene qué comparar.
+                          fetch-depth: 0
 
                     - uses: shivammathur/setup-php@v2
                       with:
@@ -141,6 +145,12 @@ final class CiGateTest extends TestCase
 
                     - name: Contrato de LaraPack
                       run: php vendor/bin/builder larapack:verify --strict --format=json
+
+                    # Varias ramas a la vez: que entre las dos de esta fusión no quede nada
+                    # por reconciliar (el laraimport, el manifiesto, migraciones repetidas).
+                    - name: Fusión reconciliada
+                      if: ${{ !cancelled() }}
+                      run: php vendor/bin/builder larapack:reconcile --check
 
                     # Cada aprobación sin terminal del candado (approved_by), a la vista en
                     # el diff del PR y comprobada con GitHub: la corrida tiene que ser la del
@@ -200,6 +210,10 @@ final class CiGateTest extends TestCase
 
                 steps:
                     - uses: actions/checkout@v5
+                      with:
+                          # Con historial: larapack:reconcile --check compara las dos ramas
+                          # de la fusión, y sin sus commits no tiene qué comparar.
+                          fetch-depth: 0
 
                     - uses: shivammathur/setup-php@v2
                       with:
@@ -217,6 +231,12 @@ final class CiGateTest extends TestCase
 
                     - name: Contrato de LaraPack
                       run: php artisan larapack:verify --strict --format=json
+
+                    # Varias ramas a la vez: que entre las dos de esta fusión no quede nada
+                    # por reconciliar (el laraimport, el manifiesto, migraciones repetidas).
+                    - name: Fusión reconciliada
+                      if: ${{ !cancelled() }}
+                      run: php artisan larapack:reconcile --check
 
                     # Cada aprobación sin terminal del candado (approved_by), a la vista en
                     # el diff del PR y comprobada con GitHub: la corrida tiene que ser la del
@@ -252,6 +272,35 @@ final class CiGateTest extends TestCase
             'con algo delante que no es de YAML' => ['@main', "['@main']"],
             'una comilla se dobla' => ["it's", "['it''s']"],
         ];
+    }
+
+    /**
+     * El estilo sólo se exige donde el proyecto ya usa Pint: lo generado sale
+     * formateado, y lo que cada consola escribe a mano tiene que leerse igual.
+     */
+    public function test_el_paso_de_pint_solo_si_el_proyecto_lo_requiere(): void
+    {
+        $this->composer(['require' => ['php' => '^8.3']]);
+        $this->assertStringNotContainsString('pint', CiGate::workflow($this->root, null));
+
+        $this->composer(['require' => ['php' => '^8.3'], 'require-dev' => ['laravel/pint' => '^1.18']]);
+        $workflow = CiGate::workflow($this->root, null);
+
+        $this->assertStringContainsString("            - name: Estilo (Pint)\n              if: \${{ !cancelled() }}\n              run: vendor/bin/pint --test\n", $workflow);
+        // Después del contrato y de la fusión, antes de las aprobaciones.
+        $this->assertLessThan(strpos($workflow, 'Aprobaciones sin terminal'), strpos($workflow, 'Estilo (Pint)'));
+        $this->assertGreaterThan(strpos($workflow, 'Fusión reconciliada'), strpos($workflow, 'Estilo (Pint)'));
+    }
+
+    /**
+     * El workflow de aprobación no compara ramas: clona como siempre.
+     */
+    public function test_solo_la_puerta_clona_con_historial(): void
+    {
+        $this->composer(['require' => ['php' => '^8.3']]);
+
+        $this->assertStringContainsString('fetch-depth: 0', CiGate::workflow($this->root, null));
+        $this->assertStringNotContainsString('fetch-depth', CiGate::approvalWorkflow($this->root));
     }
 
     #[DataProvider('ramas')]

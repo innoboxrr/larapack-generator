@@ -218,6 +218,11 @@ final class MergeDrift
         $findings = [];
 
         foreach ($files as $file) {
+            // Una que pregunta antes (`Schema::hasColumn`, `hasTable`) no
+            // repite: si ya está, no hace nada. El lector la da por segura a
+            // propósito, así que se mira aquí.
+            $guarded = preg_match('/\bhas(Column|Columns|Table)\s*\(/', (string) @file_get_contents($file)) === 1;
+
             foreach (MigrationReader::read($file)->operations as $operation) {
                 $kind = $operation['kind'] ?? null;
                 $table = $operation['table'] ?? null;
@@ -237,7 +242,7 @@ final class MergeDrift
                 }
 
                 if ($kind === 'create') {
-                    if (isset($creators[$table]) && $creators[$table] !== $file && $this->generated($file, $creators[$table])) {
+                    if (! $guarded && isset($creators[$table]) && $creators[$table] !== $file && $this->generated($file, $creators[$table])) {
                         $findings[] = ['file' => $file, 'previous' => $creators[$table], 'what' => "crea la tabla `{$table}`", 'verb' => 'crea'];
 
                         continue;
@@ -275,7 +280,7 @@ final class MergeDrift
 
                         $previous = $columns[$table][$column->name] ?? null;
 
-                        if ($previous !== null && $previous !== $file && $this->generated($file, $previous)) {
+                        if (! $guarded && $previous !== null && $previous !== $file && $this->generated($file, $previous)) {
                             $findings[] = ['file' => $file, 'previous' => $previous, 'what' => "añade la columna `{$column->name}` a `{$table}`", 'verb' => 'añade'];
 
                             continue;
