@@ -198,6 +198,34 @@ retirada no hubiera corrido ya en una base compartida; nada de lo que sólo se v
 se integra con *squash* o *rebase* en vez de con commit de fusión; y el estado de `larapack:realign` en dos ramas
 a la vez, que no se fusiona.
 
+### Auditoría de la documentación: la guía, contra el comportamiento
+
+Se siguió la guía como un recién llegado, sobre proyectos temporales desviados, hasta `larapack:realign done` en
+verde, ejecutando cada orden citada y comparando cada formato con la salida real.
+
+- **Contradicciones corregidas.** `accept-untested` «nombrándose» sin terminal ya no existe fuera del workflow
+  de aprobación (lo decían `plan.md` y la ayuda del comando), y el workflow que genera `larapack:ci --approval`
+  no trae esa orden: está dicho. El final del recorrido era `verify --strict` en `profiles.md` y `done` en el
+  resto. `risks.md` decía que un archivo con otros comentarios se adopta (no se adopta). `awaiting_decision` y
+  `decided` se calculan al leer, como `blocked`: `plan.json` sólo guarda `pending`, `untested` y `done`.
+- **Formatos que no eran los reales.** `report.json` lleva `scopes` por ámbito (un objeto, no una lista), `id` y
+  `out_of_scope.<ámbito>.{files, other_code}`; `brief` trae `untested`; las operaciones, `commit`; `done`, `error`
+  cuando falla; `next` sin pendientes, `untested`; `playbook`, `name` e `instructions`.
+- **El comando.** `status` decía «No queda nada pendiente» con todos los pasos aplazados (ahora dice cuántos
+  siguen sin hacer), y mandaba a confirmar con `diagnose` en vez de con `done`; `help` y `--help` daban dos ciclos
+  distintos; la última comprobación de un paso `untested` salía como «falta»; `infer --dry-run` decía «borrador
+  escribiría».
+- **La guía, reordenada.** `docs/realign/README.md` abre con un inicio rápido en diez líneas para una persona
+  y otro para un agente, y el ciclo completo en un diagrama (con `brief`, `defer`, `escalate`, `untested`,
+  `--tested`, `accept-untested`, `except` y la aprobación, y `done`). Dos páginas nuevas: `glossary.md` (cada
+  término, una vez) y `faq.md` («¿qué hago si…?», con los atascos reales). El README del paquete gana «Por dónde
+  empezar», un índice con subsecciones y las secciones «Realinear un proyecto existente» y «Trabajar con agentes
+  de IA».
+- **Comprobado siempre.** `RealignDocTest` cruza las tablas de la guía con las constantes del código (acciones,
+  tipos de paso, estados, clases, `kind`, comprobaciones, lo que se exceptúa, lo que le falta a `done`), los
+  ejemplos JSON y los playbooks; `RealignDocShapesTest` compara cada salida `--format=json`, `report.json`,
+  `brief` y los campos de un paso, clave por clave, con la salida real, y ejecuta lo que `faq.md` afirma.
+
 ### Lo que encontró la segunda revisión, sobre lo integrado
 
 ### Qué es

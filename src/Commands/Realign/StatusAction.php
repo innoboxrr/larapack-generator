@@ -82,11 +82,12 @@ class StatusAction extends Action
                 count($steps), $byStatus[Planner::DONE], $byStatus[Planner::UNTESTED], $byStatus[Planner::PENDING], $byStatus[Planner::AWAITING_DECISION], $byStatus[Planner::DECIDED], $byStatus[Planner::BLOCKED]));
 
             foreach ($byCategory as $category => $counts) {
-                $this->output->writeln(sprintf('    %-17s %s', Category::LABELS[$category] ?? $category, implode(', ', array_map(fn (string $status, int $count): string => "{$status}: {$count}", array_keys($counts), $counts))));
+                $this->output->writeln(sprintf('    %s %s', $this->padded(Category::LABELS[$category] ?? $category, 17), implode(', ', array_map(fn (string $status, int $count): string => "{$status}: {$count}", array_keys($counts), $counts))));
             }
 
             if ($document['last_check'] !== null) {
-                $this->output->writeln("\n  Última comprobación: ".$document['last_check']['id'].' ('.($document['last_check']['done'] ? 'hecho' : 'falta').', '.$document['last_check']['at'].')');
+                $outcome = $document['last_check']['done'] ? 'hecho' : (($document['last_check']['untested'] ?? false) ? 'sin probar' : 'falta');
+                $this->output->writeln("\n  Última comprobación: ".$document['last_check']['id'].' ('.$outcome.', '.$document['last_check']['at'].')');
             }
 
             foreach ($document['awaiting_owner'] as $waiting) {
@@ -113,8 +114,16 @@ class StatusAction extends Action
                 }
             }
 
+            // Sin siguiente no es sin pendientes: lo aplazado, lo que espera
+            // al dueño y lo bloqueado siguen sin hacer, y decir «no queda
+            // nada» con seis pasos aplazados mandaba a `done` a quien no
+            // había terminado.
+            $left = count(array_filter($steps, fn (array $step): bool => ! Planner::finished($step)));
+
             $this->output->writeln($next === null
-                ? "\n  <info>No queda nada pendiente.</info> Confírmalo con: larapack:realign diagnose"
+                ? ($left > 0
+                    ? "\n  <comment>Nada que hacer ahora, pero no ha terminado:</comment> {$left} ".($left === 1 ? 'paso sigue' : 'pasos siguen').' sin hacer (aplazados, en manos del dueño o bloqueados, arriba). larapack:realign next dice qué espera cada uno.'
+                    : "\n  <info>No queda nada pendiente en el plan.</info> El criterio de terminado es: larapack:realign done")
                 : "\n  Siguiente: <info>{$next['id']}</info> — ".OutputFormatter::escape((string) $next['title']).'  (larapack:realign next)');
         }
 

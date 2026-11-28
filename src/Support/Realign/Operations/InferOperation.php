@@ -161,13 +161,13 @@ final class InferOperation implements RealignOperation
             Files::write($state.'/'.$slug.'.json', json_encode($report, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)."\n");
         }
 
-        $verb = $context->dryRun() ? 'escribiría' : 'escrito';
+        $verb = $context->dryRun() ? 'se escribiría el borrador' : 'borrador escrito';
         $summary = $existing === null ? $summary : count($added).' entradas añadidas al contrato que ya existe ('.$summary.')';
         // En una simulación no se escribe el informe: va entero en el
         // resultado (`infer`), y `report` es null. Antes remitía a un archivo
         // que el dry-run no escribe, y el brief recomienda justo el dry-run
         // para saber si las rutas se conservan (route-not-preservable).
-        $result->fixed($relative, "borrador {$verb} desde el código: {$summary}.", $context->dryRun()
+        $result->fixed($relative, "{$verb} desde el código: {$summary}.", $context->dryRun()
             ? ['step' => $step['id'], 'report' => null, 'infer' => $report]
             : ['step' => $step['id'], 'report' => $reportPath]);
         $where = $context->dryRun() ? 'el resultado (--format=json, `infer`; sin --dry-run, en '.$reportPath.')' : $reportPath;

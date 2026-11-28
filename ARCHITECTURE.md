@@ -665,7 +665,8 @@ Tiene tres capas, y conviene saber en cuál se está antes de tocar nada:
 | El núcleo | `src/Support/Realign/` | Diagnostica, planifica, comprueba y escribe. | No sabe de consola: se prueba sin ella. |
 
 Es **un comando con la acción como argumento** (`diagnose`, `plan`, `status`,
-`next`, `check`, `decide` y las operaciones), como `larapack:hand-rolled`: todas
+`next`, `check`, `decide`, `done`… y las operaciones; la lista es
+`RealignActions::ALL`), como `larapack:hand-rolled`: todas
 comparten la raíz, el estado, `--package` y `--format`, y así una operación
 nueva se enchufa sin registrar un comando. Cada acción declara qué opciones usa
 (`RealignActions::options`, que es también lo que dicen `--help` y
@@ -1256,8 +1257,21 @@ cambia algo que ve quien usa el generador.
   descripciones de `Operations::DESCRIPTIONS` y lo que el comando rechaza; una
   clave de `--option` que no esté ahí es un error. La guía de la acción, en
   `docs/realign/`, enlazada desde su README: `RealignDocTest` comprueba que
-  cada orden, opción y clave que la documentación y el skill citan exista, que
-  cada enlace y ancla resuelva y que ninguna página quede sin enlazar.
+  cada orden, opción y clave que la documentación, el skill y los playbooks
+  citan exista, que cada enlace y ancla resuelva y que ninguna página quede
+  sin enlazar.
+- **Una tabla o un formato de la guía**: las tablas de `docs/realign/` que
+  repiten una lista del código —acciones, tipos de paso, estados, clases,
+  `kind`, qué paso pide cada comprobación, qué se exceptúa, lo que le falta a
+  `done`— se cruzan con sus constantes en `RealignDocTest`: quien añade un
+  tipo o un estado añade su fila. Las claves de cada salida `--format=json`
+  (la tabla de [docs/realign/plan.md](docs/realign/plan.md#las-salidas---formatjson))
+  y los formatos anidados de `report.json` y de `brief`, escritos como
+  `{a, b?: {c}, d: [{e}]}`, se comparan con la salida real en
+  `RealignDocShapesTest`: una clave nueva se documenta ahí, o la prueba falla.
+- **Un término nuevo** se define una vez, en
+  [docs/realign/glossary.md](docs/realign/glossary.md); un atasco que alguien
+  tuvo de verdad, en [docs/realign/faq.md](docs/realign/faq.md).
 
 ### Una versión del ecosistema
 

@@ -109,7 +109,7 @@ final class RealignActions
             'guide' => 'docs/realign/plan.md',
         ],
         'accept-untested' => [
-            'summary' => 'El dueño acepta sin probar un paso que quedó untested (cambia comportamiento y nadie registró su prueba), con su nota. Lo confirma él en su terminal o, sin ella, dentro de la corrida de aprobación lanzada a mano en GitHub (LARAPACK_APPROVER y --approver con la cuenta que la lanzó); nombrarse fuera de ella no acepta nada. Queda en el plan y lo lista done.',
+            'summary' => 'El dueño acepta sin probar un paso que quedó untested (cambia comportamiento y nadie registró su prueba), con su nota. Lo confirma él en su terminal, escribiendo «acepto sin probar»; sin terminal, sólo dentro de la corrida de aprobación lanzada a mano en GitHub (LARAPACK_APPROVER y --approver con la cuenta que la lanzó). Un agente no lo corre: nombrarse fuera de esa corrida no acepta nada. Queda en el plan y lo lista done.',
             'usage' => ['larapack:realign accept-untested <id> --note="por qué y cuándo se probará"'],
             'writes' => 'Sólo el paso en .larapack/realign/plan.json (untested_accepted y su historia).',
             'options' => ['note', 'approver'],
@@ -245,7 +245,8 @@ final class RealignActions
             '',
             'Si llegas sin contexto: <info>larapack:realign status</info> dice dónde se va y qué sigue.',
             '',
-            'El ciclo: diagnose → plan → next → (hacer el paso y sus pruebas) → check [--tested] → next … → diagnose',
+            'El ciclo: diagnose → plan → apply --deterministic → next → (hacer el paso y sus pruebas) → check [--tested] → next … → done',
+            'Se termina cuando <info>larapack:realign done</info> sale con 0. Inicio rápido, glosario y «qué hago si…»: la guía de abajo.',
             '',
         ];
 

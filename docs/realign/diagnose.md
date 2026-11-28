@@ -71,9 +71,9 @@ La de texto, para una persona:
   «cumplen»: sin paso pendiente —idénticos o iguales salvo formato que el manifiesto ya registra con su hash, …
 
   Archivos por clase:
-    identical            380  Byte a byte lo que generaría el contrato.
-    format_only           55  …
-    edited_outside        12  …
+    identical            380  idéntico a lo que generaría hoy el contrato
+    format_only           55  igual salvo formato (espacios, comentarios, Pint)
+    edited_outside        12  editado fuera de los huecos
 
   Por categoría (archivos, código sin gestionar y hallazgos de verify):
     determinista          71
@@ -102,13 +102,18 @@ La de texto, para una persona:
 - **«sin contrato»** es un ámbito con manifiesto pero sin `laraimport.json`, o
   la raíz de un proyecto que nunca usó LaraPack: el plan pide `no-contract`.
 
-La de `--format=json` lleva lo mismo con números: `{format_version, ok,
-action, generator, generated_at, totals: {classes, categories, conforming,
-files}, verify, scopes: [{package, path, contract, manifest, manifest_version,
-regeneration, counts, total, conforming, breakdown}], report}`. `breakdown` es
-`{conforming, to_adopt, other_steps, out_of_scope}`, el reparto de `total` de
-la salida de texto. El detalle de cada archivo
-está en el informe (`report`, la ruta de `report.json`).
+La de `--format=json` lleva lo mismo con números:
+
+```
+{format_version, ok, action, generator, generated_at,
+ totals: {classes, categories, conforming, files},
+ verify: {at, errors, warnings},
+ scopes: [{package, path, contract, manifest, manifest_version, regeneration, counts, total, conforming, breakdown: {conforming, to_adopt, other_steps, out_of_scope}}],
+ report}
+```
+
+`breakdown` es el reparto de `total` de la salida de texto. El detalle de
+cada archivo está en el informe (`report`, la ruta de `report.json`).
 
 ## Las clases de archivo
 
@@ -189,9 +194,13 @@ Controladores de `Http/Controllers`, archivos de `routes/` y modelos de
 
 | Paso | Qué es | Opciones |
 |---|---|---|
-| `unmanaged-http` | Controladores y archivos de rutas escritos a mano. | Declararlos en el contrato (`endpoints`, `controllers[]`, conservando su `route_name` y su `uri`), dejarlos como código propio (y pedir la excepción) o inferir primero. |
-| `unmanaged-models` | Modelos escritos a mano. | Adoptarlos en el contrato, dejarlos fuera o inferir primero. |
-| `no-contract` | Un ámbito sin `laraimport.json`. | Inferirlo ([infer.md](infer.md)) o dejarlo fuera de LaraPack. |
+| `unmanaged-http` | Controladores y archivos de rutas escritos a mano. | `declare`: declararlos en el contrato (`endpoints`, `controllers[]`, conservando su `route_name` y su `uri`). `keep`: dejarlos como código propio, con su excepción. |
+| `unmanaged-models` | Modelos escritos a mano. | `adopt`: inferirlos al contrato y adoptarlos. `keep`: dejarlos fuera, con su excepción. |
+| `no-contract` | Un ámbito sin `laraimport.json`. | `infer`: inferir el contrato. `keep`: dejarlo fuera de LaraPack, con su excepción. |
+
+Antes de decidir cualquiera de las tres se puede **preparar** la decisión sin
+tomarla: `larapack:realign infer <id> --dry-run` dice qué se inferiría y qué
+rutas se conservarían ([infer.md](infer.md)).
 
 Lo que esté en otro sitio (servicios, soportes, jobs) no se lista: se cuenta en
 `out_of_scope.<ámbito>.other_code`, por directorio.
@@ -232,25 +241,34 @@ proponer.
 
 ## Lo que está fuera de alcance
 
-`out_of_scope` en el informe, por ámbito: `not_regenerated`,
-`migration_history` y `other_code` (lo que no es de LaraPack, contado por
-directorio). Se dice para que nadie piense que se olvidó, y ningún comando lo
+`out_of_scope` en el informe, por ámbito: `files` (los archivos
+`not_regenerated` y `migration_history`) y `other_code` (lo que no es de
+LaraPack, contado por directorio). Se dice para que nadie piense que se olvidó, y ningún comando lo
 toca. Si algo de ahí tiene que cambiar, lo cambia el proyecto con sus propias
 herramientas (una migración nueva, un cambio en un servicio).
 
 ## El informe: `report.json`
 
 ```
-{format_version, generator, generated_at, totals, verify,
- scopes:    [{package, path, contract, manifest, manifest_version, fingerprint, regeneration, counts, total, conforming}],
- files:     [{scope, package, file, path, model, stub, class, category, type, reason, tracked, hash_current, generator, to?, members?, cause?, comments?, regenerated?}],
- unmanaged: [...],
- findings:  [...],   los de verify, con scope, category y type
- contract:  [{scope, package, file, model, column, table, on_delete?, on_update?, migration, category, type}],
- out_of_scope: {<ámbito>: {...}}}
+{format_version, generator, generated_at, id, totals, verify,
+ scopes: {<ámbito>: {package, path, contract, manifest, manifest_version, ui, regeneration, fingerprint, diagnosed_at, counts, total, conforming, breakdown, excepted}},
+ files: [{scope, package, file, path, model, stub, class, category, type, reason, tracked, hash_current, generator, to?, members?, cause?, comments?, regenerated?}],
+ unmanaged: [{scope, package, file, kind, category, type}],
+ findings: [{level, check, model, file, message, package, scope, category, type}],
+ contract: [{scope, package, file, model, column, table, on_delete?, on_update?, migration, category, type}],
+ out_of_scope: {<ámbito>: {files, other_code}}}
 ```
 
+Una clave con `?` sólo está cuando aplica. `<ámbito>` es la ruta del ámbito
+(`.` es la raíz).
+
+- `scopes` va por ámbito, con su ruta como clave; `excepted` dice si el ámbito
+  entero está cubierto por una excepción aprobada (`no-contract`).
 - `files` sólo lleva lo que **no** cumple: lo que cumple se cuenta en `counts`.
+- `unmanaged` es el código sin gestionar (`kind`: `controller`, `routes` o
+  `model`); `findings`, los hallazgos de verify con su ámbito, su categoría y
+  el tipo de paso que piden.
+- `id` identifica el diagnóstico: el plan guarda de cuál salió (`report_id`).
 - `fingerprint` es el hash del contrato y del manifiesto del ámbito: si cambian
   después del diagnóstico, `status` lo dice en `stale` y hay que volver a
   diagnosticar.

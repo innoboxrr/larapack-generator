@@ -35,6 +35,7 @@ larapack:realign status --format=json
 - Sin plan, o con `stale` no vacío: `larapack:realign diagnose` y
   `larapack:realign plan`.
 - Con plan: sigue la receta.
+- Si te atascas, la salida está en `<paquete>/docs/realign/faq.md`.
 
 ## El orden de punta a punta
 
@@ -54,11 +55,13 @@ larapack:realign status --format=json
 
 ## La receta
 
-1. `larapack:realign next --format=json`. Si `done` es true, corre
+1. `larapack:realign next --format=json`. Si `done` es false y `step` es
+   null, no hay nada que hacer ahora: `waiting` dice qué está aplazado, en
+   manos del dueño o bloqueado. Si `done` es true, corre
    `larapack:realign done --format=json`: es **el** criterio de terminado.
    Sale con 0 sólo si no queda nada en ningún ámbito; si no, `missing` dice
-   qué falta (pasos, decisiones, excepciones, `validate`, `verify`) y lo
-   resuelves. `verify --strict` en verde **no** basta: no ve lo editado
+   qué falta (pasos, decisiones, pasos sin probar, excepciones, `validate`,
+   `verify`) y lo resuelves. `verify --strict` en verde **no** basta: no ve lo editado
    fuera de los huecos.
 2. Según `step.category`:
    - **`deterministic`**: ejecuta `how.command`, primero con `--dry-run` y
@@ -110,8 +113,8 @@ base de datos): escribe la prueba igual, comita el cambio solo con
 `realign: <id> (SIN PROBAR: <motivo>)` y corre `check <id>` **sin**
 `--tested`: lo deja `untested`, que es la verdad, y `done` no termina mientras
 quede así. Nunca pongas en `--tested` una orden que no corriste. Aceptarlo sin
-probar (`accept-untested`) lo hace el dueño, no tú: entrega la lista
-(`status` → `untested`, o `brief`). Detalle en
+probar (`accept-untested`) lo hace el dueño, en su terminal, no tú: entrega
+la lista (`status` → `untested`, o `brief`). Detalle en
 `<paquete>/docs/realign/guided.md`.
 
 ## Lo que nunca haces
@@ -151,7 +154,9 @@ En `<paquete>/docs/realign/`:
 
 | Guía | Para |
 |---|---|
-| `README.md` | El modelo mental, las categorías, la seguridad y la receta. |
+| `README.md` | Los inicios rápidos, el ciclo completo, las categorías, la seguridad y la receta. |
+| `faq.md` | «¿Qué hago si…?»: una decisión que no es tuya, sin pruebas, `untested`, `done` que no termina, lo que no cabe, el árbol sucio, un clon, un monorepo, sin contrato. |
+| `glossary.md` | Cada término, definido una vez. |
 | `diagnose.md` | Leer el informe y cada clasificación. |
 | `plan.md` | Los pasos, `next`, `check`, `decide` y los formatos JSON. |
 | `adopt.md`, `apply.md` | Lo determinista. |

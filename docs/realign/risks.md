@@ -36,8 +36,8 @@ git. Que el proyecto siga haciendo lo mismo lo dicen **sus pruebas**. Por eso:
 
 | Operación | Escribe | Riesgo | Qué puede salir mal | Cómo se deshace |
 |---|---|---|---|---|
-| `diagnose`, `plan`, `status`, `next`, `check`, `decide`, `playbook`, `help` | Su estado (o nada) | Ninguno sobre el código | Un diagnóstico viejo da un plan viejo (`status` lo dice en `stale`). La caché ocupa disco. | Borrar `.larapack/realign/`: sólo se pierde el estado. |
-| `adopt` | El manifiesto | Bajo | Adoptar un `format_only` con otros comentarios deja que un `import --force` posterior los cambie por los de la plantilla. Adoptar como editado algo escrito a mano hace que `--force` no lo regenere nunca. `prune` deja de vigilar lo que el contrato ya no genera. | `git restore .larapack/manifest.json` |
+| `diagnose`, `plan`, `status`, `next`, `show`, `check`, `decide`, `defer`, `undefer`, `escalate`, `accept-untested`, `done`, `brief`, `playbook`, `help` | Su estado (o nada) | Ninguno sobre el código | Un diagnóstico viejo da un plan viejo (`status` lo dice en `stale`). La caché ocupa disco. `check` con la orden de pruebas configurada la **ejecuta** en la raíz del proyecto. | Borrar `.larapack/realign/`: sólo se pierde el estado (lo hecho y lo decidido incluidos, si no se versionó). |
+| `adopt` | El manifiesto | Bajo | Lo adoptado lo vuelve a escribir el siguiente `import --force`: por eso un archivo con otros comentarios no se adopta ([adopt.md](adopt.md#riesgos)). Adoptar como editado algo escrito a mano hace que `--force` no lo regenere nunca. `prune` deja de vigilar lo que el contrato ya no genera. | `git restore .larapack/manifest.json` |
 | `apply` → `regenerate`, `missing` | Código generado | Medio | La plantilla nueva cambia comportamiento (un listado que respeta `managed`, un Resource sin `appends`) o usa una clase de una versión nueva de una dependencia. | `git restore`, `git clean` para lo creado |
 | `apply` → `fix` | Requests, Resources, traits, `routes/web.php` | Medio | `index-managed` cambia qué ve un listado; `resource-appends`, qué sirve un Resource; el fallback de la SPA, cómo se resuelve una ruta del front. | `git restore` |
 | `apply` → `endpoint-tests` | Pruebas | Bajo | Una prueba nueva falla porque la acción responde sin sesión o no pregunta a la política: **es un hallazgo**, no un fallo de la herramienta. | `git restore` |
@@ -138,8 +138,8 @@ git. Que el proyecto siga haciendo lo mismo lo dicen **sus pruebas**. Por eso:
 - **Cada paquete local es un ámbito** con su contrato y su manifiesto. Las
   migraciones de todos los ámbitos comparten base: `infer` y
   `pin-foreign-keys` las leen todas juntas.
-- **`--package`** acota `diagnose`, `status`, `next` y las operaciones a un
-  ámbito: así se trabaja (y se comitea) paquete por paquete.
+- **`--package`** acota `diagnose`, `status`, `next`, `brief`, `done` y las
+  operaciones a un ámbito: así se trabaja (y se comitea) paquete por paquete.
 - **Un solo proceso de realineamiento a la vez por copia de trabajo.**
   `plan.json` se escribe de forma atómica pero sin candado: dos procesos a la
   vez (dos `check`, un `apply` y un `diagnose`) se pisan, y gana el último. Para
@@ -163,7 +163,8 @@ además:
 - **`git` tiene que estar en el `PATH`** del PHP que corre el comando: las
   operaciones que escriben lo usan para comprobar que el árbol está limpio, y
   sin él se niegan (salvo `--allow-dirty`).
-- **Las rutas largas**: la caché vive en `.larapack/realign/cache/<hash>/…`, y
+- **Las rutas largas**: la caché vive en
+  `.larapack/realign/cache/<ámbito>/<clave>/…`, y
   en un monorepo con paquetes anidados una ruta puede pasar de 260 caracteres.
   Activa las rutas largas de Windows (`LongPathsEnabled` y
   `git config core.longpaths true`) o pon el proyecto cerca de la raíz del

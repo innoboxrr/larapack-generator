@@ -38,7 +38,7 @@ final class NextAction extends StepAction
             if ($this->wantsJson()) {
                 $this->json(['format_version' => RealignState::FORMAT_VERSION, 'ok' => true, 'action' => 'next', 'done' => true, 'step' => null, 'untested' => Navigation::untested($steps)]);
             } else {
-                $this->output->writeln('  <info>No queda nada pendiente.</info> Confírmalo con un diagnóstico nuevo: larapack:realign diagnose && larapack:realign plan');
+                $this->output->writeln('  <info>No queda nada pendiente en el plan.</info> El criterio de terminado es larapack:realign done: diagnostica y planifica otra vez, y dice si falta algo.');
 
                 if (Navigation::untested($steps) !== []) {
                     $this->output->writeln('  <comment>Pero hay '.count(Navigation::untested($steps)).' sin probar</comment>: larapack:realign status los lista.');

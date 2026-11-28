@@ -68,7 +68,7 @@ final class DiagnoseAction extends Action
         $this->output->writeln("\n  Por categoría (archivos, código sin gestionar y hallazgos de verify):");
 
         foreach ($totals['categories'] as $category => $count) {
-            $this->output->writeln(sprintf('    %-17s %6d', Category::LABELS[$category] ?? $category, $count));
+            $this->output->writeln(sprintf('    %s %6d', $this->padded(Category::LABELS[$category] ?? $category, 17), $count));
         }
 
         $this->output->writeln("\n  Informe: ".$this->relative($state->reportPath()).'. Siguiente: larapack:realign plan');

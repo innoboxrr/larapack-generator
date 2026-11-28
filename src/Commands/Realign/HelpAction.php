@@ -46,12 +46,13 @@ final class HelpAction extends Action
         $this->output->writeln('');
 
         foreach ($actions as $name => $description) {
-            $this->output->writeln(sprintf('  %-9s %s', $name, OutputFormatter::escape($description)));
+            $this->output->writeln(sprintf('  %-15s %s', $name, OutputFormatter::escape($description)));
         }
 
         $this->output->writeln('
-  El ciclo: diagnose → plan → next → (hacer el paso) → check → next …');
-        $this->output->writeln('  Si llegas sin contexto: larapack:realign status. Una acción en detalle: larapack:realign help <acción>.');
+  El ciclo: diagnose → plan → apply --deterministic → next → (hacer el paso y sus pruebas) → check [--tested] → next … → done');
+        $this->output->writeln('  Se termina cuando larapack:realign done sale con 0. Si llegas sin contexto: larapack:realign status. Una acción en detalle: larapack:realign help <acción>.');
+        $this->output->writeln('  Inicio rápido, glosario y «¿qué hago si…?»: '.RealignActions::GUIDE.' del paquete.');
 
         return Command::SUCCESS;
     }

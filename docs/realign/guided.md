@@ -213,21 +213,18 @@ proyecto, como un script de Composer: la escribe una persona.
 3. Corre `larapack:realign check <id>` **sin** `--tested`: comprueba la forma y
    deja el paso `untested`, que es la verdad. No inventes una orden para
    `--tested`, y no marques el paso hecho editando `plan.json` a mano.
-4. Si prefieres no hacerlo todavía, aplázalo con su razón
-   (`larapack:realign defer <id> --note="sin base de datos para probarlo"`):
-   sigue `pending` y `next` pasa al siguiente.
-5. Dilo en tu informe: `larapack:realign status` (`untested`) y
+4. Dilo en tu informe: `larapack:realign status` (`untested`) y
    `larapack:realign brief` (la sección «Sin probar») dan la lista con la
    orden de cada uno. Quien tenga el entorno corre las pruebas y, si pasan,
    `check <id> --tested="…"`; si no, `git revert` del commit del paso.
 
-`next` vuelve a dar el mismo paso mientras siga pendiente. Para seguir con
-otros, aplaza el paso sin probar con su motivo
-(`larapack:realign defer <id> --note="SIN PROBAR: no hay base de datos"`):
-sigue `pending`, `next` lo salta, `status` lo lista en «Aplazados» y
-`undefer <id>` lo devuelve cuando haya entorno para probarlo. También puedes
-trabajar otro ámbito con `--package`, o parar y entregar el informe. No
-marques el paso hecho editando `plan.json` a mano.
+Un paso `untested` no detiene el plan: `next` da el siguiente.
+
+**Si prefieres no tocar el paso hasta poder probarlo**, no lo hagas a medias:
+aplázalo con su motivo (`larapack:realign defer <id> --note="sin base de datos
+para probarlo"`). Sigue `pending`, `next` lo salta, `status` lo lista en
+«Aplazados» y `undefer <id>` lo devuelve cuando haya entorno. También puedes
+trabajar otro ámbito con `--package`, o parar y entregar el informe.
 
 ### Aceptarlo sin probar: lo decide el dueño
 
@@ -237,13 +234,22 @@ larapack:realign accept-untested <id> --note="se prueba en staging antes de desp
 
 Es como aprobar una excepción ([exceptions.md](exceptions.md)): lo confirma
 **el dueño**, en su terminal, viendo el paso, por qué cambia comportamiento,
-sus archivos y la nota, y escribiendo «acepto sin probar». Sin terminal vale
-la misma vía que para aprobar una excepción, y sólo ésa: la corrida de
-aprobación lanzada a mano por una persona en GitHub
-([exceptions.md](exceptions.md#por-qué-un-agente-no-puede-aprobar)); nombrarse
-fuera de ella no basta, y la guardia de los agentes bloquea cualquier orden
-con `--approver` o que dé valor a `LARAPACK_APPROVER`. Un agente no lo corre: lo deja en su informe. Lo aceptado
-queda en `plan.json` (el diff que se revisa) y `done` lo sigue enseñando.
+sus archivos y la nota, y escribiendo «acepto sin probar». Un agente no lo
+corre: lo deja en su informe. Lo aceptado queda en `plan.json` (el diff que
+se revisa), con `untested_accepted`, y `done` lo sigue enseñando
+(`accepted_untested`).
+
+**Sin terminal**, la orden se niega y no cambia nada. Nombrarse
+(`LARAPACK_APPROVER` y `--approver`) sólo vale dentro de una corrida del
+workflow de aprobación lanzada a mano por una persona en GitHub, con las
+mismas condiciones que para aprobar una excepción
+([exceptions.md](exceptions.md#aprobar-sin-terminal-el-workflow-de-aprobación)),
+y la guardia de los agentes bloquea cualquier orden con `--approver` o que dé
+valor a la variable. **Límite:** el workflow que escribe `larapack:ci
+--approval` sólo corre `larapack:hand-rolled approve`; no trae un paso para
+`accept-untested`. Hoy, aceptar sin probar se hace desde una terminal; la
+salida habitual sin ella es que alguien con el entorno corra las pruebas y
+registre `check <id> --tested="…"`.
 
 ## Después de los pasos guiados: otra pasada
 

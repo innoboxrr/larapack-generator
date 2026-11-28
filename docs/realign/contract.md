@@ -86,8 +86,10 @@ tabla son un error.
 ## Rutas: conservar el nombre y la URI
 
 ```json
-"endpoints": [
-  { "name": "approve", "method": "post", "uri": "{campaignId}/approve_now", "route_name": "campaigns.approve" }
+"controllers": [
+  { "name": "Campaign", "endpoints": [
+    { "name": "approve", "method": "post", "uri": "campaigns/{campaignId}/approve_now", "route_name": "campaigns.approve" }
+  ] }
 ]
 ```
 
@@ -98,6 +100,12 @@ tabla son un error.
   acción CRUD que exista, es un error.
 - **La `uri` admite** segmentos con `_`, mayúsculas o `.` y parámetros en
   camelCase (`{campaignId}`), para conservar la URI que ya usa el front.
+- **Dos reglas de siempre siguen valiendo**, y `larapack:validate` las dice
+  con la corrección: una URI que empieza por un parámetro es un aviso (casa
+  con cualquier primer segmento: pon delante uno fijo), y en un endpoint de
+  **modelo** que actúa sobre un registro el identificador se llama como lo lee
+  la request (`{staff_member_id}`, no `{campaignId}`). Una URI con otro nombre
+  de parámetro se conserva en `controllers[]`, o no se declara.
 
 Es la regla de todo el realineamiento: **un nombre de ruta o una URI no cambian
 sin que el contrato lo declare**. Declarar `route_name` y `uri` es cómo se

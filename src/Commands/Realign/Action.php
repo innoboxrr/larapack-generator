@@ -114,4 +114,13 @@ abstract class Action
     {
         return str_starts_with($path, $this->root.'/') ? substr($path, strlen($this->root) + 1) : $path;
     }
+
+    /**
+     * Una etiqueta rellenada hasta un ancho en caracteres, no en bytes:
+     * «decisión» lleva una tilde y `%-17s` la dejaba una columna corta.
+     */
+    protected function padded(string $label, int $width): string
+    {
+        return $label.str_repeat(' ', max(0, $width - mb_strlen($label, 'UTF-8')));
+    }
 }
