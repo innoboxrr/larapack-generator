@@ -240,7 +240,7 @@ class RealignCommand extends Command
 
         $report = (new Diagnosis($root, $jobs, ! $input->getOption('no-cache')))->run($this->packages($input));
         $state = new RealignState($root);
-        $scopes = array_values(array_map(fn (array $scope): array => array_intersect_key($scope, array_flip(['package', 'path', 'contract', 'manifest', 'manifest_version', 'regeneration', 'counts', 'total', 'conforming'])), (array) $report['scopes']));
+        $scopes = array_values(array_map(fn (array $scope): array => array_intersect_key($scope, array_flip(['package', 'path', 'contract', 'manifest', 'manifest_version', 'regeneration', 'counts', 'total', 'conforming', 'breakdown'])), (array) $report['scopes']));
 
         if ($this->wantsJson($input)) {
             $this->writeJson($output, ['format_version' => RealignState::FORMAT_VERSION, 'ok' => true, 'action' => 'diagnose',
@@ -254,10 +254,13 @@ class RealignCommand extends Command
 
         foreach ($scopes as $scope) {
             $regeneration = is_array($scope['regeneration']) ? $scope['regeneration'] : null;
-            $output->writeln(sprintf('  %s: %d archivos, %d cumplen%s',
+            $breakdown = is_array($scope['breakdown'] ?? null) ? $scope['breakdown'] : null;
+            $output->writeln(sprintf('  %s: %d archivos, %d cumplen%s%s',
                 $scope['package'] === null ? 'app (núcleo)' : OutputFormatter::escape((string) $scope['package']),
                 $scope['total'],
                 $scope['conforming'],
+                $breakdown === null || $scope['total'] === 0 ? '' : sprintf(', %d por adoptar, %d con otro paso, %d fuera de alcance',
+                    $breakdown['to_adopt'], $breakdown['other_steps'], $breakdown['out_of_scope']),
                 match (true) {
                     ! $scope['contract'] => ' <comment>(sin contrato: no hay con qué comparar)</comment>',
                     $regeneration !== null && ! $regeneration['ok'] => ' <fg=red>(no se pudo regenerar: '.OutputFormatter::escape((string) $regeneration['error']).')</>',
@@ -265,6 +268,7 @@ class RealignCommand extends Command
                 }));
         }
 
+        $output->writeln('  <comment>«cumplen»: sin paso pendiente —idénticos o iguales salvo formato que el manifiesto ya registra con su hash, editados sólo en sus huecos o con excepción—. Un archivo identical o format_only que el manifiesto no registra con su hash actual no cumple todavía: cuenta en «por adoptar» (el paso adopt, que sólo anota el manifiesto). Por eso «cumplen» puede ser menos que identical.</comment>');
         $output->writeln("\n  Archivos por clase:");
 
         foreach ($totals['classes'] as $class => $count) {

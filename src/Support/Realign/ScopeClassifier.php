@@ -6,6 +6,7 @@ use Innoboxrr\LarapackGenerator\Support\Files;
 use Innoboxrr\LarapackGenerator\Support\GeneratorVersion;
 use Innoboxrr\LarapackGenerator\Support\Manifest;
 use Innoboxrr\LarapackGenerator\Support\ProjectSources;
+use Innoboxrr\LarapackGenerator\Support\SpaFallback;
 
 /**
  * Clasifica los archivos de un ámbito comparándolos con lo regenerado
@@ -190,19 +191,42 @@ final class ScopeClassifier
 
             $entries[$index] = match ($after) {
                 FileComparison::IDENTICAL, FileComparison::FORMAT => $this->resolve($entry, FileClass::FORMAT_ONLY, 'igual tras pasarlo por la Pint del proyecto'),
-                // Sólo comentarios en lo que nadie editó es la plantilla que
-                // cambió sus comentarios (version_delta), y en un hueco
-                // entero, el hueco. Lo demás es formato —como lo define el
-                // realineamiento— y se marca, porque adoptarlo deja que
-                // --force reemplace esos comentarios.
-                FileComparison::COMMENTS => $entry['hash_current'] === true || ($entry['tracked'] && Holes::wholeFile((string) $entry['stub']))
-                    ? $this->different($entry, $current, $regenerated)
-                    : $this->resolve($entry + ['comments' => true], FileClass::FORMAT_ONLY, 'el mismo código; sólo cambian los comentarios'),
+                FileComparison::COMMENTS => $this->commentsOnly($entry)
+                    ? $this->resolve($entry + ['comments' => true], FileClass::FORMAT_ONLY, 'el mismo código; sólo cambian los comentarios')
+                    : $this->different($entry, $current, $regenerated),
                 default => $this->different($entry, $current, $regenerated),
             };
         }
 
         return array_values($entries);
+    }
+
+    /**
+     * Si un archivo con el mismo código y otros comentarios es formato
+     * (`format_only` con `comments: true`), como lo define el
+     * realineamiento: se marca, porque adoptarlo deja que --force reemplace
+     * esos comentarios. No lo es:
+     *
+     *  - una migración: no se reescribe nunca, ni para ponerle los
+     *    comentarios de la plantilla, así que es `migration_history`;
+     *  - un hueco entero: es el hueco (`hole_edited`);
+     *  - lo que nadie editó escrito por una versión anterior: es la
+     *    plantilla, que cambió sus comentarios (`version_delta`).
+     *
+     * No depende de lo que `adopt` cambia (el hash del manifiesto y la
+     * versión, que anota la actual): lo que diagnose clasifica como formato
+     * y adopt anota sigue siendo formato cuando `check` lo vuelve a
+     * clasificar. Antes, «sin editar» era sólo «el hash es el del
+     * manifiesto», y tras adoptarlo el mismo archivo pasaba a
+     * `version_delta`, o, una migración, a `migration_history`.
+     *
+     * @param  Entry  $entry
+     */
+    private function commentsOnly(array $entry): bool
+    {
+        return self::migrationKey($entry['path']) === null
+            && ! ($entry['tracked'] && Holes::wholeFile((string) $entry['stub']))
+            && ! ($entry['hash_current'] === true && GeneratorVersion::isOlder($entry['generator']));
     }
 
     /**
@@ -294,12 +318,14 @@ final class ScopeClassifier
                 : 'sin editar, pero el contrato cambió desde que se generó');
         }
 
-        $members = FileComparison::kindOf($current) === 'php'
-            ? FileComparison::members(Files::read($current), Files::read($regenerated))
+        $isPhp = FileComparison::kindOf($current) === 'php';
+        $regeneratedCode = $isPhp ? Files::read($regenerated) : null;
+        $members = $isPhp
+            ? FileComparison::members(Files::read($current), (string) $regeneratedCode)
             : ['outside'];
         $entry['members'] = $members;
 
-        if (Holes::onlyHoles((string) $entry['stub'], $members)) {
+        if (Holes::onlyHoles((string) $entry['stub'], $members, $regeneratedCode)) {
             return $this->resolve($entry, FileClass::HOLE_EDITED, 'editado sólo en sus huecos');
         }
 
@@ -310,7 +336,7 @@ final class ScopeClassifier
             $entry['cause'] = 'edited_or_generator';
         }
 
-        $outside = array_values(array_diff($members, array_map(fn (string $method): string => 'method:'.strtolower($method), Holes::methods((string) $entry['stub']))));
+        $outside = array_values(array_diff($members, array_map(fn (string $method): string => 'method:'.strtolower($method), Holes::methods((string) $entry['stub'], $regeneratedCode))));
 
         return $this->resolve($entry, FileClass::EDITED_OUTSIDE, 'editado fuera de los huecos: '.implode(', ', $outside));
     }
@@ -494,7 +520,7 @@ final class ScopeClassifier
 
         foreach ($this->sourceDirectories() as $source) {
             foreach ($this->phpUnder($source.'/Http/Controllers') as $relative) {
-                if (basename($relative) !== 'Controller.php') {
+                if (basename($relative) !== 'Controller.php' && ! $this->writtenByFix($relative)) {
                     $found[] = [$relative, 'controller', 'unmanaged-http'];
                 }
             }
@@ -526,6 +552,29 @@ final class ScopeClassifier
         }
 
         return $unmanaged;
+    }
+
+    /**
+     * Si el archivo es uno que crea `larapack:fix` y sigue tal cual lo
+     * escribe (salvo formato): el SpaController de `route-closure`
+     * (SpaFallback, el de laravel-setup 7.2.1). Es código del paquete, no
+     * HTTP escrito a mano: sin esto, corregir el fallback subía en uno el
+     * código sin gestionar del siguiente diagnóstico. SpaRequest está en
+     * Http/Requests, que no se lista.
+     */
+    private function writtenByFix(string $relative): bool
+    {
+        if (basename($relative) !== 'SpaController.php') {
+            return false;
+        }
+
+        $absolute = $this->scope['root'].'/'.$relative;
+
+        return is_file($absolute) && in_array(
+            FileComparison::compare(Files::read($absolute), SpaFallback::CONTROLLER_CODE, 'php'),
+            [FileComparison::IDENTICAL, FileComparison::FORMAT],
+            true
+        );
     }
 
     /**

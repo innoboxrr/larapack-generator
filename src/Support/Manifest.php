@@ -312,9 +312,11 @@ final class Manifest
      */
     public function refresh(string $file, bool $generator = true): bool
     {
-        return $this->updateEntry($file, fn (array $entry): array => ['hash' => $this->hash($file)]
-            + ($generator ? ['generator' => GeneratorVersion::current()] : [])
-            + $entry);
+        // array_merge y no `+`: la entrada conserva el orden de sus claves
+        // (stub, hash, generator, state). Con `+` el stub pasaba al final, y
+        // en el diff del manifiesto la entrada parecía haber perdido el stub.
+        return $this->updateEntry($file, fn (array $entry): array => array_merge($entry, ['hash' => $this->hash($file)],
+            $generator ? ['generator' => GeneratorVersion::current()] : []));
     }
 
     /**

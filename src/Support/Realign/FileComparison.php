@@ -111,6 +111,19 @@ final class FileComparison
     }
 
     /**
+     * Las piezas de un PHP, como las compara members(): `method:<nombre>`
+     * => sus tokens sin espacios ni comentarios, `imports` y `outside`.
+     * Holes las usa para saber si un método de lo regenerado es el marcador
+     * de algo sin implementar.
+     *
+     * @return array<string, string>
+     */
+    public static function pieces(string $code): array
+    {
+        return self::split($code);
+    }
+
+    /**
      * @param  'php'|'json'|'text'  $kind
      */
     private static function normalise(string $content, string $kind, bool $comments): string

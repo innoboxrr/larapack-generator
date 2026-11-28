@@ -416,6 +416,53 @@ tercer diagnóstico.
 archivos, sus hallazgos y sus órdenes). La caché ocupó 176 MB en
 school-management y 24 MB en expediente.
 
+### Realineamiento: los huecos de las plantillas, una sola clasificación y lo que crea `fix`
+
+De una prueba de autonomía sobre la copia de un proyecto 7.x.
+
+- **Los huecos son los de las plantillas.** Las requests nacen con
+  `prepareForValidation()`, `passedValidation()`, `messages()` y
+  `attributes()` vacíos para el usuario, pero sólo `rules()` contaba como
+  hueco: normalizar el payload en `prepareForValidation()` salía
+  `edited_outside` y la única salida era pedir una excepción. Ahora son hueco
+  todos los ganchos de validación que la plantilla deja vacíos (en
+  `IndexRequest`, menos `prepareForValidation()`, que fuerza `managed`); en la
+  request de un endpoint, `prepareForValidation()` y `rules()`, y en uno sin
+  modelo además `authorize()` y `handle()`, que nacen cerrado y con
+  `abort(501)` (Holes::PLACEHOLDERS: lo dice lo regenerado); y
+  `defineGates()` del AuthServiceProvider. `tests/Unit/HolesTest` cruza
+  Holes con lo que cada plantilla de `src/Stubs` deja vacío y con la tabla
+  «Dónde va tu código» del README: una plantilla nueva con un hueco sin
+  declarar falla ahí.
+- **Una sola clasificación, que no cambia con lo que escribe `adopt`.** Una
+  migración `create_locations_table` con otros comentarios salía
+  `format_only` en `diagnose`, `apply` la adoptaba y `check adopt@.` decía
+  «es migration_history … se espera identical o format_only»: «sin editar»
+  era «el hash es el del manifiesto», y tras adoptarla lo era. Lo mismo le
+  pasaba a cualquier archivo con otros comentarios, que pasaba a
+  `version_delta`. Ahora el mismo código con otros comentarios es formato
+  salvo en una migración (`migration_history` desde el diagnóstico: nunca
+  `adopt`), en un hueco entero y en lo que nadie editó escrito por una
+  versión anterior; `diagnose`, `check` y la comprobación de `adopt` dan lo
+  mismo antes y después de adoptar.
+- **`adopt` conserva la entrada.** Volver a anotar un archivo registrado
+  ponía `hash` y `generator` delante y el `stub` al final: en el diff del
+  manifiesto la entrada parecía perder el stub. Ahora conserva el orden, el
+  stub, el modelo y el namespace, y sólo cambian `hash` y `generator`.
+- **Lo que crea `fix route-closure` es del paquete.** El SpaController que
+  escribe (el de laravel-setup 7.2.1) salía en el diagnóstico siguiente como
+  `unmanaged-http` (83 → 84); mientras siga siendo ese, salvo formato, ya no
+  se lista. Y los closures que no son el fallback de la SPA, que `fix` salta,
+  no dejan el paso con `fixed` y `skipped` a la vez: son de la decisión
+  `route-closure@<ámbito>`, y salen en `unchanged` con `deferred_to` y la
+  razón. Sin ese paso en el plan quedan `skipped` y el paso, a medias.
+- **El resumen se explica solo.** «3 550 archivos, 1 185 cumplen» junto a
+  «identical 2 844» no decía por qué: un `identical` que el manifiesto no
+  registra con su hash todavía no cumple. Cada ámbito dice ahora cuántos
+  cumplen, cuántos son **por adoptar**, cuántos tienen otro paso y cuántos
+  están fuera de alcance (suman el total; en JSON, `breakdown`), con una
+  línea que define «cumplen».
+
 ### Al actualizar a 9.4.0
 
 - **Nada cambia si no se usa `larapack:realign`.** El esquema del contrato

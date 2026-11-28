@@ -59,7 +59,7 @@ diciéndolo.
 
 | Paso | Qué hace con cada archivo | Cuándo lo salta |
 |---|---|---|
-| `adopt` | Igual a lo regenerado (`identical`, `format_only`). Si el manifiesto lo conoce, vuelve a anotar su hash y la versión del generador, **conservando su estado** (lo generado sigue siendo `generated`). Si no lo conoce, lo registra con `state: adopted`, con el modelo, el namespace y el stub de lo regenerado. | Ya no es igual a lo regenerado. Lo regenerado no lo registra. |
+| `adopt` | Igual a lo regenerado (`identical`, `format_only`; nunca una migración que difiere más que en espacios, que es `migration_history`). Si el manifiesto lo conoce, vuelve a anotar su hash y la versión del generador, **conservando su estado, su stub, su modelo y su namespace**, y el orden de las claves de la entrada: en el diff del manifiesto sólo cambian `hash` y `generator` (lo generado sigue siendo `generated`). Si no lo conoce, lo registra con `state: adopted`, con el modelo, el namespace y el stub de lo regenerado. | Ya no es igual a lo regenerado. Lo regenerado no lo registra. |
 | `relink` | Renombrado: mueve el registro a la ruta nueva con su stub y su hash. | Ya no se reconoce como renombrado (dos candidatos, o el original volvió). |
 | `prune` | Borrado y el contrato no lo volvería a generar (`retired`, `not_regenerated`, `superseded`): lo olvida. Si es de un modelo que ya no está en el contrato, lo que le queda en disco pasa a quien lo genera hoy (el módulo compartido de la interfaz) o, si no lo genera nadie (una vista que se quedó), a lo que no es de ninguna entidad —sigue registrado y vigilado—, y el modelo se olvida: si no, `verify` lo vería como una entidad a la que le falta todo. | Vuelve a estar en disco. El contrato lo sigue pidiendo: eso es la decisión `missing`. |
 | `untracked-edited` (si se decidió `adopt`) | Escrito a mano en la ruta de uno generado: lo registra con `state: adopted` y **el hash de lo regenerado**. Queda personalizado: `verify` lo sigue (deriva, forma de controlador) y `--force` no lo sobrescribe jamás. | Falta decidir, o se decidió otra cosa. Ya no es de esa clase. |
@@ -97,7 +97,10 @@ larapack:realign check adopt@.
 ```
 
 Pasa cuando cada archivo del paso, comparado otra vez, es `identical` o
-`format_only` y está registrado con su hash actual. Para `prune`, cuando ya no
+`format_only` y está registrado con su hash actual. Es la misma clasificación
+del diagnóstico, y lo que `adopt` anota no la cambia: un archivo que diagnose
+dio por `format_only` sigue siéndolo después de adoptarlo (antes, uno con otros
+comentarios pasaba a `version_delta`, y una migración, a `migration_history`). Para `prune`, cuando ya no
 está ni en el manifiesto ni en disco (`absent`) o se reconoce con otra ruta;
 para `relink`, cuando ya no sale ni como renombrado ni como borrado; para
 `untracked-edited`, cuando ya no tiene paso pendiente.

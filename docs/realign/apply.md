@@ -105,6 +105,18 @@ todos sus paquetes: `index-managed`, `resource-appends`, `relation-missing` y
 el fallback de la SPA (`route-closure` del `Route::fallback()` de la SPA). Lo
 que no tiene la forma generada lo salta con la razón de `larapack:fix`.
 
+Lo que `larapack:fix` salta y es de **otro paso** del plan no cuenta como
+saltado: en `route-closure`, los closures que no son el fallback de la SPA son
+de la decisión `route-closure@<ámbito>`. Salen en `unchanged` con
+`deferred_to` (el id de ese paso) y la razón «No es de este paso: lo resuelve
+…», y el paso `fix` puede quedar hecho sin ellos. Si el plan no tiene ese
+paso, quedan `skipped` y el paso, a medias: `check` no lo da por hecho
+mientras quede un hallazgo suyo.
+
+El SpaController que crea `route-closure` es código del paquete: mientras sea
+el de laravel-setup 7.2.1 (salvo formato) el diagnóstico no lo lista como
+código sin gestionar (`unmanaged-http`). Si se edita, sí.
+
 Riesgo medio: `index-managed` cambia qué ve un listado (pasa a respetar
 `managed`); `resource-appends` cambia qué campos sirve un Resource. Las
 pruebas del proyecto lo dicen.

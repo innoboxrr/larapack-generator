@@ -1140,7 +1140,7 @@ src/Models/Filters/<Model>/ManagedFilter.php       ← hueco (visibilidad)
 src/Models/Filters/<Model>/{Id,Creation,Updated,EagerLoading}Filter.php
 
 src/Http/Controllers/<Model>Controller.php         delega en las requests
-src/Http/Requests/<Model>/*.php                    rules() ← hueco
+src/Http/Requests/<Model>/*.php                    rules() y ganchos de validación ← hueco
 src/Http/Resources/Models/<Model>Resource.php      ← hueco (forma de la respuesta)
 src/Http/Events/<Model>/Events/*.php
 src/Http/Events/<Model>/Listeners/*/*.php          ← hueco (efectos secundarios)
@@ -1184,6 +1184,9 @@ Si una lógica no cabe en ninguno de estos sitios, falta algo en el
 | `Filters/<Model>/ManagedFilter::canView` | **Quién puede ver qué.** Sin esto el índice lo devuelve todo. El IndexRequest fuerza `managed`, así que acota a todos, administrador incluido: cubre ese caso aquí. |
 | `Policies/<Model>Policy` | Autorización por acción y por endpoint. Nace cerrada: sólo pasa el administrador, y ni él borra para siempre hasta que se saque `forceDelete` de `$exceptAbilities`. |
 | `Requests/*/rules()` | Reglas que no vengan del JSON. Nada fuera del array. |
+| `Requests/*/` `messages()`, `attributes()`, `prepareForValidation()`, `passedValidation()` | Los ganchos de validación que la plantilla deja vacíos: mensajes y nombres de los campos, normalizar el payload antes de validarlo, ajustarlo después. En `IndexRequest`, `prepareForValidation()` no: fuerza `managed`. En un endpoint de `endpoints`/`controllers`, `prepareForValidation()` y `rules()`. |
+| Endpoint sin modelo: `authorize()` y `handle()` | Nacen cerrado y con `abort(501)`: quién entra y qué hace (si es más que unas líneas, una clase de `Support/` a la que se llama). En un endpoint de modelo no: preguntan a la política y delegan en la operación. |
+| `Providers/AuthServiceProvider::defineGates()` | Gates y habilidades sueltas, que no son de una política. |
 | `Resources/<Model>Resource` | La forma exacta de la respuesta y su array `actions`. Los accessors que el cliente puede pedir con `appends[]` se listan en `$appendable`; lo demás se ignora. |
 | `Events/*/Listeners/` | Efectos secundarios: notificaciones, colas, integraciones. |
 | `Observers/` | Ciclo de vida del modelo. |
