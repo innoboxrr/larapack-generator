@@ -524,6 +524,22 @@ final class ControllerShapeTest extends TestCase
         ], $this->messages('hand-rolled-stale'));
     }
 
+    public function test_una_excepcion_del_realineamiento_que_no_es_de_un_closure_no_tapa_a_las_que_sobran_detras(): void
+    {
+        // Ordenadas, la del realineamiento va antes que la de la clase: la
+        // juzga ProjectVerification, y lo que viene después se sigue mirando.
+        $this->put('.larapack/hand-rolled.lock', (string) json_encode([
+            ['target' => 'realign:accept-untested:posts', 'reason' => 'r', 'fingerprint' => null],
+            ['target' => 'realign:route-closure:get:/old', 'reason' => 'r', 'fingerprint' => null],
+            ['target' => 'vendor\Old', 'reason' => 'r', 'fingerprint' => null],
+        ]));
+
+        $this->assertSame([
+            'Aprueba la excepción realign:route-closure:get:/old, y esa ruta ya no lleva su acción en un closure (o cambió de URI). El dueño del proyecto la retira con larapack:hand-rolled revoke.',
+            'Aprueba vendor\Old, que ya no lleva #[HandRolled] en ningún controlador. El dueño del proyecto la retira con larapack:hand-rolled revoke.',
+        ], $this->messages('hand-rolled-stale'));
+    }
+
     public function test_un_candado_ilegible_lo_dice_y_no_aprueba_nada(): void
     {
         $this->exceptions();
@@ -674,5 +690,285 @@ final class ControllerShapeTest extends TestCase
         $this->assertStringStartsWith('SneakyController::callAction() (línea 11) redefine callAction(), por donde el router llama a todas las acciones:', $messages[0]);
         $this->assertStringStartsWith('SneakyController::getMiddleware() (línea 18) devuelve un middleware en un closure desde getMiddleware():', $messages[1]);
         $this->assertStringStartsWith('SneakyController::__destruct() (línea 23) es un destructor con cuerpo:', $messages[2]);
+    }
+
+    // LO QUE AÑADIÓ LA AUDITORÍA DE SEGURIDAD, REGLA POR REGLA
+    //
+    // Las pruebas de arriba fijan cada regla con un caso que la pisa entera;
+    // éstas, cada forma por separado, para que ninguna se sostenga en otra:
+    // una ruta que nombra `run` de dos maneras dejaba de ver una sin que
+    // cambiara nada (Infection, docs/mutacion.md).
+
+    private const EXPORT = "class Export\n{\n    public function __invoke(Request \$request)\n    {\n        return \\DB::select('select 1');\n    }\n\n    public function run(Request \$request)\n    {\n        return \\DB::select('select 2');\n    }\n\n    public function thin(StoreRequest \$request)\n    {\n        return \$request->handle();\n    }\n}";
+
+    private function actionClass(string $name, string $declaration): void
+    {
+        $this->put("app/Actions/{$name}.php", "<?php\n\nnamespace App\\Actions;\n\nuse App\\Http\\Requests\\StoreRequest;\nuse Illuminate\\Http\\Request;\nuse Innoboxrr\\LarapackGenerator\\Attributes\\HandRolled;\n\n{$declaration}\n");
+    }
+
+    /**
+     * Lo que nombra cada hallazgo de controller-shape: su primera palabra.
+     *
+     * @return list<string>
+     */
+    private function flagged(): array
+    {
+        return array_map(fn (string $message): string => explode(' ', $message)[0], $this->messages('controller-shape'));
+    }
+
+    public function test_los_mensajes_de_call_action_del_destructor_y_de_get_middleware_enteros(): void
+    {
+        $this->controller('SneakyController', "class SneakyController extends Controller\n{\n    public function callAction(\$method, \$parameters)\n    {\n        return 1;\n    }\n\n    public function getMiddleware()\n    {\n        return [['middleware' => function (\$request, \$next) { return \$next(\$request); }]];\n    }\n\n    public function __destruct()\n    {\n        \\DB::select('select 1');\n    }\n}");
+
+        $this->assertSame([
+            'SneakyController::callAction() (línea 11) redefine callAction(), por donde el router llama a todas las acciones: lo que haga ahí corre en cada una y ninguna lo muestra. '
+                .'Quítalo; lo que tenga que pasar antes de una acción es un middleware con nombre, y lo demás va en el handle() de su request.',
+            'SneakyController::getMiddleware() (línea 16) devuelve un middleware en un closure desde getMiddleware(): es lógica en el controlador que no se ve al leer sus acciones. '
+                .'Hazlo una clase de middleware y regístrala por su nombre o su alias.',
+            'SneakyController::__destruct() (línea 21) es un destructor con cuerpo: corre al terminar cada petición que pasa por el controlador, y es lógica que ninguna acción muestra. '
+                .'Quítalo; lo que haya que hacer después de responder va en un middleware terminable o en un listener.',
+        ], $this->messages('controller-shape'));
+    }
+
+    /**
+     * Cada forma de nombrar la acción de una ruta, sola.
+     *
+     * @return array<string, array{0: string, 1: list<string>}>
+     */
+    public static function accionesDeRuta(): array
+    {
+        return [
+            'invocable' => ["Route::get('/a', Export::class);", ['Export::__invoke()']],
+            'array con método' => ["Route::get('/a', [Export::class, 'run']);", ['Export::run()']],
+            'array sin método: invocable' => ["Route::get('/a', [Export::class]);", ['Export::__invoke()']],
+            'array con un método que delega' => ["Route::get('/a', [Export::class, 'thin']);", []],
+            'cadena Clase@método' => ["Route::get('/a', 'App\\Actions\\Export@run');", ['Export::run()']],
+            'cadena con barra inicial' => ["Route::get('/a', '\\App\\Actions\\Export@run');", ['Export::run()']],
+            'cadena sin método: invocable' => ["Route::get('/a', 'App\\Actions\\Export');", ['Export::__invoke()']],
+            'cadena con dos @: ningún método se llama así' => ["Route::get('/a', 'App\\Actions\\Export@run@x');", []],
+            'match: la acción es el tercero' => ["Route::match(['get', 'post'], '/a', [Export::class, 'run']);", ['Export::run()']],
+            'addRoute: la acción es el tercero' => ["Route::addRoute('GET', '/a', [Export::class, 'run']);", ['Export::run()']],
+            'fallback: la acción es el primero' => ["Route::fallback([Export::class, 'run']);", ['Export::run()']],
+            'action con nombre' => ["Route::get(uri: '/a', action: [Export::class, 'run']);", ['Export::run()']],
+            'controller con nombre' => ["Route::apiResource(name: 'a', controller: Export::class);", ['Export::__invoke()', 'Export::run()']],
+            'la fachada con su nombre completo' => ["\\Illuminate\\Support\\Facades\\Route::get('/a', [Export::class, 'run']);", ['Export::run()']],
+            'el router' => ["\$router->get('/a', [Export::class, 'run']);", ['Export::run()']],
+            'en una cadena de llamadas' => ["Route::middleware('auth')->prefix('x')->get('/a', [Export::class, 'run']);", ['Export::run()']],
+            'otra fachada no registra rutas' => ["Cache::get('/a', [Export::class, 'run']);", []],
+            'una constante no es una clase' => ["Route::get('/a', ACTION);", []],
+            'Clase::class con algo detrás no es la clase' => ["Route::get('/a', Export::class . '');", []],
+        ];
+    }
+
+    /**
+     * @param  list<string>  $expected
+     */
+    #[DataProvider('accionesDeRuta')]
+    public function test_la_accion_de_una_ruta_en_cada_forma(string $route, array $expected): void
+    {
+        $this->request();
+        $this->actionClass('Export', self::EXPORT);
+        $this->routes("use App\\Actions\\Export;\n\n{$route}");
+
+        $this->assertSame($expected, $this->flagged());
+        $this->assertSame([], $this->messages('route-closure'));
+    }
+
+    public function test_lo_que_no_es_una_ruta_o_es_un_closure_no_corta_el_recorrido_de_las_demas(): void
+    {
+        $this->actionClass('Export', self::EXPORT);
+        $this->routes("use App\\Actions\\Export;\n\nCache::get('k', [Export::class, 'run']);\nRoute::get('/x', function () { return 1; });\nRoute::get('/y', SOME_CONSTANT);\nRoute::get('/a', Export::class);");
+
+        $this->assertSame(['Export::__invoke()'], $this->flagged());
+    }
+
+    public function test_la_misma_accion_enrutada_dos_veces_con_otra_caja_se_marca_una_vez(): void
+    {
+        $this->actionClass('Export', self::EXPORT);
+        $this->routes("use App\\Actions\\Export;\n\nRoute::get('/a', [Export::class, 'run']);\nRoute::get('/b', [Export::class, 'RUN']);\nRoute::get('/c', [\\App\\Actions\\export::class, 'run']);");
+
+        $this->assertSame(['Export::run()'], $this->flagged());
+    }
+
+    public function test_la_accion_enrutada_que_viene_de_un_trait_dice_de_donde(): void
+    {
+        $this->support('Runs', "trait Runs\n{\n".self::LOGIC.'}');
+        $this->actionClass('Export', "class Export\n{\n    use \\App\\Support\\Runs;\n}");
+        $this->routes("Route::get('/a', [\\App\\Actions\\Export::class, 'report']);");
+
+        $this->assertSame([
+            'Export::report(), heredada de Runs (app/Support/Runs.php), (línea 11) no delega: recibe Illuminate\Http\Request, valida en el controlador con validate(). '.$this->remedy()
+                .' Es la acción de una ruta de routes/web.php: aunque su clase no esté en Http/Controllers, para el router es un controlador.',
+        ], $this->messages('controller-shape'));
+    }
+
+    public function test_una_clase_enrutada_con_hand_rolled_es_una_excepcion_que_se_anota(): void
+    {
+        $this->actionClass('Export', "#[HandRolled('exporta en streaming')]\n".self::EXPORT);
+        $this->routes("Route::get('/a', [\\App\\Actions\\Export::class, 'run']);");
+
+        $shape = new ControllerShape($this->root);
+
+        $this->assertSame([['warning', 'hand-rolled']], array_map(fn (array $f): array => [$f['level'], $f['check']], $shape->run()));
+        $this->assertSame(['App\Actions\Export'], array_keys($shape->exceptions()));
+    }
+
+    public function test_un_metodo_enrutado_con_hand_rolled_se_anota_y_los_demas_se_siguen_mirando(): void
+    {
+        $this->actionClass('Export', "class Export\n{\n    #[HandRolled('firma la descarga')]\n    public function __invoke(Request \$request)\n    {\n        return \\DB::select('select 1');\n    }\n\n    public function __call(\$name, \$arguments)\n    {\n        return 1;\n    }\n\n    public function run(Request \$request)\n    {\n        return \\DB::select('select 2');\n    }\n}");
+        $this->routes("Route::resource('a', \\App\\Actions\\Export::class);");
+
+        $shape = new ControllerShape($this->root);
+
+        $this->assertSame(['Export::__call()', 'Export::run()'], array_map(
+            fn (array $f): string => explode(' ', $f['message'])[0],
+            array_values(array_filter($shape->run(), fn (array $f): bool => $f['check'] === 'controller-shape'))
+        ));
+        $this->assertSame(['App\Actions\Export::__invoke'], array_keys($shape->exceptions()));
+    }
+
+    public function test_dos_acciones_enrutadas_que_delegan_en_la_misma_request_sin_handle_se_dicen_una_vez(): void
+    {
+        $this->request('StoreRequest', "    public function rules() {}\n");
+        $this->actionClass('Export', "class Export\n{\n    public function a(StoreRequest \$request)\n    {\n        return \$request->handle();\n    }\n\n    public function b(\\App\\Http\\Requests\\storeRequest \$request)\n    {\n        return \$request->handle();\n    }\n}");
+        $this->routes("Route::resource('a', \\App\\Actions\\Export::class);");
+
+        $this->assertSame([
+            'App\Http\Requests\StoreRequest no define handle(), y Export::a() en app/Actions/Export.php delega en él: la petición falla con BadMethodCallException. La operación va en su handle().',
+        ], $this->messages('request-handle'));
+    }
+
+    public function test_un_controlador_con_hand_rolled_excusa_lo_que_hereda(): void
+    {
+        $this->support('DoesEverything', "trait DoesEverything\n{\n".self::LOGIC.'}');
+        $this->controller('ReportController', "#[HandRolled('informe heredado')]\nclass ReportController extends Controller\n{\n    use \\App\\Support\\DoesEverything;\n}");
+
+        $this->assertSame([['warning', 'hand-rolled']], $this->kinds());
+    }
+
+    public function test_un_trait_con_hand_rolled_excusa_lo_que_da_y_se_anota_una_vez(): void
+    {
+        $this->support('DoesEverything', "#[HandRolled('informe compartido')]\ntrait DoesEverything\n{\n".self::LOGIC.'}');
+        $this->controller('AController', "class AController\n{\n    use \\App\\Support\\DoesEverything;\n}");
+        $this->controller('BController', "class BController\n{\n    use \\App\\Support\\DoesEverything;\n}");
+
+        $shape = new ControllerShape($this->root);
+
+        $this->assertSame([['warning', 'hand-rolled']], array_map(fn (array $f): array => [$f['level'], $f['check']], $shape->run()));
+        $this->assertSame(['App\Support\DoesEverything'], array_keys($shape->exceptions()));
+    }
+
+    public function test_un_metodo_heredado_excusado_no_tapa_al_siguiente(): void
+    {
+        $this->support('Mixed', "trait Mixed\n{\n    #[HandRolled('firma el cuerpo en bruto')]\n    public function signed(Request \$request)\n    {\n        return 1;\n    }\n\n".self::LOGIC.'}');
+        $this->controller('ReportController', "class ReportController\n{\n    use \\App\\Support\\Mixed;\n}");
+
+        $this->assertSame(['ReportController::report(),'], $this->flagged());
+    }
+
+    public function test_dos_controladores_que_heredan_la_misma_delegacion_en_una_request_sin_handle_se_dicen_una_vez(): void
+    {
+        $this->request('StoreRequest', "    public function rules() {}\n");
+        $this->support('Thin', "trait Thin\n{\n    public function store(StoreRequest \$request)\n    {\n        return \$request->handle();\n    }\n}");
+        $this->support('OtherThin', "trait OtherThin\n{\n    public function save(\\App\\Http\\Requests\\storeRequest \$request)\n    {\n        return \$request->handle();\n    }\n}");
+        $this->controller('AController', "class AController\n{\n    use \\App\\Support\\Thin;\n}");
+        $this->controller('BController', "class BController\n{\n    use \\App\\Support\\Thin, \\App\\Support\\OtherThin;\n}");
+
+        $this->assertSame([
+            'App\Http\Requests\StoreRequest no define handle(), y AController::store(), heredada de Thin (app/Support/Thin.php), en app/Http/Controllers/AController.php delega en él: la petición falla con BadMethodCallException. La operación va en su handle().',
+        ], $this->messages('request-handle'));
+    }
+
+    public function test_lo_que_el_controlador_declara_gana_a_lo_heredado_aunque_cambie_la_caja(): void
+    {
+        $this->request();
+        $this->support('Loud', "trait Loud\n{\n    public function rePort(Request \$request)\n    {\n        return \\DB::select('select 1');\n    }\n}");
+        $this->controller('ReportController', "class ReportController\n{\n    use \\App\\Support\\Loud;\n\n    public function Report(StoreRequest \$request)\n    {\n        return \$request->handle();\n    }\n}");
+
+        $this->assertSame([], $this->findings());
+    }
+
+    public function test_un_trait_dentro_de_otro_trait_tambien_se_hereda(): void
+    {
+        $this->support('Inner', "trait Inner\n{\n".self::LOGIC.'}');
+        $this->support('Outer', "trait Outer\n{\n    use Inner;\n}");
+        $this->controller('ReportController', "class ReportController\n{\n    use \\App\\Support\\Outer;\n}");
+
+        $this->assertSame(['ReportController::report(), heredada de Inner (app/Support/Inner.php), (línea 11) no delega:'], array_map(
+            fn (string $message): string => implode(' ', array_slice(explode(' ', $message), 0, 9)),
+            $this->messages('controller-shape')
+        ));
+    }
+
+    public function test_un_trait_de_http_controllers_no_se_cuenta_como_herencia(): void
+    {
+        $this->put('app/Http/Controllers/Concerns/Reports.php', "<?php\n\nnamespace App\\Http\\Controllers\\Concerns;\n\nuse Illuminate\\Http\\Request;\n\ntrait Reports\n{\n".self::LOGIC."}\n");
+        $this->controller('ReportController', "class ReportController\n{\n    use Concerns\\Reports;\n}");
+
+        $this->assertSame([], $this->messages('controller-shape'));
+    }
+
+    public function test_un_padre_concreto_de_fuera_de_http_controllers_se_hereda(): void
+    {
+        $this->support('BaseStats', "class BaseStats\n{\n".self::LOGIC.'}');
+        $this->controller('StatsController', "class StatsController extends \\App\\Support\\BaseStats\n{\n}");
+
+        $this->assertSame(['StatsController::report(),'], $this->flagged());
+    }
+
+    public function test_un_padre_concreto_de_http_controllers_se_comprueba_en_el_y_no_en_sus_hijos(): void
+    {
+        $this->controller('BaseReport', "class BaseReport\n{\n".self::LOGIC.'}');
+        $this->controller('RealReport', "class RealReport extends BaseReport\n{\n}");
+
+        $this->assertSame(['BaseReport::report()'], $this->flagged());
+    }
+
+    public function test_un_padre_abstracto_de_http_controllers_con_hand_rolled_excusa_a_sus_hijos(): void
+    {
+        $this->controller('BaseReport', "#[HandRolled('la base firma los informes')]\nabstract class BaseReport\n{\n".self::LOGIC.'}');
+        $this->controller('RealReport', "class RealReport extends BaseReport\n{\n}");
+        $this->controller('BlankReport', "#[HandRolled('')]\nabstract class BlankBase\n{\n}");
+
+        $this->assertSame([], $this->messages('controller-shape'));
+    }
+
+    public function test_un_padre_abstracto_de_http_controllers_con_hand_rolled_sin_razon_no_excusa(): void
+    {
+        // Sin argumentos: sin razón, y sin cadena que leer.
+        $this->controller('BaseReport', "#[HandRolled]\nabstract class BaseReport\n{\n".self::LOGIC.'}');
+        $this->controller('RealReport', "class RealReport extends BaseReport\n{\n}");
+
+        $this->assertSame(['RealReport::report(),'], $this->flagged());
+    }
+
+    public function test_el_metodo_de_una_accion_en_una_variable_es_un_closure_por_otro_camino(): void
+    {
+        $this->actionClass('Export', self::EXPORT);
+        $this->routes("use App\\Actions\\Export;\n\nRoute::get('/a', [Export::class, \$method]);");
+
+        $this->assertSame([], $this->flagged());
+        $this->assertCount(1, $this->messages('route-closure'));
+    }
+
+    public function test_un_trait_de_http_controllers_dentro_de_otro_tampoco_se_cuenta_como_herencia(): void
+    {
+        $this->put('app/Http/Controllers/Concerns/Reports.php', "<?php\n\nnamespace App\\Http\\Controllers\\Concerns;\n\nuse Illuminate\\Http\\Request;\n\ntrait Reports\n{\n".self::LOGIC."}\n");
+        $this->support('Outer', "trait Outer\n{\n    use \\App\\Http\\Controllers\\Concerns\\Reports;\n}");
+        $this->controller('ReportController', "class ReportController\n{\n    use \\App\\Support\\Outer;\n}");
+
+        $this->assertSame([], $this->messages('controller-shape'));
+    }
+
+    public function test_http_controllers_en_la_raiz_del_espacio_de_nombres_tambien_es_de_controladores(): void
+    {
+        // Un PSR-4 que apunta a la raíz: la ruta relativa empieza por
+        // Http/Controllers/, sin nada delante.
+        file_put_contents($this->root.'/composer.json', json_encode(['autoload' => ['psr-4' => ['App\\' => '']]]));
+        $this->put('Http/Controllers/PostController.php', "<?php\n\nnamespace App\\Http\\Controllers;\n\nuse Illuminate\\Http\\Request;\n\nclass PostController\n{\n".self::LOGIC."}\n");
+        $this->put('Http/Controllers/ChildController.php', "<?php\n\nnamespace App\\Http\\Controllers;\n\nclass ChildController extends PostController\n{\n}\n");
+        $this->routes("Route::get('/a', [\\App\\Http\\Controllers\\PostController::class, 'report']);");
+
+        $this->assertSame(['PostController::report()'], $this->flagged());
     }
 }

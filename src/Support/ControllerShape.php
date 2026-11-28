@@ -291,19 +291,19 @@ final class ControllerShape
      */
     private function checkStale(array &$findings): void
     {
-        // Las excepciones del realineamiento que no son de un closure las
-        // juzga ProjectVerification, que ve todos los hallazgos.
-        $stale = array_filter(
-            array_diff_key($this->approved ?? [], $this->declared, $this->closures),
-            fn (string|int $target): bool => ! ExceptionTargets::isRealign((string) $target) || str_starts_with((string) $target, ExceptionTargets::PREFIX.'route-closure:'),
-            ARRAY_FILTER_USE_KEY
-        );
+        $stale = array_diff_key($this->approved ?? [], $this->declared, $this->closures);
         ksort($stale, SORT_STRING);
 
         foreach (array_keys($stale) as $target) {
-            $findings[] = $this->finding(Verifier::WARNING, self::HAND_ROLLED_STALE, HandRolledLock::PATH, ExceptionTargets::isRealign((string) $target)
-                ? 'Aprueba la excepción '.self::sanitise((string) $target).', y esa ruta ya no lleva su acción en un closure (o cambió de URI). El dueño del proyecto la retira con larapack:hand-rolled revoke.'
-                : 'Aprueba '.self::sanitise((string) $target).', que ya no lleva #[HandRolled] en ningún controlador. El dueño del proyecto la retira con larapack:hand-rolled revoke.');
+            // Las excepciones del realineamiento que no son de un closure las
+            // juzga ProjectVerification, que ve todos los hallazgos.
+            if (ExceptionTargets::isRealign($target) && ! str_starts_with($target, ExceptionTargets::PREFIX.'route-closure:')) {
+                continue;
+            }
+
+            $findings[] = $this->finding(Verifier::WARNING, self::HAND_ROLLED_STALE, HandRolledLock::PATH, ExceptionTargets::isRealign($target)
+                ? 'Aprueba la excepción '.self::sanitise($target).', y esa ruta ya no lleva su acción en un closure (o cambió de URI). El dueño del proyecto la retira con larapack:hand-rolled revoke.'
+                : 'Aprueba '.self::sanitise($target).', que ya no lleva #[HandRolled] en ningún controlador. El dueño del proyecto la retira con larapack:hand-rolled revoke.');
         }
     }
 
@@ -569,7 +569,7 @@ final class ControllerShape
                 break;
             }
 
-            $file = $this->project->relative((string) $this->project->locate($parent['fqcn']));
+            $file = $this->fileOf($parent['fqcn']);
 
             // Un padre concreto de Http/Controllers es un controlador: sus
             // acciones, y lo que él herede, se comprueban en él.
@@ -599,7 +599,7 @@ final class ControllerShape
         }
 
         $visited[$key] = true;
-        $file = $this->project->relative((string) $this->project->locate($name));
+        $file = $this->fileOf($name);
 
         // Los de un trait de Http/Controllers los cuenta controller-concern.
         if (! ($trait && $this->inControllers($file))) {
@@ -620,6 +620,15 @@ final class ControllerShape
         }
     }
 
+    /**
+     * El archivo, relativo a la raíz, de una clase cuyo ClassOutline ya se
+     * encontró: locate() no puede dar null.
+     */
+    private function fileOf(string $fqcn): string
+    {
+        return $this->project->relative((string) $this->project->locate($fqcn));
+    }
+
     private function inControllers(string $relative): bool
     {
         return str_contains('/'.$relative, '/Http/Controllers/');
@@ -638,17 +647,19 @@ final class ControllerShape
      */
     private function excusedElsewhere(array $attributes, string $what, string $target, string $file, array &$findings, Closure $fingerprint, bool $declare): bool
     {
-        if (! $declare) {
-            foreach ($attributes as $attribute) {
-                if (strcasecmp($attribute['name'], HandRolled::class) === 0) {
-                    return self::sanitise((string) PhpOutline::stringArgument($attribute['args'], 0, 'reason')) !== '';
-                }
-            }
-
-            return false;
+        // El objetivo sale del ClassOutline (el nombre como se declaró), así
+        // que dos rutas que lo escriben con otra caja dan el mismo.
+        if ($declare) {
+            return $this->excusedElsewhere[$target] ??= $this->handRolled($attributes, $what, $target, $file, $findings, $fingerprint);
         }
 
-        return $this->excusedElsewhere[strtolower($target)] ??= $this->handRolled($attributes, $what, $target, $file, $findings, $fingerprint);
+        foreach ($attributes as $attribute) {
+            if (strcasecmp($attribute['name'], HandRolled::class) === 0) {
+                return self::sanitise((string) PhpOutline::stringArgument($attribute['args'], 0, 'reason')) !== '';
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -737,10 +748,6 @@ final class ControllerShape
             return null;
         }
 
-        if (array_intersect($kinds, [T_FUNCTION, T_FN]) !== []) {
-            return [];
-        }
-
         $className = fn (array $tokens): ?string => count($tokens) === 3
             && in_array($tokens[0][0], [T_STRING, T_NAME_QUALIFIED, T_NAME_FULLY_QUALIFIED, T_NAME_RELATIVE], true)
             && $tokens[1][0] === T_DOUBLE_COLON
@@ -750,9 +757,9 @@ final class ControllerShape
 
         // 'Clase@metodo', o 'Clase' (invocable).
         if (count($action) === 1 && $action[0][0] === T_CONSTANT_ENCAPSED_STRING) {
-            [$class, $method] = [...explode('@', (string) PhpOutline::stringArgument($action, 0, ''), 2), null];
+            $parts = explode('@', (string) PhpOutline::stringArgument($action, 0, ''), 2);
 
-            return ['class' => ltrim((string) $class, '\\'), 'method' => $method];
+            return ['class' => ltrim($parts[0], '\\'), 'method' => $parts[1] ?? null];
         }
 
         if (($class = $className($action)) !== null) {
@@ -770,7 +777,9 @@ final class ControllerShape
         }
 
         // Lo que queda sólo es opaco si ejecuta o trae algo: una constante o
-        // un literal suelto no son una acción que esconda nada.
+        // un literal suelto no son una acción que esconda nada. Un closure
+        // dentro de un array (`['uses' => function () {…}]`) lleva siempre su
+        // `(`.
         return array_intersect($kinds, [T_VARIABLE, T_NEW, '(']) !== [] ? [] : null;
     }
 
@@ -858,7 +867,7 @@ final class ControllerShape
 
             // El nombre y la huella con que se aprueba cada closure como
             // excepción del realineamiento (ExceptionTargets), por su línea.
-            foreach ($closures === [] ? [] : ExceptionTargets::routeClosures($relative, (string) file_get_contents($file)) as $exception) {
+            foreach ($closures === [] ? [] : ExceptionTargets::routeClosures($relative, Files::read($file)) as $exception) {
                 $named[$exception['call'].'@'.$exception['line']] = $exception;
                 $this->closures[$exception['target']] = true;
             }
@@ -899,7 +908,7 @@ final class ControllerShape
         $web = $this->project->root().'/routes/web.php';
 
         foreach ($this->routeFiles() as $file) {
-            $code = (string) file_get_contents($file);
+            $code = Files::read($file);
             $spa = $file === $web ? SpaFallback::fallback($code) : null;
             $result[$file] = array_map(
                 fn (array $closure): array => [
