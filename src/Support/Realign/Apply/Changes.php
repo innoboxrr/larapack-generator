@@ -76,6 +76,22 @@ final class Changes
     }
 
     /**
+     * El diff de lo que quedó en disco después de commit(), con la Pint ya
+     * pasada: lo que cambió de verdad. Es el de la simulación (Simulation),
+     * que escribe en una copia.
+     */
+    public function appliedDiff(): string
+    {
+        $diffs = [];
+
+        foreach (array_keys($this->writes) as $file) {
+            $diffs[] = UnifiedDiff::of($this->originals[$file] ?? '', is_file($file) ? Files::read($file) : '', $this->relative($file));
+        }
+
+        return implode('', $diffs);
+    }
+
+    /**
      * Escribe. Con `$format`, pasa la Pint del proyecto por los PHP escritos
      * (y vuelve a anotar el hash de lo registrado sin editar en `$manifest`).
      *

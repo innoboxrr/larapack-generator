@@ -152,7 +152,9 @@ final class Regeneration
             ($pint = self::pintConfigFor($scope['root'], $this->state->root())) === null ? null : Files::read($pint),
             $ui,
             getenv('LARAPACK_PINT') ?: null,
-            ProjectRoot::using($scope['root'], fn (): ?string => Formatter::pint()),
+            // Por su ruta real: la copia de una simulación (Simulation) enlaza
+            // el vendor/ del proyecto, y tiene que dar con la misma caché.
+            ProjectRoot::using($scope['root'], fn (): ?string => ($pint = Formatter::pint()) === null ? null : (realpath($pint) ?: $pint)),
         ]));
     }
 

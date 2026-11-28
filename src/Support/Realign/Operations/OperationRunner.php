@@ -19,6 +19,10 @@ use RuntimeException;
  *     haga se pueda deshacer con git. `--allow-dirty` lo salta, dicho.
  *  3. Llama a la operación y anota en la historia de cada paso lo que hizo.
  *     No lo da por hecho: eso lo decide `check`, con su `done_when`.
+ *
+ * Con `--dry-run`, `apply` y `adopt` corren de verdad sobre una copia
+ * temporal del proyecto (Simulation): un paso escribe lo que lee el
+ * siguiente, y la simulación tiene que encadenarse igual que la corrida.
  */
 final class OperationRunner
 {
@@ -28,9 +32,10 @@ final class OperationRunner
      * @param  list<string>  $targets  ids de paso; vacío, todos los que la operación sabe hacer
      * @param  list<string>  $packages  rutas de ámbito a las que acotar (`.` es el núcleo); vacío, todos
      * @param  array<string, string>  $options
+     * @param  list<string>  $only  `--target`: sólo estos elementos de los pasos (lo entiende `except`)
      * @return array{action: string, dry_run: bool, steps: list<string>, result: array{fixed: list<array<string, mixed>>, skipped: list<array<string, mixed>>, unchanged: list<array<string, mixed>>, notes: list<string>}}
      */
-    public function run(string $action, array $targets, array $packages, bool $dryRun, bool $allowDirty, array $options = []): array
+    public function run(string $action, array $targets, array $packages, bool $dryRun, bool $allowDirty, array $options = [], array $only = []): array
     {
         $operation = Operations::for($action);
         $state = new RealignState($this->root);
@@ -52,7 +57,9 @@ final class OperationRunner
             $this->ensureClean();
         }
 
-        $result = $operation->run(new OperationContext($this->root, $state, $steps, $dryRun, $options))->toArray();
+        $result = $dryRun && in_array($action, Simulation::ACTIONS, true) && ! Operations::overridden($action)
+            ? Simulation::run($this->root, $operation, $steps, $options, $only)
+            : $operation->run(new OperationContext($this->root, $state, $steps, $dryRun, $options, $only))->toArray();
         $ids = array_map(fn (array $step): string => (string) $step['id'], $steps);
 
         if (! $dryRun) {

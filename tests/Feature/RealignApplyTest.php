@@ -263,6 +263,71 @@ final class RealignApplyTest extends TestCase
         )), (string) json_encode($plan));
     }
 
+    public function test_la_simulacion_cuenta_lo_mismo_que_la_corrida_real_aunque_los_pasos_se_encadenen(): void
+    {
+        // El IndexRequest se queda en una plantilla de antes que no forzaba
+        // `managed`: lo regenera `regenerate` y, en la corrida real, `fix
+        // index-managed` ya lo encuentra bien. Una simulación que no encadena
+        // lo contaba dos veces (regenerado y arreglado), como en los
+        // proyectos reales (index-managed: 70 simulados, 69 reales).
+        $index = 'src/Http/Requests/Post/IndexRequest.php';
+        $this->olderTemplate($index, "        \$this->merge([\n            'managed' => true,\n        ]);\n", '');
+        $this->olderTemplate(self::SHOW, '        //', '        // la plantilla de antes');
+        $this->prepare();
+        $this->assertSame('version_delta', $this->entry($index)['class'] ?? null);
+        $this->assertContains('fix:index-managed@.', array_column($this->plan()['steps'], 'id'));
+        $before = $this->git('status', '--porcelain');
+
+        $simulated = $this->realign('apply', ['--deterministic' => true, '--dry-run' => true]);
+
+        // Simular no escribe nada.
+        $this->assertSame($before, $this->git('status', '--porcelain'));
+        $this->assertStringNotContainsString("'managed' => true", $this->project->read($index));
+        $this->assertNotSame([], $simulated['fixed']);
+
+        foreach ($simulated['fixed'] as $item) {
+            if ($item['file'] !== null && str_ends_with((string) $item['file'], '.php')) {
+                $this->assertArrayHasKey('diff', $item, (string) json_encode($item));
+            }
+        }
+
+        $real = $this->realign('apply', ['--deterministic' => true]);
+
+        // Todo elemento dice su paso con la misma forma: `step` (el primero)
+        // y `steps` (todos). El `unchanged` de una comprobación de fix es de
+        // todos sus pasos.
+        foreach (['fixed', 'skipped', 'unchanged'] as $list) {
+            foreach ([...$simulated[$list], ...$real[$list]] as $item) {
+                $this->assertArrayHasKey('step', $item, (string) json_encode($item));
+                $this->assertIsList($item['steps']);
+                $this->assertSame($item['steps'][0] ?? null, $item['step'], (string) json_encode($item));
+            }
+        }
+
+        $this->assertSame($real['steps'], $simulated['steps']);
+
+        foreach (['fixed', 'skipped', 'unchanged'] as $list) {
+            $this->assertSame($this->outcome($real[$list]), $this->outcome($simulated[$list]), "{$list}: la simulación y la corrida real no coinciden.\n".json_encode([$simulated[$list], $real[$list]], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+        }
+    }
+
+    /**
+     * Lo que dice una lista de resultados sin lo que sólo trae la simulación
+     * (el diff) ni el tiempo verbal de la razón.
+     *
+     * @param  list<array<string, mixed>>  $items
+     * @return list<array<string, mixed>>
+     */
+    private function outcome(array $items): array
+    {
+        return array_map(function (array $item): array {
+            unset($item['diff']);
+            $item['reason'] = str_replace(['se anotarían con', 'Se solicitaría'], ['quedan anotados con', 'Solicitada'], (string) $item['reason']);
+
+            return $item;
+        }, $items);
+    }
+
     private function prepare(): void
     {
         $this->realign('diagnose');

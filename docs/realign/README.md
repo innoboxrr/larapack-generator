@@ -163,8 +163,9 @@ Los principios, que valen para todas las acciones:
   `check`, `decide`, `playbook` y `help` no escriben código: como mucho, su
   estado en `.larapack/realign/`.
 - **Lo que escribe se puede simular y deshacer.** `adopt`, `apply`, `infer` y
-  `except` aceptan `--dry-run` (no escribe nada y dice qué haría; `apply`, con
-  el diff), y sin él **exigen un árbol git limpio** —fuera de
+  `except` aceptan `--dry-run` (no escribe nada y dice qué haría; `apply` y
+  `adopt` hacen la corrida entera sobre una copia temporal y la tiran, así que
+  cuentan lo mismo que la real, con el diff de cada cambio), y sin él **exigen un árbol git limpio** —fuera de
   `.larapack/realign/`— para que todo se deshaga con `git restore` o
   `git checkout`. Fuera de un repositorio git también se niegan.
   `--allow-dirty` lo salta, y es responsabilidad de quien lo pasa.
