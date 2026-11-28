@@ -18,9 +18,12 @@ namespace Innoboxrr\LarapackGenerator\Support\Realign;
  *  1. Lo que desbloquea: que el manifiesto diga la verdad (relink, prune,
  *     adopt), los saltos de versión (regenerate) y la deuda de fix. Sin eso,
  *     lo demás se juzga contra un manifiesto que miente.
- *  2. Lo guiado, por ámbito: del que más cumple al que menos, para que los
+ *  2. Las decisiones que condicionan lo guiado (Navigation::CONDITIONS):
+ *     declarar o no lo escrito a mano decide si lo guiado sobre esos
+ *     archivos se hace o lo regenera el contrato. Después, no: se rehacía.
+ *  3. Lo guiado, por ámbito: del que más cumple al que menos, para que los
  *     primeros pasos terminen paquetes enteros.
- *  3. Las decisiones, agrupadas por tipo.
+ *  4. Las demás decisiones, agrupadas por tipo.
  *
  * Volver a planificar después de diagnosticar otra vez no pierde nada: un
  * paso con el mismo id conserva su estado, su decisión y su historia; uno
@@ -129,7 +132,21 @@ final class Planner
         // El ámbito de un paso por controlador es su archivo: su orden es el
         // del ámbito al que pertenece.
         $scopeOf = fn (array $step): string => (string) ($step['scope']['path'] ?? '.');
-        $phase = fn (array $step): int => array_search($step['category'], [Category::DETERMINISTIC, Category::GUIDED, Category::DECISION], true) ?: 0;
+        // Sólo adelanta la decisión que de verdad condiciona algo guiado.
+        $conditioning = [];
+
+        foreach ($steps as $step) {
+            if (Navigation::conditions((string) $step['type']) && Navigation::dependents($step, $steps) !== []) {
+                $conditioning[(string) $step['id']] = true;
+            }
+        }
+
+        $phase = fn (array $step): int => match (true) {
+            $step['category'] === Category::DETERMINISTIC => 0,
+            isset($conditioning[(string) $step['id']]) => 1,
+            $step['category'] === Category::GUIDED => 2,
+            default => 3,
+        };
 
         usort($steps, function (array $a, array $b) use ($rank, $scopeOf, $phase): int {
             return [$phase($a),
@@ -169,13 +186,14 @@ final class Planner
         }
 
         foreach ((array) ($step['depends_on'] ?? []) as $dependency) {
-            if (isset($byId[$dependency]) && ($byId[$dependency]['status'] ?? self::PENDING) !== self::DONE) {
+            if (isset($byId[$dependency]) && ($byId[$dependency]['status'] ?? self::PENDING) !== self::DONE
+                && ! (Navigation::conditions((string) ($byId[$dependency]['type'] ?? '')) && Navigation::allows($step, $byId[$dependency]))) {
                 return self::BLOCKED;
             }
         }
 
         if ($step['category'] === Category::DECISION) {
-            return is_array($step['decision'] ?? null) ? self::DECIDED : self::AWAITING_DECISION;
+            return Navigation::decided($step) ? self::DECIDED : self::AWAITING_DECISION;
         }
 
         return self::PENDING;
@@ -351,6 +369,14 @@ final class Planner
                 array_push($depends, ...($byScope[(string) $step['scope']['path']][$type] ?? []));
             }
 
+            // Lo guiado espera a las decisiones que tocan sus archivos: si el
+            // dueño los declara en el contrato, el trabajo no se hace dos veces.
+            foreach ($steps as $other) {
+                if (Navigation::conditions((string) $other['type']) && Navigation::dependents($other, [$step]) !== []) {
+                    $depends[] = (string) $other['id'];
+                }
+            }
+
             $steps[$index]['depends_on'] = $depends;
         }
 
@@ -384,16 +410,22 @@ final class Planner
 
             $steps[$index]['history'] = is_array($before['history'] ?? null) ? $before['history'] : [];
 
-            foreach (['decision', 'last_check'] as $key) {
+            // La última comprobación no pasa: era de otro diagnóstico, y
+            // `status` la daba como si fuera de éste.
+            foreach (['decision', 'decisions', 'deferred'] as $key) {
                 if (isset($before[$key])) {
                     $steps[$index][$key] = $before[$key];
                 }
             }
 
+            if (is_array($before['escalated'] ?? null) && $steps[$index]['category'] === Category::GUIDED) {
+                $steps[$index] = Navigation::escalate($steps[$index], ['note' => (string) ($before['escalated']['note'] ?? ''), 'at' => (string) ($before['escalated']['at'] ?? $now)]);
+            }
+
             if (($before['status'] ?? null) === self::DONE) {
                 // Una decisión tomada sigue tomada; un paso hecho cuyo
                 // problema vuelve a salir se reabre.
-                if ($step['category'] === Category::DECISION && isset($before['decision'])) {
+                if ($steps[$index]['category'] === Category::DECISION && (isset($before['decision']) || isset($before['decisions']))) {
                     continue;
                 }
 
@@ -403,6 +435,8 @@ final class Planner
 
         // Lo que ya no sale: hecho (por quien sea) o ya estaba hecho.
         foreach ($old as $step) {
+            unset($step['last_check']);
+
             if (($step['status'] ?? null) !== self::DONE) {
                 $step['status'] = self::DONE;
                 $step['history'] = [...(is_array($step['history'] ?? null) ? $step['history'] : []),

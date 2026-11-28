@@ -3,6 +3,7 @@
 namespace Innoboxrr\LarapackGenerator\Support\Realign\Operations;
 
 use Innoboxrr\LarapackGenerator\Support\Realign\Category;
+use Innoboxrr\LarapackGenerator\Support\Realign\Navigation;
 use Innoboxrr\LarapackGenerator\Support\Realign\Planner;
 use Innoboxrr\LarapackGenerator\Support\Realign\RealignState;
 use RuntimeException;
@@ -46,7 +47,9 @@ final class OperationRunner
             throw new RuntimeException('No hay plan: corre `larapack:realign diagnose` y `larapack:realign plan` primero.');
         }
 
-        $steps = $this->steps($operation, $plan, $targets, $packages);
+        // Lo decidido por elemento: la operación sólo ve los elementos cuya
+        // opción es suya.
+        $steps = array_map(fn (array $step): array => Navigation::narrow($step, $operation->name()), $this->steps($operation, $plan, $targets, $packages));
 
         if (! $dryRun && ! $allowDirty) {
             $this->ensureClean();
@@ -101,6 +104,7 @@ final class OperationRunner
                     && ($packages === [] || in_array($step['scope']['path'] ?? null, $packages, true))
                     && Planner::effectiveStatus($step, $byId) !== Planner::DONE
                     && Planner::effectiveStatus($step, $byId) !== Planner::BLOCKED
+                    && ! isset($step['deferred'])
                     && self::decidedFor($step, $operation->name())) {
                     $selected[] = $step;
                 }
@@ -154,15 +158,7 @@ final class OperationRunner
             return true;
         }
 
-        $chosen = $step['decision']['option'] ?? null;
-
-        foreach ((array) ($step['options'] ?? []) as $option) {
-            if (is_array($option) && ($option['key'] ?? null) === $chosen && is_string($option['run'] ?? null)) {
-                return str_starts_with($option['run'], 'larapack:realign '.$action.' ');
-            }
-        }
-
-        return false;
+        return Navigation::decidedFor($step, $action);
     }
 
     /**

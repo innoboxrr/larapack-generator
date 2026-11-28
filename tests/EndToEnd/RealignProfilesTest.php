@@ -148,6 +148,11 @@ final class RealignProfilesTest extends TestCase
         $this->commitAll();
         $this->assertTrue($this->realign('check', ['targets' => [$id]])['done']);
 
+        // El controlador sigue fuera del contrato: el dueño decidió dejarlo así
+        // antes de lo guiado (o declararlo, con su route_name, otro día). Hecho
+        // lo guiado, la excepción se pide sobre el código ya delegado.
+        $this->decideAndExcept('unmanaged-http@.', 'keep', 'El buscador del CIE-10 se queda a mano hasta declarar sus rutas.');
+
         // model-lists completó la lista, pero el modelo sigue editado fuera de
         // sus huecos (el orden de la lista no es el de la plantilla): un
         // paso guiado, por familia. El agente lo devuelve a la forma generada.
@@ -156,10 +161,6 @@ final class RealignProfilesTest extends TestCase
         file_put_contents($this->path('src/Models/Post.php'), $generatedModel);
         $this->commitAll();
         $this->assertTrue($this->realign('check', ['targets' => ['edited-outside:Model@.']])['done']);
-
-        // El controlador sigue fuera del contrato: el dueño decide dejarlo así
-        // (o declararlo, con su route_name, otro día).
-        $this->decideAndExcept('unmanaged-http@.', 'keep', 'El buscador del CIE-10 se queda a mano hasta declarar sus rutas.');
 
         $this->assertCompliant();
         $this->assertProgress($before, 'expediente');
@@ -257,15 +258,21 @@ final class RealignProfilesTest extends TestCase
     }
 
     /**
-     * Lleva `next` hasta el paso guiado: lo que va antes (las decisiones del
-     * mismo ámbito no lo bloquean) se salta con --package, como haría un
-     * agente que sigue un ámbito.
+     * Lleva `next` hasta el paso guiado. Las decisiones que lo condicionan
+     * (dejar o declarar el controlador escrito a mano) van antes: next las
+     * ofrece y el dueño decide dejarlo como código propio; la excepción se
+     * pide después, sobre el código ya llevado a su request.
      *
      * @return array<string, mixed>
      */
     private function nextGuided(string $id): array
     {
         $next = $this->realign('next');
+
+        while ($next['step'] !== null && $next['step']['effective_status'] === Planner::AWAITING_DECISION && in_array($id, $this->dependentsOf($next['step']['id']), true)) {
+            $this->realign('decide', ['targets' => [$next['step']['id'], $this->keepOption($next['step']['id'])], '--note' => 'El dueño: se queda como código propio.']);
+            $next = $this->realign('next');
+        }
 
         if (($next['step']['id'] ?? null) !== $id) {
             // Lo guiado va antes que las decisiones: si next no lo da es que
@@ -287,9 +294,17 @@ final class RealignProfilesTest extends TestCase
     {
         $next = $this->realign('next');
         $this->assertSame('decision', $next['step']['category'], "Antes de {$id} queda algo que no es una decisión: {$next['step']['id']}.");
-        $this->assertContains($option, array_column($next['how']['options'] ?? [], 'key'));
 
-        $this->realign('decide', ['targets' => [$id, $option], '--note' => 'El dueño: '.$reason]);
+        // Decidida ya antes de lo guiado que condicionaba: next la vuelve a
+        // dar cuando lo guiado está hecho, para pedir la excepción.
+        if (($this->step($id)['decision']['option'] ?? null) === $option) {
+            $this->assertSame($id, $next['step']['id']);
+            $this->assertStringStartsWith('larapack:realign except '.$id, (string) $next['how']['then']);
+        } else {
+            $this->assertContains($option, array_column($next['how']['options'] ?? [], 'key'));
+            $this->realign('decide', ['targets' => [$id, $option], '--note' => 'El dueño: '.$reason]);
+        }
+
         $this->realign('except', ['targets' => [$id], '--option' => ['reason='.$reason]]);
 
         // Pedida no cubre nada: hasta que el dueño la aprueba, el paso no está hecho.
@@ -355,6 +370,15 @@ final class RealignProfilesTest extends TestCase
     /**
      * La opción de «dejarlo como está» de una decisión: la que pide una excepción.
      */
+    /**
+     * @return list<string>
+     */
+    private function dependentsOf(string $id): array
+    {
+        return array_values(array_map(fn (array $step): string => $step['id'],
+            array_filter($this->plan()['steps'], fn (array $step): bool => in_array($id, $step['depends_on'] ?? [], true))));
+    }
+
     private function keepOption(string $id): string
     {
         foreach ($this->step($id)['options'] as $option) {

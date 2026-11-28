@@ -53,10 +53,18 @@ final class RealignActions
             'guide' => 'docs/realign/plan.md',
         ],
         'next' => [
-            'summary' => 'El siguiente paso, con todo lo necesario para hacerlo sin contexto: la orden, el playbook rellenado o las opciones de la decisión, y cómo comprobarlo.',
-            'usage' => ['larapack:realign next [--package=…]'],
+            'summary' => 'El siguiente paso, con todo lo necesario para hacerlo sin contexto: la orden, el playbook rellenado o las opciones de la decisión, y cómo comprobarlo. Con un id, ese paso. Salta lo aplazado; si lo que toca es una decisión del dueño, dice con qué seguir mientras.',
+            'usage' => ['larapack:realign next [<id>] [--package=…]'],
             'writes' => 'Nada.',
             'options' => ['package'],
+            'keys' => [],
+            'guide' => 'docs/realign/plan.md',
+        ],
+        'show' => [
+            'summary' => 'Un paso cualquiera, como lo da next: la orden, el playbook rellenado o las opciones, lo que lo bloquea y cómo comprobarlo. Esté hecho, bloqueado o aplazado.',
+            'usage' => ['larapack:realign show <id>'],
+            'writes' => 'Nada.',
+            'options' => [],
             'keys' => [],
             'guide' => 'docs/realign/plan.md',
         ],
@@ -69,9 +77,33 @@ final class RealignActions
             'guide' => 'docs/realign/plan.md',
         ],
         'decide' => [
-            'summary' => 'Registra la opción elegida en un paso de decisión, con su nota. Decidir no es hacer: el paso sigue pendiente hasta que check pasa.',
-            'usage' => ['larapack:realign decide <id> <opción> --note="por qué"'],
+            'summary' => 'Registra la opción elegida en un paso de decisión, con su nota; con --target, sólo para esos elementos (las decisiones pueden ser mixtas). Decidir no es hacer: el paso sigue pendiente hasta que check pasa.',
+            'usage' => ['larapack:realign decide <id> <opción> --note="por qué"', 'larapack:realign decide <id> <opción> --target=<archivo> [--target=<archivo>…] --note="por qué"'],
             'writes' => 'Sólo la decisión del paso en .larapack/realign/plan.json.',
+            'options' => ['note', 'target'],
+            'keys' => [],
+            'guide' => 'docs/realign/plan.md',
+        ],
+        'defer' => [
+            'summary' => 'Aplaza un paso con su razón: sigue pendiente, next pasa al siguiente y status lo lista como aplazado. undefer lo devuelve.',
+            'usage' => ['larapack:realign defer <id> --note="por qué"'],
+            'writes' => 'Sólo el estado del paso en .larapack/realign/plan.json.',
+            'options' => ['note'],
+            'keys' => [],
+            'guide' => 'docs/realign/plan.md',
+        ],
+        'undefer' => [
+            'summary' => 'Devuelve al orden un paso aplazado con defer.',
+            'usage' => ['larapack:realign undefer <id>'],
+            'writes' => 'Sólo el estado del paso en .larapack/realign/plan.json.',
+            'options' => [],
+            'keys' => [],
+            'guide' => 'docs/realign/plan.md',
+        ],
+        'escalate' => [
+            'summary' => 'Convierte un paso guiado en una decisión del dueño, con su nota: hacerlo como dice el playbook o dejarlo como está. Lo decide el dueño con decide.',
+            'usage' => ['larapack:realign escalate <id> --note="qué hay que decidir"'],
+            'writes' => 'Sólo el paso en .larapack/realign/plan.json.',
             'options' => ['note'],
             'keys' => [],
             'guide' => 'docs/realign/plan.md',
@@ -133,6 +165,20 @@ final class RealignActions
             'keys' => [],
             'guide' => self::GUIDE,
         ],
+    ];
+
+    /**
+     * Cuántos argumentos (ids, opciones, nombres) recibe cada acción: [mínimo,
+     * máximo], null sin máximo. Uno de más es un error, como una opción que
+     * la acción no usa: `next <id>` ignoraba el id y daba el siguiente. El
+     * mínimo lo dice cada acción con su mensaje.
+     *
+     * @var array<string, array{0: int, 1: int|null}>
+     */
+    public const ARGUMENTS = [
+        'diagnose' => [0, 0], 'plan' => [0, 0], 'status' => [0, 0], 'next' => [0, 1], 'show' => [1, 1],
+        'check' => [1, 1], 'decide' => [2, 2], 'defer' => [1, 1], 'undefer' => [1, 1], 'escalate' => [1, 1],
+        'playbook' => [0, 1], 'help' => [0, 1], 'adopt' => [0, null], 'apply' => [0, null], 'infer' => [0, null], 'except' => [0, null],
     ];
 
     /**
