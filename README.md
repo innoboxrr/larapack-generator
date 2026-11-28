@@ -1510,7 +1510,25 @@ estable. Cambiar la razón o el
 código invalida la aprobación: a una clase aprobada no se le añade una acción
 sin que el dueño la vuelva a aprobar, y ese diff del candado es el que revisa.
 `approve` recalcula la huella; sin nada que aprobar, `approve --all` no crea un
-candado vacío. Sin candado, `verify` la lista como aviso y con `--strict` falla,
+candado vacío.
+
+**`approve` y `revoke` los confirma una persona**, también en un proyecto sin la
+guardia ni el hook de git: el comando enseña en la terminal lo que va a aprobar
+o retirar —el objetivo, la razón, lo que cubre y el mensaje del hallazgo— y hay
+que escribir `apruebo <n>` (`retiro <n>`). La pregunta va a `/dev/tty`, no a la
+entrada estándar: una tubería no la contesta, y sin terminal no se cambia nada.
+Una persona sin terminal —una CI de aprobación— se nombra con la variable y la
+opción, iguales, y su nombre queda en el candado (`approved_by`):
+
+```
+LARAPACK_APPROVER="Ana Pérez" php artisan larapack:hand-rolled approve --all --approver="Ana Pérez"
+```
+
+La variable sola no vale (un agente la heredaría de un perfil de la shell) y la
+guardia de los agentes bloquea `--approver` y dar valor a `LARAPACK_APPROVER`.
+En Windows vale la consola (PowerShell, cmd); desde Git Bash (mintty) no hay
+forma fiable de saber si hay alguien delante, así que se corre desde PowerShell,
+con `winpty` o nombrándose. Sin candado, `verify` la lista como aviso y con `--strict` falla,
 como en 9.0. Con candado, lo aprobado se informa y `--strict` pasa; lo que no
 está aprobado es error (`hand-rolled-unapproved`) y lo aprobado que ya no está
 en el código, aviso (`hand-rolled-stale`). El candado es de la raíz sobre la que

@@ -75,7 +75,8 @@ vendor/bin/builder larapack:realign decide route-closure@. except --note="CSP, C
 vendor/bin/builder larapack:realign except route-closure@. --option reason="Sin datos de nadie y sin sesión." --dry-run
 vendor/bin/builder larapack:realign except route-closure@. --option reason="Sin datos de nadie y sin sesión."
 
-# 3. El dueño del proyecto las lee y las aprueba (una a una, o --all):
+# 3. El dueño del proyecto las lee y las aprueba (una a una, o --all), en su
+#    terminal: ve cada una y escribe «apruebo <n>».
 vendor/bin/builder larapack:hand-rolled list
 vendor/bin/builder larapack:hand-rolled approve "routes/web.php#post('/csp-report')"
 git diff .larapack/hand-rolled.lock && git commit .larapack/hand-rolled.lock   # la aprobación es este commit
@@ -104,6 +105,15 @@ vendor/bin/builder larapack:realign check route-closure@.
   único: `"routes/web.php#post('/csp-report')"`, `"post('/csp-report')"`,
   `src/Http/Controllers/HookController.php`. `--all` aprueba también todas las
   excepciones del realineamiento pedidas: léelas antes. `revoke` las retira.
+- `approve` y `revoke` **los confirma una persona** (ver
+  [abajo](#por-qué-un-agente-no-puede-aprobar)): enseñan en la terminal cada
+  objetivo, su razón, lo que cubre y el mensaje del hallazgo, y hay que escribir
+  `apruebo <n>` (`retiro <n>`). Sin terminal no cambian nada.
+- La excepción de **un hallazgo sin archivo** (`model:`) se aprueba con el
+  hallazgo **de hoy**: `approve` corre verify con su comprobación, y si verify
+  ya no dice esa frase no hay nada que aprobar. El mensaje que trae la
+  solicitud lo escribe quien pide; el que se enseña y se aprueba es el de
+  verify.
 
 ## El objetivo: qué cubre exactamente
 
@@ -141,7 +151,7 @@ aprobó**, y sólo lo cubre mientras la huella de hoy sea la misma:
 | un archivo PHP | sus tokens, sin espacios ni comentarios | cambia una sentencia, un `use`, un método. |
 | otro archivo | su contenido, con los saltos de línea normalizados | cambia cualquier cosa. |
 | algo que no está (`missing`, `no-contract`) | una huella fija de su ausencia | el archivo vuelve a existir (el ámbito tiene `laraimport.json`). |
-| un hallazgo sin archivo | la de su mensaje | verify dice otra cosa sobre ese modelo. |
+| un hallazgo sin archivo | la de su mensaje, tal como lo dice verify hoy | verify dice otra cosa sobre ese modelo, o nada (`list` la da por `stale`). |
 
 Cuando caduca, el hallazgo vuelve a salir **con su nivel de siempre** y su
 mensaje añade «la excepción aprobada `<objetivo>` era de otro código». Si sigue
@@ -176,12 +186,41 @@ contrato.
 Son las mismas capas que la aprobación de `#[HandRolled]`, porque es el mismo
 candado y la misma orden:
 
+0. **El propio comando** (desde 9.4.0, también sin la guardia ni el hook
+   instalados). `approve` y `revoke` no cambian el candado sin una persona:
+   - **en su terminal**: lo que se aprueba o se retira —objetivo, razón, lo
+     que cubre y el mensaje del hallazgo— sale en `/dev/tty`, y la persona
+     escribe `apruebo <n>` con el número de excepciones. La pregunta no va a
+     la entrada estándar: `yes | …` o `echo apruebo 1 | …` no la contestan, y
+     un proceso sin terminal de control (un agente, la CI) no puede abrir
+     `/dev/tty`. En Windows vale la consola (PowerShell, cmd, Windows
+     Terminal); desde Git Bash (mintty) la entrada es una tubería y no hay
+     forma fiable de saber si hay alguien delante: se corre desde PowerShell,
+     con `winpty` o nombrándose.
+   - **sin terminal, nombrándose** (una CI de aprobación que lanza el dueño,
+     una persona en un entorno sin tty):
+
+     ```bash
+     LARAPACK_APPROVER="Ana Pérez" vendor/bin/builder larapack:hand-rolled approve --all --approver="Ana Pérez"
+     ```
+
+     El nombre queda en cada entrada aprobada (`approved_by`), a la vista en
+     el diff que revisa CODEOWNERS. Por qué así y no otra cosa: una variable
+     sola se hereda —un agente lanzado desde una shell con la variable en el
+     perfil la tendría sin quererlo—, y una opción sola la escribe cualquiera.
+     Con las dos, usarla es un acto explícito en la propia orden, que la
+     guardia de los agentes bloquea, y que deja el nombre de quien la usó. Un
+     `CI=true` o la identidad del job no valen: los agentes también corren en
+     CI.
 1. **La guardia de los agentes** (`larapack:guard --pre`, instalado con
    `larapack:skill --hooks`) bloquea antes de ejecutarse cualquier forma de
    `larapack:hand-rolled approve` o `revoke` —abreviada, dentro de `bash -c`,
    de `eval`, de un heredoc— y cualquier escritura de `.larapack/hand-rolled.lock`
-   (con Write/Edit o desde la shell: `>`, `tee`, `cp`, `sed -i`, `php -r`…).
-   `larapack:realign except` **no** se bloquea: pedir es libre.
+   (con Write/Edit o desde la shell: `>`, `tee`, `cp`, `sed -i`, `php -r`…),
+   y la vía sin terminal: cualquier orden con `--approver` o que dé valor a
+   `LARAPACK_APPROVER` (`export`, `env`, delante de otra orden). Leer o buscar
+   la variable no se bloquea. `larapack:realign except` **no** se bloquea:
+   pedir es libre.
 2. **El hook de git** (`larapack:guard --git`, que también pone `larapack:skill --hooks`)
    pregunta en la terminal (`/dev/tty`) cuando un commit cambia el candado. Un
    agente no tiene terminal en la que contestar.
@@ -203,7 +242,8 @@ hacen que aprobar sea un acto del dueño, visible en el historial.
       "target": "realign:route-closure:routes/web.php#post('/csp-report')",
       "type": "route-closure", "check": "route-closure", "scope": ".",
       "file": "routes/web.php", "subject": "post('/csp-report')", "line": 84,
-      "step": "route-closure@.", "reason": "Sin datos de nadie y sin sesión.",
+      "step": "route-closure@.", "message": "Closure en la ruta …",
+      "reason": "Sin datos de nadie y sin sesión.",
       "fingerprint": "sha256:…", "requested_at": "2026-11-27T10:00:00+00:00"
     }
   ]
@@ -212,16 +252,24 @@ hacen que aprobar sea un acto del dueño, visible en el historial.
 
 Una solicitud sin `reason` o sin un `target` de la forma de arriba no cuenta.
 `fingerprint` es la huella cuando se pidió; la que se aprueba es la de cuando
-el dueño corre `approve`.
+el dueño corre `approve`. `message` (desde 9.4.0) es el del hallazgo que se
+pidió exceptuar, para enseñárselo al dueño; no aprueba nada —lo escribe quien
+pide—, y el de un hallazgo sin archivo se enseña y se aprueba como lo dice
+verify hoy.
 
 **La aprobación**, en `.larapack/hand-rolled.lock`, con la misma forma que las
 de `#[HandRolled]`:
 
 ```json
 [
-  {"target": "realign:route-closure:routes/web.php#post('/csp-report')", "reason": "Sin datos de nadie y sin sesión.", "fingerprint": "sha256:…"}
+  {"target": "realign:route-closure:routes/web.php#post('/csp-report')", "reason": "Sin datos de nadie y sin sesión.", "fingerprint": "sha256:…"},
+  {"target": "realign:no-contract:packages/x/laraimport.json", "reason": "…", "fingerprint": "sha256:…", "approved_by": "Ana Pérez"}
 ]
 ```
+
+`approved_by` sólo lo llevan las aprobadas sin terminal (`LARAPACK_APPROVER`
+y `--approver`): lo aprobado en la terminal lo firma quien comitea. Una
+versión anterior lo ignora.
 
 ## Limitaciones y riesgos
 
@@ -243,7 +291,13 @@ de `#[HandRolled]`:
   la deja sin cubrir y deja la aprobación vieja sobrando: hay que pedirla otra
   vez y retirar la vieja.
 - **`approve --all` aprueba todo lo pedido.** Es cómodo y es exactamente lo
-  que no se debe hacer sin leer: un agente puede pedir lo que quiera.
+  que no se debe hacer sin leer: un agente puede pedir lo que quiera. Por eso
+  la confirmación enseña cada una y pide escribir cuántas son.
+- **La terminal es de la persona, no prueba quién es.** Un agente que corre
+  dentro de la terminal de alguien puede abrir `/dev/tty`; entonces quien lee
+  la pregunta y escribe la frase es esa persona, que tiene que leerla. Y quien
+  pone `LARAPACK_APPROVER` y `--approver` puede escribir cualquier nombre: lo
+  que lo hace visible es el diff del candado y la revisión de CODEOWNERS.
 - **Exceptuar un hallazgo de seguridad es aceptar el agujero.** Se puede; la
   razón queda escrita y la aprobación en el historial.
 - **Lo que cubre una excepción ya no lo vigila nadie** mientras no cambie.

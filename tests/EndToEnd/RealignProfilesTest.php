@@ -295,6 +295,7 @@ final class RealignProfilesTest extends TestCase
         // Pedida no cubre nada: hasta que el dueño la aprueba, el paso no está hecho.
         $this->assertFalse($this->realign('check', ['targets' => [$id]], Command::FAILURE)['done']);
 
+        $this->ownerAtTerminal();
         $this->assertSame(Command::SUCCESS, $this->runCommand('larapack:hand-rolled', ['action' => 'approve', '--all' => true, '--root' => $this->project->path, '--format' => 'json']), $this->lastOutput);
         $this->assertTrue($this->realign('check', ['targets' => [$id]])['done'], "{$id} no quedó hecho con la excepción aprobada.");
         $this->commitAll();

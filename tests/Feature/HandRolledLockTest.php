@@ -29,6 +29,10 @@ final class HandRolledLockTest extends TestCase
 
         $this->useProject(FakeProject::application());
 
+        // El dueño, delante de su terminal, confirma lo que aprueba
+        // (HandRolledOwnerTest prueba que sin él no se aprueba nada).
+        $this->ownerAtTerminal();
+
         $this->controller('InboundWebhookController.php', 'App\Http\Controllers', <<<'PHP'
         #[HandRolled('La firma se calcula sobre el cuerpo en bruto.')]
         class InboundWebhookController

@@ -6,6 +6,7 @@ use Innoboxrr\LarapackGenerator\Commands\Concerns\TargetsProject;
 use Innoboxrr\LarapackGenerator\Commands\Concerns\WritesJson;
 use Innoboxrr\LarapackGenerator\Support\ControllerShape;
 use Innoboxrr\LarapackGenerator\Support\HandRolledLock;
+use Innoboxrr\LarapackGenerator\Support\OwnerConfirmation;
 use Innoboxrr\LarapackGenerator\Support\Realign\Exceptions;
 use Innoboxrr\LarapackGenerator\Support\Realign\ExceptionTargets;
 use RuntimeException;
@@ -23,12 +24,18 @@ use Symfony\Component\Console\Output\OutputInterface;
  * Aprobar es esto: el dueño corre `approve`, revisa el diff del candado y lo
  * comitea. Se aprueba la razón y la huella del código tal como está ahora
  * (HandRolledLock): si el código cambia, la excepción vuelve a pedir
- * aprobación, y `approve` de nuevo recalcula la huella. El comando no pregunta nada ni comprueba quién lo corre —en
- * Windows no hay forma fiable de saber si hay una terminal delante, y una
- * pregunta se contesta con una tubería—; lo que lo hace del dueño es que el
- * candado pide su revisión (CODEOWNERS, `larapack:ci --owner`) y que la
- * guardia de los agentes bloquea `approve` y `revoke` antes de que se
- * ejecuten.
+ * aprobación, y `approve` de nuevo recalcula la huella.
+ *
+ * Desde 9.4.0 `approve` y `revoke` los confirma una persona
+ * (OwnerConfirmation): en su terminal —/dev/tty, no la entrada estándar,
+ * que una tubería contesta—, viendo qué se aprueba (el objetivo, la razón y
+ * lo que cubre) y escribiendo `apruebo <n>`; o, sin terminal, nombrándose
+ * con `LARAPACK_APPROVER` y `--approver`, y su nombre queda en el candado.
+ * Antes no preguntaba nada, y en un proyecto sin la guardia ni el hook de git
+ * un agente aprobaba sus propias excepciones con `approve --all`. Lo demás
+ * sigue: el candado pide la revisión del dueño (CODEOWNERS, `larapack:ci
+ * --owner`) y la guardia de los agentes bloquea `approve`, `revoke` y la vía
+ * sin terminal antes de que se ejecuten.
  *
  * Los objetivos se escriben como los da `list`: el nombre completo de la
  * clase, con `::metodo` si la excepción es de una acción. Basta el final que
@@ -56,10 +63,11 @@ class HandRolledCommand extends Command
         $this->addRootOption();
 
         $this->setName('larapack:hand-rolled')
-            ->setDescription('Lista, aprueba o retira las excepciones #[HandRolled] (lo corre el dueño del proyecto)')
+            ->setDescription('Lista, aprueba o retira las excepciones #[HandRolled] (lo corre el dueño del proyecto, en su terminal)')
             ->addArgument('action', InputArgument::REQUIRED, 'list, approve o revoke')
             ->addArgument('targets', InputArgument::OPTIONAL | InputArgument::IS_ARRAY, 'Clase o Clase::metodo, como los da list')
             ->addOption('all', null, InputOption::VALUE_NONE, 'Con approve: aprueba todas las excepciones del código')
+            ->addOption('approver', null, InputOption::VALUE_REQUIRED, 'Sin terminal: el nombre de la persona que aprueba, igual que en la variable '.OwnerConfirmation::APPROVER_ENV.' (queda en el candado)')
             ->addOption('format', null, InputOption::VALUE_REQUIRED, 'Formato de salida: txt o json', 'txt');
     }
 
@@ -122,11 +130,17 @@ class HandRolledCommand extends Command
         // Lo que se puede aprobar: cada #[HandRolled] con razón del código y
         // cada excepción del realineamiento solicitada, con la huella de lo
         // que cubre hoy. Una cuyo código ya no existe no se aprueba.
-        foreach ($requested as $target => $request) {
-            $fingerprint = str_starts_with($request['file'], 'model:') ? $request['fingerprint'] : $realign->fingerprint($target);
+        //
+        // La de un hallazgo sin archivo (`model:`) se aprueba con la huella de
+        // su hallazgo de hoy —verify se corre—, no con la que trae la
+        // solicitud, que la escribe quien pide: sin ese hallazgo no hay nada
+        // que aprobar, y al dueño se le enseña el de hoy.
+        foreach ($action === 'approve' ? $requested : [] as $target => $request) {
+            $fingerprint = $realign->fingerprint($target);
 
             if ($fingerprint !== null) {
-                $exceptions[$target] = ['reason' => $request['reason'], 'fingerprint' => $fingerprint, 'file' => $request['file'], 'line' => $request['line'] ?? 0];
+                $exceptions[$target] = ['reason' => $request['reason'], 'fingerprint' => $fingerprint, 'file' => $request['file'], 'line' => $request['line'] ?? 0,
+                    'finding' => Exceptions::isStatement($target) ? $realign->statement($target) : $request['message']];
             }
         }
 
@@ -166,8 +180,22 @@ class HandRolledCommand extends Command
         }
 
         $changed = $approved === null || HandRolledLock::encode($next) !== HandRolledLock::encode($current);
+        $approver = null;
 
+        // Lo que cambia el candado lo confirma una persona.
         if ($changed) {
+            $confirmation = $this->confirm($input, $output, $action, $chosen, $action === 'approve' ? $exceptions : $current);
+
+            if ($confirmation['error'] !== null) {
+                return $this->reportFailure($input, $output, $confirmation['error']);
+            }
+
+            $approver = $confirmation['approver'];
+
+            foreach ($action === 'approve' && $approver !== null ? $chosen : [] as $target) {
+                $next[$target] = ['reason' => $exceptions[$target]['reason'], 'fingerprint' => $exceptions[$target]['fingerprint'], 'approved_by' => $approver];
+            }
+
             HandRolledLock::write($root, $next);
         }
 
@@ -175,7 +203,7 @@ class HandRolledCommand extends Command
             + ($action === 'approve' ? ['reason' => $exceptions[$target]['reason']] : []), $chosen);
 
         if ($this->wantsJson($input)) {
-            $this->writeJson($output, ['ok' => true, 'action' => $action, 'lock' => HandRolledLock::PATH, 'changed' => $changed, 'targets' => $done]);
+            $this->writeJson($output, ['ok' => true, 'action' => $action, 'lock' => HandRolledLock::PATH, 'changed' => $changed, 'approved_by' => $approver, 'targets' => $done]);
 
             return Command::SUCCESS;
         }
@@ -201,6 +229,90 @@ class HandRolledCommand extends Command
             : "\n  ".HandRolledLock::PATH.' ya estaba así.');
 
         return Command::SUCCESS;
+    }
+
+    /**
+     * La persona que confirma el cambio: en su terminal, viendo lo que
+     * aprueba o retira y escribiendo la frase; o sin terminal, nombrándose
+     * (OwnerConfirmation).
+     *
+     * @param  list<string>  $targets
+     * @param  array<string, array{reason: string, file?: string, line?: int, finding?: string|null}>  $entries
+     * @return array{approver: string|null, error: string|null}
+     */
+    private function confirm(InputInterface $input, OutputInterface $output, string $action, array $targets, array $entries): array
+    {
+        $option = $input->getOption('approver');
+        $named = OwnerConfirmation::namedApprover(is_string($option) ? $option : null);
+
+        if ($named['error'] !== null) {
+            return $named;
+        }
+
+        $summary = $this->summary($action, $targets, $entries);
+
+        if ($named['approver'] !== null) {
+            if (! $this->wantsJson($input)) {
+                $output->writeln(array_map(fn (string $line): string => OutputFormatter::escape($line), $summary));
+                $output->writeln('  Lo aprueba '.OutputFormatter::escape(Exceptions::sanitise($named['approver'])).' sin terminal ('.OwnerConfirmation::APPROVER_ENV.'); su nombre queda en '.HandRolledLock::PATH.".\n");
+            }
+
+            return $named;
+        }
+
+        $terminal = OwnerConfirmation::openTerminal();
+
+        if ($terminal === null) {
+            return ['approver' => null, 'error' => ($action === 'approve' ? 'Aprobar' : 'Retirar').' una excepción lo confirma una persona en su terminal, y este proceso no tiene ninguna (/dev/tty): no se cambió nada. '
+                .'Si eres un agente, no lo intentes por otra vía: pide al dueño del proyecto que lo corra él. '
+                .'Una persona sin terminal (una CI de aprobación) se nombra: '.OwnerConfirmation::APPROVER_ENV.'="Su nombre" y --approver="Su nombre", y el nombre queda en '.HandRolledLock::PATH.'. '
+                .'En Git Bash para Windows, córrelo desde PowerShell o con winpty.'];
+        }
+
+        $phrase = OwnerConfirmation::phrase($action, count($targets));
+        $terminal->write(implode("\n", $summary)."\n\n  Si eres el dueño del proyecto y lo ".($action === 'approve' ? 'apruebas' : 'retiras')." tú, escribe «{$phrase}»: ");
+        $answer = $terminal->readLine();
+        $terminal->write("\n");
+
+        if ($answer === null || trim($answer) !== $phrase) {
+            return ['approver' => null, 'error' => "No se confirmó (había que escribir «{$phrase}»): no se cambió nada."];
+        }
+
+        return ['approver' => null, 'error' => null];
+    }
+
+    /**
+     * Lo que se le enseña a quien confirma: cada objetivo, su razón y lo que
+     * cubre. Todo en una línea y sin caracteres de control: la razón y el
+     * hallazgo los escribe quien pide, y no deben poder borrar ni tapar nada
+     * en la terminal.
+     *
+     * @param  list<string>  $targets
+     * @param  array<string, array{reason: string, file?: string, line?: int, finding?: string|null}>  $entries
+     * @return list<string>
+     */
+    private function summary(string $action, array $targets, array $entries): array
+    {
+        $lines = ['  Vas a '.($action === 'approve' ? 'aprobar' : 'retirar').' en '.HandRolledLock::PATH.' ('.count($targets).'):'];
+
+        foreach ($targets as $target) {
+            $entry = $entries[$target] ?? ['reason' => ''];
+            $lines[] = '  - '.Exceptions::sanitise($target);
+            $lines[] = '      razón: «'.Exceptions::sanitise($entry['reason']).'»';
+            $file = $entry['file'] ?? null;
+
+            if (is_string($file) && $file !== '') {
+                $lines[] = '      cubre: '.(str_starts_with($file, 'model:')
+                    ? 'el hallazgo de verify sobre '.Exceptions::sanitise(substr($file, 6))
+                    : Exceptions::sanitise($file).(($entry['line'] ?? 0) > 0 ? ':'.$entry['line'] : ''));
+            }
+
+            if (is_string($entry['finding'] ?? null) && $entry['finding'] !== '') {
+                $lines[] = '      hallazgo: «'.Exceptions::sanitise($entry['finding']).'»';
+            }
+        }
+
+        return $lines;
     }
 
     /**

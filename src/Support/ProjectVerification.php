@@ -45,11 +45,13 @@ final class ProjectVerification
 
     /**
      * @param  list<string>  $packages  raíces absolutas a las que acotar; vacío, todas
+     * @param  Exceptions|null  $exceptions  las excepciones con las que se revisa; null, las de la raíz
      */
     public function __construct(
         private readonly string $root,
         private readonly array $packages = [],
         private readonly bool $withPackages = true,
+        private readonly ?Exceptions $exceptions = null,
     ) {
         $this->sources = new ProjectSources($root);
     }
@@ -125,7 +127,13 @@ final class ProjectVerification
         // Las excepciones del realineamiento aprobadas por el dueño
         // (Exceptions): lo que cubren pasa a info diciéndolo, y lo aprobado
         // que ya no cubre nada se avisa como lo de #[HandRolled].
-        $exceptions = Exceptions::forRoot($root);
+        $exceptions = $this->exceptions ?? Exceptions::forRoot($root);
+        $ran = $only === [] ? Verifier::CHECKS : array_values($only);
+
+        // Lo que dijo verify, antes de revisarlo: el estado de una excepción
+        // de una entidad se juzga con su hallazgo de hoy. Acotado a unos
+        // paquetes, lo que no salió puede ser de otro: no cuenta como visto.
+        $exceptions->observe($findings, $this->packages === [] && $this->withPackages ? $ran : []);
 
         $changes = $exceptions->review($findings);
         $reviewed = [];
@@ -137,8 +145,6 @@ final class ProjectVerification
         }
 
         $findings = $reviewed;
-
-        $ran = $only === [] ? Verifier::CHECKS : array_values($only);
 
         if ($only === [] || in_array(ControllerShape::HAND_ROLLED_STALE, $only, true)) {
             foreach ($exceptions->staleFindings($ran, fn (string $file): bool => $this->selected($this->ownerOf($file))) as $stale) {

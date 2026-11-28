@@ -39,6 +39,7 @@ final class RealignExceptionsTest extends TestCase
         parent::setUp();
 
         $this->generatedPackage();
+        $this->ownerAtTerminal();
         @mkdir($this->project->path.'/routes', 0777, true);
         $this->routes();
         $this->commitAll();
