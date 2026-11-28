@@ -42,6 +42,7 @@ Las guías de cada parte:
 | [Adoptar código existente](adopt.md) | `adopt`: que el manifiesto diga la verdad sin tocar un archivo. |
 | [Correcciones automáticas](apply.md) | `apply`: lo determinista que reescribe código o el contrato, y el salto de versión mayor. |
 | [Pasos guiados](guided.md) | Cómo hace un agente lo que no es determinista, con los playbooks del paquete. |
+| [Cuando el dueño no está](owner.md) | `brief`: todas las decisiones y excepciones que esperan al dueño en un documento, con la orden exacta de cada una, para que el agente siga mientras. |
 | [Excepciones](exceptions.md) | `except` y `larapack:hand-rolled`: dejar algo como está, con la aprobación del dueño. |
 | [Inferir el contrato](infer.md) | `infer`: un `laraimport.json` borrador desde el código de un proyecto sin contrato. |
 | [El contrato ampliado](contract.md) | Las claves de 9.4.0 que permiten describir un proyecto real sin cambiarlo. |
@@ -141,6 +142,7 @@ quien empezó:
   report.json        el último diagnóstico (se puede versionar)
   plan.json          los pasos, su estado, sus decisiones y su historia (se versiona)
   exceptions.json    las excepciones pedidas, sin aprobar (se versiona)
+  brief.md, .json    lo que espera al dueño, en un documento (se rehace; owner.md)
   infer/<ámbito>.json el informe de cada inferencia
   .gitignore         deja fuera cache/
   cache/             lo regenerado para comparar (no se versiona)
@@ -160,8 +162,8 @@ estaba.
 Los principios, que valen para todas las acciones:
 
 - **Lo que sólo lee es seguro siempre.** `diagnose`, `plan`, `status`, `next`,
-  `check`, `decide`, `playbook` y `help` no escriben código: como mucho, su
-  estado en `.larapack/realign/`.
+  `check`, `decide`, `brief`, `playbook` y `help` no escriben código: como
+  mucho, su estado (o el documento para el dueño) en `.larapack/realign/`.
 - **Lo que escribe se puede simular y deshacer.** `adopt`, `apply`, `infer` y
   `except` aceptan `--dry-run` (no escribe nada y dice qué haría; `apply`, con
   el diff), y sin él **exigen un árbol git limpio** —fuera de
@@ -197,6 +199,7 @@ pasen, que el contrato diga lo que hace la base de producción— está en
 | `next` | nada | El siguiente paso con todo lo necesario para hacerlo sin contexto. | [plan.md](plan.md#next) |
 | `check` | estado | Corre el criterio de terminado de un paso y lo marca hecho. | [plan.md](plan.md#check) |
 | `decide` | estado | Registra la opción elegida en una decisión. | [plan.md](plan.md#decide) |
+| `brief` | el documento para el dueño | Junta todo lo que espera al dueño, con la orden exacta de cada cosa. | [owner.md](owner.md) |
 | `playbook` | nada | Lista los playbooks o imprime uno sin rellenar. | [guided.md](guided.md) |
 | `adopt` | manifiesto | Adopta, vuelve a enlazar y olvida, sin tocar un archivo. | [adopt.md](adopt.md) |
 | `apply` | código, contrato y manifiesto | Los pasos deterministas que reescriben. | [apply.md](apply.md) |
@@ -236,6 +239,10 @@ Esta es toda la lógica que hace falta; no hay que inventar nada por proyecto.
      opción lo trae, su playbook). Si lo decidido es dejarlo como está,
      pide la excepción (`larapack:realign except <id> --option reason="…"`)
      y **no la apruebes**: díselo al dueño (`larapack:hand-rolled approve`).
+     Cuando lo que queda sea del dueño, no preguntes de una en una: genera
+     el documento con todas (`larapack:realign brief`), avísale, sigue con
+     lo que no depende de él y retoma con `status` cuando decida
+     ([owner.md](owner.md)). Es el camino normal.
      Para `no-contract`, `unmanaged-models` y `unmanaged-http` puedes preparar
      el material de la decisión sin decidir nada: `larapack:realign infer <id>`
      escribe un borrador (`laraimport.inferred.json`) y su informe, y no toca

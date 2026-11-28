@@ -306,6 +306,45 @@ larapack:hand-rolled approve "routes/web.php#post('/csp-report')"   # y las apru
 - **`check` de una decisión que eligió dejarlo así** no pasa hasta que el
   dueño aprueba cada excepción pedida, y dice cuál falta y a quién le toca.
 
+### `larapack:realign brief`: el camino del dueño ausente
+
+Una prueba de autonomía en un proyecto real llegó a 77 decisiones
+(controladores a mano, closures, modelos que adoptar, llaves foráneas) y a
+excepciones que sólo el dueño aprueba, y no había forma documentada de
+preparárselas de una vez: el agente preguntaba de una en una o se paraba.
+`larapack:realign brief` lo junta todo en **un** documento y lo hace el camino
+normal: el agente hace lo que no depende del dueño, genera el documento,
+avisa, sigue con lo demás y retoma con `status`. La guía:
+[docs/realign/owner.md](docs/realign/owner.md).
+
+```bash
+larapack:realign brief                  # .larapack/realign/brief.md, y por stdout
+larapack:realign brief --format=json    # .larapack/realign/brief.json, con format_version
+```
+
+- **Cada decisión pendiente**: qué es, por qué importa, la evidencia
+  (archivos, líneas, hallazgos) **agrupada por tipo y directorio** —setenta
+  controladores de `Admin/` son un grupo, no setenta bloques—, las opciones
+  con sus consecuencias y la orden exacta de cada una
+  (`larapack:realign decide <id> <opción> --note="…"`), lo que bloquea y, si
+  una regla del playbook la sostiene, **la recomendación del paquete**, firme
+  o tentativa (`infer` sin contrato, `adopt` en lo escrito a mano en la ruta
+  de lo generado, `except` o `refactor` en los closures según sean de los
+  legítimos conocidos…). Sin regla (`unmanaged-http`, `hand-rolled`) lo dice
+  y dice cómo averiguarlo.
+- **Cada excepción pedida sin aprobar**: objetivo, paso, motivo, el mensaje
+  del hallazgo que cubre, su estado y la orden exacta
+  (`larapack:hand-rolled approve "<objetivo>"`; `revoke` si ya no existe).
+- **Arriba, el resumen**: cuántas, el tiempo estimado de revisión, qué pasa
+  si no se decide nada (nada se rompe; el realineamiento no termina) y
+  cuántos pasos puede seguir haciendo el agente mientras (`meanwhile`).
+- No decide, no aprueba y no escribe código, ni el plan ni el candado: sólo
+  `brief.md` y `brief.json`, que se rehacen cada vez. Acepta `--package`.
+- La receta del README, la guía para agentes de `larapack:skill`,
+  [plan.md](docs/realign/plan.md#decide) y
+  [exceptions.md](docs/realign/exceptions.md#el-ciclo) lo citan como el paso
+  que sigue cuando lo que queda es del dueño.
+
 ### Pasos guiados: los playbooks del paquete
 
 Cada trabajo mecánico tiene sus instrucciones en el paquete, y `next` las da
