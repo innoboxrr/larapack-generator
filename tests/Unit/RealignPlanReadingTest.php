@@ -186,6 +186,9 @@ final class RealignPlanReadingTest extends TestCase
                 // La hora es la de cuando quedó sin probar, no la del último evento.
                 'history' => ['basura', ['event' => 'untested', 'at' => '1'], ['event' => 'resolved', 'at' => '3'], ['event' => 'applied', 'at' => '4']]]),
             $this->step('declared-routes@.', 'declared-routes', ['status' => Planner::UNTESTED, 'history' => [['event' => 'applied', 'at' => '9']]]),
+            // Un plan editado a mano: la historia no es una lista, la hora es un número.
+            $this->step('broken@.', 'broken', ['status' => Planner::UNTESTED, 'history' => 'roto']),
+            $this->step('numeric@.', 'numeric', ['status' => Planner::UNTESTED, 'history' => [['event' => 'untested', 'at' => 5]]]),
         ];
 
         $this->assertSame([
@@ -193,6 +196,10 @@ final class RealignPlanReadingTest extends TestCase
                 'check' => 'larapack:realign check security@. --tested="<orden>"', 'accept' => 'larapack:realign accept-untested security@. --note="por qué"'],
             ['id' => 'declared-routes@.', 'title' => 'declared-routes', 'scope' => '.', 'at' => null,
                 'check' => 'larapack:realign check declared-routes@. --tested="<orden>"', 'accept' => 'larapack:realign accept-untested declared-routes@. --note="por qué"'],
+            ['id' => 'broken@.', 'title' => 'broken', 'scope' => '.', 'at' => null,
+                'check' => 'larapack:realign check broken@. --tested="<orden>"', 'accept' => 'larapack:realign accept-untested broken@. --note="por qué"'],
+            ['id' => 'numeric@.', 'title' => 'numeric', 'scope' => '.', 'at' => '5',
+                'check' => 'larapack:realign check numeric@. --tested="<orden>"', 'accept' => 'larapack:realign accept-untested numeric@. --note="por qué"'],
         ], Navigation::untested($steps));
     }
 

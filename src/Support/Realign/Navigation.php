@@ -188,7 +188,6 @@ final class Navigation
 
         $decided = false;
         $applied = [];
-        $any = false;
 
         foreach ((array) ($step['history'] ?? []) as $event) {
             if (! is_array($event)) {
@@ -198,14 +197,12 @@ final class Navigation
             if (($event['event'] ?? null) === 'decided') {
                 $decided = true;
                 $applied = [];
-                $any = false;
             } elseif (($event['event'] ?? null) === 'applied' && $decided) {
-                $any = true;
                 $applied[] = is_string($event['operation'] ?? null) ? $event['operation'] : '*';
             }
         }
 
-        if (! $decided || ! $any) {
+        if (! $decided || $applied === []) {
             return false;
         }
 
@@ -217,7 +214,8 @@ final class Navigation
     }
 
     /**
-     * Las operaciones que ejecutan las opciones elegidas en el paso.
+     * Las operaciones que ejecutan las opciones elegidas en el paso. Puede
+     * repetir una: sólo se le resta lo que ya corrió.
      *
      * @param  Step  $step
      * @return list<string>
@@ -234,7 +232,7 @@ final class Navigation
             }
         }
 
-        return array_values(array_unique($operations));
+        return $operations;
     }
 
     /**

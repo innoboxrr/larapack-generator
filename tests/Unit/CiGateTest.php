@@ -286,7 +286,7 @@ final class CiGateTest extends TestCase
         $this->composer(['require' => ['php' => '^8.3'], 'require-dev' => ['laravel/pint' => '^1.18']]);
         $workflow = CiGate::workflow($this->root, null);
 
-        $this->assertStringContainsString("            - name: Estilo (Pint)\n              if: \${{ !cancelled() }}\n              run: vendor/bin/pint --test\n", $workflow);
+        $this->assertStringContainsString("            # El mismo estilo para lo que escribe cada consola.\n            - name: Estilo (Pint)\n              if: \${{ !cancelled() }}\n              run: vendor/bin/pint --test\n", $workflow);
         // Después del contrato y de la fusión, antes de las aprobaciones.
         $this->assertLessThan(strpos($workflow, 'Aprobaciones sin terminal'), strpos($workflow, 'Estilo (Pint)'));
         $this->assertGreaterThan(strpos($workflow, 'Fusión reconciliada'), strpos($workflow, 'Estilo (Pint)'));

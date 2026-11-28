@@ -118,7 +118,7 @@ final class CiGate
      * Cómo se llama a LaraPack en el proyecto: Artisan en una aplicación, el
      * binario en un paquete.
      */
-    public static function binary(string $root): string
+    private static function binary(string $root): string
     {
         return self::isApplication($root) ? 'php artisan' : 'php vendor/bin/builder';
     }

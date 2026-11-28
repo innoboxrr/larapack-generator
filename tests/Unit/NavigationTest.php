@@ -279,6 +279,37 @@ final class NavigationTest extends TestCase
         $this->assertTrue(Navigation::handedOver($step + ['history' => [$decided, ['at' => 't2', 'event' => 'applied']]]));
     }
 
+    public function test_que_ordenes_cuentan_como_las_de_la_opcion_elegida(): void
+    {
+        // Opciones escritas a mano: sólo cuenta lo que empieza por
+        // `larapack:realign <operación>`.
+        $step = fn (array $options, array $history): array => $this->decision('unmanaged-http', [self::A], [
+            'options' => $options, 'decision' => ['option' => 'keep'], 'history' => $history,
+        ]);
+        $decided = ['at' => 't1', 'event' => 'decided'];
+        $infer = ['at' => 't2', 'event' => 'applied', 'operation' => 'infer'];
+
+        // Decidida y sin nada aplicado: no es del dueño, aunque la opción no
+        // ejecute ninguna orden.
+        $this->assertFalse(Navigation::handedOver($step([['key' => 'keep']], [$decided])));
+        // Una orden que no es de realign no es una operación que falte.
+        $this->assertTrue(Navigation::handedOver($step([['key' => 'keep', 'run' => 'echo larapack:realign except posts']], [$decided, $infer])));
+        $this->assertFalse(Navigation::handedOver($step([['key' => 'keep', 'run' => 'larapack:realign except posts']], [$decided, $infer])));
+        // Dos opciones que corren la misma operación: con correrla una vez basta.
+        $this->assertTrue(Navigation::handedOver($step([['key' => 'keep', 'run' => 'larapack:realign infer a'], ['key' => 'keep', 'run' => 'larapack:realign infer b']], [$decided, $infer])));
+    }
+
+    public function test_la_clave_de_una_opcion_se_compara_como_texto(): void
+    {
+        $step = $this->decision('unmanaged-http', [self::A], [
+            'options' => [['key' => 1, 'run' => 'larapack:realign except posts']],
+            'decision' => ['option' => '1'],
+        ]);
+
+        $this->assertFalse(Navigation::handedOver($step + ['history' => [['at' => 't1', 'event' => 'decided'], ['at' => 't2', 'event' => 'applied', 'operation' => 'infer']]]));
+        $this->assertTrue(Navigation::handedOver($step + ['history' => [['at' => 't1', 'event' => 'decided'], ['at' => 't2', 'event' => 'applied', 'operation' => 'except']]]));
+    }
+
     public function test_una_operacion_solo_ve_los_elementos_que_se_decidio_que_hiciera(): void
     {
         $step = $this->decision('unmanaged-http', [self::A, self::B, self::C], [
