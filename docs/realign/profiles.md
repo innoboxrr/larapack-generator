@@ -11,11 +11,53 @@ estás sin preguntarle a nadie:
 | [Con contrato, de una versión vieja y con deuda](#2-con-contrato-de-una-versión-vieja-y-con-deuda) | Muchos `adopt` por formato, `prune`, `fix`, cientos de `controller-shape`, `pin-foreign-keys`. | Los pasos guiados `controller-shape`. |
 | [Sin contrato](#3-sin-contrato) | `no-contract` en la raíz y en los paquetes; mucho `unmanaged-http` y `unmanaged-models`. | `infer` y la decisión de adoptar. |
 
+Antes del perfil, [el orden exacto de punta a punta](#el-orden-exacto-de-punta-a-punta),
+que es el mismo en los tres: el perfil sólo dice dónde se va el tiempo. Las
+órdenes se escriben `larapack:…`; delante va `vendor/bin/builder`,
+`php artisan` o `php <clon>/builder … --root=<proyecto>` según dónde esté el
+paquete ([cómo se invoca](README.md#cómo-se-invoca-con-el-paquete-en-vendor-o-desde-un-clon)).
+
 Las cifras son de copias de proyectos reales, ensayadas sin tocar los
 originales (CHANGELOG de 9.4.0). Los tres recorridos, de `diagnose` a
 `verify --strict`, están además en una prueba de punta a punta del paquete
 (`RealignProfilesTest`), sobre proyectos sintéticos con las formas de los
 reales.
+
+## El orden exacto de punta a punta
+
+Para cualquier perfil, persona o agente. Cada número se termina antes de pasar
+al siguiente; los números 4 a 7 se repiten hasta que no queda nada.
+
+1. **Preparar.** Una rama (`git switch -c realign`) y el árbol limpio. Si el
+   paquete no está en `vendor/`, el clon con su `composer install` y
+   `--root=<proyecto>` en cada orden. Comprueba si puedes correr las pruebas
+   del proyecto; si no, cada paso guiado que cambia comportamiento quedará
+   [sin probar](guided.md#sin-pruebas-cuando-no-se-pueden-correr-las-del-proyecto).
+2. **Dónde estás.** `larapack:realign status`. Si hay plan y no está viejo,
+   sigue en el número que toque; si no, el 3.
+3. **Sin contrato** (`no-contract`): el perfil 3. `infer`, la decisión del
+   dueño y, si se adopta, el import; desde ahí, el 4.
+4. **Diagnosticar y planificar.** `larapack:realign diagnose` y
+   `larapack:realign plan`.
+5. **Lo determinista.** `larapack:realign apply --deterministic --dry-run`,
+   después sin `--dry-run`; lo saltado, a mano con `how.fallback` de `next`.
+   Pruebas del proyecto y commit. **Vuelve al 4** hasta que `apply
+   --deterministic` no tenga nada que aplicar (casi siempre, dos pasadas).
+6. **Lo guiado, uno por uno.** `larapack:realign next`; seguir el playbook
+   (`how.instructions`) con las pruebas antes y después;
+   `larapack:realign check <id>`; un commit por paso. Al terminar los de un
+   ámbito, y siempre que hayas copiado lo regenerado o cambiado el contrato,
+   **vuelve al 4**.
+7. **Las decisiones.** Cuando `next` da una `decision`: presentarla al dueño
+   (no decidir), `larapack:realign decide` cuando él decida, lo que pida la
+   opción (su orden o su playbook) y, si es dejarlo así, la excepción pedida
+   que **aprueba el dueño**. Lo que la opción cambie (un contrato, un
+   controlador movido) pide **volver al 4**.
+8. **Terminar.** `next` dice `done` después de una última pasada del 4 que
+   no deja nada pendiente; entonces `larapack:verify --strict`
+   ([verify.md](verify.md#cuándo-se-termina)) y la lista de lo que quedó
+   [sin probar](guided.md#sin-pruebas-cuando-no-se-pueden-correr-las-del-proyecto),
+   si hay.
 
 ## 1. Con contrato y manifiesto al día
 
@@ -38,6 +80,10 @@ larapack:realign apply --deterministic          # la segunda pasada adopta lo qu
 # pruebas; commit
 larapack:realign next                           # lo guiado: edited-outside por familia, algún controller-shape
 larapack:realign check <id>
+# un commit por paso; tras los guiados (y tras copiar lo regenerado), otra pasada:
+larapack:realign diagnose
+larapack:realign plan
+larapack:realign apply --deterministic
 # … y las decisiones, al final, con el dueño
 larapack:verify --strict
 ```
@@ -83,6 +129,12 @@ larapack:realign apply --deterministic
 # pruebas; commit
 larapack:realign next                           # controller-shape, un controlador por paso, con controller-to-request
 larapack:realign check controller-shape@<archivo>
+# un commit por paso; tras los de un ámbito, otra pasada:
+larapack:realign diagnose
+larapack:realign plan
+larapack:realign apply --deterministic
+# … las decisiones con el dueño, y al final:
+larapack:verify --strict
 ```
 
 **Qué esperar** (un proyecto 7.x de 3 550 archivos):

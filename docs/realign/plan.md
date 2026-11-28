@@ -38,7 +38,7 @@ Cada paso agrupa lo que se resuelve junto y lleva:
 | `id` | Estable entre diagnósticos: `<tipo>[:<sujeto>]@<ámbito>` (`adopt@.`, `fix:index-managed@packages/billing`, `edited-outside:Requests@.`) o, en un controlador, `controller-shape@<archivo>`. Es lo que se pasa a `check`, `decide` y las operaciones. |
 | `category`, `type`, `title`, `description` | Qué es y qué hay que hacer. |
 | `scope` | `{package, path}`: el paquete (null es el núcleo) y su ruta. |
-| `files`, `details` | Los archivos, y detrás de cada uno su clase y razón, los hallazgos de verify con su mensaje y el código sin gestionar. |
+| `files`, `details` | Los archivos, y detrás de cada uno su clase y razón, los hallazgos de verify con su mensaje y el código sin gestionar. Un archivo editado fuera de sus huecos trae `regenerated`: la ruta de lo regenerado en la caché (`.larapack/realign/cache/…`), con la que se compara. |
 | `risk` | `{level: low\|medium\|high, why}`: qué puede romper y por qué. |
 | `reversible` | Si se puede deshacer (con git). |
 | `command` | Pasos `deterministic`: la orden que lo hace. |
