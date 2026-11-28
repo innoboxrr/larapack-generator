@@ -2,6 +2,7 @@
 
 namespace Innoboxrr\LarapackGenerator\Tests\Unit;
 
+use Innoboxrr\LarapackGenerator\Support\Import\ImportDocument;
 use Innoboxrr\LarapackGenerator\Support\Realign\Category;
 use Innoboxrr\LarapackGenerator\Support\Realign\Completion;
 use Innoboxrr\LarapackGenerator\Support\Realign\DoneWhen;
@@ -389,6 +390,39 @@ final class RealignDocTest extends TestCase
 
         $this->assertFalse($this->isJsonExample('{"a": 1,}'));
         $this->assertFalse($this->isJsonExample('"indexes": [ {"columns": ["a"] ]'));
+    }
+
+    /**
+     * Los ejemplos de contract.md, juntos en un laraimport, validan sin
+     * errores ni avisos: son lo que alguien copia para describir su proyecto.
+     * En la auditoría de 9.4.0 el del endpoint no validaba (un parámetro en
+     * camelCase en un endpoint de modelo, y delante de todo).
+     */
+    public function test_los_ejemplos_del_contrato_ampliado_validan_juntos(): void
+    {
+        preg_match_all('/^```json\n(.*?)^```$/ms', (string) file_get_contents($this->root().'/docs/realign/contract.md'), $blocks);
+        $this->assertCount(5, $blocks[1], 'contract.md trae cinco ejemplos: columnas, índices, la tabla, las rutas y una llave.');
+
+        [$columns, $indexes, $table, $routes, $key] = $blocks[1];
+        $props = array_map(fn (string $line): array => (array) json_decode($line, true), array_values(array_filter(explode("\n", trim($columns)))));
+        $indexes = (array) json_decode('{'.$indexes.'}', true);
+        $routes = (array) json_decode('{'.$routes.'}', true);
+
+        $contract = [
+            'models' => [
+                ['name' => 'Clinic', 'props' => $props],
+                (array) json_decode($table, true) + $indexes + ['props' => [
+                    ['name' => 'email', 'type' => 'string'],
+                    ['name' => 'patient_id', 'type' => 'integer'],
+                    (array) json_decode($key, true),
+                ]],
+            ],
+        ] + $routes;
+
+        ['document' => $document, 'errors' => $errors] = ImportDocument::fromArray($contract);
+
+        $this->assertNotNull($document, 'Los ejemplos de contract.md no validan: '.json_encode($errors, JSON_UNESCAPED_UNICODE));
+        $this->assertSame([], $errors, 'Los ejemplos de contract.md dejan errores o avisos: '.json_encode($errors, JSON_UNESCAPED_UNICODE));
     }
 
     /**
