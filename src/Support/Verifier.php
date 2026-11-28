@@ -145,6 +145,9 @@ final class Verifier
             return [
                 ...$this->checkFilesExist(['']),
                 ...$this->checkCustomisations(['']),
+                // Si el contrato declara modelos y el manifiesto no tiene
+                // ninguno, se dice: no es «un paquete que sólo integra».
+                ...(new ContractDrift($this->manifest))->run([]),
             ];
         }
 

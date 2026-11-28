@@ -82,6 +82,8 @@ final class NamedApprovalTest extends TestCase
             'event' => 'workflow_dispatch',
             'actor' => ['login' => 'ana'],
             'triggering_actor' => ['login' => 'ana'],
+            'status' => 'completed',
+            'conclusion' => 'success',
         ]);
     }
 
@@ -147,6 +149,11 @@ final class NamedApprovalTest extends TestCase
             'de otro workflow' => [['path' => '.github/workflows/agente.yml'], 'no es del workflow de aprobación'],
             'no lanzada a mano' => [['event' => 'push'], 'no se lanzó a mano'],
             'la lanzó otra persona' => [['actor' => ['login' => 'mallory'], 'triggering_actor' => ['login' => 'mallory']], 'la lanzó mallory, no ana'],
+            // Auditoría de seguridad de 9.4.0: una corrida de verdad, de esa
+            // persona, que falló o se canceló no aprobó nada, y citarla valía.
+            'la corrida falló' => [['conclusion' => 'failure'], 'a corrida no terminó bien (failure): no aprobó nada.'],
+            'la corrida se canceló' => [['conclusion' => 'cancelled'], 'a corrida no terminó bien (cancelled)'],
+            'la corrida sigue en marcha' => [['status' => 'in_progress', 'conclusion' => null], 'a corrida no terminó bien (in_progress)'],
         ];
     }
 

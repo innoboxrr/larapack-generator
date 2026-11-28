@@ -476,17 +476,36 @@ final class CiGate
 
     /**
      * Lo que tiene que revisar el dueño: el candado de las excepciones, y lo
-     * que sostiene la puerta —este workflow, el de aprobación sin terminal
-     * (NamedApproval) y el propio CODEOWNERS—. Si el workflow o CODEOWNERS se
-     * pudieran cambiar sin su revisión, quitar la puerta costaría un commit.
-     * El de aprobación va aunque el proyecto no lo tenga: si no, cualquiera
-     * podría añadir uno que aprobara lo que quisiera.
+     * que sostiene la puerta —los workflows y CODEOWNERS—. Si se pudieran
+     * cambiar sin su revisión, quitar la puerta costaría un commit.
+     *
+     *  - **Todos los workflows** (`/.github/workflows/`), no sólo el de la
+     *    puerta y el de aprobación (que van además con su línea, por si el
+     *    proyecto le da el directorio a otro dueño). El check que exige la
+     *    rama se llama como el job, y cualquier workflow puede declarar un
+     *    job con ese nombre que no compruebe nada, o correr con permisos de
+     *    escritura. El de aprobación va aunque el proyecto no lo tenga.
+     *  - **Las tres rutas donde GitHub busca CODEOWNERS**, no sólo la que el
+     *    proyecto usa: GitHub lee la primera que existe (`.github/`, la raíz,
+     *    `docs/`), así que en un proyecto con el suyo en la raíz bastaba
+     *    crear un `.github/CODEOWNERS` vacío —que no era de nadie— para
+     *    dejar el candado sin dueño en el siguiente PR.
+     *
+     * El orden importa: en CODEOWNERS gana la última línea que coincide, y el
+     * directorio va antes que sus archivos.
      *
      * @return list<string>
      */
     public static function ownedPaths(string $codeowners): array
     {
-        return ['/'.HandRolledLock::PATH, '/'.self::WORKFLOW, '/'.NamedApproval::WORKFLOW, '/'.$codeowners];
+        return array_values(array_unique([
+            '/.github/workflows/',
+            '/'.HandRolledLock::PATH,
+            '/'.self::WORKFLOW,
+            '/'.NamedApproval::WORKFLOW,
+            '/'.$codeowners,
+            ...array_map(fn (string $candidate): string => '/'.$candidate, self::CODEOWNERS),
+        ]));
     }
 
     /**
@@ -593,6 +612,9 @@ final class CiGate
             ['-f', 'required_status_checks[contexts][]='.self::JOB],
             ['-F', 'enforce_admins='.($enforceAdmins ? 'true' : 'false')],
             ['-F', 'required_pull_request_reviews[require_code_owner_reviews]=true'],
+            // Sin esto una revisión vale para lo que se empuje después: se
+            // aprueba el PR y luego se cambia el candado.
+            ['-F', 'required_pull_request_reviews[dismiss_stale_reviews]=true'],
             ['-F', 'required_pull_request_reviews[required_approving_review_count]=1'],
             ['-F', 'restrictions=null'],
         ];
