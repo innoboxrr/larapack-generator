@@ -98,7 +98,7 @@ final class HandRolledLockFormatTest extends TestCase
 
     private function lock(string $json): void
     {
-        mkdir($this->root.'/.larapack');
+        is_dir($this->root.'/.larapack') || mkdir($this->root.'/.larapack');
         file_put_contents($this->root.'/.larapack/hand-rolled.lock', $json);
     }
 
@@ -167,6 +167,21 @@ final class HandRolledLockFormatTest extends TestCase
             '[{"target": "A", "reason": "r", "fingerprint": "'.$good.'"}, {"target": "B", "reason": "r", "fingerprint": "sha1:abc"}]',
             '.larapack/hand-rolled.lock tiene una `fingerprint` que no es sha256:<64 hex> (posición 1).'
         );
+    }
+
+    public function test_quien_aprueba_sin_nombre_dice_su_posicion(): void
+    {
+        // `approved_by` es el nombre de la persona que aprobó sin terminal:
+        // vacío o que no es texto no nombra a nadie.
+        foreach (['""', '"   "', '7', '["Ana"]'] as $approver) {
+            $this->assertUnreadable(
+                '[{"target": "A", "reason": "r", "fingerprint": null}, {"target": "B", "reason": "r", "fingerprint": null, "approved_by": '.$approver.'}]',
+                '.larapack/hand-rolled.lock tiene un `approved_by` que no es un nombre (posición 1).'
+            );
+        }
+
+        $this->lock('[{"target": "A", "reason": "r", "fingerprint": null, "approved_by": "Ana Pérez"}]');
+        $this->assertSame('Ana Pérez', HandRolledLock::read($this->root)['A']['approved_by'] ?? null);
     }
 
     public function test_un_objetivo_aprobado_dos_veces_no_se_lee(): void
