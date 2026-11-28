@@ -134,13 +134,21 @@ pedía la guía de 9.1.
 El aviso de `controller-concern`: un trait de `Http/Controllers/Concerns` que
 sólo usan requests. Lo mueve a `Http/Requests/Concerns`, cambia su namespace y
 reescribe **por tokens** cada nombre que lo apunta en el proyecto: `use`,
-`\…::class`, nombres relativos. Si el manifiesto lo registraba, el registro lo
-sigue.
+`\…::class`, nombres relativos al namespace del archivo o a uno de sus alias
+(`use …\Controllers\Concerns as Cs;` y `Cs\X`), y el `use X;` dentro de una
+clase (relativo). Si el manifiesto lo registraba, el registro lo sigue.
 
+- En el trait movido, lo que nombraba de su namespace viejo sin importarlo (un
+  hermano `Helper::x()`) se importa, y un nombre cualificado relativo se
+  escribe completo: con el namespace nuevo resolvería a otra clase.
+- Después de escribir, recorre **todo** el proyecto otra vez: si algo sigue
+  resolviendo al trait viejo, o el trait movido nombra un hermano que ya no
+  ve, devuelve el cambio entero y salta con el archivo.
 - El que usa un controlador no se mueve: es `controller-shape` (guiado).
 - Salta si alguien lo nombra en una cadena (configuración), en un `use`
-  agrupado o por su nombre corto desde su mismo namespace, si ya hay un archivo
-  en el destino o si su namespace no es el de su ruta.
+  agrupado o por su nombre corto desde su mismo namespace, si el trait llama a
+  una función o usa una constante de su namespace viejo sin importarla, si ya
+  hay un archivo en el destino o si su namespace no es el de su ruta.
 - Un comentario o un docblock que lo nombra (`@see`) se queda como estaba. Y
   sólo busca en los PHP del proyecto (fuera de `vendor`, `node_modules`,
   `storage` y `cache`): un nombre en un `.json` o un `.yaml` no se ve.

@@ -132,7 +132,11 @@ final class Changes
         return ($tokens[0][0] ?? null) === T_OPEN_TAG ? null : 'no empieza con <?php';
     }
 
-    private function revert(): void
+    /**
+     * Devuelve todo a como estaba antes de commit(): para quien comprueba
+     * algo más que el parseo después de escribir (ConcernMove).
+     */
+    public function revert(): void
     {
         foreach ($this->originals as $file => $original) {
             if ($original === null) {

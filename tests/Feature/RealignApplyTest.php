@@ -185,6 +185,24 @@ final class RealignApplyTest extends TestCase
         $this->assertTrue($this->realign('check', ['targets' => [$id]])['done']);
     }
 
+    public function test_el_trait_movido_sigue_viendo_a_sus_hermanos_y_los_alias_se_reescriben(): void
+    {
+        $this->put('src/Http/Controllers/Concerns/PostLookup.php', "<?php\n\nnamespace Acme\\Blog\\Http\\Controllers\\Concerns;\n\nfinal class PostLookup\n{\n    public static function id(): int\n    {\n        return 1;\n    }\n}\n");
+        $trait = 'src/Http/Controllers/Concerns/ResolvesPost.php';
+        $this->put($trait, "<?php\n\nnamespace Acme\\Blog\\Http\\Controllers\\Concerns;\n\ntrait ResolvesPost\n{\n    protected function resolvePost(): int\n    {\n        return PostLookup::id();\n    }\n}\n");
+        // Por el alias de su namespace, dentro de la clase.
+        $this->edit(self::SHOW, "use Illuminate\\Validation\\Rule;\n", "use Illuminate\\Validation\\Rule;\nuse Acme\\Blog\\Http\\Controllers\\Concerns as Cs;\n");
+        $this->edit(self::SHOW, "class ShowRequest extends FormRequest\n{\n", "class ShowRequest extends FormRequest\n{\n    use Cs\\ResolvesPost;\n");
+        $this->prepare();
+
+        $this->realign('apply', ['targets' => ['controller-concern@.']]);
+
+        $moved = $this->project->read('src/Http/Requests/Concerns/ResolvesPost.php');
+        $this->assertStringContainsString("namespace Acme\\Blog\\Http\\Requests\\Concerns;\n\nuse Acme\\Blog\\Http\\Controllers\\Concerns\\PostLookup;\n", $moved);
+        $this->assertStringContainsString('use \\Acme\\Blog\\Http\\Requests\\Concerns\\ResolvesPost;', $this->project->read(self::SHOW));
+        $this->assertFileDoesNotExist($this->project->path.'/'.$trait);
+    }
+
     public function test_no_mueve_un_trait_que_se_nombra_en_una_cadena(): void
     {
         $this->put('src/Http/Controllers/Concerns/ResolvesPost.php', "<?php\n\nnamespace Acme\\Blog\\Http\\Controllers\\Concerns;\n\ntrait ResolvesPost\n{\n    protected function resolvePost(): int\n    {\n        return 1;\n    }\n}\n");
