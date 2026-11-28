@@ -214,6 +214,11 @@ final class RealignStateTest extends TestCase
         $command = "ls aqui.txt && sh -c 'echo por-error >&2'";
         $this->assertSame(['command' => $command, 'exit' => 0, 'output' => "aqui.txt\npor-error"], $tests->run($command));
 
+        // De toda la orden, no sólo de su último comando: con `a && b` el
+        // `2>&1` que se le añadía al final sólo juntaba los errores de `b`, y
+        // los de `a` se iban a la terminal de quien corría `check`.
+        $this->assertSame("primero\nsegundo", $tests->run("sh -c 'echo primero >&2' && echo segundo")['output']);
+
         $failed = $tests->run('echo falla; exit 3');
         $this->assertSame(3, $failed['exit']);
         $this->assertSame('falla', $failed['output']);
