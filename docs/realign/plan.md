@@ -346,8 +346,11 @@ El dueño acepta sin probar un paso `untested`: queda `done` con
 `untested_accepted` (la nota, la hora y cómo se confirmó) y una línea en su
 historia, y `larapack:realign done` lo sigue enseñando (`accepted_untested`).
 Lo confirma **una persona**, como una aprobación: en su terminal, viendo el
-paso y la nota y escribiendo «acepto sin probar»; o sin terminal, nombrándose
-(`LARAPACK_APPROVER` y `--approver` con el mismo nombre, que queda en `by`).
+paso y la nota y escribiendo «acepto sin probar»; o sin terminal, sólo dentro
+de la corrida de aprobación lanzada a mano en GitHub
+([exceptions.md](exceptions.md#por-qué-un-agente-no-puede-aprobar)), donde
+`LARAPACK_APPROVER`, `--approver` y quien la lanzó son la misma cuenta, que
+queda en `by`. Nombrarse fuera de ella no acepta nada.
 Un agente no lo corre: lo deja en su informe y en `brief`. La nota es
 obligatoria y sólo se acepta lo que está `untested`.
 

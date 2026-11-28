@@ -116,7 +116,7 @@ class RealignCommand extends Command
             ->addOption('option', null, InputOption::VALUE_REQUIRED | InputOption::VALUE_IS_ARRAY, 'Operaciones que escriben: clave=valor para la operación. Repetible')
             ->addOption('note', null, InputOption::VALUE_REQUIRED, 'decide, defer, escalate, accept-untested: por qué (queda en el plan)')
             ->addOption('tested', null, InputOption::VALUE_REQUIRED, 'check: la orden de pruebas del proyecto que se corrió y pasó (queda en el plan); sin ella, un paso que cambia comportamiento queda untested')
-            ->addOption('approver', null, InputOption::VALUE_REQUIRED, 'accept-untested sin terminal: el nombre de la persona que acepta, igual que en la variable '.OwnerConfirmation::APPROVER_ENV.' (queda en el plan)')
+            ->addOption('approver', null, InputOption::VALUE_REQUIRED, 'accept-untested sin terminal, sólo dentro de la corrida de aprobación de GitHub: la cuenta que la lanzó, igual que en la variable '.OwnerConfirmation::APPROVER_ENV.' (queda en el plan)')
             ->addOption('deterministic', null, InputOption::VALUE_NONE, 'apply: todos los pasos deterministas pendientes, en el orden del plan (sin ids hay que pedirlo así)')
             ->addOption('target', null, InputOption::VALUE_REQUIRED | InputOption::VALUE_IS_ARRAY, 'decide: sólo para este elemento del paso (su archivo); except: sólo este elemento de los pasos, por su objetivo (realign:…) o su archivo. Repetible');
     }

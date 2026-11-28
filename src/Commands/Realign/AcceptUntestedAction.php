@@ -20,9 +20,10 @@ final class AcceptUntestedAction extends Action
 {
     /**
      * El dueño acepta sin probar un paso que quedó `untested`: lo confirma
-     * él, como una aprobación (OwnerConfirmation), en su terminal o
-     * nombrándose sin ella, y queda en el plan con su nota, su nombre si lo
-     * dio y la hora, a la vista en el diff y en lo que lista `done`.
+     * él, como una aprobación (OwnerConfirmation), en su terminal o, sin
+     * ella, dentro del workflow de aprobación (NamedApproval), y queda en el
+     * plan con su nota, su cuenta si fue por el workflow y la hora, a la
+     * vista en el diff y en lo que lista `done`.
      *
      * @param  list<string>  $targets
      */
