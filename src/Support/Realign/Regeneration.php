@@ -218,10 +218,18 @@ final class Regeneration
         $running = [];
         $jobs = max(1, $this->jobs);
 
+        // El contrato más grande primero: es el que más tarda y el que
+        // arranca con todos los huecos libres para su Pint.
+        usort($pending, fn (array $a, array $b): int => self::contractSize($b['scope']) <=> self::contractSize($a['scope']));
+
         while ($pending !== [] || $running !== []) {
             while ($pending !== [] && count($running) < $jobs) {
                 $job = array_shift($pending);
-                $running[] = $this->start($job);
+                // Los huecos que no ocupa otra regeneración, para Pint: sin
+                // esto el contrato grande (la raíz de un monorepo) formateaba
+                // sus miles de archivos en un solo núcleo mientras los demás
+                // esperaban, y era casi todo lo que tardaba un diagnóstico.
+                $running[] = $this->start($job, $jobs - count($running));
             }
 
             foreach ($running as $index => $process) {
@@ -244,10 +252,19 @@ final class Regeneration
     }
 
     /**
+     * @param  Scope  $scope
+     */
+    private static function contractSize(array $scope): int
+    {
+        return (int) @filesize($scope['root'].'/laraimport.json');
+    }
+
+    /**
      * @param  array{scope: Scope, key: string, ui: list<string>, directory: string}  $job
+     * @param  int  $formatJobs  cuántas Pint a la vez puede usar el hijo (Formatter::jobs())
      * @return array{job: array{scope: Scope, key: string, ui: list<string>, directory: string}, handle: resource, started: float}
      */
-    private function start(array $job): array
+    private function start(array $job, int $formatJobs = 1): array
     {
         $directory = $job['directory'];
 
@@ -280,7 +297,7 @@ final class Regeneration
             0 => ['pipe', 'r'],
             1 => ['file', $directory.'.import.json', 'w'],
             2 => ['file', $directory.'.stderr', 'w'],
-        ], $pipes, $directory);
+        ], $pipes, $directory, [...getenv(), Formatter::JOBS_ENV => (string) max(1, $formatJobs)]);
 
         if (! is_resource($handle)) {
             throw new RuntimeException('No se pudo arrancar la regeneración de '.$job['scope']['path'].'.');

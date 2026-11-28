@@ -2,6 +2,10 @@
 
 namespace Innoboxrr\LarapackGenerator\Tests\Feature;
 
+use Innoboxrr\LarapackGenerator\Support\Declaration;
+use Innoboxrr\LarapackGenerator\Support\Formatter;
+use Innoboxrr\LarapackGenerator\Support\Generation;
+use Innoboxrr\LarapackGenerator\Support\MigrationTimestamp;
 use Innoboxrr\LarapackGenerator\Tests\Support\FakeProject;
 use Innoboxrr\LarapackGenerator\Tests\TestCase;
 use Symfony\Component\Console\Command\Command;
@@ -134,5 +138,69 @@ final class FormatsWithoutProjectPintTest extends TestCase
         ]), $this->lastOutput);
 
         $this->assertStringContainsString('la Pint del generador', $this->lastOutput);
+    }
+
+    public function test_varias_pint_a_la_vez_dejan_lo_mismo_que_una(): void
+    {
+        $previous = getenv(Formatter::JOBS_ENV);
+
+        try {
+            putenv(Formatter::JOBS_ENV);
+            $this->assertSame(1, Formatter::jobs());
+            $alone = $this->import();
+            $expected = $this->formattedFiles();
+
+            // Más archivos que los de un trozo: si no, no hay nada que repartir.
+            $this->assertGreaterThan(40, $alone['formatted']);
+
+            $this->project->cleanup();
+            Generation::reset();
+            Declaration::reset();
+            MigrationTimestamp::reset();
+            $this->useProject(FakeProject::library());
+
+            putenv(Formatter::JOBS_ENV.'=3');
+            $this->assertSame(3, Formatter::jobs());
+            $together = $this->import();
+        } finally {
+            putenv($previous === false ? Formatter::JOBS_ENV : Formatter::JOBS_ENV.'='.$previous);
+        }
+
+        $this->assertSame($alone['formatted'], $together['formatted']);
+        $this->assertSame($expected, $this->formattedFiles());
+    }
+
+    public function test_cuantas_pint_a_la_vez_lo_dice_el_entorno_y_por_defecto_una(): void
+    {
+        $previous = getenv(Formatter::JOBS_ENV);
+
+        try {
+            foreach (['4' => 4, '1' => 1, '0' => 1, '-2' => 1, 'muchas' => 1, '' => 1, '999' => 16] as $value => $jobs) {
+                putenv(Formatter::JOBS_ENV.'='.$value);
+
+                $this->assertSame($jobs, Formatter::jobs(), "LARAPACK_PINT_JOBS={$value}");
+            }
+        } finally {
+            putenv($previous === false ? Formatter::JOBS_ENV : Formatter::JOBS_ENV.'='.$previous);
+        }
+    }
+
+    /**
+     * Los PHP del proyecto, ya formateados: ruta (sin la fecha de una
+     * migración, que es la hora a la que se generó) => contenido.
+     *
+     * @return array<string, string>
+     */
+    private function formattedFiles(): array
+    {
+        $files = [];
+
+        foreach ($this->project->phpFiles() as $relative) {
+            $files[(string) preg_replace('/\d{4}_\d{2}_\d{2}_\d{6}_/', '', $relative)] = $this->project->read($relative);
+        }
+
+        ksort($files);
+
+        return $files;
     }
 }
