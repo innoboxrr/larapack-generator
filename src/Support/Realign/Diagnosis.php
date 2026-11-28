@@ -9,6 +9,7 @@ use Innoboxrr\LarapackGenerator\Support\ProjectSources;
 use Innoboxrr\LarapackGenerator\Support\ProjectVerification;
 use Innoboxrr\LarapackGenerator\Support\Realign\Apply\ForeignKeyPins;
 use Innoboxrr\LarapackGenerator\Support\Verifier;
+use RuntimeException;
 
 /**
  * `larapack:realign diagnose`: dónde está el proyecto respecto del contrato.
@@ -53,6 +54,18 @@ final class Diagnosis
         $scopes = new Scopes($this->root);
         $selected = $scopes->all($packages);
         $exceptions = new Exceptions($this->state);
+
+        // Un manifiesto de un formato posterior se lee sin error (Manifest
+        // sólo se niega a reescribirlo), pero clasificar con él sería
+        // adivinar qué significan sus entradas: se dice antes de regenerar.
+        foreach ($selected as $scope) {
+            $version = $scope['manifest'] ? (new Manifest($scope['root']))->formatVersion() : Manifest::VERSION;
+
+            if ($version > Manifest::VERSION) {
+                throw new RuntimeException(($scope['path'] === '.' ? '' : $scope['path'].'/').".larapack/manifest.json está en la versión {$version} del formato, y este LaraPack entiende hasta la ".Manifest::VERSION.': lo escribió una versión posterior. Actualiza innoboxrr/larapack-generator antes de diagnosticar.');
+            }
+        }
+
         $outcomes = (new Regeneration($this->state, $this->jobs, $this->useCache))->run($selected);
         $now = gmdate('c');
 

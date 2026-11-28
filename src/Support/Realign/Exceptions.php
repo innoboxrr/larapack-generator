@@ -577,11 +577,7 @@ final class Exceptions
             throw new RuntimeException("{$path} no tiene la forma de las solicitudes de excepción del realineamiento (un objeto con una lista `requests`). Corrígelo o bórralo y vuelve a pedirlas con `larapack:realign except`.");
         }
 
-        $version = $decoded['format_version'] ?? null;
-
-        if (! is_int($version) || $version > RealignState::FORMAT_VERSION) {
-            throw new RuntimeException("{$path} está en un formato que esta versión de LaraPack no entiende. Actualiza innoboxrr/larapack-generator.");
-        }
+        RealignState::assertReadable($path, $decoded);
 
         $requests = [];
 
