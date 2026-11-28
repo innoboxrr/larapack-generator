@@ -20,12 +20,15 @@ instrucciones de cada tipo de paso, sus comprobaciones y esta documentación.
 >
 > Dice si hay un realineamiento en curso, dónde va y cuál es el siguiente paso.
 > Sin plan, dice que hay que diagnosticar. Después, [la receta](#para-un-agente-la-receta).
+> Si el paquete no está en `vendor/` del proyecto, mira primero
+> [cómo se invoca](#cómo-se-invoca-con-el-paquete-en-vendor-o-desde-un-clon).
 
 ## Índice
 
 - [Cuándo usarlo y cuándo no](#cuándo-usarlo-y-cuándo-no)
 - [El modelo mental](#el-modelo-mental)
 - [Las cuatro categorías](#las-cuatro-categorías)
+- [Cómo se invoca: con el paquete en vendor o desde un clon](#cómo-se-invoca-con-el-paquete-en-vendor-o-desde-un-clon)
 - [El ciclo](#el-ciclo)
 - [El estado: reanudable por cualquiera](#el-estado-reanudable-por-cualquiera)
 - [Seguridad: qué garantiza](#seguridad-qué-garantiza)
@@ -105,10 +108,47 @@ documentación:
 | `decision` | Hay más de una respuesta legítima y cambia el comportamiento o el alcance. Se presenta con sus opciones y consecuencias. | Quien tenga autoridad sobre el proyecto. **Nunca un agente por su cuenta.** | `decide`, y después lo que la opción pida (`apply`, un playbook, `except` con [aprobación del dueño](exceptions.md)). |
 | `out_of_scope` | No es de LaraPack: dominio, servicios, front propio, la historia de las migraciones, lo que el generador ya no regenera. | Nadie. | Se cuenta y se declara; ningún comando lo toca. |
 
+## Cómo se invoca: con el paquete en vendor o desde un clon
+
+Hay tres formas de llegar a las mismas órdenes, y **todas las páginas de esta
+guía escriben la segunda**:
+
+| Dónde está el paquete | Cómo se invoca |
+|---|---|
+| Aplicación Laravel con el paquete instalado | `php artisan larapack:realign status` |
+| Paquete en `vendor/` del proyecto (cualquier proyecto) | `vendor/bin/builder larapack:realign status` |
+| **No está en `vendor/`**: un clon de innoboxrr/larapack-generator en otro directorio | `php <clon>/builder larapack:realign status --root=<proyecto>` |
+
+**La notación.** Donde la guía escribe `vendor/bin/builder larapack:…` (o
+`larapack:…` a secas), sustituye la forma de tu fila. Donde escribe una ruta
+del paquete —`vendor/innoboxrr/larapack-generator/docs/realign/`,
+`resources/realign/playbooks/`— léela relativa a `<paquete>`: el directorio
+del paquete, que es `vendor/innoboxrr/larapack-generator` en las dos primeras
+filas y `<clon>` en la tercera. Las rutas del **proyecto**
+(`.larapack/realign/`, `laraimport.json`, los archivos de un paso) son siempre
+relativas a `<proyecto>`, la raíz del proyecto que se realinea.
+
+Con un clon:
+
+- el clon necesita sus dependencias: `composer install` **dentro del clon**,
+  una vez;
+- **pasa `--root=<proyecto>` en cada orden** (con ruta absoluta, o relativa al
+  directorio desde el que corres). Sin `--root`, el `builder` de un clon
+  ejecutado fuera de un proyecto falla y lo dice: no adivina el proyecto;
+- `diagnose` regenera con el generador del clon, así que la versión que cuenta
+  es la del clon (`cat <clon>/VERSION`).
+
+Para ensayar sobre una copia del proyecto no hace falta `rsync` (no está en
+todos los entornos): `git worktree add ../copia` si es un repositorio, o
+`mkdir ../copia && tar -C <proyecto> -cf - . | tar -C ../copia -xf -`.
+
 ## El ciclo
 
 ```
-diagnose → plan → next → (hacer el paso) → check → next → … → done
+diagnose → plan → apply --deterministic → diagnose → plan → apply --deterministic
+        → next → (hacer el paso guiado) → check → next → …
+        → diagnose → plan → apply --deterministic → next → … → nada pendiente
+        → larapack:realign done
 ```
 
 ```bash
@@ -127,9 +167,23 @@ el nombre de Composer o `app` para el núcleo), igual que `larapack:verify`.
 `larapack:realign help <acción>` explica cada una con su uso, lo que escribe y
 su guía; `larapack:realign --help` las lista todas.
 
-Al terminar los pasos deterministas (`apply --deterministic`), **vuelve a
-diagnosticar y planificar**: una corrección puede dejar un archivo igual a lo
-regenerado, y eso sale como `adopt` en la pasada siguiente.
+**Otra pasada `diagnose` → `plan` → `apply --deterministic`** hace falta en
+tres momentos, y no es opcional:
+
+1. **Después de cada `apply --deterministic`**: una corrección puede dejar un
+   archivo igual a lo regenerado, y eso sale como `adopt` en la pasada
+   siguiente.
+2. **Después de copiar lo regenerado** encima de un archivo (lo que pide el
+   playbook `edited-outside`) o de cambiar el contrato: el archivo copiado
+   tiene que adoptarse para que el manifiesto diga la verdad, y un contrato
+   distinto cambia lo regenerado.
+3. **Después de completar pasos guiados**, al menos al terminar los de un
+   ámbito: un controlador que ya delega o un archivo devuelto a sus huecos
+   pueden dejar pasos deterministas nuevos, o cerrar otros.
+
+`status` lo recuerda cuando el contrato o el manifiesto cambiaron (`stale`),
+pero no ve un archivo copiado a mano: la pasada la decides tú. Repítela hasta
+que `apply --deterministic` no tenga nada que aplicar.
 
 **Se termina cuando `larapack:realign done` sale con 0.** Es el único
 criterio: diagnostica y planifica otra vez y recorre todos los ámbitos, y
@@ -251,6 +305,8 @@ Esta es toda la lógica que hace falta; no hay que inventar nada por proyecto.
      ahora, aplázalo con su razón (`larapack:realign defer <id> --note="…"`);
      si hacerlo o no es cosa del dueño, pásaselo
      (`larapack:realign escalate <id> --note="…"`).
+     Si no puedes correr las pruebas, el paso no se da por hecho: ver
+     [sin pruebas](guided.md#sin-pruebas-cuando-no-se-pueden-correr-las-del-proyecto).
    - `decision`: **no decidas tú**. Presenta `how.options` —y
      `how.instructions` si trae el playbook de la decisión— a quien tenga
      autoridad y, **mientras decide, sigue con `meanwhile`** (`larapack:realign
@@ -273,6 +329,9 @@ Esta es toda la lógica que hace falta; no hay que inventar nada por proyecto.
    `remaining` y vuelve a comprobar.
 5. Comitea el paso (un commit por paso, con el `.larapack/realign/plan.json`
    que lo marca hecho) y vuelve al 2.
+6. Al terminar los pasos guiados de un ámbito —y siempre que hayas copiado lo
+   regenerado o cambiado el contrato—, otra pasada: `diagnose`, `plan`,
+   `apply --deterministic` (ver [el ciclo](#el-ciclo)), y vuelve al 2.
 
 Reglas que no se rompen aunque parezca que ayudan: no edites
 `.larapack/hand-rolled.lock` ni `plan.json` a mano, no añadas `#[HandRolled]`
@@ -302,6 +361,10 @@ vendor/bin/builder larapack:realign plan               # la segunda pasada adopt
 vendor/bin/builder larapack:realign apply --deterministic
 vendor/bin/builder larapack:realign status             # lo que queda: guiados y decisiones
 vendor/bin/builder larapack:realign next               # uno por uno, con su playbook
+vendor/bin/builder larapack:realign check <id>         # cada uno; un commit por paso
+vendor/bin/builder larapack:realign diagnose           # tras los guiados (y tras copiar lo regenerado)
+vendor/bin/builder larapack:realign plan
+vendor/bin/builder larapack:realign apply --deterministic
 vendor/bin/builder larapack:realign done              # al final: el criterio de terminado (0 = terminado)
 ```
 

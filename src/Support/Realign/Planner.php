@@ -219,7 +219,7 @@ final class Planner
 
         foreach ($group['items'] as $item) {
             if (isset($item['file']) && is_array($item['file'])) {
-                $files[] = array_intersect_key($item['file'], array_flip(['file', 'class', 'reason', 'stub', 'model', 'to', 'members', 'cause', 'tracked', 'hash_current']));
+                $files[] = array_intersect_key($item['file'], array_flip(['file', 'class', 'reason', 'stub', 'model', 'to', 'members', 'cause', 'tracked', 'hash_current', 'regenerated']));
             }
 
             if (isset($item['finding']) && is_array($item['finding'])) {

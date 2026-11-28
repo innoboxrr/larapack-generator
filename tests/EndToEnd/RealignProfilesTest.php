@@ -67,6 +67,9 @@ final class RealignProfilesTest extends TestCase
         $this->assertSame('edited-outside', $next['how']['playbook']);
         $this->assertStringContainsString($editedRequest, $next['how']['instructions']);
         $this->assertStringContainsString('larapack:realign check edited-outside:Requests@.', $next['how']['instructions']);
+        // La ruta exacta de lo regenerado, para compararlo sin buscarlo.
+        $this->assertSame(1, preg_match('#regenerado: `(\.larapack/realign/cache/root/[0-9a-f]{16}/'.preg_quote($editedRequest, '#').')`#', $next['how']['instructions'], $regenerated));
+        $this->assertFileExists($this->path($regenerated[1]));
         $this->assertFalse($this->realign('check', ['targets' => ['edited-outside:Requests@.']], Command::FAILURE)['done']);
         // El agente devuelve lo de fuera del hueco a su sitio (aquí: la
         // autorización vuelve a ser la de la política, como la generada).

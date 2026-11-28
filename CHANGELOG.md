@@ -754,6 +754,51 @@ La guía: [plan.md](docs/realign/plan.md#next) (`next`, `show`, `decide`,
 `defer`, `escalate`, el orden), [guided.md](docs/realign/guided.md#cómo-se-usa)
 y la receta del [README](docs/realign/README.md#para-un-agente-la-receta).
 
+### Playbooks y guía tras dos pruebas de autonomía: la caché, el 404 y los protocolos
+
+Dos agentes sin contexto realinearon proyectos reales sólo con lo que trae el
+paquete. Donde se pararon o tuvieron que adivinar, ahora el paquete lo dice.
+
+- **`edited-outside` da la ruta exacta de lo regenerado.** Cada archivo del
+  paso trae en el plan `regenerated` (`.larapack/realign/cache/<ámbito>/<clave>/<archivo>`,
+  relativo a la raíz del proyecto), y el playbook la imprime como
+  `regenerado:` con la orden para ver la diferencia (`git diff --no-index`).
+  Antes decía «está en la caché» y el agente tenía que buscar la clave.
+- **`edited-outside` ya no manda borrar y correr `import --force`**, que
+  contradecía a `controller-to-request` (no correrlo) y regeneraba el ámbito
+  entero: se devuelve **un** archivo copiando lo regenerado encima, y se
+  vuelve a pegar lo de sus huecos. Dice además qué hacer con los `use`, los
+  métodos auxiliares y las propiedades al mover código a un hueco, y **cuándo
+  copiar lo regenerado es la salida correcta** (lo que falta está declarado en
+  el contrato, como una columna en una vista generada: se copia y se dice) y
+  cuándo no (señales de que se quitó a propósito, una columna secreta: lo
+  decide el dueño).
+- **`controller-to-request`: la autorización que se queda en `handle()`.** Una
+  comprobación que va después de un `findOrFail` no se lleva a `authorize()`
+  si eso cambia el 404 de un id inexistente por un 403 (salvo con route model
+  binding, que da el 404 antes). Dice explícitamente que verify **no**
+  comprueba ese orden, y la prueba con un id inexistente es obligatoria.
+- **Un solo criterio para los protocolos** (OAuth2, RFC 7591, webhooks
+  firmados, xAPI): se mueve si se conservan exactamente el código de estado y
+  el formato de la respuesta —con `failedValidation()`/`failedAuthorization()`
+  y la convención de request base del propio proyecto, si la tiene—; si no,
+  `#[HandRolled]` con la razón concreta y lo aprueba el dueño. Antes decía
+  «déjala como está y pasa», y en un proyecto real un controlador RFC 7591 se
+  movió conservando la respuesta. `decide-hand-rolled` usa el mismo criterio.
+- **Sin el paquete en `vendor/`.** [docs/realign/README.md](docs/realign/README.md)
+  explica una vez las tres formas de invocar (Artisan, `vendor/bin/builder`,
+  `php <clon>/builder … --root=<proyecto>`) y la notación `<paquete>` /
+  `<proyecto>` que usan las demás páginas y la guía para agentes; para copiar
+  un proyecto, `git worktree` o `tar`, no `rsync`.
+- **Sin pruebas.** Si no se pueden correr las del proyecto (sin `vendor/`, sin
+  base de datos), un paso guiado que cambia comportamiento no se da por
+  hecho: se escribe la prueba igual, se comita con `SIN PROBAR` y no se corre
+  `check` en él ([guided.md](docs/realign/guided.md)).
+- **La otra pasada, dicha en el ciclo.** Tras copiar lo regenerado, cambiar
+  el contrato o completar los guiados de un ámbito, otra vez `diagnose` →
+  `plan` → `apply --deterministic`. [profiles.md](docs/realign/profiles.md)
+  y la guía para agentes traen el orden exacto de punta a punta.
+
 ### Al actualizar a 9.4.0
 
 - **Nada cambia si no se usa `larapack:realign`.** El esquema del contrato

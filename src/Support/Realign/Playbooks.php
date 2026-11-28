@@ -190,7 +190,8 @@ final class Playbooks
         foreach ((array) ($details['files'] ?? []) as $file) {
             if (is_array($file)) {
                 $members = is_array($file['members'] ?? null) && $file['members'] !== [] ? ' — piezas: '.implode(', ', $file['members']) : '';
-                $files[] = '- `'.($file['file'] ?? '?').'` ('.($file['class'] ?? '?').'): '.($file['reason'] ?? '').$members;
+                $regenerated = is_string($file['regenerated'] ?? null) ? "\n  regenerado: `".$file['regenerated'].'`' : '';
+                $files[] = '- `'.($file['file'] ?? '?').'` ('.($file['class'] ?? '?').'): '.($file['reason'] ?? '').$members.$regenerated;
             }
         }
 

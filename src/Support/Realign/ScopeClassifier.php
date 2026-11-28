@@ -21,7 +21,7 @@ use Innoboxrr\LarapackGenerator\Support\SpaFallback;
  *
  * @phpstan-import-type Scope from Scopes
  *
- * @phpstan-type Entry array{scope: string, package: string|null, file: string, path: string, model: string|null, stub: string|null, class: string, category: string|null, type: string|null, reason: string, tracked: bool, hash_current: bool|null, generator: string|null, to?: string, members?: list<string>, cause?: string, comments?: bool}
+ * @phpstan-type Entry array{scope: string, package: string|null, file: string, path: string, model: string|null, stub: string|null, class: string, category: string|null, type: string|null, reason: string, tracked: bool, hash_current: bool|null, generator: string|null, to?: string, members?: list<string>, cause?: string, comments?: bool, regenerated?: string}
  * @phpstan-type Unmanaged array{scope: string, package: string|null, file: string, kind: string, category: string, type: string}
  */
 final class ScopeClassifier
@@ -297,6 +297,15 @@ final class ScopeClassifier
             return $this->resolve($entry, FileClass::VERSION_DELTA, $older
                 ? 'sin editar, escrito con una versión anterior del generador ('.($entry['generator'] ?? 'sin versión: manifiesto v1').')'
                 : 'sin editar, pero el contrato cambió desde que se generó');
+        }
+
+        // Dónde está lo que generaría hoy el contrato, relativo a la raíz
+        // del proyecto: el playbook lo da para que el agente lo compare
+        // (`git diff --no-index`) sin buscarlo en la caché.
+        $root = rtrim($this->projectRoot, '/').'/';
+
+        if (str_starts_with($regenerated, $root)) {
+            $entry['regenerated'] = substr($regenerated, strlen($root));
         }
 
         $isPhp = FileComparison::kindOf($current) === 'php';

@@ -114,7 +114,7 @@ está en el informe (`report`, la ruta de `report.json`).
 | `format_only` | Igual salvo formato: en PHP, espacios, coma final, orden de imports, o igual tras pasar el archivo por la misma Pint; en lo demás (jsx, tsx, vue, js, ts, md), sólo finales de línea, indentación y espacio al final de línea. **Otros comentarios no son formato** (ver abajo). | igual que `identical` | `adopt` |
 | `version_delta` | Nadie lo editó (su hash es el del manifiesto) y difiere: la plantilla cambió (`cause: generator`, escrito por una versión anterior o sin versión) o el contrato cambió (`cause: contract`). | `deterministic` | `regenerate` |
 | `hole_edited` | Editado sólo dentro de sus [huecos](#los-huecos). Es lo correcto. También un PHP registrado y editado con el mismo código y **otros comentarios** (`comments: true`): son del usuario y se conservan. | cumple | — |
-| `edited_outside` | Editado fuera de sus huecos. La entrada dice qué piezas (`members`: métodos, propiedades, `use`). | `guided` | `edited-outside` |
+| `edited_outside` | Editado fuera de sus huecos. La entrada dice qué piezas (`members`: métodos, propiedades, `use`) y dónde está lo regenerado con qué compararlo (`regenerated`, relativo a la raíz del proyecto). | `guided` | `edited-outside` |
 | `missing` | No está en disco. Si el contrato lo sigue pidiendo y se borró, `decision`; si es de un modelo retirado del contrato (`cause: retired`), el contrato no lo volvería a generar (`not_regenerated`) o es una migración registrada dos veces cuya otra copia sigue ahí (`superseded`), `deterministic` (`prune`); si el contrato lo pide y nunca se generó, `deterministic` (`regenerate`). | según el caso | `missing`, `prune`, `regenerate` |
 | `renamed` | El manifiesto lo conoce con otra ruta: una migración renombrada a mano, o el mismo contenido en el mismo directorio. | `deterministic` | `relink` |
 | `not_regenerated` | Lo registró el generador, pero `import` no lo regenera (proveedores, configuración, alteraciones, lo de un modelo que ya no está en el contrato). | `out_of_scope` | — |
@@ -239,7 +239,7 @@ herramientas (una migración nueva, un cambio en un servicio).
 ```
 {format_version, generator, generated_at, totals, verify,
  scopes:    [{package, path, contract, manifest, manifest_version, fingerprint, regeneration, counts, total, conforming}],
- files:     [{scope, package, file, path, model, stub, class, category, type, reason, tracked, hash_current, generator, to?, members?, cause?, comments?}],
+ files:     [{scope, package, file, path, model, stub, class, category, type, reason, tracked, hash_current, generator, to?, members?, cause?, comments?, regenerated?}],
  unmanaged: [...],
  findings:  [...],   los de verify, con scope, category y type
  contract:  [{scope, package, file, model, column, table, on_delete?, on_update?, migration, category, type}],
