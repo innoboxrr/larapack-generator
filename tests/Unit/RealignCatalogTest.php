@@ -286,6 +286,9 @@ final class RealignCatalogTest extends TestCase
             'ConcernMove::$files' => 'ConcernMove::reset',
             // El hash de las plantillas del paquete: no cambia en un proceso.
             'Regeneration::$stubsHash' => null,
+            // Las cachés enlazadas de las simulaciones en curso: cada corrida
+            // quita la suya en su `finally`, así que no queda nada entre pruebas.
+            'Simulation::$caches' => null,
         ];
         $found = [];
         $files = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator(dirname(__DIR__, 2).'/src/Support/Realign', \FilesystemIterator::SKIP_DOTS));

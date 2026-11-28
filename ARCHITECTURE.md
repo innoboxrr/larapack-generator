@@ -924,7 +924,11 @@ corrida (`ScopeReference::forget`), `ConcernMove` la lista de PHP del proyecto
 (`ConcernMove::reset`), `Operations` las implementaciones registradas por
 encima de la convención (`Operations::reset`) y `OwnerConfirmation` la
 terminal (`OwnerConfirmation::useTerminal`). `tests/TestCase.php` los limpia
-todos al terminar cada prueba; uno nuevo va también ahí.
+todos al terminar cada prueba; uno nuevo va también ahí. Dos no hace falta
+limpiarlos: `Simulation` anota la caché enlazada de cada simulación en curso y
+la quita en su `finally`, y `Regeneration` guarda la huella de las plantillas
+del paquete, que no cambia en un proceso. `RealignCatalogTest` falla con uno
+que no esté en esa lista.
 
 ---
 
