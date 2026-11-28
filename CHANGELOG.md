@@ -736,6 +736,55 @@ tercer diagnóstico.
 (8,8 y 11,9 kB de instrucciones con sus archivos, sus hallazgos y sus órdenes). La caché ocupó 176 MB en
 school-management y 24 MB en expediente.
 
+### La auditoría de mantenibilidad, antes de publicar
+
+El módulo se construyó en pocas horas, en ramas paralelas. Antes de publicarlo se revisó para quien tenga que
+mantenerlo; la interfaz —acciones, opciones, textos, documentos JSON— no cambia salvo donde se dice.
+
+- **Dos errores, cada uno con la prueba que fallaba sin el arreglo.** Volver a correr `plan` sobre el mismo
+  diagnóstico ponía `done` un paso que `check` había dejado `untested` (y `larapack:realign done` salía en verde
+  sin prueba registrada), perdía `tested` y `untested_accepted` y devolvía a pendiente una decisión cumplida
+  (`Planner::merge`). Y la orden de pruebas de `config.json` sólo capturaba los errores de su último tramo:
+  en `a && b`, los de `a` se iban a la terminal (`ProjectTests::run`).
+- **`RealignCommand` reparte en una clase por acción** (`src/Commands/Realign/`, sobre `Action`); el comando
+  valida lo común y entrega (`RealignCommand::HANDLERS`). Lo que decide salió a donde se prueba sin consola:
+  `StepCheck` (lo que `check` y `accept-untested` hacen con un paso), `Navigation::next`, `meanwhile`,
+  `awaitingOwner`, `untested` y `pendingExceptions`, y los lectores del plan (`Planner::byId`, `stepsIn`,
+  `indexOf`, `option`, `blockedBy`; `RealignState::requirePlan`; `Diagnosis::stale`).
+- **Lo duplicado entre ramas, en un sitio.** `done` y `brief` calculaban cada uno qué excepciones faltan por
+  aprobar; el plan por id se armaba a mano en cuatro clases; había cuatro copias de «borra este directorio»
+  (`Files::remove`; la de `PintPass` seguía un enlace simbólico en vez de borrarlo) y dos del lector de tokens
+  de `infer` (`Infer\SourceTokens`). Una operación con el paso bloqueado dice ahora sólo los pasos que
+  todavía lo detienen, no todas sus dependencias.
+- **Un error en JSON lleva siempre `format_version` y `action`**, como ya decía
+  [plan.md](docs/realign/plan.md); antes dependía de qué línea fallaba.
+- **Un estado de un formato posterior no se lee, y dice cuál.** `report.json`, `plan.json`, `config.json` y
+  `exceptions.json` pasan por la misma comprobación (`RealignState::assertReadable`): el error dice en qué
+  versión está el archivo, hasta cuál se entiende y que hay que actualizar; uno sin `format_version` tiene su
+  propio mensaje. `diagnose` no clasifica con un manifiesto de una versión posterior a la 2.
+- **Tarda menos, con el mismo informe y el mismo plan.** La pasada de Pint del diagnóstico es una para todos
+  los ámbitos que comparten Pint y configuración, en hasta `--jobs` procesos (`PintPass::equivalentMany`); la
+  regeneración arranca primero el contrato más grande y reparte su Pint en los huecos libres
+  (`LARAPACK_PINT_JOBS`, que también vale para `larapack:import`; por omisión, 1); `done` no repite el `verify`
+  del diagnóstico; `check` clasifica los archivos de un paso por ámbito y no de uno en uno. En un proyecto
+  sintético de 27 000 archivos y 17 ámbitos: `diagnose` con caché, de 7,5 s a unos 4; `done`, de 9,5 s a 4;
+  `check` de un paso de 30 archivos, de 6 s a 1; sin caché, de 63 s a unos 42 (medido con la máquina
+  compartida: es el dato menos firme). `report.json`, `plan.json` y las salidas JSON son idénticos.
+- **Pruebas unitarias directas** de lo que antes sólo se cubría de punta a punta: `Planner`, `Navigation`,
+  `DoneWhen`, `Completion`, `ScopeClassifier`, `Exceptions`, `RealignState`, `ProjectTests`, las operaciones
+  (`OperationRunner`, `OperationResult`, `Simulation`), `NamedApproval`, `OwnerConfirmation`, `StepTypes`,
+  `Playbooks`, `Scopes` y `StepCheck`.
+- **Mutación.** `RealignExceptionsTest` estaba en el `--filter` de `infection.json5` y bajo Infection falla
+  siempre al regenerar, así que daba por muerto todo mutante que recorría: sale del filtro (sigue en la suite),
+  entran pruebas que recorren lo mismo sin regenerar y `MutationFloorsTest` impide que vuelva a entrar una que
+  regenere. Dos piezas nuevas con suelo: `NamedApproval` (98,3 %) y `Navigation` (90,4 %). Ningún suelo
+  existente se mueve. Lo medido y lo que no entra todavía, en [docs/mutacion.md](docs/mutacion.md).
+- **[ARCHITECTURE.md](ARCHITECTURE.md#realign)** describe las tres capas, cada acción con su clase, el estado
+  archivo por archivo, el estado estático y cómo se añade cada pieza; `RealignCatalogTest` comprueba que nombre
+  cada clase del módulo, que cada acción descrita tenga quien la haga y que cada propiedad estática esté contada.
+- La ayuda de `accept-untested`, la de `--approver` y [plan.md](docs/realign/plan.md) decían todavía que sin
+  terminal bastaba nombrarse; dicen lo que hace el código: sólo dentro del workflow de aprobación.
+
 ### Al actualizar a 9.4.0
 
 - **Nada cambia si no se usa `larapack:realign`.** El esquema del contrato

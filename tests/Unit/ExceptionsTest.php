@@ -3,8 +3,10 @@
 namespace Innoboxrr\LarapackGenerator\Tests\Unit;
 
 use Innoboxrr\LarapackGenerator\Support\HandRolledLock;
+use Innoboxrr\LarapackGenerator\Support\Realign\Category;
 use Innoboxrr\LarapackGenerator\Support\Realign\Exceptions;
 use Innoboxrr\LarapackGenerator\Support\Realign\ExceptionTargets;
+use Innoboxrr\LarapackGenerator\Support\Realign\Navigation;
 use Innoboxrr\LarapackGenerator\Support\Verifier;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
@@ -437,5 +439,51 @@ final class ExceptionsTest extends TestCase
         // La huella de un archivo se calcula del archivo.
         $this->assertSame($this->today(), $said->fingerprint(self::TARGET));
         $this->assertNull($said->fingerprint('realign:unmanaged-http:src/Nadie.php'));
+    }
+
+    /**
+     * La lista que hace fallar a `done` y que `brief` le presenta al dueño
+     * es una sola (Navigation::pendingExceptions()).
+     */
+    public function test_lo_pendiente_de_aprobar_es_una_sola_lista(): void
+    {
+        $other = 'src/Http/Controllers/OtherController.php';
+        $declared = 'src/Http/Controllers/DeclaredController.php';
+        $old = 'realign:unmanaged-http:src/Http/Controllers/OldController.php';
+
+        foreach ([$other, $declared] as $file) {
+            file_put_contents($this->root.'/'.$file, "<?php\n\nclass X\n{\n}\n");
+        }
+
+        $this->requestsFile([
+            $this->request(extra: ['step' => 'unmanaged-http@.', 'scope' => '.']),
+            $this->request('realign:unmanaged-http:'.$other, 'Otro informe.', ['step' => 'unmanaged-http@.', 'scope' => 'packages/blog']),
+            $this->request('realign:unmanaged-http:'.$declared, 'Se iba a dejar.', ['step' => 'unmanaged-http@.', 'scope' => '.']),
+        ]);
+        // Una aprobada sobre el código de hoy, y una de antes sobre algo que ya no existe.
+        $this->lock([self::TARGET => ['Es un informe interno.', $this->today()], $old => ['De otra rama.', 'sha256:'.str_repeat('a', 64)]]);
+
+        $step = ['id' => 'unmanaged-http@.', 'category' => Category::DECISION, 'files' => [self::CONTROLLER, $other, $declared],
+            'options' => [['key' => 'keep', 'run' => 'larapack:realign except unmanaged-http@. --option reason="…"'], ['key' => 'declare']],
+            'decision' => ['option' => 'keep'], 'decisions' => [$declared => ['option' => 'declare']]];
+        $byId = ['unmanaged-http@.' => $step];
+
+        $pending = Navigation::pendingExceptions($this->exceptions(), [], $byId);
+
+        // La aprobada no está; la que se decidió declarar ya no se pide; la de antes, caducada, sí.
+        $this->assertSame(['realign:unmanaged-http:'.$other, $old], array_column($pending, 'target'));
+        $this->assertNotSame(Exceptions::APPROVED, $pending[0]['status']);
+        $this->assertSame('Otro informe.', $pending[0]['reason']);
+        $this->assertSame('unmanaged-http@.', $pending[0]['request']['step'] ?? null);
+        $this->assertNull($pending[1]['request'], 'aprobada sin solicitud');
+        $this->assertSame('De otra rama.', $pending[1]['reason']);
+        $this->assertSame(Exceptions::STALE, $pending[1]['status']);
+
+        // Sin el plan no se sabe que se decidió declararla: se sigue pidiendo.
+        $this->assertSame(['realign:unmanaged-http:'.$declared, 'realign:unmanaged-http:'.$other, $old], array_column(Navigation::pendingExceptions($this->exceptions(), [], []), 'target'));
+
+        // Con --package, sólo las de ese ámbito; las aprobadas sin solicitud no se sabe de cuál son.
+        $this->assertSame(['realign:unmanaged-http:'.$other], array_column(Navigation::pendingExceptions($this->exceptions(), ['packages/blog'], $byId), 'target'));
+        $this->assertSame([], Navigation::pendingExceptions($this->exceptions(), ['packages/otro'], $byId));
     }
 }

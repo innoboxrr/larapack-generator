@@ -415,13 +415,15 @@ final class Navigation
                 $key = $package ?? 'app';
                 $by[$key] ??= ['scope' => $key, 'package' => $package, 'decisions' => [], 'guided' => []];
                 $by[$key]['decisions'][$id] = $id;
-                $by[$key]['guided'][(string) $step['id']] = (string) $step['id'];
+                $guided = (string) $step['id'];
+                $by[$key]['guided'][$guided] = $guided;
             }
         }
 
         return array_values(array_map(function (array $entry): array {
-            $decisions = array_values($entry['decisions']);
-            $guided = array_values($entry['guided']);
+            // sort() reindexa: salen como listas.
+            $decisions = $entry['decisions'];
+            $guided = $entry['guided'];
             sort($decisions);
             sort($guided);
 
@@ -450,7 +452,7 @@ final class Navigation
     {
         $rows = [];
 
-        foreach ($exceptions->requests() as $target => $request) {
+        foreach ($exceptions->requests() as $request) {
             if ($paths !== [] && ! in_array($request['scope'], $paths, true)) {
                 continue;
             }
@@ -461,10 +463,11 @@ final class Navigation
                 continue;
             }
 
-            $status = $exceptions->status((string) $target);
+            $target = $request['target'];
+            $status = $exceptions->status($target);
 
             if ($status !== Exceptions::APPROVED) {
-                $rows[(string) $target] = ['target' => (string) $target, 'status' => $status, 'request' => $request, 'reason' => $request['reason']];
+                $rows[$target] = ['target' => $target, 'status' => $status, 'request' => $request, 'reason' => $request['reason']];
             }
         }
 

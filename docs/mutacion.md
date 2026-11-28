@@ -80,8 +80,8 @@ Todo se midió otra vez, y **sin la prueba que lo daba todo por muerto**
 | `Guard` | 990 | 2 | 96,77 % | 96,96 % | 96,6 % | 1 |
 | `LegacySecurity` | 364 | 0 | 96,43 % | 96,43 % | 95,4 % | 3 |
 | `LegacyFix` | 866 | 11 | 91,57 % | 92,75 % | 90,6 % | 8 |
-| `Navigation` | 198 | 0 | 91,41 % | 91,41 % | 90,4 % | 2 |
-| **Las diez** | **5089** | **14** | **96,23 %** | **96,49 %** | **95,6 % / 95,8 %** | |
+| `Navigation` | 302 | 0 | 92,05 % | 92,05 % | 90,4 % | 5 |
+| **Las diez** | **5193** | **14** | **96,17 %** | **96,43 %** | **95,6 % / 95,8 %** | |
 
 Una corrida, con cuatro núcleos y la máquina ocupada: 48 mutantes agotaron el
 tiempo (16 de `Guard`, 28 de `PhpOutline`) y cuentan como detectados. Los
@@ -94,8 +94,15 @@ conjuntos tampoco: con las dos piezas nuevas el conjunto queda 0,6 puntos por
 encima.
 
 Los suelos nuevos, con la regla de siempre: `NamedApproval`, 99,39 % → 98,3 %;
-`Navigation`, 91,41 % → 90,4 %. De los 17 mutantes de `Navigation` que escapan
-ninguno es un test que falte (ver
+`Navigation`, 91,41 % → 90,4 %. `Navigation` se midió con 198 mutantes y
+después ganó código —`next`, `meanwhile`, `awaitingOwner`, `untested` y
+`pendingExceptions`, que salieron de `RealignCommand`—: medida otra vez sola,
+con `RealignPlanReadingTest` en el `--filter`, son 302 mutantes y 92,05 %, y
+su suelo se queda donde estaba (la fila de la tabla y el conjunto llevan ese
+dato; las otras nueve no cambiaron de código desde la corrida). De los 17
+mutantes de `Navigation` que escapaban ninguno es un test que falte, y los 7
+que añade el código nuevo son conversiones `(string)`/`(array)` de un paso,
+que es un array sin tipos (ver
 [Los de `Navigation` y `NamedApproval`](#los-de-navigation-y-namedapproval)):
 su techo, sin tocar el código, es ése.
 

@@ -126,7 +126,7 @@ final class RealignPlanReadingTest extends TestCase
         $decision = $this->step('unmanaged-http@packages/blog', 'unmanaged-http', ['category' => Category::DECISION, 'files' => ['a.php', 'b.php']]);
         $scope = ['scope' => ['path' => 'packages/blog', 'package' => 'acme/blog']];
         $guided = fn (string $file, array $more = []): array => $this->step('controller-shape@'.$file, 'controller-shape',
-            ['category' => Category::GUIDED, 'files' => [$file], 'depends_on' => ['unmanaged-http@packages/blog']] + $more + $scope);
+            $more + ['category' => Category::GUIDED, 'files' => [$file], 'depends_on' => ['unmanaged-http@packages/blog']] + $scope);
         $steps = [$decision, $guided('b.php'), $guided('a.php'), $guided('c.php'), $guided('d.php', ['files' => ['a.php'], 'deferred' => ['note' => 'x']])];
 
         $this->assertSame(
@@ -139,6 +139,39 @@ final class RealignPlanReadingTest extends TestCase
         $steps[0]['decisions'] = ['a.php' => ['option' => 'keep']];
         $this->assertSame(['controller-shape@b.php'], Navigation::awaitingOwner($steps, Planner::byId(['steps' => $steps]))[0]['guided']);
 
+        // Decidido con una opción que no deja seguir («declararlos»): lo guiado
+        // espera a que la decisión se cumpla, no al dueño.
+        $steps[0]['decisions'] = ['a.php' => ['option' => 'declare'], 'b.php' => ['option' => 'declare']];
+        $byId = Planner::byId(['steps' => $steps]);
+        $this->assertSame(['unmanaged-http@packages/blog'], Planner::blockedBy($steps[2], $byId));
+        $this->assertSame([], Navigation::awaitingOwner($steps, $byId));
+
+        // Lo que no es guiado no cuenta, ni lo que espera a un paso que no es una decisión del dueño.
+        $adopt = $this->step('adopt@.', 'adopt', ['files' => ['a.php']]);
+        $waiting = [
+            $adopt,
+            $this->step('unmanaged-http@.', 'unmanaged-http', ['category' => Category::DECISION, 'files' => ['a.php']]),
+            $this->step('regenerate@.', 'regenerate', ['files' => ['a.php'], 'depends_on' => ['unmanaged-http@.']]),
+            $this->step('security@.', 'security', ['category' => Category::GUIDED, 'files' => ['a.php'], 'depends_on' => ['adopt@.']]),
+        ];
+        $this->assertSame([], Navigation::awaitingOwner($waiting, Planner::byId(['steps' => $waiting])));
+
+        // Y si además espera una decisión, ésa sí.
+        $waiting[3]['depends_on'] = ['adopt@.', 'unmanaged-http@.'];
+        $this->assertSame(['unmanaged-http@.'], Navigation::awaitingOwner($waiting, Planner::byId(['steps' => $waiting]))[0]['decisions'] ?? null);
+
+        // Varias decisiones y varios guiados salen ordenados y sin repetir.
+        $many = [
+            $this->step('unmanaged-models@.', 'unmanaged-models', ['category' => Category::DECISION, 'files' => ['a.php', 'b.php']]),
+            $this->step('hand-rolled@.', 'hand-rolled', ['category' => Category::DECISION, 'files' => ['a.php', 'b.php']]),
+            $this->step('z@b.php', 'controller-shape', ['category' => Category::GUIDED, 'files' => ['b.php'], 'depends_on' => ['unmanaged-models@.', 'hand-rolled@.']]),
+            $this->step('a@a.php', 'controller-shape', ['category' => Category::GUIDED, 'files' => ['a.php'], 'depends_on' => ['unmanaged-models@.', 'hand-rolled@.']]),
+        ];
+        $this->assertSame(
+            [['scope' => 'app', 'package' => null, 'decisions' => ['hand-rolled@.', 'unmanaged-models@.'], 'guided' => ['a@a.php', 'z@b.php']]],
+            Navigation::awaitingOwner($many, Planner::byId(['steps' => $many]))
+        );
+
         // El núcleo se llama `app`.
         $core = [$this->step('hand-rolled@.', 'hand-rolled', ['category' => Category::DECISION, 'files' => ['a.php']]),
             $this->step('controller-shape@a.php', 'controller-shape', ['category' => Category::GUIDED, 'files' => ['a.php'], 'depends_on' => ['hand-rolled@.']])];
@@ -149,13 +182,14 @@ final class RealignPlanReadingTest extends TestCase
     {
         $steps = [
             $this->step('adopt@.', 'adopt', ['status' => Planner::DONE]),
-            $this->step('security@.', 'security', ['status' => Planner::UNTESTED, 'title' => 'Seguridad',
-                'history' => [['event' => 'untested', 'at' => '1'], ['event' => 'applied', 'at' => '2'], ['event' => 'resolved', 'at' => '3']]]),
-            $this->step('declared-routes@.', 'declared-routes', ['status' => Planner::UNTESTED]),
+            $this->step('security@.', 'security', ['status' => Planner::UNTESTED, 'title' => 'Seguridad', 'scope' => ['path' => 'packages/blog', 'package' => 'acme/blog'],
+                // La hora es la de cuando quedó sin probar, no la del último evento.
+                'history' => ['basura', ['event' => 'untested', 'at' => '1'], ['event' => 'resolved', 'at' => '3'], ['event' => 'applied', 'at' => '4']]]),
+            $this->step('declared-routes@.', 'declared-routes', ['status' => Planner::UNTESTED, 'history' => [['event' => 'applied', 'at' => '9']]]),
         ];
 
         $this->assertSame([
-            ['id' => 'security@.', 'title' => 'Seguridad', 'scope' => '.', 'at' => '3',
+            ['id' => 'security@.', 'title' => 'Seguridad', 'scope' => 'packages/blog', 'at' => '3',
                 'check' => 'larapack:realign check security@. --tested="<orden>"', 'accept' => 'larapack:realign accept-untested security@. --note="por qué"'],
             ['id' => 'declared-routes@.', 'title' => 'declared-routes', 'scope' => '.', 'at' => null,
                 'check' => 'larapack:realign check declared-routes@. --tested="<orden>"', 'accept' => 'larapack:realign accept-untested declared-routes@. --note="por qué"'],
