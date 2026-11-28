@@ -250,7 +250,7 @@ final class ApplyOperation implements RealignOperation
         $model = $tracked['model'] ?? ($produced['model'] ?? '');
 
         $manifest->record($model, (string) ($manifest->namespaceOf($model) ?? ($produced['namespace'] ?? '')), $absolute, $produced['stub'] ?? ($tracked['stub'] ?? ''));
-        $result->fixed($file, $reason, $extra);
+        $result->fixed($file, $reason, $extra + ($context->simulation ? ['diff' => $changes->appliedDiff()] : []));
     }
 
     /**
@@ -309,11 +309,28 @@ final class ApplyOperation implements RealignOperation
 
         $fix = new LegacyFix($context->root, [$check], null, array_values(array_unique($roots)));
         $fix->plan();
+        $before = [];
+
+        if ($context->simulation) {
+            // En la copia se escribe de verdad: el diff es el de lo que quedó.
+            foreach (($fix->withDiffs()[$check]['fixed'] ?? []) as $planned) {
+                $absolute = $context->root.'/'.$planned['file'];
+                $before[$planned['file']] = is_file($absolute) ? Files::read($absolute) : '';
+            }
+        }
+
         $report = $context->dryRun() ? $fix->withDiffs() : $fix->apply()['report'];
         $entry = $report[$check] ?? ['fixed' => [], 'skipped' => [], 'unchanged' => 0];
 
         foreach ($entry['fixed'] as $fixed) {
-            $result->fixed($fixed['file'], "larapack:fix {$check}.", ['step' => $stepOf($fixed['file'])] + (isset($fixed['diff']) ? ['diff' => $fixed['diff']] : []));
+            $diff = isset($fixed['diff']) ? ['diff' => $fixed['diff']] : [];
+
+            if (isset($before[$fixed['file']])) {
+                $absolute = $context->root.'/'.$fixed['file'];
+                $diff = ['diff' => UnifiedDiff::of($before[$fixed['file']], is_file($absolute) ? Files::read($absolute) : '', $fixed['file'])];
+            }
+
+            $result->fixed($fixed['file'], "larapack:fix {$check}.", ['step' => $stepOf($fixed['file'])] + $diff);
         }
 
         foreach ($entry['skipped'] as $skipped) {
@@ -464,6 +481,10 @@ final class ApplyOperation implements RealignOperation
                 continue;
             }
 
+            if ($context->simulation) {
+                $extra += ['diff' => $plan['changes']->appliedDiff()];
+            }
+
             // Si alguien lo registró, el registro sigue al archivo.
             $owner = ScopeReference::ownerOf($context->root, $file);
 
@@ -590,7 +611,9 @@ final class ApplyOperation implements RealignOperation
 
         $problem = $changes->commit($format, $manifest);
 
-        $problem === null ? $result->fixed($file, $reason, $extra) : $result->skipped($file, $problem, $extra);
+        $problem === null
+            ? $result->fixed($file, $reason, $extra + ($context->simulation ? ['diff' => $changes->appliedDiff()] : []))
+            : $result->skipped($file, $problem, $extra);
     }
 
     private function document(string $scopeRoot): ImportDocument|string

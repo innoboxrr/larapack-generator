@@ -73,7 +73,8 @@ class RealignCommand extends Command
             ->addOption('allow-dirty', null, InputOption::VALUE_NONE, 'Operaciones que escriben: escribe aunque el árbol git tenga cambios sin comitear (no se podrá deshacer con git)')
             ->addOption('option', null, InputOption::VALUE_REQUIRED | InputOption::VALUE_IS_ARRAY, 'Operaciones que escriben: clave=valor para la operación. Repetible')
             ->addOption('note', null, InputOption::VALUE_REQUIRED, 'decide: por qué se decide así (queda en el plan)')
-            ->addOption('deterministic', null, InputOption::VALUE_NONE, 'apply: todos los pasos deterministas pendientes, en el orden del plan (sin ids hay que pedirlo así)');
+            ->addOption('deterministic', null, InputOption::VALUE_NONE, 'apply: todos los pasos deterministas pendientes, en el orden del plan (sin ids hay que pedirlo así)')
+            ->addOption('target', null, InputOption::VALUE_REQUIRED | InputOption::VALUE_IS_ARRAY, 'except: sólo este elemento de los pasos, por su objetivo (realign:…) o su archivo. Repetible');
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
@@ -131,7 +132,7 @@ class RealignCommand extends Command
         $accepted = RealignActions::options($action);
         $unexpected = [];
 
-        foreach (['package', 'no-cache', 'dry-run', 'allow-dirty', 'option', 'note', 'deterministic'] as $option) {
+        foreach (['package', 'no-cache', 'dry-run', 'allow-dirty', 'option', 'note', 'deterministic', 'target'] as $option) {
             $value = $input->getOption($option);
 
             if ($value !== false && $value !== null && $value !== [] && ! in_array($option, $accepted, true)) {
@@ -677,7 +678,8 @@ class RealignCommand extends Command
             $options[$key] = $value;
         }
 
-        $report = (new OperationRunner($root))->run($action, $targets, $this->scopePaths($input, $root), (bool) $input->getOption('dry-run'), (bool) $input->getOption('allow-dirty'), $options);
+        $report = (new OperationRunner($root))->run($action, $targets, $this->scopePaths($input, $root), (bool) $input->getOption('dry-run'), (bool) $input->getOption('allow-dirty'), $options,
+            array_values(array_map('strval', (array) $input->getOption('target'))));
         $ok = $report['result']['skipped'] === [];
 
         if ($this->wantsJson($input)) {

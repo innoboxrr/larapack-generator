@@ -586,6 +586,45 @@ De una prueba de autonomía sobre la copia de un proyecto 7.x.
   están fuera de alcance (suman el total; en JSON, `breakdown`), con una
   línea que define «cumplen».
 
+### El `--dry-run` de `apply` cuenta lo mismo que la corrida, y `except` pide por lo de hoy
+
+De dos pruebas de autonomía sobre proyectos reales.
+
+- **`apply --deterministic --dry-run` contaba otra cosa que la corrida real.**
+  En un proyecto, 2 276 cambios, 3 saltados y 1 sin cambios simulados contra
+  2 272, 3 y 3 reales (`index-managed`, 70 simulados y 69 reales; `resource-appends`, 70 y 68);
+  en otro, 1 215 de `fix` y 28 de `model-lists` simulados contra 447 y 14. Cada
+  paso simulaba contra el disco de hoy, y en la corrida real lo que escribe un
+  paso lo lee el siguiente: un IndexRequest que `regenerate` deja como la
+  plantilla actual ya no lo arregla `fix`, `model-lists` ve lo que `fix` añadió
+  al modelo, lo que fija `pin-foreign-keys` cambia el contrato de los pasos
+  siguientes. Ahora `--dry-run` de `apply` y de `adopt` **es la corrida**, sobre
+  una copia temporal del proyecto que se borra (Simulation): mismas decisiones,
+  mismo orden, mismos saltos. La copia lleva todo menos `.git`; `vendor/`,
+  `node_modules/` y la caché de lo regenerado son enlaces. Cada elemento de
+  `fixed` trae el diff de lo que cambió ese paso sobre lo que dejaron los
+  anteriores, ya con la Pint del proyecto. La clave de la caché de lo
+  regenerado usa la ruta real de la Pint, para que la copia dé con la misma
+  (se regenera una vez al actualizar). Prueba: el mismo proyecto con un paso
+  que se encadena, simulado y luego escrito, da las mismas tres listas
+  ([apply.md](docs/realign/apply.md#cómo-simula)).
+- **El JSON de las operaciones dice el paso siempre igual.** Cada elemento de
+  `fixed`/`skipped`/`unchanged` es `{file, reason, step, steps}`: `step` está
+  siempre (el paso, el primero si es de varios, o `null`) y `steps` los lista
+  todos. Antes el `unchanged` de una comprobación de `fix` traía sólo
+  `steps: […]` y la línea de la versión anotada no traía ninguno
+  ([plan.md](docs/realign/plan.md#el-estado-en-disco-y-los-formatos-json)).
+- **`except` pedía por los archivos del plan, no por los de hoy**: antes de
+  volver a diagnosticar, pedía excepción también para un archivo ya
+  arreglado, y el dueño la habría aprobado para algo que ya cumplía. Ahora
+  reclasifica cada elemento antes de pedir —un hallazgo con la misma
+  comprobación de verify sobre el código de ahora, un archivo con la misma
+  clasificación, uno a mano si sigue existiendo— y lo que ya no está sale en
+  `unchanged` diciéndolo. Y **`--target`** (repetible) acota a elementos
+  concretos, por su objetivo o por su archivo; uno que no es de esos pasos es
+  un error que dice cuáles hay
+  ([exceptions.md](docs/realign/exceptions.md#el-ciclo)).
+
 ### Al actualizar a 9.4.0
 
 - **Nada cambia si no se usa `larapack:realign`.** El esquema del contrato

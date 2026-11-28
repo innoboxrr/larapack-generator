@@ -185,7 +185,12 @@ final class RealignAdoptTest extends TestCase
         $this->prepare();
 
         $simulated = $this->realign('adopt', ['targets' => ['adopt@.'], '--dry-run' => true]);
-        $this->assertGreaterThan(10, end($simulated['fixed'])['stamped'] ?? 0);
+        $stamp = end($simulated['fixed']);
+        $this->assertGreaterThan(10, $stamp['stamped'] ?? 0);
+        // La línea de la versión anotada también dice de qué paso es.
+        $this->assertNull($stamp['file']);
+        $this->assertSame('adopt@.', $stamp['step']);
+        $this->assertSame(['adopt@.'], $stamp['steps']);
         $this->assertNull($this->manifest()->entryOf(self::POLICY)['generator']);
 
         $this->realign('adopt', ['targets' => ['adopt@.']]);

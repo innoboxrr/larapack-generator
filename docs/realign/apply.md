@@ -8,6 +8,7 @@ certeza lo salta, con su razón, y lo termina a mano su playbook.
 ## Índice
 
 - [Correrla](#correrla)
+- [Cómo simula](#cómo-simula)
 - [Cómo escribe](#cómo-escribe)
 - [Los pasos](#los-pasos)
   - [regenerate](#regenerate)
@@ -45,6 +46,29 @@ Como toda operación que escribe: sin `--dry-run` exige el árbol git limpio
 fuera de `.larapack/realign/` (o `--allow-dirty`), informa
 `fixed`/`skipped`/`unchanged`, termina con error si saltó algo y anota en la
 historia de cada paso lo que hizo, sin darlo por hecho (eso es `check`).
+
+## Cómo simula
+
+`--dry-run` **es la misma corrida, sobre una copia temporal del proyecto**, que
+se borra al terminar: las mismas decisiones, en el mismo orden, con los mismos
+saltos, y los mismos `fixed`/`skipped`/`unchanged` que dará la corrida real
+(salvo lo que cambie en el disco entre una y otra). Los pasos se encadenan: lo
+que escribe uno lo lee el siguiente.
+
+- Un archivo que `regenerate` deja como la plantilla actual ya no lo «arregla»
+  después `fix` (antes se contaba dos veces: en un proyecto real,
+  `index-managed` daba 70 simulados y 69 reales, y `resource-appends` 70 y
+  68).
+- `model-lists` ve lo que `fix` añadió al mismo modelo, y lo que fija
+  `pin-foreign-keys` en el contrato lo leen los pasos que vienen después.
+- Cada elemento de `fixed` trae el `diff` de **lo que cambió ese paso sobre lo
+  que dejaron los anteriores**, ya pasado por la Pint del proyecto.
+- La copia lleva todo menos `.git`; `vendor/`, `node_modules/` y la caché de
+  lo regenerado (`.larapack/realign/cache/`) son enlaces a los del proyecto,
+  que no se escriben. Cuesta lo que la corrida más copiar el código (no el
+  vendor).
+- `adopt --dry-run` simula igual. `infer` y `except` no lo necesitan: no
+  escriben nada que lea el paso siguiente.
 
 ## Cómo escribe
 
