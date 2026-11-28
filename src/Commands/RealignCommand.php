@@ -87,7 +87,7 @@ class RealignCommand extends Command
             ->addOption('option', null, InputOption::VALUE_REQUIRED | InputOption::VALUE_IS_ARRAY, 'Operaciones que escriben: clave=valor para la operación. Repetible')
             ->addOption('note', null, InputOption::VALUE_REQUIRED, 'decide, defer, escalate, accept-untested: por qué (queda en el plan)')
             ->addOption('tested', null, InputOption::VALUE_REQUIRED, 'check: la orden de pruebas del proyecto que se corrió y pasó (queda en el plan); sin ella, un paso que cambia comportamiento queda untested')
-            ->addOption('approver', null, InputOption::VALUE_REQUIRED, 'accept-untested sin terminal: el nombre de la persona que acepta, igual que en la variable '.OwnerConfirmation::APPROVER_ENV.' (queda en el plan)')
+            ->addOption('approver', null, InputOption::VALUE_REQUIRED, 'accept-untested sin terminal, sólo dentro de una corrida del workflow de aprobación lanzada a mano: la cuenta de la persona que acepta, igual que en la variable '.OwnerConfirmation::APPROVER_ENV.' (queda en el plan)')
             ->addOption('deterministic', null, InputOption::VALUE_NONE, 'apply: todos los pasos deterministas pendientes, en el orden del plan (sin ids hay que pedirlo así)')
             ->addOption('target', null, InputOption::VALUE_REQUIRED | InputOption::VALUE_IS_ARRAY, 'decide: sólo para este elemento del paso (su archivo); except: sólo este elemento de los pasos, por su objetivo (realign:…) o su archivo. Repetible');
     }
@@ -209,12 +209,13 @@ class RealignCommand extends Command
         $output->writeln('');
 
         foreach ($actions as $name => $description) {
-            $output->writeln(sprintf('  %-9s %s', $name, OutputFormatter::escape($description)));
+            $output->writeln(sprintf('  %-15s %s', $name, OutputFormatter::escape($description)));
         }
 
         $output->writeln('
-  El ciclo: diagnose → plan → next → (hacer el paso) → check → next …');
-        $output->writeln('  Si llegas sin contexto: larapack:realign status. Una acción en detalle: larapack:realign help <acción>.');
+  El ciclo: diagnose → plan → apply --deterministic → next → (hacer el paso y sus pruebas) → check [--tested] → next … → done');
+        $output->writeln('  Se termina cuando larapack:realign done sale con 0. Si llegas sin contexto: larapack:realign status. Una acción en detalle: larapack:realign help <acción>.');
+        $output->writeln('  Inicio rápido, glosario y «¿qué hago si…?»: '.RealignActions::GUIDE.' del paquete.');
 
         return Command::SUCCESS;
     }
@@ -313,7 +314,7 @@ class RealignCommand extends Command
         $output->writeln("\n  Por categoría (archivos, código sin gestionar y hallazgos de verify):");
 
         foreach ($totals['categories'] as $category => $count) {
-            $output->writeln(sprintf('    %-17s %6d', Category::LABELS[$category] ?? $category, $count));
+            $output->writeln(sprintf('    %s %6d', $this->padded(Category::LABELS[$category] ?? $category, 17), $count));
         }
 
         $output->writeln("\n  Informe: ".$this->relative($state->reportPath(), $root).'. Siguiente: larapack:realign plan');
@@ -334,6 +335,15 @@ class RealignCommand extends Command
         $state->savePlan($plan);
 
         return $this->status($input, $output, $root, 'plan');
+    }
+
+    /**
+     * Una etiqueta rellenada hasta un ancho en caracteres, no en bytes:
+     * «decisión» lleva una tilde y `%-17s` la dejaba una columna corta.
+     */
+    private function padded(string $label, int $width): string
+    {
+        return $label.str_repeat(' ', max(0, $width - mb_strlen($label, 'UTF-8')));
     }
 
     private function status(InputInterface $input, OutputInterface $output, string $root, string $action = 'status'): int
@@ -399,11 +409,12 @@ class RealignCommand extends Command
                 count($steps), $byStatus[Planner::DONE], $byStatus[Planner::UNTESTED], $byStatus[Planner::PENDING], $byStatus[Planner::AWAITING_DECISION], $byStatus[Planner::DECIDED], $byStatus[Planner::BLOCKED]));
 
             foreach ($byCategory as $category => $counts) {
-                $output->writeln(sprintf('    %-17s %s', Category::LABELS[$category] ?? $category, implode(', ', array_map(fn (string $status, int $count): string => "{$status}: {$count}", array_keys($counts), $counts))));
+                $output->writeln(sprintf('    %s %s', $this->padded(Category::LABELS[$category] ?? $category, 17), implode(', ', array_map(fn (string $status, int $count): string => "{$status}: {$count}", array_keys($counts), $counts))));
             }
 
             if ($document['last_check'] !== null) {
-                $output->writeln("\n  Última comprobación: ".$document['last_check']['id'].' ('.($document['last_check']['done'] ? 'hecho' : 'falta').', '.$document['last_check']['at'].')');
+                $outcome = $document['last_check']['done'] ? 'hecho' : (($document['last_check']['untested'] ?? false) ? 'sin probar' : 'falta');
+                $output->writeln("\n  Última comprobación: ".$document['last_check']['id'].' ('.$outcome.', '.$document['last_check']['at'].')');
             }
 
             foreach ($document['awaiting_owner'] as $waiting) {
@@ -430,8 +441,16 @@ class RealignCommand extends Command
                 }
             }
 
+            // Sin siguiente no es sin pendientes: lo aplazado, lo que espera
+            // al dueño y lo bloqueado siguen sin hacer, y decir «no queda
+            // nada» con seis pasos aplazados mandaba a `done` a quien no
+            // había terminado.
+            $left = count(array_filter($steps, fn (array $step): bool => ! Planner::finished($step)));
+
             $output->writeln($next === null
-                ? "\n  <info>No queda nada pendiente.</info> Confírmalo con: larapack:realign diagnose"
+                ? ($left > 0
+                    ? "\n  <comment>Nada que hacer ahora, pero no ha terminado:</comment> {$left} ".($left === 1 ? 'paso sigue' : 'pasos siguen').' sin hacer (aplazados, en manos del dueño o bloqueados, arriba). larapack:realign next dice qué espera cada uno.'
+                    : "\n  <info>No queda nada pendiente en el plan.</info> El criterio de terminado es: larapack:realign done")
                 : "\n  Siguiente: <info>{$next['id']}</info> — ".OutputFormatter::escape((string) $next['title']).'  (larapack:realign next)');
         }
 
@@ -463,7 +482,7 @@ class RealignCommand extends Command
             if ($this->wantsJson($input)) {
                 $this->writeJson($output, ['format_version' => RealignState::FORMAT_VERSION, 'ok' => true, 'action' => 'next', 'done' => true, 'step' => null, 'untested' => $this->untested($steps)]);
             } else {
-                $output->writeln('  <info>No queda nada pendiente.</info> Confírmalo con un diagnóstico nuevo: larapack:realign diagnose && larapack:realign plan');
+                $output->writeln('  <info>No queda nada pendiente en el plan.</info> El criterio de terminado es larapack:realign done: diagnostica y planifica otra vez, y dice si falta algo.');
 
                 if ($this->untested($steps) !== []) {
                     $output->writeln('  <comment>Pero hay '.count($this->untested($steps)).' sin probar</comment>: larapack:realign status los lista.');

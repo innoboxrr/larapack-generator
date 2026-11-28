@@ -31,8 +31,9 @@ Dejarlo como código propio es legítimo si delega en su request: sigue bajo
 
 ## Las opciones
 
-- **declare** — Playbook `declare-handwritten-controller` (y `larapack:realign
-  infer` si está disponible).
+- **declare** — `larapack:realign infer {{id}}` escribe el borrador con lo
+  que conserva su ruta, y el playbook `declare-handwritten-controller` dice
+  cómo declararlo e importarlo.
 - **keep** — Se pide una excepción **por archivo**:
 
       larapack:realign except {{id}} --option reason="…"
