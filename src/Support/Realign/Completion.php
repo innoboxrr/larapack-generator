@@ -70,7 +70,8 @@ final class Completion
     public function run(array $packages = [], array $roots = [], array $paths = []): array
     {
         $state = new RealignState($this->root);
-        $report = (new Diagnosis($this->root, $this->jobs, $this->useCache))->run($packages);
+        $diagnosis = new Diagnosis($this->root, $this->jobs, $this->useCache);
+        $report = $diagnosis->run($packages);
         $plan = Planner::build($report, $state->plan());
         $state->savePlan($plan);
 
@@ -128,7 +129,7 @@ final class Completion
             $missing['validate'][] = $finding;
         }
 
-        foreach ($this->verify($roots) as $finding) {
+        foreach ($this->verify($roots, $diagnosis) as $finding) {
             $scope = (string) $finding['scope'];
 
             if ($finding['check'] === 'empty-manifest' && isset($declaredOut[$scope])) {
@@ -216,11 +217,15 @@ final class Completion
      * ámbito (`scope`).
      *
      * @param  list<string>  $roots
+     * @param  Diagnosis  $diagnosis  el que se acaba de correr
      * @return list<array<string, mixed>>
      */
-    private function verify(array $roots): array
+    private function verify(array $roots, Diagnosis $diagnosis): array
     {
-        ['findings' => $findings, 'summary' => $summary] = (new ProjectVerification($this->root, $roots))->run();
+        // El diagnóstico acaba de correr este mismo verify sobre el mismo
+        // disco (entre medias sólo se escribió el plan, que verify no lee):
+        // se usa el suyo en vez de correrlo otra vez.
+        ['findings' => $findings, 'summary' => $summary] = $diagnosis->verification($roots) ?? (new ProjectVerification($this->root, $roots))->run();
         $pathOf = [];
 
         foreach ($summary as $row) {

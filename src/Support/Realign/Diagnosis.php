@@ -35,10 +35,22 @@ use RuntimeException;
  * @phpstan-import-type Scope from Scopes
  * @phpstan-import-type Entry from ScopeClassifier
  * @phpstan-import-type Unmanaged from ScopeClassifier
+ * @phpstan-import-type ScopedFinding from ProjectVerification
+ * @phpstan-import-type Scope from ProjectVerification as VerifiedScope
+ *
+ * @phpstan-type VerificationResult array{findings: list<ScopedFinding>, summary: list<VerifiedScope>, exceptions: list<array{target: string, reason: string, fingerprint: string|null, status: string}>}
  */
 final class Diagnosis
 {
     private RealignState $state;
+
+    /**
+     * El `verify` del último run(), tal cual lo dio ProjectVerification, y
+     * las raíces a las que se acotó.
+     *
+     * @var array{roots: list<string>, result: VerificationResult}|null
+     */
+    private ?array $verification = null;
 
     public function __construct(private readonly string $root, private readonly int $jobs = 1, private readonly bool $useCache = true)
     {
@@ -181,6 +193,19 @@ final class Diagnosis
     }
 
     /**
+     * El `verify` que corrió el último run(), si se acotó a esas mismas
+     * raíces: `done` lo necesita entero justo después de diagnosticar, y
+     * correrlo otra vez sobre el mismo disco da lo mismo y tarda lo mismo.
+     *
+     * @param  list<string>  $roots  las de --package ya resueltas; vacío, todo el proyecto
+     * @return VerificationResult|null
+     */
+    public function verification(array $roots = []): ?array
+    {
+        return $this->verification !== null && $this->verification['roots'] === $roots ? $this->verification['result'] : null;
+    }
+
+    /**
      * Cómo se reparte `total`: lo que cumple (`conforming`: sin paso
      * pendiente —idéntico o igual salvo formato y ya registrado con su hash,
      * editado sólo en sus huecos, o con excepción aprobada—), lo que es
@@ -300,9 +325,8 @@ final class Diagnosis
      */
     private function findings(Scopes $scopes, array $selected, array $packages, Exceptions $exceptions): array
     {
-        $verification = $packages === []
-            ? new ProjectVerification($this->root)
-            : new ProjectVerification($this->root, $scopes->resolve($packages));
+        $roots = $packages === [] ? [] : $scopes->resolve($packages);
+        $this->verification = ['roots' => $roots, 'result' => (new ProjectVerification($this->root, $roots))->run()];
 
         // El nombre de un paquete local => la ruta de su ámbito; un paquete
         // que no es ámbito (sin contrato ni manifiesto) se cuenta con la suya.
@@ -316,7 +340,7 @@ final class Diagnosis
 
         $findings = [];
 
-        foreach ($verification->run()['findings'] as $finding) {
+        foreach ($this->verification['result']['findings'] as $finding) {
             // Lo que verify sólo informa no pide nada: una excepción aprobada
             // (#[HandRolled] o del realineamiento), una request de vendor que
             // no se pudo comprobar.
