@@ -1108,10 +1108,25 @@ administrador. Lo que cambia respecto a un modelo normal:
   `hashed`: se guarda cifrada sin que el controlador lo haga;
 - `isAdmin()` compara el correo con `config('auth.admins')`, que es lo que
   consulta el `before()` de cada política. La aplicación define esa lista en
-  `config/auth.php`.
+  `config/auth.php`. La comparación es exacta, letra por letra (9.4.0): escribe
+  cada correo como está guardado en la tabla;
+- `email` lleva un índice único aunque no declares `indexes` (9.4.0). En una
+  tabla que ya lo tiene —la `users` de Laravel— la migración no añade nada.
 
 `larapack:validate` falla si no declara `email` y `password`: sin ellos nadie
-puede iniciar sesión.
+puede iniciar sesión. Y avisa si `email_verified_at` o `remember_token` quedan
+escribibles desde la API (`creatable` y `updatable` valen `true` por omisión).
+
+**Lo que no decide el generador.** Quien pase la política de `update` escribe
+todas las columnas `updatable` del usuario, y todas lo son salvo que digas lo
+contrario. Antes de abrir esa política a alguien que no administra —«cada uno
+edita su perfil»—, declara `"creatable": false, "updatable": false` en las
+columnas que dan privilegios (`is_admin`, `role`, `email_verified_at`), y
+decide qué pasa con `email` y `password`: la request generada no pide la
+contraseña actual ni vuelve a verificar un correo nuevo. Mientras `isAdmin()`
+decida por el correo, quien pueda cambiar el suyo por uno de `auth.admins` que
+todavía no tenga cuenta, administra: no pongas en esa lista un correo sin
+usuario, o cambia `isAdmin()` por tu sistema de roles.
 
 ```json
 {
@@ -1196,7 +1211,7 @@ Si una lógica no cabe en ninguno de estos sitios, falta algo en el
 | Endpoint sin modelo: `authorize()` y `handle()` | Nacen cerrado y con `abort(501)`: quién entra y qué hace (si es más que unas líneas, una clase de `Support/` a la que se llama). En un endpoint de modelo no: preguntan a la política y delegan en la operación. |
 | `Providers/AuthServiceProvider::defineGates()` | Gates y habilidades sueltas, que no son de una política. |
 | `Resources/<Model>Resource` | La forma exacta de la respuesta y su array `actions`. Los accessors que el cliente puede pedir con `appends[]` se listan en `$appendable`; lo demás se ignora. |
-| `Events/*/Listeners/` | Efectos secundarios: notificaciones, colas, integraciones. |
+| `Events/*/Listeners/` | Efectos secundarios: notificaciones, colas, integraciones. `$event->data` es la petición sin las columnas `$hidden` del modelo (un `secret`, la contraseña) ni su `_confirmation`: un secreto no viaja a una cola (9.4.0). |
 | `Observers/` | Ciclo de vida del modelo. |
 | `Factories/` | Datos de prueba realistas. Las generadas ya insertan. |
 | `tests/Feature/` | El comportamiento. Los generados pasan recién generados; si uno falla, algo se rompió. |
@@ -1241,6 +1256,50 @@ devolviendo `true`, y el test, que no consulta la política, sigue pasando.
 `<Model>EndpointsTest` se crea una vez y no se regenera: en un modelo que ya
 existía, `verify` avisa con `endpoint-tests-outdated`. Guarda lo que le
 añadiste, bórralo y vuelve a importar.
+
+### Lo que el código generado cierra, y lo que deja al dueño
+
+Lo que sale cerrado sin que nadie escriba nada, y que
+`tests/EndToEnd/GeneratedSecurityAuditTest.php` ataca contra una aplicación que
+arranca:
+
+- **Cada acción pide sesión y pregunta a la política**, que nace en `false`;
+  las masivas, registro a registro. Un endpoint público sigue preguntando.
+- **Sólo se escribe lo declarado**: `$creatable` al crear, `$updatable` al
+  editar, las metas de `editable_metas`. `id`, las fechas, `payload` y una
+  columna con `"updatable": false` no cambian por mucho que lleguen.
+- **Un `secret` no sale**: ni en la API, ni en la tabla, ni en la exportación,
+  ni en la carga de los eventos.
+- **`show` sólo carga las relaciones de `$loadable_relations`**, y sólo si
+  llegan como lista: `load_relations[otra.relacion]=…` responde 422 (9.4.0).
+- **El listado pagina siempre**: `paginate=0` deja de ser «todo» y pasa a ser
+  `search-surge.pagination.max_per_page`, 1000 por omisión (9.4.0). El orden
+  sólo admite las columnas de cada filtro.
+- **La exportación no escribe fórmulas** y su archivo va a `exports/<uuid>.xlsx`
+  en el disco de `export_disk`, con un enlace firmado que caduca en un día.
+
+Lo que un generador no puede decidir, y sigue siendo del dueño:
+
+- **Quién puede qué**: la política y `ManagedFilter::canView()`. Abrir `index`
+  sin escribir `canView()` lista todas las filas. `show` no pasa por
+  `canView()`: lo decide `view`.
+- **Qué se valida**: `rules()` sólo trae lo de `requests[]`. Sin reglas, una
+  columna `creatable` acepta lo que llegue, también una clave ajena
+  (`user_id`) que apunte al registro de otro: valida o quítala de `creatable`.
+- **Qué relaciones se pueden pedir**: lo que declares en `load_relations` lo
+  carga cualquiera que pueda ver el registro, sin preguntar a la política del
+  modelo relacionado. `payload` trae todas las metas, también las de
+  `protected_metas`: protegidas quiere decir que el formulario no las escribe,
+  no que no se lean.
+- **Los archivos exportados**: nadie los borra. Una regla de ciclo de vida en
+  S3 o una tarea programada sobre `exports/`. En un disco que no firma
+  (`public`) el enlace no caduca y lo abre quien lo tenga.
+- **Un `.csv`**: la exportación genera `.xlsx`, donde sólo es fórmula lo que
+  empieza por `=`. Si la cambias a CSV, neutraliza también `+`, `-`, `@`,
+  tabulador y retorno de carro.
+- **El límite de peticiones**: sólo un endpoint `public` avisa si no declara
+  `throttle`. El resto no trae ninguno propio: lleva el del grupo `api`, si la
+  aplicación lo configuró (`throttleApi()`).
 
 ### Qué no se toca
 

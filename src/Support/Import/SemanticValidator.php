@@ -54,7 +54,7 @@ final class SemanticValidator
             ...self::secrets($models, $raw['models'] ?? []),
             ...self::metas($models, $raw['models'] ?? []),
             ...self::display($models),
-            ...self::authenticatable($models),
+            ...self::authenticatable($models, $raw['models'] ?? []),
             ...self::prefixedRules($document),
             ...self::referentialActions($models, $pivots),
             ...self::endpoints($models, $document['controllers'] ?? []),
@@ -509,10 +509,13 @@ final class SemanticValidator
      * Un usuario que inicia sesión necesita con qué entrar: su correo y su
      * contraseña. Sin ellos el modelo se genera, pero nadie puede usarlo.
      *
+     * Y se avisa de lo que, de un usuario, no debería llegar de un formulario.
+     *
      * @param  array<int, array<string, mixed>>  $models
+     * @param  array<int|string, mixed>  $raw
      * @return list<Finding>
      */
-    private static function authenticatable(array $models): array
+    private static function authenticatable(array $models, array $raw): array
     {
         $findings = [];
 
@@ -529,6 +532,35 @@ final class SemanticValidator
                         'level' => self::ERROR,
                         'path' => "/models/{$index}/props",
                         'message' => "{$model['name']} es authenticatable y no declara `{$required}`: sin él nadie puede iniciar sesión.",
+                    ];
+                }
+            }
+
+            // Lo que decide quién ha verificado su correo o quién sigue con la
+            // sesión abierta no es un dato del formulario. `creatable` y
+            // `updatable` valen true por omisión, así que se avisa mientras el
+            // laraimport no diga, con todas las letras, qué quiere.
+            foreach ($model['props'] ?? [] as $position => $prop) {
+                if (! in_array($prop['name'], ['email_verified_at', 'remember_token'], true)) {
+                    continue;
+                }
+
+                $written = $raw[$index]['props'][$position] ?? [];
+
+                if (is_array($written) && ($written['fillable'] ?? null) === false) {
+                    continue;
+                }
+
+                $open = array_values(array_filter(
+                    ['creatable', 'updatable'],
+                    fn (string $key): bool => ! is_array($written) || ! array_key_exists($key, $written)
+                ));
+
+                if ($open !== []) {
+                    $findings[] = [
+                        'level' => self::WARNING,
+                        'path' => "/models/{$index}/props/{$position}",
+                        'message' => "'{$prop['name']}' de {$model['name']} se puede escribir desde la API (".implode(' y ', $open).' valen true por omisión): quien pueda editar un usuario lo cambia. Declara `"fillable": false`, o `creatable` y `updatable` con lo que decidas.',
                     ];
                 }
             }
