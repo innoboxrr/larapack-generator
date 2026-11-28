@@ -2,19 +2,15 @@
 
 namespace Innoboxrr\LarapackGenerator\Tests\Unit;
 
-use Innoboxrr\LarapackGenerator\Support\HandRolledLock;
 use Innoboxrr\LarapackGenerator\Support\Import\ImportDocument;
 use Innoboxrr\LarapackGenerator\Support\Import\SemanticValidator;
-use Innoboxrr\LarapackGenerator\Support\Manifest;
 use Innoboxrr\LarapackGenerator\Support\Realign\Category;
 use Innoboxrr\LarapackGenerator\Support\Realign\DoneWhen;
-use Innoboxrr\LarapackGenerator\Support\Realign\Exceptions;
 use Innoboxrr\LarapackGenerator\Support\Realign\ExceptionTargets;
 use Innoboxrr\LarapackGenerator\Support\Realign\FileClass;
 use Innoboxrr\LarapackGenerator\Support\Realign\StepTypes;
-use Innoboxrr\LarapackGenerator\Tests\Support\FakeProject;
+use Innoboxrr\LarapackGenerator\Tests\Support\SmallRealignProject;
 use Innoboxrr\LarapackGenerator\Tests\TestCase;
-use Symfony\Component\Console\Command\Command;
 
 /**
  * `DoneWhen::check()`: lo que decide que un paso está hecho. Cada tipo de
@@ -22,60 +18,20 @@ use Symfony\Component\Console\Command\Command;
  * una decisión sin tomar, una excepción pedida y sin aprobar, un archivo que
  * se parece pero el manifiesto no registra, un `kind` que no se conoce.
  *
- * Se llama a la clase sobre un proyecto pequeño en disco, sin pasar por
- * `larapack:realign check`. Las comprobaciones que comparan con lo regenerado
- * usan un paquete generado de un modelo (décimas de segundo); las demás, un
- * directorio con lo justo.
+ * Se llama a la clase sobre un directorio con lo justo, sin pasar por
+ * `larapack:realign check`. Lo que compara con lo regenerado (`kind:
+ * classification` con un contrato) está en DoneWhenClassificationTest, que
+ * necesita un paquete generado.
  */
 final class DoneWhenTest extends TestCase
 {
+    use SmallRealignProject;
+
     private const REPORT = 'src/Http/Controllers/Admin/ReportController.php';
 
     private const AUDIT = 'src/Http/Controllers/Admin/AuditController.php';
 
     private const AUDIT_REQUEST = 'src/Http/Requests/Admin/AuditRequest.php';
-
-    private const CONTROLLER = 'src/Http/Controllers/PostController.php';
-
-    private const POLICY = 'src/Policies/PostPolicy.php';
-
-    private const OBSERVER = 'src/Observers/PostObserver.php';
-
-    private const CONTRACT = ['models' => [['name' => 'Post', 'props' => [
-        ['name' => 'title', 'type' => 'string', 'nullable' => false, 'fillable' => true, 'creatable' => true, 'updatable' => true],
-    ]]]];
-
-    /**
-     * Un paquete sin nada de LaraPack.
-     */
-    private function bare(): FakeProject
-    {
-        return $this->useProject(FakeProject::library('Acme\\Blog\\'));
-    }
-
-    /**
-     * Un paquete generado desde un contrato de un modelo.
-     */
-    private function generated(): FakeProject
-    {
-        $project = $this->bare();
-        $this->write('laraimport.json', (string) json_encode(self::CONTRACT, JSON_PRETTY_PRINT));
-
-        $this->assertSame(Command::SUCCESS, $this->runCommand('larapack:import', ['--format' => 'json']), $this->lastOutput);
-
-        return $project;
-    }
-
-    private function write(string $relative, string $content): void
-    {
-        $path = $this->project->path.'/'.$relative;
-
-        if (! is_dir(dirname($path))) {
-            mkdir(dirname($path), 0777, true);
-        }
-
-        file_put_contents($path, $content);
-    }
 
     /**
      * Código escrito a mano: un controlador con lógica, otro que delega en
@@ -154,36 +110,6 @@ final class DoneWhenTest extends TestCase
     {
         return $extra + ['id' => $type.'@.', 'type' => $type, 'category' => Category::DECISION, 'files' => $files,
             'options' => StepTypes::TYPES[$type]['options'], 'done_when' => ['kind' => 'decision']];
-    }
-
-    /**
-     * Pide una excepción, como `larapack:realign except`.
-     */
-    private function request(string $target, string $step, string $reason = 'Se queda así.'): void
-    {
-        $parts = (array) ExceptionTargets::parse($target);
-
-        Exceptions::forRoot($this->project->path)->saveRequests([[
-            'target' => $target, 'type' => (string) $parts['type'], 'check' => null, 'scope' => '.', 'file' => (string) $parts['file'], 'subject' => null,
-            'line' => null, 'step' => $step, 'message' => null, 'reason' => $reason, 'fingerprint' => null, 'requested_at' => '2026-01-01T00:00:00+00:00',
-        ]]);
-    }
-
-    /**
-     * Aprueba sobre el código de hoy, como el dueño con
-     * `larapack:hand-rolled approve`.
-     *
-     * @param  array<string, string>  $targets  objetivo => razón
-     */
-    private function approve(array $targets): void
-    {
-        $approved = [];
-
-        foreach ($targets as $target => $reason) {
-            $approved[$target] = ['reason' => $reason, 'fingerprint' => ExceptionTargets::fingerprint($this->project->path, $target)];
-        }
-
-        HandRolledLock::write($this->project->path, $approved);
     }
 
     public function test_lo_que_no_se_sabe_comprobar_no_se_da_por_hecho(): void
@@ -470,7 +396,7 @@ final class DoneWhenTest extends TestCase
         $this->assertFalse($invalid['done']);
         $this->assertStringStartsWith('./laraimport.json ', $invalid['remaining'][0]);
 
-        $this->write('laraimport.json', (string) json_encode(self::CONTRACT));
+        $this->write('laraimport.json', (string) json_encode(self::smallContract()));
         $this->assertSame(['done' => true, 'remaining' => [], 'kind' => 'contract'], $this->check($step('.')));
         // Sin ámbito dicho, el de la raíz.
         $this->assertTrue($this->check(['id' => 'x', 'done_when' => ['kind' => 'contract']])['done']);
@@ -563,114 +489,5 @@ final class DoneWhenTest extends TestCase
         );
         // Sin archivos no hay nada que comparar.
         $this->assertTrue($this->check(['id' => 'adopt@.', 'done_when' => ['kind' => 'classification', 'files' => [], 'accept' => [FileClass::IDENTICAL]]])['done']);
-    }
-
-    public function test_cada_archivo_tiene_que_quedar_en_una_clase_que_se_acepta(): void
-    {
-        $this->generated();
-        $accept = fn (array $files, array $classes = [FileClass::IDENTICAL, FileClass::FORMAT_ONLY]): array => ['id' => 'regenerate@.', 'done_when' => ['kind' => 'classification', 'files' => $files, 'accept' => $classes]];
-
-        $this->assertSame(['done' => true, 'remaining' => [], 'kind' => 'classification'], $this->check($accept([self::CONTROLLER, self::POLICY])));
-
-        // Sólo cambia el formato: igual salvo formato.
-        $this->write(self::POLICY, str_replace('    ', "\t", $this->project->read(self::POLICY)));
-        $this->assertTrue($this->check($accept([self::POLICY]))['done']);
-        $this->assertSame(
-            [self::POLICY.': es format_only (igual salvo espacios u orden de imports); se espera identical.'],
-            $this->check($accept([self::POLICY], [FileClass::IDENTICAL]))['remaining']
-        );
-
-        // Un método más en un controlador generado: editado fuera de los huecos.
-        $this->write(self::CONTROLLER, preg_replace('/}\s*$/', "\n    public function extra()\n    {\n        return 1;\n    }\n}\n", $this->project->read(self::CONTROLLER)));
-        $this->assertSame(
-            [self::CONTROLLER.': es edited_outside (editado fuera de los huecos: method:extra, outside); se espera identical o format_only.'],
-            $this->check($accept([self::CONTROLLER, self::POLICY]))['remaining']
-        );
-        $this->assertTrue($this->check($accept([self::CONTROLLER], [FileClass::EDITED_OUTSIDE]))['done']);
-
-        // Sin clases que aceptar ni rechazar no se exige ninguna.
-        $this->assertTrue($this->check(['id' => 'x', 'done_when' => ['kind' => 'classification', 'files' => [self::CONTROLLER]]])['done']);
-    }
-
-    public function test_ningun_archivo_puede_quedar_en_una_clase_que_se_rechaza(): void
-    {
-        $this->generated();
-        $reject = fn (array $classes): array => ['id' => 'relink@.', 'done_when' => ['kind' => 'classification', 'files' => [self::POLICY, self::CONTROLLER], 'reject' => $classes]];
-
-        $this->assertTrue($this->check($reject([FileClass::RENAMED, FileClass::MISSING]))['done']);
-
-        unlink($this->project->path.'/'.self::POLICY);
-
-        $this->assertSame(
-            [self::POLICY.': sigue siendo missing (borrado, y el contrato lo sigue generando).'],
-            $this->check($reject([FileClass::RENAMED, FileClass::MISSING]))['remaining']
-        );
-        $this->assertTrue($this->check($reject([FileClass::RENAMED]))['done']);
-    }
-
-    public function test_adoptar_no_esta_hecho_hasta_que_el_manifiesto_lo_registra_con_el_hash_de_hoy(): void
-    {
-        $this->generated();
-        $adopt = fn (string $file, array $flags = ['tracked' => true, 'hash_current' => true]): array => ['id' => 'adopt@.', 'done_when' => [
-            'kind' => 'classification', 'files' => [$file], 'accept' => [FileClass::IDENTICAL, FileClass::FORMAT_ONLY]] + $flags];
-
-        $this->assertTrue($this->check($adopt(self::OBSERVER))['done']);
-
-        // Idéntico a lo regenerado, pero el manifiesto no lo conoce.
-        $this->assertTrue((new Manifest($this->project->path))->drop(self::OBSERVER));
-        $this->assertSame([self::OBSERVER.': el manifiesto todavía no lo registra.'], $this->check($adopt(self::OBSERVER))['remaining']);
-        $this->assertSame([self::OBSERVER.': el manifiesto todavía no lo registra.'], $this->check($adopt(self::OBSERVER, ['tracked' => true]))['remaining']);
-        // Lo exige el paso, no la comprobación: sin pedirlo, la clase basta.
-        $this->assertTrue($this->check($adopt(self::OBSERVER, []))['done']);
-        $this->assertTrue($this->check($adopt(self::OBSERVER, ['tracked' => 1, 'hash_current' => 1]))['done']);
-
-        // Igual salvo formato, con el hash de antes de reformatearlo.
-        $this->write(self::POLICY, str_replace('    ', "\t", $this->project->read(self::POLICY)));
-        $this->assertSame([self::POLICY.': el hash del manifiesto todavía no es el de lo que hay en disco.'], $this->check($adopt(self::POLICY))['remaining']);
-        $this->assertSame([self::POLICY.': el hash del manifiesto todavía no es el de lo que hay en disco.'], $this->check($adopt(self::POLICY, ['hash_current' => true]))['remaining']);
-        $this->assertTrue($this->check($adopt(self::POLICY, ['tracked' => true]))['done']);
-
-        // Adoptado: el manifiesto anota el hash de lo que hay.
-        (new Manifest($this->project->path))->refresh($this->project->path.'/'.self::POLICY);
-        $this->assertTrue($this->check($adopt(self::POLICY))['done']);
-    }
-
-    public function test_resuelto_es_que_el_archivo_ya_no_pide_ningun_paso(): void
-    {
-        $this->generated();
-        $resolved = fn (array $files, array $extra = ['resolved' => true]): array => ['id' => 'missing@.', 'done_when' => ['kind' => 'classification', 'files' => $files] + $extra];
-
-        $this->assertTrue($this->check($resolved([self::POLICY, self::CONTROLLER]))['done']);
-
-        unlink($this->project->path.'/'.self::POLICY);
-
-        $this->assertSame([self::POLICY.': sigue pendiente: borrado, y el contrato lo sigue generando.'], $this->check($resolved([self::POLICY, self::CONTROLLER]))['remaining']);
-        $this->assertTrue($this->check($resolved([self::POLICY], []))['done']);
-        $this->assertTrue($this->check($resolved([self::POLICY], ['resolved' => 1]))['done']);
-
-        // Se decidió dejarlo borrado y el dueño lo aprobó: mientras no vuelva, resuelto.
-        $this->approve(['realign:missing:'.self::POLICY => 'Las políticas van en otro paquete.']);
-        $this->assertTrue($this->check($resolved([self::POLICY]))['done']);
-    }
-
-    public function test_una_excepcion_aprobada_sobre_el_codigo_de_hoy_cierra_el_archivo_sea_cual_sea_su_clase(): void
-    {
-        $this->generated();
-        $this->write(self::CONTROLLER, preg_replace('/}\s*$/', "\n    public function extra()\n    {\n        return 1;\n    }\n}\n", $this->project->read(self::CONTROLLER)));
-        $step = ['id' => 'edited-outside:Controller@.', 'done_when' => ['kind' => 'classification', 'files' => [self::CONTROLLER], 'accept' => FileClass::CONFORMING]];
-
-        $this->assertFalse($this->check($step)['done']);
-
-        // Sigue siendo edited_outside: pedirle otra clase haría que el paso
-        // no terminara nunca.
-        $this->approve(['realign:edited-outside:'.self::CONTROLLER => 'El método extra se queda.']);
-        $this->assertSame(['done' => true, 'remaining' => [], 'kind' => 'classification'], $this->check($step));
-
-        // Si el código cambia, la huella caduca y vuelve a contar su clase.
-        $this->write(self::CONTROLLER, str_replace('return 1;', 'return 2;', $this->project->read(self::CONTROLLER)));
-        $this->assertSame(
-            [self::CONTROLLER.': es edited_outside (editado fuera de los huecos: method:extra, outside); se espera identical o format_only o hole_edited.'],
-            $this->check($step)['remaining']
-        );
     }
 }
