@@ -1,7 +1,7 @@
 # Los tres perfiles de proyecto
 
 Parte de [`larapack:realign`](README.md). El recorrido es el mismo para
-cualquier proyecto —`diagnose`, `plan`, `next`, `check`—, pero dónde se gasta
+cualquier proyecto —`diagnose`, `plan`, `next`, `check`, `done`—, pero dónde se gasta
 el tiempo depende de dónde parte. Hay tres perfiles, y `diagnose` dice en cuál
 estás sin preguntarle a nadie:
 
@@ -54,9 +54,10 @@ al siguiente; los números 4 a 7 se repiten hasta que no queda nada.
    que **aprueba el dueño**. Lo que la opción cambie (un contrato, un
    controlador movido) pide **volver al 4**.
 8. **Terminar.** `next` dice `done` después de una última pasada del 4 que
-   no deja nada pendiente; entonces `larapack:verify --strict`
-   ([verify.md](verify.md#cuándo-se-termina)) y la lista de lo que quedó
-   [sin probar](guided.md#sin-pruebas-cuando-no-se-pueden-correr-las-del-proyecto),
+   no deja nada pendiente; entonces `larapack:realign done`, que es el
+   criterio: sale con 0, o dice qué falta
+   ([verify.md](verify.md#cuándo-se-termina)). Entrega con él la lista de lo
+   que quedó [sin probar](guided.md#sin-pruebas-cuando-no-se-pueden-correr-las-del-proyecto),
    si hay.
 
 ## 1. Con contrato y manifiesto al día
@@ -134,7 +135,7 @@ larapack:realign diagnose
 larapack:realign plan
 larapack:realign apply --deterministic
 # … las decisiones con el dueño, y al final:
-larapack:verify --strict
+larapack:realign done                           # el criterio de terminado: 0, o lo que falta
 ```
 
 **Qué esperar** (un proyecto 7.x de 3 550 archivos):

@@ -603,7 +603,7 @@ en `AGENTS.md`—, la comprobación la haces tú con la lista de abajo.
 
 Si algo falla, la tarea no ha terminado.
 
-## Realinear un proyecto que se desvió
+## Realinear un proyecto existente
 
 Si el proyecto ya existe y lo que hay en disco no es lo que generaría su
 contrato —una versión vieja de LaraPack, código editado fuera de los huecos,
@@ -616,6 +616,7 @@ larapack:realign diagnose      # sin plan: compara el proyecto con lo que genera
 larapack:realign plan
 larapack:realign next          # el siguiente paso, con su playbook y su comprobación
 larapack:realign check <id>    # sólo esto da un paso por hecho
+larapack:realign done          # sólo esto da el realineamiento por terminado: sale con 0, o dice qué falta
 ```
 
 Lo determinista lo hace `larapack:realign apply`; lo guiado lo haces tú con el

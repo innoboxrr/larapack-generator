@@ -99,8 +99,7 @@ larapack:realign check adopt@.
 Pasa cuando cada archivo del paso, comparado otra vez, es `identical` o
 `format_only` y está registrado con su hash actual. Es la misma clasificación
 del diagnóstico, y lo que `adopt` anota no la cambia: un archivo que diagnose
-dio por `format_only` sigue siéndolo después de adoptarlo (antes, uno con otros
-comentarios pasaba a `version_delta`, y una migración, a `migration_history`). Para `prune`, cuando ya no
+dio por `format_only` sigue siéndolo después de adoptarlo. Para `prune`, cuando ya no
 está ni en el manifiesto ni en disco (`absent`) o se reconoce con otra ruta;
 para `relink`, cuando ya no sale ni como renombrado ni como borrado; para
 `untracked-edited`, cuando ya no tiene paso pendiente.

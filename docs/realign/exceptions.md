@@ -61,8 +61,9 @@ No se exceptúa con `except`:
 - **Un controlador que no delega** (`controller-shape`, `controller-concern`):
   lleva `#[HandRolled('razón')]` en el código; la razón vive junto al código.
 - **`hand-rolled`**: es la propia aprobación de los atributos.
-- **Lo que pone el manifiesto al día** (`adopt`, `relink`, `prune`,
-  `regenerate`): no hay nada que aceptar; se aplica.
+- **Lo que pone el manifiesto o el contrato al día** (`adopt`, `relink`,
+  `prune`, `regenerate`, `pin-foreign-keys`): no hay nada que aceptar; se
+  aplica.
 - **Un contrato que no valida** (`contract-invalid`): se corrige o se retira.
 
 ## El ciclo
@@ -120,10 +121,8 @@ vendor/bin/builder larapack:realign check route-closure@.
 - **Aprobada, cierra el elemento en su paso**, también en los de
   clasificación (`edited-outside`, `missing`, `untracked-edited`): `check` y
   `realign done` lo dan por hecho aunque el archivo siga editado fuera de los
-  huecos o borrado, y `diagnose`/`plan` no lo vuelven a abrir. Hasta 9.4.0 un
-  `edited-outside` aprobado seguía fallando con «(excepción aprobada); se
-  espera identical o format_only o hole_edited» y el paso no terminaba nunca.
-  Si el código cambia, la huella caduca y el paso se reabre.
+  huecos o borrado, y `diagnose`/`plan` no lo vuelven a abrir. Si el código
+  cambia, la huella caduca y el paso se reabre.
 - **Antes de pedirla para un archivo editado fuera de los huecos, mira si la
   plantilla de hoy ya trae lo editado** (el playbook `edited-outside`): el
   `bindValue` contra la inyección de fórmulas de los Exports de 7.x/8.x ya
@@ -136,10 +135,11 @@ vendor/bin/builder larapack:realign check route-closure@.
   aprueba** cada excepción pedida: si falta pedirla lo dice («falta pedir la
   excepción»), y si falta aprobarla, también, con el objetivo.
 - `larapack:hand-rolled list` muestra, además de los `#[HandRolled]`, cada
-  excepción del realineamiento con su estado: `unapproved` (pedida),
-  `approved`, `reason-changed` (se pidió con otra razón que la aprobada),
-  `code-changed` (lo aprobado ya no es el código de hoy) o `stale` (lo
-  aprobado ya no existe).
+  excepción del realineamiento con su estado. En `--format=json`, `status`;
+  en texto, la etiqueta entre paréntesis: `unapproved` (pedida y sin aprobar:
+  «pendiente»), `approved` («aprobada»), `reason-changed` (se pidió con otra
+  razón que la aprobada: «cambió»), `code-changed` (lo aprobado ya no es el
+  código de hoy: «código») o `stale` (lo aprobado ya no existe: «sobrante»).
 - **Si el dueño no está**, el agente no le pregunta una por una:
   `larapack:realign brief` le prepara un documento con cada excepción sin
   aprobar —objetivo, motivo, el mensaje del hallazgo y la orden exacta

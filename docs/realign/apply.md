@@ -56,9 +56,9 @@ saltos, y los mismos `fixed`/`skipped`/`unchanged` que dará la corrida real
 que escribe uno lo lee el siguiente.
 
 - Un archivo que `regenerate` deja como la plantilla actual ya no lo «arregla»
-  después `fix` (antes se contaba dos veces: en un proyecto real,
-  `index-managed` daba 70 simulados y 69 reales, y `resource-appends` 70 y
-  68).
+  después `fix`. Sin encadenar los pasos se contaría dos veces: en un proyecto
+  real, `index-managed` daba 70 simulados y 69 reales, y `resource-appends`
+  70 y 68.
 - `model-lists` ve lo que `fix` añadió al mismo modelo, y lo que fija
   `pin-foreign-keys` en el contrato lo leen los pasos que vienen después.
 - Cada elemento de `fixed` trae el `diff` de **lo que cambió ese paso sobre lo
@@ -246,9 +246,11 @@ Se hace a mano lo saltado y `check` lo da por hecho como a cualquier otro.
 
 ## Dos pasadas
 
-Después de `apply --deterministic`, **vuelve a diagnosticar y planificar**:
-lo que una corrección deja igual a lo regenerado (un IndexRequest que arregló
-`fix`) aparece como `adopt` en la siguiente pasada. Dos pasadas bastaron en los
+Después de `apply --deterministic`, **vuelve a diagnosticar y planificar**.
+Hace dos cosas: cierra los pasos que `apply` hizo (aplicar no los marca
+hechos, y lo que espera a ellos sigue bloqueado hasta entonces), y encuentra
+lo nuevo: lo que una corrección deja igual a lo regenerado (un IndexRequest
+que arregló `fix`) aparece como `adopt` en la siguiente pasada. Dos pasadas bastaron en los
 proyectos ensayados; cuando `plan` no tiene deterministas pendientes, se sigue
 con lo guiado.
 

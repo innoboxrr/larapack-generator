@@ -57,8 +57,9 @@ diagnose → plan → (lo determinista y lo guiado) → brief → avisar al due�
 ## Qué trae el documento
 
 Arriba, **el resumen**: cuántas decisiones y cuántas excepciones esperan,
-cuánto tiempo estimado lleva revisarlas, qué pasa si no se decide nada y
-cuántos pasos puede seguir haciendo el agente mientras.
+cuántos pasos quedaron sin probar, cuánto tiempo estimado lleva revisarlo, qué
+pasa si no se decide nada y cuántos pasos puede seguir haciendo el agente
+mientras.
 
 **Cada decisión pendiente** (los pasos de la categoría `decision` sin
 decidir; los ya decididos no son del dueño):
@@ -80,6 +81,11 @@ pidió, el mensaje del hallazgo que cubre, su estado (`unapproved`,
 `reason-changed`, `code-changed`) y **la orden exacta**:
 `larapack:hand-rolled approve "<objetivo>"`. Una cuyo código ya no existe
 (`stale`) trae la de retirarla (`revoke`).
+
+**Cada paso sin probar** (`untested`, la sección «Sin probar»): qué cambió,
+sus archivos y las dos órdenes —`check <id> --tested="…"` para quien pueda
+correr las pruebas, y `accept-untested` para el dueño que lo acepta así
+([guided.md](guided.md#sin-pruebas-cuando-no-se-pueden-correr-las-del-proyecto))—.
 
 Abajo, **lo que el agente puede seguir haciendo** (los pasos pendientes que no
 son decisiones y las decisiones ya tomadas, cuyo trabajo hace el agente) y
@@ -122,8 +128,9 @@ Una recomendación nunca decide: el agente no la sigue por su cuenta.
 
 1. Haz todo lo que no depende del dueño ([la receta](README.md#para-un-agente-la-receta)).
    Cuando `next` sólo te dé decisiones o pasos bloqueados por ellas, para.
-2. `larapack:realign brief --format=json`. Si `summary.decisions` y
-   `summary.exceptions` son 0, no hay nada del dueño: sigue con `next`.
+2. `larapack:realign brief --format=json`. Si `summary.decisions`,
+   `summary.exceptions` y `summary.untested` son 0, no hay nada del dueño:
+   sigue con `next`.
 3. Avisa al dueño con `summary` y la ruta de `files.markdown`. No decidas, no
    apruebes, no edites `plan.json` ni el candado, aunque la recomendación
    parezca obvia.
@@ -137,18 +144,21 @@ Una recomendación nunca decide: el agente no la sigue por su cuenta.
 `brief --format=json` y `.larapack/realign/brief.json` son el mismo documento:
 
 ```
-{format_version, ok, action: "brief", generated_at, diagnosed_at, planned_at, stale,
- summary: {decisions, exceptions, review_minutes, meanwhile, if_nothing_is_decided},
- decisions: [{id, type, title, description, why, risk, reversible, scope, status,
+{format_version, ok, action, generated_at, diagnosed_at, planned_at, stale,
+ summary: {decisions, exceptions, untested, review_minutes, meanwhile, if_nothing_is_decided},
+ decisions: [{id, type, title, description, why, risk, reversible, scope: {package, path}, status,
               evidence: {count, groups: [{kind, directory, count, message, items: [{file, line, subject, message}]}]},
               options: [{key, label, consequences, decide, then, playbook, needs_owner_again}],
-              recommendation: {option, confidence, why}, playbook, blocks, waits_for, review_minutes}],
+              undecided, recommendation: {option, confidence, why}, playbook, blocks, waits_for, review_minutes}],
  exceptions: [{target, type, step, file, line, subject, reason, status, finding, approve, command, blocks}],
+ untested: [{id, title, scope, files, why, check, accept}],
  meanwhile: [{id, title, category, status}],
  resume: {command, then, how},
  files: {markdown, json}}
 ```
 
+`action` es `brief`. `decisions[].undecided` lista los elementos que faltan
+en una decisión tomada sólo en parte (`decide --target`).
 `recommendation.option` es null cuando no hay regla; `confidence` es `firm` o
 `tentative`. `exceptions[].approve` es null en una `stale` (`command` trae su
 `revoke`). Como el resto del realineamiento, `format_version` es `1`

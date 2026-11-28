@@ -10,17 +10,38 @@ o una aplicación, lo genera siempre igual y comprueba que siga siendo así.
 
 ¿Vas a cambiar el generador? Cómo está hecho, en [ARCHITECTURE](ARCHITECTURE.md); cómo se prueba y se publica, en [CONTRIBUTING](CONTRIBUTING.md).
 
+## Por dónde empezar
+
+Este documento es largo porque es la referencia. Según a qué vengas:
+
+| Quieres… | Lee |
+|---|---|
+| Entender qué es y si te sirve | [Por qué existe](#por-qué-existe) |
+| Crear un paquete nuevo | [Instalación](#instalación) y [Un paquete desde cero](#un-paquete-desde-cero) |
+| Añadir un modelo o un endpoint a un paquete que ya usa LaraPack | [Ampliar un paquete que ya usa LaraPack](#ampliar-un-paquete-que-ya-usa-larapack) y [El contrato](#el-contrato-laraimportjson) |
+| Saber dónde escribir tu código | [Dónde va tu código](#dónde-va-tu-código) |
+| Trabajar con un agente de IA sin que la arquitectura se degrade | [Trabajar con agentes de IA](#trabajar-con-agentes-de-ia) |
+| Arreglar un proyecto que ya existe y se desvió, viene de una versión vieja o nunca tuvo contrato | [Realinear un proyecto existente](#realinear-un-proyecto-existente) |
+| Comprobar que el proyecto cumple, y que lo siga haciendo | [Verificar la arquitectura](#verificar-la-arquitectura) |
+| Subir de versión de LaraPack | [Guía de actualización](#guía-de-actualización) |
+| Buscar un comando | [Referencia de comandos](#referencia-de-comandos) |
+| Cambiar el generador | [ARCHITECTURE](ARCHITECTURE.md) y [CONTRIBUTING](CONTRIBUTING.md) |
+
 ## Índice
 
 1. [Por qué existe](#por-qué-existe)
 2. [Requisitos](#requisitos)
 3. [Instalación](#instalación)
 4. [Cómo se desarrolla con LaraPack](#cómo-se-desarrolla-con-larapack)
-5. [Desarrollo con IA](#desarrollo-con-ia)
+   - [El reparto del trabajo](#el-reparto-del-trabajo) · [Un paquete desde cero](#un-paquete-desde-cero) · [Ampliar un paquete que ya usa LaraPack](#ampliar-un-paquete-que-ya-usa-larapack) · [Publicar una versión](#publicar-una-versión) · [Convenciones](#convenciones)
+5. [Trabajar con agentes de IA](#trabajar-con-agentes-de-ia)
+   - [Lo esencial, en diez líneas](#lo-esencial-en-diez-líneas) · [Preparar el proyecto](#preparar-el-proyecto) · [La guardia](#la-guardia-que-el-agente-no-pierda-la-guía) · [El ciclo que sigue el agente](#el-ciclo-que-sigue-el-agente) · [Cómo pedirle las cosas](#cómo-pedirle-las-cosas) · [Qué revisa una persona](#qué-revisa-una-persona) · [Lo que no se delega](#lo-que-no-se-delega)
 6. [El contrato: laraimport.json](#el-contrato-laraimportjson)
+   - [Lo mínimo](#lo-mínimo) · [Las claves ajenas](#las-claves-ajenas-restrict-por-omisión) · [`table_prefix`](#table_prefix-varios-paquetes-en-una-sola-base-de-datos) · [Las claves que más se usan](#las-claves-que-más-se-usan) · [Un modelo completo](#un-modelo-completo) · [Metas y payload](#metas-y-payload) · [Endpoints que no son CRUD](#endpoints-que-no-son-crud-endpoints-y-controllers) · [El usuario que inicia sesión](#el-usuario-que-inicia-sesión)
 7. [Qué se genera y dónde va tu código](#qué-se-genera-y-dónde-va-tu-código)
+   - [Dónde va tu código](#dónde-va-tu-código) · [Lo que prueban los tests generados](#lo-que-prueban-los-tests-generados) · [Qué no se toca](#qué-no-se-toca)
 8. [Regenerar sin destruir](#regenerar-sin-destruir)
-9. [Realinear un proyecto que se desvió](#realinear-un-proyecto-que-se-desvió)
+9. [Realinear un proyecto existente](#realinear-un-proyecto-existente)
 10. [Verificar la arquitectura](#verificar-la-arquitectura)
 11. [La interfaz: Vue y React](#la-interfaz-vue-y-react)
 12. [Montar un paquete en una aplicación](#montar-un-paquete-en-una-aplicación)
@@ -233,13 +254,41 @@ Detalles en [La línea base y la publicación](#la-línea-base-y-la-publicación
 
 ---
 
-## Desarrollo con IA
+## Trabajar con agentes de IA
 
 LaraPack está pensado para trabajar con un agente —Claude Code, Codex u otro—
 sin que la arquitectura se degrade. El reparto es simple: **el agente escribe el
 contrato y la lógica de negocio; el generador escribe la estructura; las
 herramientas comprueban el trabajo de los dos; una persona decide el dominio y
 revisa.**
+
+### Lo esencial, en diez líneas
+
+1. `larapack:skill` deja en el proyecto las instrucciones que lee el agente
+   (el skill y el bloque de `AGENTS.md`); con `--hooks`, además, la guardia.
+2. El agente **no escribe** controladores, requests ni migraciones: escribe
+   `laraimport.json` y la lógica en los huecos ([dónde va tu código](#dónde-va-tu-código)).
+3. Cada comando da `--format=json` y un código de salida: el agente itera
+   solo con `larapack:validate`, `larapack:import` y `larapack:verify`.
+4. El ciclo de siempre está [abajo](#el-ciclo-que-sigue-el-agente).
+5. Si el proyecto ya existe y se desvió, el agente **no lo arregla a mano**:
+   lo realinea. Su entrada es `larapack:realign status`, y su guía,
+   [docs/realign/README.md](docs/realign/README.md#inicio-rápido-para-un-agente).
+6. El agente **nunca decide ni aprueba** por el dueño del proyecto: ni
+   `#[HandRolled]`, ni `larapack:hand-rolled approve`, ni
+   `larapack:realign decide` o `accept-untested`
+   ([por qué no puede](docs/realign/exceptions.md#por-qué-un-agente-no-puede-aprobar)).
+7. Cuando algo es del dueño, el agente se lo prepara en un documento
+   (`larapack:realign brief`) y sigue con lo demás
+   ([docs/realign/owner.md](docs/realign/owner.md)).
+8. Una tarea está terminada con `larapack:validate` y `larapack:verify` en
+   verde y la suite pasando; un realineamiento, con `larapack:realign done`
+   en 0.
+9. La guardia y la rama protegida hacen que saltarse lo anterior se vea
+   ([la guardia](#la-guardia-que-el-agente-no-pierda-la-guía),
+   [verificar](#verificar-la-arquitectura)).
+10. Una persona revisa el diff del contrato, la autorización y cada excepción
+    ([qué revisa una persona](#qué-revisa-una-persona)).
 
 ### Por qué funciona
 
@@ -432,6 +481,11 @@ Lo que no cierra, dicho claro:
 
 La skill le explica además el mapa de lo que se genera, **dónde va la lógica de
 negocio**, qué no debe tocar y los errores frecuentes.
+
+Ese es el ciclo de un proyecto que cumple. En uno que **ya existe y se
+desvió** el agente no empieza por ahí: empieza por `larapack:realign status` y
+sigue el ciclo del realineamiento, que le da cada paso con sus instrucciones y
+le dice qué es del dueño ([Realinear un proyecto existente](#realinear-un-proyecto-existente)).
 
 ### Cómo pedirle las cosas
 
@@ -1309,15 +1363,22 @@ El manifiesto debe versionarse con el proyecto.
 
 ---
 
-## Realinear un proyecto que se desvió
+## Realinear un proyecto existente
 
 Cuando lo que hay en disco ya no es lo que generaría el contrato —un proyecto
 de una versión vieja de LaraPack, código editado fuera de los huecos,
 controladores y modelos escritos a mano, o un proyecto sin contrato—,
-`larapack:realign` lo lleva de vuelta **sin reconstruirlo**: lo determinista se
-aplica solo, lo mecánico lo hace un agente con el playbook del paquete y una
-comprobación como criterio de terminado, lo que es decisión se presenta con
-sus opciones y lo que no es de LaraPack se declara fuera y no se toca.
+`larapack:realign` lo lleva de vuelta **sin reconstruirlo**. Reparte el
+trabajo en cuatro:
+
+| Qué | Quién lo hace |
+|---|---|
+| Lo determinista (adoptar, regenerar lo que nadie editó, las correcciones conocidas) | La herramienta, con una orden. |
+| Lo mecánico que no se automatiza con certeza (llevar la lógica de un controlador a su request, devolver código a sus huecos) | Una persona o un agente, con el playbook del paquete y una comprobación como criterio de terminado. |
+| Lo que cambia el comportamiento o el alcance | El dueño del proyecto: se le presenta como decisión, con sus opciones. |
+| Lo que no es de LaraPack (dominio, servicios, front propio, la historia de las migraciones) | Nadie: se declara fuera y no se toca. |
+
+El recorrido, de principio a fin:
 
 ```
 php artisan larapack:realign status                     # si llegas sin contexto: dónde se va y qué sigue
@@ -1326,19 +1387,38 @@ php artisan larapack:realign plan                       # pasos ordenados y rean
 php artisan larapack:realign apply --deterministic      # lo determinista (con --dry-run primero)
 php artisan larapack:realign next                       # el siguiente paso, con su playbook
 php artisan larapack:realign check <id>                 # sólo esto lo da por hecho
+php artisan larapack:realign brief                      # lo que espera al dueño, en un documento
+php artisan larapack:realign done                       # el criterio de terminado: sale con 0, o dice qué falta
 php artisan larapack:realign help <acción>              # cada acción: uso, lo que escribe, su guía
 ```
 
-Nada de lo que sólo lee escribe código; lo que escribe tiene `--dry-run`, exige
-el árbol git limpio y nunca toca una migración ni un nombre de ruta. El estado
-vive en `.larapack/realign/`, así que cualquiera —persona o agente— lo retoma
-con `status`. `larapack:skill` instala la guía para agentes
-(`.claude/skills/larapack-realign/SKILL.md`).
+Lo que conviene saber antes de empezar:
 
-La guía completa —diagnóstico, plan, adopción, correcciones, pasos guiados,
-excepciones, inferir el contrato, verificación, limitaciones y riesgos, y el
-recorrido por perfil de proyecto— está en
-[docs/realign/README.md](docs/realign/README.md).
+- **Nada de lo que sólo lee escribe código**; lo que escribe tiene `--dry-run`,
+  exige el árbol git limpio y nunca toca una migración ni un nombre de ruta.
+- **El estado vive en el proyecto** (`.larapack/realign/`), así que cualquiera
+  —persona o agente— lo retoma con `status`.
+- **Se termina cuando `larapack:realign done` sale con 0**, no cuando
+  `verify` está en verde.
+- **Un agente no decide ni aprueba**: las decisiones y las excepciones son del
+  dueño.
+
+La guía está en [docs/realign/](docs/realign/README.md), una página por tema:
+
+| Necesitas | Página |
+|---|---|
+| Empezar: diez líneas para una persona, diez para un agente, y el ciclo completo | [docs/realign/README.md](docs/realign/README.md) |
+| Salir de un atasco: una decisión que no es tuya, sin pruebas, `untested`, `done` que no termina, el árbol sucio, un monorepo, sin contrato | [docs/realign/faq.md](docs/realign/faq.md) |
+| Una palabra: ámbito, hueco, paso, decisión, excepción, adoptar | [docs/realign/glossary.md](docs/realign/glossary.md) |
+| El recorrido según de dónde parte el proyecto | [docs/realign/profiles.md](docs/realign/profiles.md) |
+| Leer el diagnóstico y el plan | [diagnose.md](docs/realign/diagnose.md), [plan.md](docs/realign/plan.md) |
+| Lo automático y lo guiado | [adopt.md](docs/realign/adopt.md), [apply.md](docs/realign/apply.md), [guided.md](docs/realign/guided.md) |
+| Las decisiones del dueño y las excepciones | [owner.md](docs/realign/owner.md), [exceptions.md](docs/realign/exceptions.md) |
+| Un proyecto sin contrato | [infer.md](docs/realign/infer.md), [contract.md](docs/realign/contract.md) |
+| Cuándo se termina, qué garantiza y qué puede romper | [verify.md](docs/realign/verify.md), [risks.md](docs/realign/risks.md) |
+
+`larapack:skill` instala la guía para agentes
+(`.claude/skills/larapack-realign/SKILL.md`).
 
 ---
 
@@ -2872,9 +2952,9 @@ larapack:guard                   Hook para agentes: comprueba el archivo recién
 larapack:hand-rolled             Lista, aprueba o retira las excepciones #[HandRolled] y las del realineamiento (el dueño).
 larapack:ci                      Crea el workflow «LaraPack verify», el ruleset para la rama y, con --owner, CODEOWNERS;
                                  con --check, dice si la rama exige el check.
-larapack:realign                 Realinea con el contrato un proyecto que se desvió: diagnose, plan, status, next, check,
-                                 decide, playbook y las operaciones adopt, apply, infer, except. help <acción> explica cada una.
-                                 Guía: docs/realign/README.md.
+larapack:realign                 Realinea con el contrato un proyecto que se desvió: diagnose, plan, status, next, show, check,
+                                 decide, defer, undefer, escalate, accept-untested, done, brief, playbook y las operaciones
+                                 adopt, apply, infer, except. help <acción> explica cada una. Guía: docs/realign/README.md.
 
 larapack:full-model              Crea un entorno completo de modelo.
 larapack:remove-full-model       Elimina todas las entidades de un modelo.

@@ -1,14 +1,16 @@
-# El plan y el estado: `plan`, `status`, `next`, `show`, `check`, `decide`, `defer`, `escalate`, `accept-untested`
+# El plan y el estado: `plan`, `status`, `next`, `show`, `check`, `decide`, `defer`, `undefer`, `escalate`, `accept-untested`
 
 Parte de [`larapack:realign`](README.md). Del diagnóstico a pasos que cualquiera
 puede retomar, con un criterio de terminado que no depende de la opinión de
 nadie. Ninguna de estas acciones escribe código: sólo el estado en
-`.larapack/realign/`.
+`.larapack/realign/`. Los términos (paso, ámbito, elemento, criterio de
+terminado) están en el [glosario](glossary.md).
 
 ## Índice
 
 - [`plan`](#plan)
 - [Los pasos](#los-pasos)
+- [Los estados](#los-estados)
 - [Los tipos de paso](#los-tipos-de-paso)
 - [El orden](#el-orden)
 - [Volver a planificar](#volver-a-planificar)
@@ -20,6 +22,7 @@ nadie. Ninguna de estas acciones escribe código: sólo el estado en
 - [`defer` y `undefer`](#defer-y-undefer)
 - [`escalate`](#escalate)
 - [`accept-untested`](#accept-untested)
+- [Argumentos](#argumentos)
 - [El estado en disco y los formatos JSON](#el-estado-en-disco-y-los-formatos-json)
 
 ## `plan`
@@ -41,6 +44,7 @@ Cada paso agrupa lo que se resuelve junto y lleva:
 |---|---|
 | `id` | Estable entre diagnósticos: `<tipo>[:<sujeto>]@<ámbito>` (`adopt@.`, `fix:index-managed@packages/billing`, `edited-outside:Requests@.`) o, en un controlador, `controller-shape@<archivo>`. Es lo que se pasa a `check`, `decide` y las operaciones. |
 | `category`, `type`, `title`, `description` | Qué es y qué hay que hacer. |
+| `subject` | Lo que distingue a un paso de otros del mismo tipo y ámbito: la comprobación de un `fix`, la familia de plantilla de un `edited-outside` (`Requests`); null si no hay. |
 | `scope` | `{package, path}`: el paquete (null es el núcleo) y su ruta. |
 | `files`, `details` | Los archivos, y detrás de cada uno su clase y razón, los hallazgos de verify con su mensaje y el código sin gestionar. Un archivo editado fuera de sus huecos trae `regenerated`: la ruta de lo regenerado en la caché (`.larapack/realign/cache/…`), con la que se compara. |
 | `risk` | `{level: low\|medium\|high, why}`: qué puede romper y por qué. |
@@ -50,22 +54,35 @@ Cada paso agrupa lo que se resuelve junto y lleva:
 | `options` | Pasos `decision`: `{key, label, consequences, run?, playbook?}`. |
 | `done_when` | La comprobación de terminado ([`check`](#check)). |
 | `depends_on` | Lo que tiene que estar hecho antes; mientras no, el paso está `blocked`. Una decisión que condiciona lo guiado ([El orden](#el-orden)) deja de bloquearlo antes: en cuanto cada archivo compartido está decidido con una opción con la que lo guiado sigue valiendo. |
-| `status`, `decision`, `history`, `last_check`, `order` | El estado. |
+| `status`, `decision`, `history`, `last_check`, `order` | El estado guardado ([abajo](#los-estados)), la decisión tomada (`{option, note, at}`), la historia del paso, su última comprobación y su posición en el plan. |
 | `decisions` | Lo decidido elemento por elemento (`decide --target`): `{<archivo>: {option, note, at}}`. Manda sobre `decision`. |
 | `deferred` | `{note, at}` si se aplazó ([`defer`](#defer-y-undefer)). |
 | `escalated` | `{from, note, at}` si un paso guiado se le pasó al dueño ([`escalate`](#escalate)). |
 | `tested` | `{via: declared\|config, command, at}`: la prueba con la que se dio por hecho un paso que cambia comportamiento ([`check`](#check)). |
 | `untested_accepted` | `{note, at, via: terminal\|approver, by}` si el dueño lo aceptó sin probar ([`accept-untested`](#accept-untested)). |
 
-Los estados: `pending`, `done`, `untested` (hecho a falta de su prueba: cambia
-comportamiento y nadie registró que las pruebas del proyecto pasaran;
-[guided.md](guided.md#sin-pruebas-cuando-no-se-pueden-correr-las-del-proyecto)),
-`awaiting_decision` (una decisión sin decidir, o decidida sólo para algunos de
-sus elementos), `decided` (decidida entera, o cada elemento, y todavía sin
-cumplir) y `blocked` (calculado al leer: espera a un paso de `depends_on`).
+`next` y `show` añaden al paso `effective_status`: su estado calculado al
+leerlo, el de la tabla de abajo.
+
+## Los estados
+
+| Estado | Qué significa | Cómo se sale |
+|---|---|---|
+| `pending` | Sin hacer. | Se hace y `check` pasa. |
+| `awaiting_decision` | Una decisión sin tomar, o tomada sólo para algunos de sus elementos. | El dueño decide (`decide`). |
+| `decided` | Una decisión tomada entera —o en cada elemento— y todavía sin cumplir. | Lo que pide la opción, y `check`. |
+| `blocked` | Espera a un paso de `depends_on`. | Ese paso se hace (o se decide con una opción que no lo condiciona). |
+| `untested` | Hecho a falta de su prueba: cambia comportamiento y nadie registró que las pruebas del proyecto pasaran ([guided.md](guided.md#sin-pruebas-cuando-no-se-pueden-correr-las-del-proyecto)). | `check --tested`, o el dueño con `accept-untested`. |
+| `done` | Hecho: su comprobación pasó. | — |
+
+En `plan.json`, `status` sólo guarda `pending`, `untested` o `done`.
+`awaiting_decision`, `decided` y `blocked` **se calculan al leer** el plan (de
+la decisión registrada y de `depends_on`), y son lo que cuentan `status`,
+`next` y `show`.
+
 Para moverse por el plan `untested` cuenta como hecho (no bloquea a nadie y
 `next` no lo da); para terminar, no. Aplazar no es un estado: el paso sigue en
-el suyo.
+el suyo, con `deferred`.
 
 ## Los tipos de paso
 
@@ -97,8 +114,8 @@ Los define `src/Support/Realign/StepTypes.php`:
 | `no-contract` | `decision` | Un ámbito sin `laraimport.json`: inferirlo o dejarlo fuera. | [infer](infer.md) |
 | `contract-invalid` | `decision` | El contrato no valida con esta versión: corregirlo o retirarlo. | [contract](contract.md) |
 
-`larapack:realign help` dice qué operación hace cada tipo, y
-`larapack:realign playbook` los playbooks.
+La orden o el playbook de un paso concreto los da `larapack:realign next
+<id>`; `larapack:realign playbook` lista los playbooks.
 
 ## El orden
 
@@ -345,30 +362,31 @@ larapack:realign accept-untested <id> --note="por qué y cuándo se probará"
 El dueño acepta sin probar un paso `untested`: queda `done` con
 `untested_accepted` (la nota, la hora y cómo se confirmó) y una línea en su
 historia, y `larapack:realign done` lo sigue enseñando (`accepted_untested`).
+La nota es obligatoria y sólo se acepta lo que está `untested`.
+
 Lo confirma **una persona**, como una aprobación: en su terminal, viendo el
-paso y la nota y escribiendo «acepto sin probar»; o sin terminal, nombrándose
-(`LARAPACK_APPROVER` y `--approver` con el mismo nombre, que queda en `by`).
-Un agente no lo corre: lo deja en su informe y en `brief`. La nota es
-obligatoria y sólo se acepta lo que está `untested`.
+paso y la nota y escribiendo «acepto sin probar». Un agente no lo corre: lo
+deja en su informe y en `brief`. Cómo se confirma, y qué pasa sin terminal:
+[guided.md](guided.md#aceptarlo-sin-probar-lo-decide-el-dueño).
 
 ## Argumentos
 
 Un argumento que la acción no usa es un error, igual que una opción: `next
 <id> <otro>`, `status <id>` o `check <id> <otro>` fallan diciendo qué sobra.
-Antes, `next <id>` ignoraba el id y daba el siguiente.
+Cuántos recibe cada acción lo dice su uso (`larapack:realign help <acción>`).
 
 ## El estado en disco y los formatos JSON
 
 ```
 .larapack/realign/
-  report.json        el último diagnóstico
-  plan.json          los pasos, su estado y su historia
-  exceptions.json    las excepciones pedidas, sin aprobar (exceptions.md)
-  config.json        opcional, lo escribe una persona: la orden de pruebas (check)
+  report.json        el último diagnóstico (se puede versionar)
+  plan.json          los pasos, su estado, sus decisiones y su historia (se versiona)
+  exceptions.json    las excepciones pedidas, sin aprobar (se versiona; exceptions.md)
+  config.json        opcional, lo escribe una persona: la orden de pruebas (se versiona; check)
   brief.md, .json    lo que espera al dueño (owner.md); se rehace con brief
-  infer/             los informes de infer (infer.md)
+  infer/<ámbito>.json el informe de cada inferencia (infer.md)
   .gitignore         deja fuera cache/
-  cache/             lo regenerado para comparar
+  cache/             lo regenerado para comparar (no se versiona)
 ```
 
 Todos los JSON —los archivos y toda salida `--format=json`— llevan
@@ -376,49 +394,84 @@ Todos los JSON —los archivos y toda salida `--format=json`— llevan
 añadir una clave no la sube. Un archivo de una versión posterior no se lee: se
 pide actualizar el paquete.
 
-- `diagnose --format=json` y `report.json`: [diagnose.md](diagnose.md#el-informe-reportjson).
-- `plan --format=json` y `status --format=json`: `{format_version, ok, action,
-  diagnosed_at, planned_at, stale, totals, verify, steps: {total, by_status,
-  by_category}, next, last_check, awaiting_owner, deferred, untested, plan}`. `stale`
-  lista los ámbitos cuyo contrato o manifiesto cambió después del diagnóstico;
-  `awaiting_owner` es `[{scope, package, decisions, guided}]` y `deferred`,
-  `[{id, title, note, at}]`.
-- `next --format=json` y `show --format=json`: `{format_version, ok, action,
-  done, step, how, check, tests, done_when, blocked_by, meanwhile}`, con
-  `tests: {required, command, tested}`; sin nada que
-  hacer ahora, `{…, done: false, step: null, waiting: {deferred, owner,
-  blocked}}`.
-- `check --format=json`: `{format_version, ok, action, id, done, status,
-  remaining, kind, tests, warning?}`. `ok` es que la comprobación pasó; `done`,
-  que el paso quedó `done` (en uno `untested`, `ok: true, done: false`);
-  `tests` es `{command, exit, output}` si corrió la orden configurada, o null.
-- `accept-untested --format=json`: `{format_version, ok, action, id, status,
-  untested_accepted}`.
-- `decide --format=json`: `{format_version, ok, action, id, decision, targets,
-  undecided, then, check}`.
-- `defer`/`undefer --format=json`: `{format_version, ok, action, id, deferred,
-  next}`; `escalate --format=json`: `{format_version, ok, action, id,
-  escalated, options, decide}`.
-- `brief --format=json` y `brief.json`: `{format_version, ok, action, summary,
-  decisions, exceptions, meanwhile, resume, files, …}`
+### Las salidas `--format=json`
+
+Las claves de primer nivel de cada salida. Una clave con `?` sólo está en el
+caso que se dice debajo.
+
+| Salida | Claves |
+|---|---|
+| `diagnose` | `format_version`, `ok`, `action`, `generator`, `generated_at`, `totals`, `verify`, `scopes`, `report` |
+| `plan`, `status` | `format_version`, `ok`, `action`, `diagnosed_at`, `planned_at`, `stale`, `totals`, `verify`, `steps`, `next`, `last_check`, `awaiting_owner`, `deferred`, `untested`, `plan` |
+| `next`, `show` | `format_version`, `ok`, `action`, `done`, `step`, `how?`, `check?`, `tests?`, `done_when?`, `blocked_by?`, `meanwhile?`, `untested?`, `waiting?` |
+| `check` | `format_version`, `ok`, `action`, `id`, `done`, `status`, `remaining`, `kind`, `tests`, `warning?` |
+| `decide` | `format_version`, `ok`, `action`, `id`, `decision`, `targets`, `undecided`, `then`, `check` |
+| `defer`, `undefer` | `format_version`, `ok`, `action`, `id`, `deferred`, `next` |
+| `escalate` | `format_version`, `ok`, `action`, `id`, `escalated`, `options`, `decide` |
+| `accept-untested` | `format_version`, `ok`, `action`, `id`, `status`, `untested_accepted` |
+| `done` | `format_version`, `ok`, `action`, `done`, `missing`, `declared`, `accepted_untested`, `counts`, `reasons`, `diagnosed_at`, `error?` |
+| `brief` | `format_version`, `ok`, `action`, `generated_at`, `diagnosed_at`, `planned_at`, `stale`, `summary`, `decisions`, `exceptions`, `untested`, `meanwhile`, `resume`, `files` |
+| `playbook` | `format_version`, `ok`, `action`, `playbooks?`, `name?`, `instructions?` |
+| `help` | `format_version`, `ok`, `action`, `actions?`, `categories?`, `classes?`, `guide`, `guides?`, `entry_point?`, `topic?`, `summary?`, `usage?`, `writes?`, `options?`, `keys?`, `available?` |
+| `adopt`, `apply`, `infer`, `except` | `format_version`, `ok`, `action`, `dry_run`, `steps`, `fixed`, `skipped`, `unchanged`, `notes`, `commit` |
+| un error, en cualquiera | `ok`, `error`, `format_version`, `action` |
+
+Lo que hay dentro de cada una:
+
+- **`diagnose`**: `totals` es `{classes, categories, conforming, files}`;
+  `scopes`, una entrada por ámbito; `report`, la ruta de `report.json`. El
+  detalle, en [diagnose.md](diagnose.md#el-informe-reportjson).
+- **`plan` y `status`**: `stale` lista los ámbitos cuyo contrato o manifiesto
+  cambió después del diagnóstico; `steps` es `{total, by_status,
+  by_category}`; `next`, `{id, title, category, status}` o null;
+  `awaiting_owner`, `[{scope, package, decisions, guided}]`; `deferred`,
+  `[{id, title, note, at}]`; `untested`, `[{id, title, scope, at, check,
+  accept}]`; `plan`, la ruta de `plan.json` (null sin plan).
+- **`next` y `show`**: con un paso, `step`, `how`, `check`, `tests`
+  (`{required, command, tested}`), `done_when`, `blocked_by` y `meanwhile`
+  (`{id, title, category, show}`; sólo lo rellena `next` sin id cuando da una
+  decisión sin tomar: con un id, y en `show`, es null).
+  Sin nada pendiente, `done: true`, `step: null` y `untested` (lo que quedó
+  sin probar). Con trabajo pero nada que hacer ahora, `done: false`, `step:
+  null` y `waiting: {deferred, owner, blocked}`.
+- **`check`**: `ok` es que la comprobación pasó; `done`, que el paso quedó
+  `done` (en uno `untested`, `ok: true, done: false`, con `warning`); `tests`
+  es `{command, exit, output}` si corrió la orden configurada, o null.
+- **`done`**: `missing` y `counts` llevan las mismas seis claves (`steps`,
+  `decisions`, `untested`, `exceptions`, `validate`, `verify`); `reasons`, lo
+  que falta en una frase por clase, y `error` —sólo cuando no ha terminado—,
+  las mismas frases juntas ([verify.md](verify.md#cuándo-se-termina)).
+- **`brief`**: es también `.larapack/realign/brief.json`
   ([owner.md](owner.md#el-formato-json)).
-- `help --format=json`: `{format_version, ok, action, actions, categories,
-  classes, guide, guides, entry_point}`; con una acción, `{…, topic, summary,
-  usage, writes, options, keys, guide, available}`.
-- Las operaciones (`adopt`, `apply`, `infer`, `except`): `{format_version, ok,
-  action, dry_run, steps, fixed, skipped, unchanged, notes}`. Cada elemento de
+- **`playbook`**: sin nombre, `playbooks` (nombre → para qué es); con nombre,
+  `name` e `instructions` (el playbook sin rellenar).
+- **`help`**: sin acción, `actions`, `categories`, `classes`, `guides` y
+  `entry_point`; con una acción, `topic`, `summary`, `usage`, `writes`,
+  `options`, `keys` y `available`.
+- **Las operaciones** (`adopt`, `apply`, `infer`, `except`): cada elemento de
   `fixed`/`skipped`/`unchanged` es `{file, reason, step, steps}` más lo suyo:
   `diff` en una simulación de `apply`, `to` y `references` en
   `controller-concern`, `model` y `stub` en `adopt`, `target` en `except`,
-  `scope` y `stamped` en la línea de la versión anotada en lo heredado
-  (`file: null`). **`step` está siempre**: el id del paso, o `null` si el
-  elemento no es de ninguno. Un elemento que es de varios pasos —el
-  `unchanged` que resume cuántos archivos de una comprobación de `fix` ya
-  estaban bien, la versión anotada en un ámbito que tocaron varios pasos— trae
-  en `step` el primero, en el orden del plan, y en `steps` todos; en uno de un
-  solo paso, `steps` es `[step]`. `file` es `null` en lo que no es de un
-  archivo.
-- Un error, en cualquiera: `{ok: false, error, format_version, action}`.
+  `report` e `infer` en `infer`, `scope` y `stamped` en la línea de la versión
+  anotada en lo heredado (`file: null`). **`step` está siempre**: el id del
+  paso, o `null` si el elemento no es de ninguno. Un elemento que es de varios
+  pasos —el `unchanged` que resume cuántos archivos de una comprobación de
+  `fix` ya estaban bien, la versión anotada en un ámbito que tocaron varios
+  pasos— trae en `step` el primero, en el orden del plan, y en `steps` todos;
+  en uno de un solo paso, `steps` es `[step]`. `file` es `null` en lo que no
+  es de un archivo. `commit` es `{required, files, command, message}` si
+  quedó algo que comitear, o null.
+
+### Los archivos
+
+- `report.json`: [diagnose.md](diagnose.md#el-informe-reportjson).
+- `plan.json`: `{format_version, generator, planned_at, report_generated_at,
+  report_id, steps}`; cada paso, con los campos de [Los pasos](#los-pasos).
+- `exceptions.json` y el candado: [exceptions.md](exceptions.md#los-formatos).
+- `config.json`: `{"format_version": 1, "tests": "<orden>"}`
+  ([guided.md](guided.md#la-orden-de-pruebas-del-proyecto-en-la-configuración)).
+- `brief.json`: [owner.md](owner.md#el-formato-json).
+- `infer/<ámbito>.json`: [infer.md](infer.md#el-informe).
 
 **El manifiesto v2.** Desde 9.4.0 cada archivo del manifiesto dice qué versión
 del generador lo escribió (`generator`) y, si se adoptó en vez de generarse,
