@@ -133,13 +133,7 @@ final class OperationRunner
      */
     private function steps(RealignOperation $operation, array $plan, array $targets, array $packages): array
     {
-        $byId = [];
-
-        foreach ((array) ($plan['steps'] ?? []) as $step) {
-            if (is_array($step) && is_string($step['id'] ?? null)) {
-                $byId[$step['id']] = $step;
-            }
-        }
+        $byId = Planner::byId($plan);
 
         $handles = $operation->handles();
         $selected = [];
@@ -181,7 +175,7 @@ final class OperationRunner
             }
 
             if ($status === Planner::BLOCKED) {
-                throw new RuntimeException("El paso {$id} espera a: ".implode(', ', array_map('strval', (array) ($step['depends_on'] ?? []))).'.');
+                throw new RuntimeException("El paso {$id} espera a: ".implode(', ', Planner::blockedBy($step, $byId)).'.');
             }
 
             $selected[] = $step;

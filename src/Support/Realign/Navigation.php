@@ -357,6 +357,168 @@ final class Navigation
     }
 
     /**
+     * El siguiente paso que puede hacer quien sigue el plan: el primero, en
+     * su orden, que no está hecho ni bloqueado, ni aplazado, ni en manos del
+     * dueño (handedOver()), ni es una decisión tomada que espera a lo guiado
+     * (waitsForGuided()). Una decisión sin tomar sí se da: hay que
+     * presentársela al dueño.
+     *
+     * @param  list<Step>  $steps  los del ámbito pedido, en el orden del plan
+     * @param  array<string, Step>  $byId  todos los del plan
+     * @return Step|null
+     */
+    public static function next(array $steps, array $byId): ?array
+    {
+        return self::firstActionable($steps, $byId, [Planner::DONE, Planner::UNTESTED, Planner::BLOCKED]);
+    }
+
+    /**
+     * Lo primero que se puede hacer sin esperar al dueño: como next(), sin
+     * las decisiones por tomar.
+     *
+     * @param  list<Step>  $steps
+     * @param  array<string, Step>  $byId
+     * @return Step|null
+     */
+    public static function meanwhile(array $steps, array $byId): ?array
+    {
+        return self::firstActionable($steps, $byId, [Planner::DONE, Planner::UNTESTED, Planner::BLOCKED, Planner::AWAITING_DECISION]);
+    }
+
+    /**
+     * Por ámbito, las decisiones del dueño sin tomar que detienen lo guiado,
+     * y lo guiado que detienen.
+     *
+     * @param  list<Step>  $steps
+     * @param  array<string, Step>  $byId
+     * @return list<array{scope: string, package: string|null, decisions: list<string>, guided: list<string>}>
+     */
+    public static function awaitingOwner(array $steps, array $byId): array
+    {
+        $by = [];
+
+        foreach ($steps as $step) {
+            if ($step['category'] !== Category::GUIDED || isset($step['deferred'])) {
+                continue;
+            }
+
+            foreach (Planner::blockedBy($step, $byId) as $id) {
+                $decision = $byId[$id];
+                $shared = array_intersect(self::files($step), self::files($decision));
+                $pending = array_filter($shared, fn (string $file): bool => self::optionFor($decision, $file) === null);
+
+                if (! self::conditions((string) $decision['type']) || $pending === []) {
+                    continue;
+                }
+
+                $package = is_string($step['scope']['package'] ?? null) ? $step['scope']['package'] : null;
+                $key = $package ?? 'app';
+                $by[$key] ??= ['scope' => $key, 'package' => $package, 'decisions' => [], 'guided' => []];
+                $by[$key]['decisions'][$id] = $id;
+                $by[$key]['guided'][(string) $step['id']] = (string) $step['id'];
+            }
+        }
+
+        return array_values(array_map(function (array $entry): array {
+            $decisions = array_values($entry['decisions']);
+            $guided = array_values($entry['guided']);
+            sort($decisions);
+            sort($guided);
+
+            return ['scope' => $entry['scope'], 'package' => $entry['package'], 'decisions' => $decisions, 'guided' => $guided];
+        }, $by));
+    }
+
+    /**
+     * Las excepciones que no cubren lo que deberían: pedidas y sin aprobar, o
+     * aprobadas sobre otro código, con otra razón o sobre algo que ya no
+     * existe. Es una sola lista para `done` (Completion), que falla mientras
+     * quede alguna, y para `brief` (OwnerBrief), que se las presenta al
+     * dueño: si cada uno las contara a su manera, `done` pediría aprobar lo
+     * que el brief no enseña.
+     *
+     * No cuenta la pedida bajo una decisión que después cambió para ese
+     * elemento (stillRequested()), ni, con `--package`, la de otro ámbito.
+     * Las aprobadas sin solicitud (las de antes, o de otra rama) también
+     * caducan; con `--package` no se sabe de qué ámbito son y no se miran.
+     *
+     * @param  list<string>  $paths  rutas de ámbito; vacío, todo el proyecto
+     * @param  array<string, Step>  $byId
+     * @return list<array{target: string, status: string, request: array<string, mixed>|null, reason: string|null}>
+     */
+    public static function pendingExceptions(Exceptions $exceptions, array $paths, array $byId): array
+    {
+        $rows = [];
+
+        foreach ($exceptions->requests() as $target => $request) {
+            if ($paths !== [] && ! in_array($request['scope'], $paths, true)) {
+                continue;
+            }
+
+            $step = $request['step'] === null ? null : ($byId[$request['step']] ?? null);
+
+            if (is_array($step) && ! self::stillRequested($step, $request)) {
+                continue;
+            }
+
+            $status = $exceptions->status((string) $target);
+
+            if ($status !== Exceptions::APPROVED) {
+                $rows[(string) $target] = ['target' => (string) $target, 'status' => $status, 'request' => $request, 'reason' => $request['reason']];
+            }
+        }
+
+        foreach ($paths === [] ? $exceptions->all() : [] as $approval) {
+            if ($approval['status'] !== Exceptions::APPROVED && ! isset($rows[$approval['target']])) {
+                $rows[$approval['target']] = ['target' => $approval['target'], 'status' => $approval['status'], 'request' => null, 'reason' => $approval['reason']];
+            }
+        }
+
+        return array_values($rows);
+    }
+
+    /**
+     * Lo que está sin probar: cada paso con la orden para darlo por probado y
+     * la del dueño para aceptarlo así.
+     *
+     * @param  list<Step>  $steps
+     * @return list<array{id: string, title: string, scope: string, at: string|null, check: string, accept: string}>
+     */
+    public static function untested(array $steps): array
+    {
+        $rows = [];
+
+        foreach ($steps as $step) {
+            if (($step['status'] ?? null) === Planner::UNTESTED) {
+                $history = array_values(array_filter((array) ($step['history'] ?? []), fn (mixed $event): bool => is_array($event) && in_array($event['event'] ?? null, ['untested', 'resolved'], true)));
+                $rows[] = ['id' => (string) $step['id'], 'title' => (string) $step['title'], 'scope' => (string) ($step['scope']['path'] ?? '.'),
+                    'at' => $history === [] ? null : (string) ($history[count($history) - 1]['at'] ?? ''),
+                    'check' => 'larapack:realign check '.$step['id'].' --tested="<orden>"', 'accept' => 'larapack:realign accept-untested '.$step['id'].' --note="por qué"'];
+            }
+        }
+
+        return $rows;
+    }
+
+    /**
+     * @param  list<Step>  $steps
+     * @param  array<string, Step>  $byId
+     * @param  list<string>  $skip  los estados (Planner::effectiveStatus()) que no se dan
+     * @return Step|null
+     */
+    private static function firstActionable(array $steps, array $byId, array $skip): ?array
+    {
+        foreach ($steps as $step) {
+            if (! isset($step['deferred']) && ! self::handedOver($step) && ! self::waitsForGuided($step, $byId)
+                && ! in_array(Planner::effectiveStatus($step, $byId), $skip, true)) {
+                return $step;
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * @param  Step  $step
      * @return list<string>
      */

@@ -14,6 +14,7 @@ use Innoboxrr\LarapackGenerator\Support\Realign\Apply\ConcernMove;
 use Innoboxrr\LarapackGenerator\Support\Realign\Apply\EndpointTests;
 use Innoboxrr\LarapackGenerator\Support\Realign\Apply\ForeignKeyPins;
 use Innoboxrr\LarapackGenerator\Support\Realign\FileClass;
+use Innoboxrr\LarapackGenerator\Support\Realign\Planner;
 use Innoboxrr\LarapackGenerator\Support\Realign\StepTypes;
 use Innoboxrr\LarapackGenerator\Support\UnifiedDiff;
 
@@ -377,18 +378,12 @@ final class ApplyOperation implements RealignOperation
             return null;
         }
 
-        $steps = (array) (($context->state->plan() ?? [])['steps'] ?? []);
-        $scope = null;
+        $steps = Planner::byId($context->state->plan());
+        $scope = $steps[$stepId]['scope']['path'] ?? null;
 
-        foreach ($steps as $step) {
-            if (is_array($step) && ($step['id'] ?? null) === $stepId) {
-                $scope = $step['scope']['path'] ?? null;
-            }
-        }
-
-        foreach ($steps as $step) {
-            if (is_array($step) && ($step['type'] ?? null) === $type && ($step['scope']['path'] ?? null) === $scope && is_string($step['id'] ?? null)) {
-                return $step['id'];
+        foreach ($steps as $id => $step) {
+            if (($step['type'] ?? null) === $type && ($step['scope']['path'] ?? null) === $scope) {
+                return $id;
             }
         }
 

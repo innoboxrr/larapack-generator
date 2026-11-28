@@ -100,6 +100,22 @@ final class RealignState
     }
 
     /**
+     * El plan, para las acciones que no tienen nada que hacer sin él.
+     *
+     * @return array<string, mixed>
+     */
+    public function requirePlan(): array
+    {
+        $plan = $this->plan();
+
+        if ($plan === null || ! is_array($plan['steps'] ?? null)) {
+            throw new RuntimeException('No hay plan: corre `larapack:realign diagnose` y después `larapack:realign plan`.');
+        }
+
+        return $plan;
+    }
+
+    /**
      * @param  array<string, mixed>  $report
      */
     public function saveReport(array $report): void

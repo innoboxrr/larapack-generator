@@ -208,6 +208,28 @@ final class Diagnosis
     }
 
     /**
+     * Los ámbitos de un informe cuyo contrato o manifiesto cambió después
+     * de diagnosticarlos (fingerprint()): para ellos el informe está viejo.
+     *
+     * @param  array<string, mixed>|null  $report
+     * @return list<string> sus rutas de ámbito
+     */
+    public static function stale(?array $report, string $root): array
+    {
+        $stale = [];
+
+        foreach ((array) ($report['scopes'] ?? []) as $path => $scope) {
+            $directory = $path === '.' ? $root : $root.'/'.$path;
+
+            if (is_array($scope) && is_dir($directory) && ($scope['fingerprint'] ?? null) !== self::fingerprint($directory)) {
+                $stale[] = (string) $path;
+            }
+        }
+
+        return $stale;
+    }
+
+    /**
      * Los recuentos del informe: por clase de archivo y por categoría de
      * todo lo encontrado.
      *

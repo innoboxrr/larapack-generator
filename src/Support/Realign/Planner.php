@@ -2,6 +2,8 @@
 
 namespace Innoboxrr\LarapackGenerator\Support\Realign;
 
+use RuntimeException;
+
 /**
  * `larapack:realign plan`: del diagnóstico a una lista de pasos ordenados,
  * con id estable, que se pueden hacer de uno en uno y retomar.
@@ -198,11 +200,8 @@ final class Planner
             return (string) $step['status'];
         }
 
-        foreach ((array) ($step['depends_on'] ?? []) as $dependency) {
-            if (isset($byId[$dependency]) && ! self::finished($byId[$dependency])
-                && ! (Navigation::conditions((string) ($byId[$dependency]['type'] ?? '')) && Navigation::allows($step, $byId[$dependency]))) {
-                return self::BLOCKED;
-            }
+        if (self::blockedBy($step, $byId) !== []) {
+            return self::BLOCKED;
         }
 
         if ($step['category'] === Category::DECISION) {
@@ -222,6 +221,99 @@ final class Planner
     public static function finished(array $step): bool
     {
         return in_array($step['status'] ?? self::PENDING, [self::DONE, self::UNTESTED], true);
+    }
+
+    /**
+     * Los pasos de `depends_on` que todavía lo detienen: los que no están
+     * hechos, salvo una decisión que condiciona lo guiado y ya se tomó, para
+     * los archivos que comparten, con una opción con la que sigue valiendo
+     * (Navigation::allows()). Es lo que hace `blocked` a un paso.
+     *
+     * @param  Step  $step
+     * @param  array<string, Step>  $byId
+     * @return list<string>
+     */
+    public static function blockedBy(array $step, array $byId): array
+    {
+        if (self::finished($step)) {
+            return [];
+        }
+
+        return array_values(array_filter(
+            array_map('strval', (array) ($step['depends_on'] ?? [])),
+            fn (string $id): bool => isset($byId[$id])
+                && ! self::finished($byId[$id])
+                && ! (Navigation::conditions((string) ($byId[$id]['type'] ?? '')) && Navigation::allows($step, $byId[$id]))
+        ));
+    }
+
+    /**
+     * Los pasos de un plan por su id: lo que piden effectiveStatus(),
+     * blockedBy() y Navigation para mirar de qué depende cada uno.
+     *
+     * @param  array<string, mixed>|null  $plan
+     * @return array<string, Step>
+     */
+    public static function byId(?array $plan): array
+    {
+        $byId = [];
+
+        foreach ((array) ($plan['steps'] ?? []) as $step) {
+            if (is_array($step) && is_string($step['id'] ?? null)) {
+                $byId[$step['id']] = $step;
+            }
+        }
+
+        return $byId;
+    }
+
+    /**
+     * Los pasos de esos ámbitos (`--package`, como rutas de ámbito: `.` es
+     * el núcleo), en el orden del plan; sin rutas, todos.
+     *
+     * @param  array<string, mixed>|null  $plan
+     * @param  list<string>  $paths
+     * @return list<Step>
+     */
+    public static function stepsIn(?array $plan, array $paths = []): array
+    {
+        return array_values(array_filter(
+            (array) ($plan['steps'] ?? []),
+            fn (mixed $step): bool => is_array($step) && ($paths === [] || in_array($step['scope']['path'] ?? null, $paths, true))
+        ));
+    }
+
+    /**
+     * La posición de un paso en `steps`, para escribir en él.
+     *
+     * @param  array<string, mixed>  $plan
+     */
+    public static function indexOf(array $plan, string $id): int
+    {
+        foreach ((array) ($plan['steps'] ?? []) as $index => $step) {
+            if (is_array($step) && ($step['id'] ?? null) === $id) {
+                return (int) $index;
+            }
+        }
+
+        throw new RuntimeException("No hay un paso {$id} en el plan. `larapack:realign status --format=json` y plan.json los listan.");
+    }
+
+    /**
+     * La opción de una decisión por su clave, o null si el paso no la tiene.
+     *
+     * @param  Step  $step
+     * @return array<string, mixed>|null
+     */
+    public static function option(array $step, string $key): ?array
+    {
+        foreach ((array) ($step['options'] ?? []) as $option) {
+            if (is_array($option) && ($option['key'] ?? null) === $key) {
+                return $option;
+            }
+        }
+
+        return null;
     }
 
     /**
