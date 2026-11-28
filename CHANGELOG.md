@@ -808,12 +808,60 @@ paquete. Donde se pararon o tuvieron que adivinar, ahora el paquete lo dice.
   un proyecto, `git worktree` o `tar`, no `rsync`.
 - **Sin pruebas.** Si no se pueden correr las del proyecto (sin `vendor/`, sin
   base de datos), un paso guiado que cambia comportamiento no se da por
-  hecho: se escribe la prueba igual, se comita con `SIN PROBAR` y no se corre
-  `check` en él ([guided.md](docs/realign/guided.md)).
+  hecho: se escribe la prueba igual y se comita con `SIN PROBAR`
+  ([guided.md](docs/realign/guided.md)). Que no se corriera `check` en él lo
+  sustituye el estado `untested` (la sección siguiente).
 - **La otra pasada, dicha en el ciclo.** Tras copiar lo regenerado, cambiar
   el contrato o completar los guiados de un ámbito, otra vez `diagnose` →
   `plan` → `apply --deterministic`. [profiles.md](docs/realign/profiles.md)
   y la guía para agentes traen el orden exacto de punta a punta.
+
+### Lo no probado ya no acaba hecho: `untested`, `check --tested` y `accept-untested`
+
+En una prueba de autonomía real, sin poder correr las pruebas del proyecto, un
+agente no corrió `check` en un controlador —como pedía la guía— y el siguiente
+`diagnose`/`plan` lo marcó `done` solo («resolved: el diagnóstico ya no lo
+encuentra»); otro corrió `check` sin pruebas y la herramienta no avisó. Lo no
+probado acababa hecho, y `realign done` podía llegar a verde con cambios de
+comportamiento que nadie vio pasar (un 422 que pasa a 403, un 404 que pasa a
+403).
+
+- **Qué cambia comportamiento**, escrito una vez en `StepTypes`
+  (`BEHAVIOUR`, `BEHAVIOUR_OPTIONS`, `changesBehaviour()`): `controller-shape`,
+  `declared-routes`, `security`, `edited-outside` de `Requests`, `Controller`
+  y `Policy`, y las decisiones decididas con una opción que mueve código
+  (`route-closure`/`hand-rolled` → `refactor`, `unmanaged-http` → `declare`,
+  un guiado escalado → `refactor`). `next`/`show` lo dicen en
+  `tests.required`, y el playbook ya da la orden de `check` con `--tested`.
+- **El estado `untested`** (`Planner::UNTESTED`, guardado en `plan.json`):
+  hecho a falta de su prueba. `check` sin prueba lo deja así, sale con 0 y
+  avisa (`warning`; en JSON `ok: true, done: false, status: untested`). Para
+  moverse por el plan cuenta como hecho (`Planner::finished()`: no bloquea ni
+  lo vuelve a dar `next`); para terminar, no.
+- **`check <id> --tested="<orden>"`** registra la prueba que se corrió y pasó
+  (`tested: {via: declared, command, at}`) y lo deja `done`. **La orden del
+  proyecto en `.larapack/realign/config.json`** (`{"format_version": 1,
+  "tests": "php artisan test"}`, nuevo, lo escribe una persona): `check` la
+  corre él (`ProjectTests`) y sólo da el paso por hecho si sale con 0; si
+  falla, no está hecho y da el final de la salida (`tests.output`).
+- **`plan` ya no da por hecho lo que cambia comportamiento** cuando el
+  diagnóstico deja de encontrarlo: queda `untested` (`resolved`, con la orden
+  para probarlo). Uno `untested` que vuelve a salir se reabre y pierde la
+  prueba registrada, igual que uno `done`.
+- **`status`** (`untested`, «Sin probar (N)»), **`brief`** (`summary.untested`,
+  sección «Sin probar») y **`done`** (`missing.untested`, `counts.untested`) los
+  listan con la orden de cada uno. **`done` falla mientras quede uno.**
+- **`larapack:realign accept-untested <id> --note="…"`**: sólo el dueño acepta
+  un paso sin probar, como aprueba una excepción (`OwnerConfirmation`): en su
+  terminal, viendo el paso y escribiendo «acepto sin probar», o sin terminal
+  con `LARAPACK_APPROVER` y `--approver` iguales (la guardia de los agentes ya
+  bloquea cualquier orden con `--approver`). Queda `done` con
+  `untested_accepted: {note, at, via, by}` en el plan, y `done` lo sigue
+  enseñando (`accepted_untested`). La nota es obligatoria.
+- La guía ([guided.md](docs/realign/guided.md#sin-pruebas-cuando-no-se-pueden-correr-las-del-proyecto),
+  [plan.md](docs/realign/plan.md#check)), la de los agentes
+  (`skill/realign/SKILL.md`) y el playbook `edited-outside` dicen ahora
+  «corre `check` sin `--tested`» en vez de «no corras `check`».
 
 ### Al actualizar a 9.4.0
 
@@ -832,7 +880,7 @@ paquete. Donde se pararon o tuvieron que adivinar, ahora el paquete lo dice.
   desde ahí un `#[HandRolled]` sin aprobar es error; todo el equipo y la CI en
   9.4.0 antes de aprobar la primera (un verify anterior ve las aprobaciones
   `realign:` como sobrantes).
-- **Versiona** `.larapack/realign/plan.json` y `exceptions.json`; la caché
+- **Versiona** `.larapack/realign/plan.json`, `exceptions.json` y, si la usas, `config.json` (la orden de pruebas que corre `check`); la caché
   (`.larapack/realign/cache/`) ya viene ignorada.
 - **Un `import` después de adoptar** puede escribir alteraciones (columnas,
   índices o un `->change()` si lo declarado difiere): `--dry-run` y revísalas

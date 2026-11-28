@@ -650,12 +650,21 @@ estado: `next` lo salta y `status` lo lista.
 **`check`** corre el `done_when` del paso con
 [`DoneWhen`](src/Support/Realign/DoneWhen.php): `verify` acotado, la misma
 clasificación, el código sin gestionar o la validación del contrato. Hacer un
-paso no lo marca hecho; sólo esto.
+paso no lo marca hecho; sólo esto. Un paso que cambia comportamiento
+(`StepTypes::changesBehaviour`: `StepTypes::BEHAVIOUR` y
+`StepTypes::BEHAVIOUR_OPTIONS`) necesita además su prueba: la que declara
+quien la corrió (`--tested`) o la orden de `.larapack/realign/config.json`, que
+corre [`ProjectTests`](src/Support/Realign/ProjectTests.php); sin ella queda
+`untested` (`Planner::UNTESTED`, guardado: cuenta como hecho para moverse
+por el plan, `Planner::finished`, no para terminar). `plan` deja `untested`, no
+`done`, lo que el diagnóstico ya no encuentra si cambia comportamiento. Lo
+acepta sin probar sólo el dueño (`accept-untested`, con
+[`OwnerConfirmation`](src/Support/OwnerConfirmation.php), como una aprobación).
 
 **`done`** es el criterio de terminado del realineamiento entero
 ([`Completion`](src/Support/Realign/Completion.php)): diagnostica y planifica
 otra vez, y falla mientras quede un paso sin hacer, una decisión sin tomar,
-una excepción sin aprobar, o un error o aviso de `validate --strict`
+un paso `untested` que el dueño no aceptó, una excepción sin aprobar, o un error o aviso de `validate --strict`
 ([`ProjectValidation`](src/Support/ProjectValidation.php), cada contrato
 local) o de `verify --strict` (`ProjectVerification`) en cualquier ámbito.
 Lo declarado fuera (un `no-contract` decidido) va en `declared`. La guía:

@@ -229,7 +229,9 @@ final class Playbooks
             'files' => $files === [] ? '(ninguno)' : implode("\n", $files),
             'findings' => $findings === [] ? '(ninguno)' : implode("\n", $findings),
             'risk' => (string) ($step['risk']['level'] ?? '?').': '.(string) ($step['risk']['why'] ?? ''),
-            'check' => 'larapack:realign check '.$id,
+            // Lo que cambia comportamiento sólo queda hecho con su prueba:
+            // la orden lo pide, y sin pruebas check lo deja untested.
+            'check' => 'larapack:realign check '.$id.(StepTypes::changesBehaviour($step) ? ' --tested="<la orden de pruebas del proyecto que corriste y pasó>"' : ''),
             'verify' => $verify,
             'done_when' => self::describeCondition($condition),
         ];

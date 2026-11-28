@@ -69,10 +69,10 @@ final class RealignActions
             'guide' => 'docs/realign/plan.md',
         ],
         'check' => [
-            'summary' => 'Comprueba el done_when de un paso y lo marca hecho, o dice qué falta, elemento por elemento (sale con error).',
-            'usage' => ['larapack:realign check <id>'],
-            'writes' => 'Sólo el estado del paso en .larapack/realign/plan.json.',
-            'options' => [],
+            'summary' => 'Comprueba el done_when de un paso y lo marca hecho, o dice qué falta, elemento por elemento (sale con error). Un paso que cambia comportamiento sólo queda hecho con su prueba (--tested, o la orden de pruebas de .larapack/realign/config.json, que corre él); sin ella queda untested, con su aviso.',
+            'usage' => ['larapack:realign check <id>', 'larapack:realign check <id> --tested="<la orden de pruebas que se corrió y pasó>"'],
+            'writes' => 'Sólo el estado del paso en .larapack/realign/plan.json. Con la orden de pruebas configurada, la corre en la raíz del proyecto.',
+            'options' => ['tested'],
             'keys' => [],
             'guide' => 'docs/realign/plan.md',
         ],
@@ -108,8 +108,16 @@ final class RealignActions
             'keys' => [],
             'guide' => 'docs/realign/plan.md',
         ],
+        'accept-untested' => [
+            'summary' => 'El dueño acepta sin probar un paso que quedó untested (cambia comportamiento y nadie registró su prueba), con su nota. Lo confirma él en su terminal, o sin ella nombrándose (LARAPACK_APPROVER y --approver); queda en el plan y lo lista done.',
+            'usage' => ['larapack:realign accept-untested <id> --note="por qué y cuándo se probará"'],
+            'writes' => 'Sólo el paso en .larapack/realign/plan.json (untested_accepted y su historia).',
+            'options' => ['note', 'approver'],
+            'keys' => [],
+            'guide' => 'docs/realign/guided.md',
+        ],
         'done' => [
-            'summary' => 'El criterio de terminado, uno para todo el proyecto: diagnostica y planifica otra vez, y falla (con lo que falta, elemento por elemento) mientras quede un paso sin hacer, una decisión sin tomar, una excepción sin aprobar, o un error o aviso de validate --strict o verify --strict en cualquier ámbito.',
+            'summary' => 'El criterio de terminado, uno para todo el proyecto: diagnostica y planifica otra vez, y falla (con lo que falta, elemento por elemento) mientras quede un paso sin hacer, una decisión sin tomar, un paso sin probar (untested) que el dueño no aceptó, una excepción sin aprobar, o un error o aviso de validate --strict o verify --strict en cualquier ámbito.',
             'usage' => ['larapack:realign done [--package=…] [--jobs=4] [--no-cache]'],
             'writes' => 'Sólo .larapack/realign/report.json, plan.json y la caché, como diagnose y plan.',
             'options' => ['package', 'jobs', 'no-cache'],
@@ -193,7 +201,7 @@ final class RealignActions
      */
     public const ARGUMENTS = [
         'diagnose' => [0, 0], 'plan' => [0, 0], 'status' => [0, 0], 'next' => [0, 1], 'show' => [1, 1],
-        'check' => [1, 1], 'decide' => [2, 2], 'defer' => [1, 1], 'undefer' => [1, 1], 'escalate' => [1, 1],
+        'check' => [1, 1], 'decide' => [2, 2], 'defer' => [1, 1], 'undefer' => [1, 1], 'escalate' => [1, 1], 'accept-untested' => [1, 1],
         'done' => [0, 0], 'brief' => [0, 0], 'playbook' => [0, 1], 'help' => [0, 1], 'adopt' => [0, null], 'apply' => [0, null], 'infer' => [0, null], 'except' => [0, null],
     ];
 
@@ -238,7 +246,7 @@ final class RealignActions
             '',
             'Si llegas sin contexto: <info>larapack:realign status</info> dice dónde se va y qué sigue.',
             '',
-            'El ciclo: diagnose → plan → next → (hacer el paso) → check → next … → diagnose',
+            'El ciclo: diagnose → plan → next → (hacer el paso y sus pruebas) → check [--tested] → next … → diagnose',
             '',
         ];
 

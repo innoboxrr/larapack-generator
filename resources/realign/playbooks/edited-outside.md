@@ -89,10 +89,11 @@ corre `larapack:realign diagnose` y `larapack:realign plan` y vuelve a pedir
 4. **Si una pieza no cabe en ningún hueco** y no se puede declarar en el
    contrato, no la fuerces: es una excepción y la decide el dueño
    (`larapack:realign except`). Déjala anotada en el informe del paso.
-5. **Corre las pruebas del proyecto antes y después.** Si no se pueden correr
-   (sin `vendor`, sin base de datos), el paso no se da por hecho aunque
-   `check` pase: ver «Sin pruebas» en la guía de los pasos guiados
-   (`docs/realign/guided.md`).
+5. **Corre las pruebas del proyecto antes y después.** Si el paso mueve
+   autorización o validación (requests, controladores, políticas), `check`
+   sólo lo da por hecho con su prueba (`--tested="<orden>"`); si no se pueden
+   correr (sin `vendor`, sin base de datos), lo deja `untested`: ver «Sin
+   pruebas» en la guía de los pasos guiados (`docs/realign/guided.md`).
 
 ## Cuándo copiar lo regenerado es la salida correcta, y cuándo no
 

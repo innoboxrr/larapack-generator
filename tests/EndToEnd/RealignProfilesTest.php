@@ -75,7 +75,8 @@ final class RealignProfilesTest extends TestCase
         // autorización vuelve a ser la de la política, como la generada).
         file_put_contents($this->path($editedRequest), $generatedRequest);
         $this->commitAll();
-        $this->assertTrue($this->realign('check', ['targets' => ['edited-outside:Requests@.']])['done']);
+        // Cambia comportamiento: sólo queda hecho con la prueba del proyecto.
+        $this->assertTrue($this->realign('check', ['targets' => ['edited-outside:Requests@.'], '--tested' => 'php artisan test'])['done']);
 
         // La decisión: la toma el dueño, el agente pide la excepción, el
         // dueño la aprueba.
@@ -149,7 +150,7 @@ final class RealignProfilesTest extends TestCase
         // El agente lleva la lógica a su FormRequest, como dice el playbook.
         $this->delegate('Acme\\Blog', $controller, 'Clinic', 'CatalogCodesController', 'IndexCatalogCodesRequest');
         $this->commitAll();
-        $this->assertTrue($this->realign('check', ['targets' => [$id]])['done']);
+        $this->assertTrue($this->realign('check', ['targets' => [$id], '--tested' => 'php artisan test'])['done']);
 
         // model-lists completó la lista en el orden del contrato: el modelo
         // vuelve a ser el generado y no queda un paso guiado
@@ -199,7 +200,7 @@ final class RealignProfilesTest extends TestCase
         $this->nextGuided($id);
         $this->delegate('App', $controller, '', 'WorkspaceMicroservicePreferenceController', 'UpdateMicroservicePreferenceRequest', 'update');
         $this->commitAll();
-        $this->assertTrue($this->realign('check', ['targets' => [$id]])['done']);
+        $this->assertTrue($this->realign('check', ['targets' => [$id], '--tested' => 'php artisan test'])['done']);
 
         // El dueño decide dejarlo fuera: cada decisión, con su excepción
         // aprobada. Es exactamente lo que queda declarado fuera de alcance.

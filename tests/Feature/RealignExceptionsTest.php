@@ -242,7 +242,7 @@ final class RealignExceptionsTest extends TestCase
         // La guardia de los agentes tampoco lo cuenta como error.
         $this->assertSame([], Guard::errorsFor(Guard::findings($this->project->path, ['route-not-declared'])));
 
-        $this->assertTrue($this->realign('check', ['targets' => ['declared-routes@.']])['done']);
+        $this->assertTrue($this->realign('check', ['targets' => ['declared-routes@.'], '--tested' => 'php artisan test'])['done']);
     }
 
     public function test_un_agente_puede_pedir_pero_no_aprobar(): void

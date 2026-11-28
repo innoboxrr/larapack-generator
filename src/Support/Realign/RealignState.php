@@ -12,6 +12,8 @@ use RuntimeException;
  *  - `plan.json`: los pasos, su estado y su historia (Planner). Es lo que
  *    hace el proceso reanudable: un agente que llega sin contexto corre
  *    `larapack:realign status` y sabe dónde se va.
+ *  - `config.json`: lo que configura una persona (la orden de pruebas del
+ *    proyecto, ProjectTests). Opcional; no lo escribe ninguna acción.
  *  - `cache/`: lo regenerado para comparar (Regeneration). No se versiona:
  *    se ignora con el `.gitignore` de este directorio.
  *
@@ -60,6 +62,25 @@ final class RealignState
     public function planPath(): string
     {
         return $this->directory().'/plan.json';
+    }
+
+    /**
+     * La configuración del realineamiento del proyecto, que escribe una
+     * persona y se versiona: hoy, la orden de pruebas del proyecto (`tests`)
+     * que `check` corre en los pasos que cambian comportamiento
+     * (ProjectTests).
+     */
+    public function configPath(): string
+    {
+        return $this->directory().'/config.json';
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    public function config(): ?array
+    {
+        return $this->load($this->configPath());
     }
 
     /**

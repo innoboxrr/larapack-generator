@@ -41,7 +41,7 @@ Las guías de cada parte:
 | Guía | Qué explica |
 |---|---|
 | [Diagnosticar](diagnose.md) | `diagnose`: cómo se compara el proyecto con su contrato, cómo leer el informe y qué significa cada clasificación. |
-| [El plan y el estado](plan.md) | `plan`, `status`, `next`, `show`, `check`, `decide`, `defer` y `escalate`: los pasos, su orden, su comprobación de terminado y los formatos JSON. |
+| [El plan y el estado](plan.md) | `plan`, `status`, `next`, `show`, `check`, `decide`, `defer`, `escalate` y `accept-untested`: los pasos, su orden, su comprobación de terminado y los formatos JSON. |
 | [Adoptar código existente](adopt.md) | `adopt`: que el manifiesto diga la verdad sin tocar un archivo. |
 | [Correcciones automáticas](apply.md) | `apply`: lo determinista que reescribe código o el contrato, y el salto de versión mayor. |
 | [Pasos guiados](guided.md) | Cómo hace un agente lo que no es determinista, con los playbooks del paquete. |
@@ -262,10 +262,11 @@ pasen, que el contrato diga lo que hace la base de producción— está en
 | `status` | nada | Dónde se va y qué sigue. | [plan.md](plan.md#status) |
 | `next` | nada | El siguiente paso (o, con un id, ése) con todo lo necesario para hacerlo sin contexto. | [plan.md](plan.md#next) |
 | `show` | nada | Cualquier paso, como lo da `next`. | [plan.md](plan.md#show) |
-| `check` | estado | Corre el criterio de terminado de un paso y lo marca hecho. | [plan.md](plan.md#check) |
+| `check` | estado | Corre el criterio de terminado de un paso y lo marca hecho; si cambia comportamiento, sólo con su prueba (`--tested` o la orden configurada), y si no, `untested`. | [plan.md](plan.md#check) |
 | `decide` | estado | Registra la opción elegida en una decisión, entera o por elemento (`--target`). | [plan.md](plan.md#decide) |
 | `defer`, `undefer` | estado | Aplaza un paso (sigue pendiente; `next` lo salta) o lo devuelve al orden. | [plan.md](plan.md#defer-y-undefer) |
 | `escalate` | estado | Pasa un paso guiado al dueño como decisión. | [plan.md](plan.md#escalate) |
+| `accept-untested` | estado | El dueño acepta sin probar un paso `untested`, con su nota (lo confirma él). | [plan.md](plan.md#accept-untested) |
 | `done` | estado | El criterio de terminado: falla y dice qué falta mientras quede algo en cualquier ámbito. | [verify.md](verify.md#cuándo-se-termina) |
 | `brief` | el documento para el dueño | Junta todo lo que espera al dueño, con la orden exacta de cada cosa. | [owner.md](owner.md) |
 | `playbook` | nada | Lista los playbooks o imprime uno sin rellenar. | [guided.md](guided.md) |
@@ -305,7 +306,9 @@ Esta es toda la lógica que hace falta; no hay que inventar nada por proyecto.
      ahora, aplázalo con su razón (`larapack:realign defer <id> --note="…"`);
      si hacerlo o no es cosa del dueño, pásaselo
      (`larapack:realign escalate <id> --note="…"`).
-     Si no puedes correr las pruebas, el paso no se da por hecho: ver
+     Si cambia comportamiento (`tests.required`), `check` sólo lo da por
+     hecho con su prueba (`--tested="<orden>"`); sin ella queda `untested` y
+     `done` no termina: ver
      [sin pruebas](guided.md#sin-pruebas-cuando-no-se-pueden-correr-las-del-proyecto).
    - `decision`: **no decidas tú**. Presenta `how.options` —y
      `how.instructions` si trae el playbook de la decisión— a quien tenga
