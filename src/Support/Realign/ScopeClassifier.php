@@ -21,7 +21,7 @@ use Innoboxrr\LarapackGenerator\Support\SpaFallback;
  *
  * @phpstan-import-type Scope from Scopes
  *
- * @phpstan-type Entry array{scope: string, package: string|null, file: string, path: string, model: string|null, stub: string|null, class: string, category: string|null, type: string|null, reason: string, tracked: bool, hash_current: bool|null, generator: string|null, to?: string, members?: list<string>, cause?: string, comments?: bool, regenerated?: string}
+ * @phpstan-type Entry array{scope: string, package: string|null, file: string, path: string, model: string|null, stub: string|null, class: string, category: string|null, type: string|null, reason: string, tracked: bool, hash_current: bool|null, generator: string|null, to?: string, members?: list<string>, cause?: string, comments?: bool, regenerated?: string, excepted?: string}
  * @phpstan-type Unmanaged array{scope: string, package: string|null, file: string, kind: string, category: string, type: string}
  */
 final class ScopeClassifier
@@ -415,9 +415,16 @@ final class ScopeClassifier
             default => [Category::OUT_OF_SCOPE, null],
         };
 
-        if ($type !== null && $this->exceptions?->covers(['type' => $type, 'scope' => $entry['scope'], 'file' => $entry['file']]) === true) {
+        $approved = $type === null ? null : $this->exceptions?->approvedFor(['type' => $type, 'scope' => $entry['scope'], 'file' => $entry['file']]);
+
+        // Aprobada sobre el código de hoy: no pide paso, y `excepted` dice
+        // cuál la cubre, para que el done_when de clasificación la cuente
+        // como cerrada aunque la clase siga siendo la que se exceptuó (un
+        // edited_outside aprobado sigue siendo edited_outside).
+        if ($approved !== null) {
             [$category, $type] = [null, null];
             $entry['reason'] .= ' (excepción aprobada)';
+            $entry['excepted'] = $approved['target'];
         }
 
         $entry['category'] = $category;

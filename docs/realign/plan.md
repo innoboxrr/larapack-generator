@@ -231,7 +231,7 @@ cero. **Hacer un paso, o ejecutar su orden, no lo marca hecho: sólo `check`.**
 | `kind` | Pasa cuando |
 |---|---|
 | `verify` | `verify`, acotado a sus comprobaciones (`checks`), a su paquete y a sus archivos, no encuentra ni errores ni avisos (sin contar las excepciones aprobadas). |
-| `classification` | Cada archivo, comparado otra vez con lo regenerado (con la misma clasificación del diagnóstico), queda en una de las clases de `accept`, en ninguna de `reject`, y, si se pide, registrado (`tracked`) con el hash actual (`hash_current`) o sin paso pendiente (`resolved`). |
+| `classification` | Cada archivo, comparado otra vez con lo regenerado (con la misma clasificación del diagnóstico), queda en una de las clases de `accept`, en ninguna de `reject`, y, si se pide, registrado (`tracked`) con el hash actual (`hash_current`) o sin paso pendiente (`resolved`). Un archivo que cubre una excepción aprobada sobre el código de hoy cumple sea cual sea su clase (un `edited_outside` aprobado sigue siendo `edited_outside`); si cambia, la aprobación caduca y vuelve a contar su clase. |
 | `unmanaged` | Ninguno de los archivos sigue siendo código sin gestionar. |
 | `contract` | El `laraimport.json` del ámbito valida. |
 | `foreign-keys` | El `laraimport.json` del ámbito declara `on_delete`/`on_update` en cada una de sus columnas (`columns`). El valor que declare es suyo: lo que había que resolver era que callaba. |
