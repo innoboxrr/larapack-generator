@@ -516,6 +516,41 @@ PHP);
     }
 
     /**
+     * `use_current` sobre una columna que ya existe: la longitud y la
+     * precisión se comparaban (van en los argumentos), `useCurrent()` no, y
+     * declararlo después no escribía nada ni avisaba. Ahora es una alteración
+     * `->useCurrent()->change()` que `migrate:fresh` levanta.
+     */
+    public function test_declarar_use_current_en_una_columna_existente_la_altera(): void
+    {
+        $declaration = fn (bool $useCurrent): array => ['models' => [['name' => 'Visit', 'props' => [
+            ['name' => 'label', 'type' => 'string'],
+            ['name' => 'seen_at', 'type' => 'timestamp'] + ($useCurrent ? ['use_current' => true] : []),
+        ]]]];
+
+        $this->import($declaration(false));
+        $this->fresh();
+        $this->assertNull($this->column('visits', 'seen_at')['default'] ?? null);
+
+        $this->import($declaration(true), ['--force' => true]);
+
+        $alters = $this->files('*_alter_visits_table.php');
+
+        $this->assertCount(1, $alters, 'Declarar use_current no escribió ninguna alteración.');
+
+        [$up, $down] = explode('function down', (string) file_get_contents($alters[0]));
+
+        $this->assertStringContainsString("\$table->timestamp('seen_at')->useCurrent()->change();", $up);
+        $this->assertStringContainsString("\$table->timestamp('seen_at')->change();", $down);
+
+        $this->fresh();
+
+        $this->assertStringContainsStringIgnoringCase('current_timestamp', (string) ($this->column('visits', 'seen_at')['default'] ?? ''));
+
+        $this->assertImportIsIdempotent($declaration(true));
+    }
+
+    /**
      * D2. La migración de invariantes de school-payroll cambia columnas con
      * SQL crudo (`MODIFY contract_type … DEFAULT '01'`). Lo que cambia no se
      * compara con el laraimport: no se escribe nada sobre esas columnas y se
