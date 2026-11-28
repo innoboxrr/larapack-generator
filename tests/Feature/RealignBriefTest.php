@@ -276,6 +276,44 @@ final class RealignBriefTest extends TestCase
         $this->assertSame('keep', $this->step('unmanaged-http@.')['decision']['option']);
     }
 
+    public function test_lo_decidido_por_elemento_no_se_vuelve_a_ofrecer_y_su_excepcion_vieja_no_cuenta(): void
+    {
+        $this->prepare();
+        $export = 'src/Http/Controllers/Admin/ExportController.php';
+
+        // El dueño deja uno como está y pide su excepción…
+        $this->realign('decide', ['targets' => ['unmanaged-http@.', 'keep'], '--target' => [$export], '--note' => 'se queda']);
+        $this->realign('except', ['targets' => ['unmanaged-http@.'], '--target' => [$export], '--option' => ['reason=Exporta a mano.']]);
+        $this->commitAll();
+
+        $http = $this->decision($this->realign('brief'), 'unmanaged-http@.');
+        // Sólo lo que falta, y cada orden acotada a ello: una sin --target
+        // borraría lo decidido para ExportController.
+        $this->assertNotContains($export, (array) $http['undecided']);
+        $this->assertNotEmpty($http['undecided']);
+        $this->assertStringContainsString('--target=', $http['options'][0]['decide']);
+
+        // …y luego cambia de opinión: ese controlador se declara.
+        $this->realign('decide', ['targets' => ['unmanaged-http@.', 'declare'], '--target' => [$export], '--note' => 'mejor declararlo']);
+        $brief = $this->realign('brief');
+        $this->assertSame([], array_values(array_filter(array_column($brief['exceptions'], 'file'), fn (?string $file): bool => $file === $export)),
+            'Una excepción que el dueño decidió no dar no se le vuelve a presentar.');
+        // check no exige aprobar la excepción vieja (sí que se declare).
+        $this->runCommand('larapack:realign', ['action' => 'check', 'targets' => ['unmanaged-http@.'], '--root' => $this->project->path, '--format' => 'json']);
+        $remaining = (array) (json_decode($this->lastOutput, true)['remaining'] ?? []);
+        $this->assertNotEmpty($remaining);
+        $this->assertSame([], array_values(array_filter($remaining, fn (string $line): bool => str_contains($line, 'ExportController') && str_contains($line, 'excepción'))));
+    }
+
+    public function test_done_y_brief_no_aceptan_argumentos(): void
+    {
+        $this->prepare();
+
+        foreach (['done', 'brief'] as $action) {
+            $this->assertSame(Command::FAILURE, $this->runCommand('larapack:realign', ['action' => $action, 'targets' => ['basura'], '--root' => $this->project->path, '--format' => 'json']), $action);
+        }
+    }
+
     public function test_recomienda_solo_cuando_la_regla_lo_permite(): void
     {
         $this->prepare(withLogic: true);

@@ -98,6 +98,13 @@ final class GuardHandRolledTest extends TestCase
             'export larapack_approver=Ana && echo listo',
             'php artisan larapack:x --approver=Ana',
             "bash -c 'LARAPACK_APPROVER=Ana make deploy'",
+            // Una terminal fabricada por otro programa: el agente escribiría
+            // él mismo la frase de confirmación (OwnerConfirmation).
+            "python3 -c \"import pty; pty.spawn(['php','artisan','larapack:hand-rolled','approve','--all'])\"",
+            'python3 ptyapprove.py php builder larapack:hand-rolled approve --all',
+            "expect -c 'spawn php artisan larapack:hand-rolled revoke X; send \"retiro 1\\r\"'",
+            'unbuffer php artisan l:h approve X',
+            "perl -e 'system(\"php\", \"artisan\", \"larapack:hand-rolled\", \"approve\", \"--all\")'",
             // Cuatro shells anidadas: la guardia no lee tan adentro, y lo que
             // no lee lo bloquea (Guard::shellScan()).
             "bash -c 'bash -c \"bash -c \\\"bash -c php\\\\ artisan\\\\ larapack:hand-rolled\\\\ approve\\\"\"'",

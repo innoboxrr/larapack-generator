@@ -86,7 +86,9 @@ final class OwnerBrief
         foreach ($steps as $step) {
             $status = Planner::effectiveStatus($step, $byId);
 
-            if ($step['category'] === Category::DECISION && ! is_array($step['decision'] ?? null) && $status !== Planner::DONE) {
+            // Lo decidido elemento por elemento (decide --target) ya no es del
+            // dueño; sólo lo que falta (Navigation::undecided()).
+            if ($step['category'] === Category::DECISION && ! Navigation::decided($step) && $status !== Planner::DONE) {
                 $decisions[] = $this->decision($step, $status, $byId);
             } elseif ($status === Planner::PENDING || $status === Planner::DECIDED) {
                 $meanwhile[] = ['id' => $step['id'], 'title' => $step['title'], 'category' => $step['category'], 'status' => $status];
@@ -329,6 +331,11 @@ final class OwnerBrief
         $id = (string) $step['id'];
         $evidence = $this->evidence($step);
         $options = [];
+        // Decidida en parte: cada orden va acotada a lo que falta. Una orden
+        // sin --target sustituiría también lo ya decidido por elemento.
+        $undecided = Navigation::undecided($step);
+        $partial = $undecided !== ['*'] && (is_array($step['decisions'] ?? null) && $step['decisions'] !== []);
+        $targets = $partial ? implode('', array_map(fn (string $file): string => ' --target='.self::argument($file), $undecided)) : '';
 
         foreach ((array) ($step['options'] ?? []) as $option) {
             if (! is_array($option)) {
@@ -340,7 +347,7 @@ final class OwnerBrief
                 'key' => (string) $option['key'],
                 'label' => (string) $option['label'],
                 'consequences' => (string) $option['consequences'],
-                'decide' => 'larapack:realign decide '.self::argument($id).' '.$option['key'].' --note="…"',
+                'decide' => 'larapack:realign decide '.self::argument($id).' '.$option['key'].$targets.' --note="…"',
                 'then' => $run,
                 'playbook' => is_string($option['playbook'] ?? null) ? $option['playbook'] : null,
                 'needs_owner_again' => $run !== null && (str_starts_with($run, 'larapack:realign except') || str_starts_with($run, 'larapack:hand-rolled approve')),
@@ -371,6 +378,8 @@ final class OwnerBrief
             'status' => $status,
             'evidence' => $evidence,
             'options' => $options,
+            // Decidida en parte: sólo lo que falta (los archivos de cada orden).
+            'undecided' => $partial ? $undecided : null,
             'recommendation' => $this->recommend($type, $id, $evidence),
             'playbook' => is_string($step['playbook'] ?? null) ? $step['playbook'] : null,
             'blocks' => ['larapack:realign check '.self::argument($id), ...$dependents, 'larapack:verify --strict'],
@@ -588,6 +597,13 @@ final class OwnerBrief
             }
 
             $step = $request['step'] === null ? null : ($byId[$request['step']] ?? null);
+
+            // Pedida bajo una decisión que cambió para ese elemento: ya no se
+            // pide, y aprobarla sería dar una excepción que se decidió no dar.
+            if (is_array($step) && ! Navigation::stillRequested($step, $request)) {
+                continue;
+            }
+
             $approve = 'larapack:hand-rolled approve '.self::quote($target);
 
             $rows[] = [
@@ -603,6 +619,34 @@ final class OwnerBrief
                 'approve' => $status === Exceptions::STALE ? null : $approve,
                 'command' => $status === Exceptions::STALE ? 'larapack:hand-rolled revoke '.self::quote($target) : $approve,
                 'blocks' => [...($request['step'] === null ? [] : ['larapack:realign check '.self::argument($request['step'])]), 'larapack:verify --strict'],
+            ];
+        }
+
+        // Las aprobadas sin solicitud (las de antes, o de otra rama) también
+        // caducan, y `done` las cuenta: aquí también. Con --package no se sabe
+        // de qué ámbito son.
+        $listed = array_column($rows, 'target');
+
+        foreach ($scopes === [] ? $exceptions->all() : [] as $approval) {
+            if ($approval['status'] === Exceptions::APPROVED || in_array($approval['target'], $listed, true)) {
+                continue;
+            }
+
+            $stale = $approval['status'] === Exceptions::STALE;
+            $approve = 'larapack:hand-rolled approve '.self::quote($approval['target']);
+            $rows[] = [
+                'target' => $approval['target'],
+                'type' => null,
+                'step' => null,
+                'file' => null,
+                'line' => null,
+                'subject' => null,
+                'reason' => $approval['reason'],
+                'status' => $approval['status'],
+                'finding' => null,
+                'approve' => $stale ? null : $approve,
+                'command' => $stale ? 'larapack:hand-rolled revoke '.self::quote($approval['target']) : $approve,
+                'blocks' => ['larapack:verify --strict'],
             ];
         }
 

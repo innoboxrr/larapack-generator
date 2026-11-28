@@ -337,6 +337,26 @@ final class Navigation
     }
 
     /**
+     * Si una solicitud de excepción sigue pedida por lo decidido hoy. Al
+     * cambiar de opción un elemento (decide --target … declare), su
+     * solicitud anterior deja de contar: no hay que aprobar una excepción
+     * que se decidió no dar. Un paso que no es una decisión la sigue pidiendo.
+     *
+     * @param  Step  $step
+     * @param  array<string, mixed>  $request
+     */
+    public static function stillRequested(array $step, array $request): bool
+    {
+        if (($step['category'] ?? null) !== Category::DECISION) {
+            return true;
+        }
+
+        $option = self::optionFor($step, (string) ($request['file'] ?? ''));
+
+        return $option === null || in_array($option, self::optionsRunning($step, 'except'), true);
+    }
+
+    /**
      * @param  Step  $step
      * @return list<string>
      */

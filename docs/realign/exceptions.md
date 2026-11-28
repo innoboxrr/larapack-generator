@@ -217,7 +217,12 @@ candado y la misma orden:
      escribe `apruebo <n>` con el número de excepciones. La pregunta no va a
      la entrada estándar: `yes | …` o `echo apruebo 1 | …` no la contestan, y
      un proceso sin terminal de control (un agente, la CI) no puede abrir
-     `/dev/tty`. En Windows vale la consola (PowerShell, cmd, Windows
+     `/dev/tty`. **Límite:** un proceso puede fabricarse una terminal
+     (`pty.spawn` de Python, `script -c`, `expect`, `unbuffer`) y escribir él
+     la frase; esta capa frena el error y la tubería, no a un agente
+     decidido. La guardia bloquea esas órdenes (capa 1), y la que no se puede
+     saltar es CODEOWNERS sobre el candado (capa 3): **un cambio de
+     `.larapack/hand-rolled.lock` se revisa siempre en el PR**. En Windows vale la consola (PowerShell, cmd, Windows
      Terminal); desde Git Bash (mintty) la entrada es una tubería y no hay
      forma fiable de saber si hay alguien delante: se corre desde PowerShell,
      con `winpty` o nombrándose.

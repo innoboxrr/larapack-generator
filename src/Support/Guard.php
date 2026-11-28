@@ -223,7 +223,46 @@ final class Guard
         $command = self::bashCommand($payload);
         $locks = [];
 
-        return $command !== null && self::shellScan($command, 0, $locks);
+        return $command !== null && (self::shellScan($command, 0, $locks) || self::approvesThroughAnotherProgram($command));
+    }
+
+    /**
+     * Programas que ejecutan otro dentro de una terminal nueva o desde su
+     * propio lenguaje: `script -c`, `expect`, `unbuffer`, `pty.spawn` de
+     * Python, `proc_open` de PHP… Por ahí un agente se fabrica la terminal que
+     * pide la aprobación y escribe él la frase, y sus argumentos no son
+     * palabras de una shell (`['php', 'artisan', 'larapack:hand-rolled',
+     * 'approve']`). Si la orden nombra uno de ellos y, en cualquier forma,
+     * `hand-rolled` seguido de `approve` o `revoke`, cuenta como aprobar.
+     */
+    private static function approvesThroughAnotherProgram(string $command): bool
+    {
+        // `php` a secas no: un `echo "php artisan … approve"` sólo enseña la
+        // orden. Sí `php -r`, que ejecuta código.
+        if (preg_match('/\b(python[0-9.]*|perl|ruby|node|deno|bun|expect|unbuffer|socat|tclsh|winpty|ssh)\b|\bphp\s+-[a-z]*r|\bscript\s+(-\S+\s+)*-[a-z]*c|\bpty\./i', $command) !== 1) {
+            return false;
+        }
+
+        $words = preg_split('/[\s\'"`\[\](){},;=]+/', $command, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+        foreach ($words as $index => $word) {
+            if (! self::namesHandRolled($word)) {
+                continue;
+            }
+
+            // La acción es la primera palabra que sigue y no es una opción:
+            // `hand-rolled list … | grep approve` no aprueba nada.
+            foreach (array_slice($words, $index + 1) as $next) {
+                if (! str_starts_with($next, '-')) {
+                    if (in_array(strtolower($next), ['approve', 'revoke'], true)) {
+                        return true;
+                    }
+
+                    break;
+                }
+            }
+        }
+
+        return false;
     }
 
     /**

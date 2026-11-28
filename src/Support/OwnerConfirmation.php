@@ -30,10 +30,14 @@ use Closure;
  *    orden, y la guardia de los agentes bloquea cualquier orden que la lleve o
  *    que ponga la variable (Guard::approvesHandRolled()).
  *
- * Por qué no basta «hay una terminal»: un agente que corre dentro de la
- * terminal de una persona puede abrir /dev/tty, pero entonces quien lee la
- * pregunta y escribe la frase es esa persona. Lo que no puede un agente es
- * contestarla él: no escribe en una terminal que no es la suya.
+ * Lo que esto NO garantiza, dicho: un proceso sin terminal puede fabricarse
+ * una (`pty.spawn` de Python, `script -c`, `expect`, `unbuffer`), y desde ahí
+ * escribir él la frase. La pregunta en /dev/tty frena el error y la tubería
+ * (`yes | …`), no a un agente decidido. Por eso la guardia de los agentes
+ * trata como aprobación cualquier orden que pase `hand-rolled approve|revoke`
+ * por uno de esos programas (Guard::approvesHandRolled()), y la capa que no
+ * se puede saltar sigue siendo la de fuera del proceso: CODEOWNERS sobre el
+ * candado y la revisión de su diff en el PR, que la CI exige.
  *
  * En Windows no hay /dev/tty. Se usa la consola, si la entrada estándar lo
  * es (cmd, PowerShell, Windows Terminal); desde Git Bash (mintty) la entrada

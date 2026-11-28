@@ -106,7 +106,7 @@ final class Completion
             }
         }
 
-        $missing['exceptions'] = $this->exceptions($paths);
+        $missing['exceptions'] = $this->exceptions($paths, $byId);
         $declared = [];
 
         foreach ($this->validate($roots) as $finding) {
@@ -178,15 +178,24 @@ final class Completion
      * existe. Las de un paso de otro ámbito, con --package, no cuentan.
      *
      * @param  list<string>  $paths
+     * @param  array<string, array<string, mixed>>  $byId
      * @return list<array<string, mixed>>
      */
-    private function exceptions(array $paths): array
+    private function exceptions(array $paths, array $byId = []): array
     {
         $exceptions = Exceptions::forRoot($this->root);
         $rows = [];
 
         foreach ($exceptions->requests() as $target => $request) {
             if ($paths !== [] && ! in_array($request['scope'], $paths, true)) {
+                continue;
+            }
+
+            // Pedida bajo una decisión que después cambió para ese elemento:
+            // ya no se pide (Navigation::stillRequested()).
+            $step = $byId[$request['step']] ?? null;
+
+            if (is_array($step) && ! Navigation::stillRequested($step, $request)) {
                 continue;
             }
 

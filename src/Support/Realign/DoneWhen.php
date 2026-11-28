@@ -105,7 +105,7 @@ final class DoneWhen
     {
         $id = (string) ($step['id'] ?? '');
         $exceptions = new Exceptions($this->state);
-        $requests = array_filter($exceptions->requests(), fn (array $request): bool => $request['step'] === $id);
+        $requests = array_filter($exceptions->requests(), fn (array $request): bool => $request['step'] === $id && Navigation::stillRequested($step, $request));
         // Decidido por elemento, basta con que uno se deje como está.
         $excepting = Navigation::decidedFor($step, 'except');
 

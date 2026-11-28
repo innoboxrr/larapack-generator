@@ -13,6 +13,22 @@ contrato y la documentación para personas y agentes
 ([docs/realign/README.md](docs/realign/README.md)). Las secciones de abajo,
 una por pieza; lo que hay que hacer al actualizar, al final de la versión.
 
+### Lo que encontró la segunda revisión, sobre lo integrado
+
+- **Una terminal fabricada no es una persona.** `pty.spawn` de Python, `script -c`, `expect` o `unbuffer` crean
+  una terminal desde la que un proceso escribe él mismo la frase de aprobación. La guardia de los agentes trata
+  ahora como aprobación cualquier orden que pase `hand-rolled approve|revoke` por uno de esos programas, y la
+  documentación lo dice sin rodeos: la pregunta en `/dev/tty` frena el error y la tubería, no a un agente
+  decidido; la capa que no se salta es CODEOWNERS sobre `.larapack/hand-rolled.lock` y la revisión de su diff.
+- **`brief` y lo decidido por elemento.** Una decisión tomada archivo por archivo seguía saliendo como
+  pendiente, con órdenes sin `--target` que habrían sustituido lo ya decidido. Ahora sólo sale lo que falta
+  (`undecided`) y cada orden va acotada con `--target`.
+- **Una excepción que el dueño decidió no dar.** Pedida bajo «dejarlo como está» y después decidido declarar
+  ese elemento, la solicitud seguía exigiéndose en `check`, `done` y `brief`. Ahora deja de contar
+  (`Navigation::stillRequested()`).
+- **`brief` ve las aprobaciones caducadas sin solicitud**, igual que `done`, y `done` y `brief` rechazan
+  argumentos que no usan.
+
 ### `larapack:realign`: el núcleo del realineamiento
 
 Llevar de vuelta al contrato un proyecto que empezó (o no) con LaraPack y se

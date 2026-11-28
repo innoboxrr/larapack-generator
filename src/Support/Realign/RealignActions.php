@@ -194,7 +194,7 @@ final class RealignActions
     public const ARGUMENTS = [
         'diagnose' => [0, 0], 'plan' => [0, 0], 'status' => [0, 0], 'next' => [0, 1], 'show' => [1, 1],
         'check' => [1, 1], 'decide' => [2, 2], 'defer' => [1, 1], 'undefer' => [1, 1], 'escalate' => [1, 1],
-        'playbook' => [0, 1], 'help' => [0, 1], 'adopt' => [0, null], 'apply' => [0, null], 'infer' => [0, null], 'except' => [0, null],
+        'done' => [0, 0], 'brief' => [0, 0], 'playbook' => [0, 1], 'help' => [0, 1], 'adopt' => [0, null], 'apply' => [0, null], 'infer' => [0, null], 'except' => [0, null],
     ];
 
     /**
