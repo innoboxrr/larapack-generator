@@ -612,7 +612,9 @@ persona (OwnerConfirmation):
   `echo apruebo 1 | …`) no la contesta. Sin terminal falla sin tocar nada, y
   dice por qué.
 - **Sin terminal, nombrándose** (una CI de aprobación, una persona en un
-  entorno sin tty): la variable `LARAPACK_APPROVER` con su nombre **y**
+  entorno sin tty) —desde la tercera revisión, sólo dentro del workflow de
+  aprobación lanzado a mano; ver «La aprobación sin terminal, sólo en el
+  workflow de aprobación»—: la variable `LARAPACK_APPROVER` con su nombre **y**
   `--approver` con el mismo. Su nombre queda en cada entrada que aprueba
   (`approved_by` en `.larapack/hand-rolled.lock`), a la vista en el diff que
   revisa CODEOWNERS. Hacen falta las dos: la variable sola —heredada de un
@@ -642,11 +644,61 @@ no se aprueba (tampoco con `--all`). Su estado es real, como el de las demás:
 la de hoy y `stale` cuando verify ya no la dice (el `check` del paso lo dice
 igual).
 
-**Al actualizar:** quien aprobaba desde un script o una CI sin terminal pone
-`LARAPACK_APPROVER` y `--approver` con su nombre. Un candado con
+**Al actualizar:** quien aprobaba desde un script o una CI sin terminal usa
+el workflow de aprobación (`larapack:ci --approval`). Un candado con
 `approved_by` lo lee una versión anterior (lo ignora y lo quita si lo
 reescribe). Las solicitudes pedidas antes, sin `message`, se aprueban igual:
 el hallazgo que se enseña es el de hoy.
+
+### La aprobación sin terminal, sólo en el workflow de aprobación
+
+De una prueba de autonomía real: un agente sin la guardia instalada se aprobó
+sus propias excepciones con `LARAPACK_APPROVER="…" … approve --all
+--approver="…"`, y la orden se la había enseñado el propio mensaje de rechazo.
+
+- **Nombrarse ya no basta.** La vía sin terminal sólo vale dentro del
+  workflow de aprobación de GitHub Actions (`.github/workflows/larapack-approve.yml`,
+  que escribe `larapack:ci --approval`), lanzado a mano (`workflow_dispatch`):
+  `LARAPACK_APPROVER`, `--approver` y la cuenta que lanzó la corrida tienen
+  que ser la misma, no un bot, y la corrida no la puede haber relanzado otra
+  persona (NamedApproval). Un `CI=true`, un `push` o un `pull_request` no
+  valen. La entrada aprobada lleva `approved_by` (la cuenta) y, nuevo,
+  `approved_run` (la corrida); la corrida empuja el candado a una rama
+  `larapack/approve-<corrida>` para revisarlo en un PR. Se eligió la identidad
+  que da GitHub frente a un secreto o una firma: el secreto viviría donde vive
+  el agente, o habría que repartir y rotar claves.
+- **El rechazo no enseña cómo saltárselo.** A quien no tiene terminal le dice
+  que un agente no lo intenta por ninguna otra vía, que pida al dueño (con
+  `larapack:realign brief`) y, si es una persona, que lea
+  `docs/realign/exceptions.md#aprobar-sin-terminal-el-workflow-de-aprobación`;
+  ya no da la orden lista para copiar. La ayuda de `--approver` tampoco.
+- **Todo rechazo de `approve` y `revoke` sale con un código distinto de
+  cero**, también por Artisan, en JSON y desde una terminal (las pruebas lo
+  comprueban en cada camino). Lo que se vio en la prueba de autonomía con
+  código 0 era la orden nombrada que sí aprobaba; un envoltorio como
+  `script -qc` sin `-e`, o una tubería (`… | tail`), sigue tapando el código
+  del comando.
+- **Cada aprobación sin terminal, a la vista del revisor.** `larapack:verify`
+  las lista («Aprobadas sin terminal», y `named_approvals` en JSON), y el job
+  que genera `larapack:ci` tiene un paso nuevo, `larapack:hand-rolled list
+  --format=github`, que las anota sobre su línea del candado —en el diff del
+  PR— y pregunta a GitHub si su corrida existe, es del workflow de aprobación,
+  se lanzó a mano y la lanzó quien dice `approved_by`; si no, falla el check.
+  El job pide ahora `actions: read`.
+- **CODEOWNERS cubre también `/.github/workflows/larapack-approve.yml`**,
+  aunque el proyecto no lo tenga, para que nadie añada uno a su gusto.
+- Lo que no se puede garantizar está dicho en
+  [docs/realign/exceptions.md](docs/realign/exceptions.md#aprobar-sin-terminal-el-workflow-de-aprobación):
+  las variables `GITHUB_*` se escriben a mano (por eso la CI comprueba la
+  corrida), una cuenta con permiso para lanzar workflows lanza la corrida a su
+  nombre, y la capa que no se salta sigue siendo CODEOWNERS sobre el candado y
+  la revisión de su diff.
+
+**Al actualizar:** vuelve a correr `larapack:ci` (con `--force` si el
+workflow difiere) para el paso nuevo y `actions: read`, y `--approval` si
+alguien aprueba sin terminal. Una aprobación sin terminal hecha antes, sin
+`approved_run`, hace fallar ese paso: apruébala de nuevo en la terminal o en
+el workflow.
 
 ### Realineamiento: los huecos de las plantillas, una sola clasificación y lo que crea `fix`
 

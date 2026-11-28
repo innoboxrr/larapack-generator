@@ -121,10 +121,11 @@ final class CiGateTest extends TestCase
             verify:
                 name: LaraPack verify
                 runs-on: ubuntu-latest
-                # Sólo lectura: verify no escribe nada, y el último paso sólo lee
-                # las reglas de la rama.
+                # Sólo lectura: verify no escribe nada, y los dos últimos pasos sólo
+                # leen las reglas de la rama y las corridas de aprobación.
                 permissions:
                     contents: read
+                    actions: read
 
                 steps:
                     - uses: actions/checkout@v5
@@ -140,6 +141,15 @@ final class CiGateTest extends TestCase
 
                     - name: Contrato de LaraPack
                       run: php vendor/bin/builder larapack:verify --strict --format=json
+
+                    # Cada aprobación sin terminal del candado (approved_by), a la vista en
+                    # el diff del PR y comprobada con GitHub: la corrida tiene que ser la del
+                    # workflow de aprobación, lanzada a mano por quien dice. Si no, falla.
+                    - name: Aprobaciones sin terminal
+                      if: ${{ !cancelled() }}
+                      env:
+                          GH_TOKEN: ${{ github.token }}
+                      run: php vendor/bin/builder larapack:hand-rolled list --format=github
 
                     # La puerta sólo vale si la rama exige este check, y eso lo decide el
                     # dueño en GitHub (larapack:ci imprime cómo). Aquí se comprueba en cada
@@ -182,10 +192,11 @@ final class CiGateTest extends TestCase
             verify:
                 name: LaraPack verify
                 runs-on: [self-hosted, linux]
-                # Sólo lectura: verify no escribe nada, y el último paso sólo lee
-                # las reglas de la rama.
+                # Sólo lectura: verify no escribe nada, y los dos últimos pasos sólo
+                # leen las reglas de la rama y las corridas de aprobación.
                 permissions:
                     contents: read
+                    actions: read
 
                 steps:
                     - uses: actions/checkout@v5
@@ -206,6 +217,15 @@ final class CiGateTest extends TestCase
 
                     - name: Contrato de LaraPack
                       run: php artisan larapack:verify --strict --format=json
+
+                    # Cada aprobación sin terminal del candado (approved_by), a la vista en
+                    # el diff del PR y comprobada con GitHub: la corrida tiene que ser la del
+                    # workflow de aprobación, lanzada a mano por quien dice. Si no, falla.
+                    - name: Aprobaciones sin terminal
+                      if: ${{ !cancelled() }}
+                      env:
+                          GH_TOKEN: ${{ github.token }}
+                      run: php artisan larapack:hand-rolled list --format=github
 
                     # La puerta sólo vale si la rama exige este check, y eso lo decide el
                     # dueño en GitHub (larapack:ci imprime cómo). Aquí se comprueba en cada
@@ -428,7 +448,7 @@ final class CiGateTest extends TestCase
         $this->assertSame('CODEOWNERS', CiGate::codeownersFile($this->root));
 
         $this->assertSame(
-            ['/.larapack/hand-rolled.lock', '/.github/workflows/larapack.yml', '/CODEOWNERS'],
+            ['/.larapack/hand-rolled.lock', '/.github/workflows/larapack.yml', '/.github/workflows/larapack-approve.yml', '/CODEOWNERS'],
             CiGate::ownedPaths('CODEOWNERS')
         );
     }

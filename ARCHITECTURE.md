@@ -458,6 +458,11 @@ escribió. La excepción aprobada por el dueño del proyecto se declara con
 con la razón y la huella del código (`HandRolledLock::methodFingerprint`,
 `HandRolledLock::classFingerprint`): si cambia cualquiera de las dos, deja de
 estar aprobada. Sin candado se lista como aviso en cada ejecución.
+Aprueba una persona ([`OwnerConfirmation`](src/Support/OwnerConfirmation.php)):
+en su terminal o, sin ella, sólo dentro del workflow de aprobación de GitHub
+Actions lanzado a mano ([`NamedApproval`](src/Support/NamedApproval.php),
+`NamedApproval::fromEnvironment`), que deja en el candado la cuenta y la
+corrida; el job de la puerta las comprueba con GitHub (`NamedApproval::verify`).
 
 **Deuda de seguridad de lo generado antes** —[`LegacySecurity`](src/Support/LegacySecurity.php),
 `LegacySecurity::CHECKS`—: `index-managed` y `resource-appends`. Avisos, no
