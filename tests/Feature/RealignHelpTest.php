@@ -109,4 +109,27 @@ final class RealignHelpTest extends TestCase
         $document = $this->realign('adopt', ['--option' => ['reason=x'], '--dry-run' => true], Command::FAILURE);
         $this->assertStringContainsString('adopt no lee ninguna clave', $document['error']);
     }
+
+    /**
+     * Una prueba de autonomía vio la ayuda dos veces (el texto completo y
+     * luego la lista). `help` da la lista y `--help` el texto completo: cada
+     * acción sale una sola vez en cada uno.
+     */
+    public function test_help_y_la_ayuda_del_comando_no_repiten_nada(): void
+    {
+        $this->assertSame(Command::SUCCESS, $this->runCommand('larapack:realign', ['action' => 'help']));
+        $list = $this->lastOutput;
+        $this->assertSame(Command::SUCCESS, $this->runCommand('larapack:realign', ['--help' => true]));
+        $full = $this->lastOutput;
+
+        foreach (array_keys(RealignActions::ALL) as $action) {
+            $summary = RealignActions::summary($action);
+
+            $this->assertSame($action === 'help' ? 0 : 1, substr_count($list, $summary), "`help` da {$action} más de una vez.");
+            $this->assertSame(1, substr_count($full, $summary), "`--help` da {$action} más de una vez.");
+        }
+
+        // La lista no trae el texto de --help.
+        $this->assertStringNotContainsString('Escribe:', $list);
+    }
 }

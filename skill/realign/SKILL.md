@@ -45,11 +45,16 @@ larapack:realign status --format=json
      --deterministic` hace todos los deterministas de una vez; después,
      `diagnose` y `plan` otra vez.
    - **`guided`**: sigue `how.instructions` al pie de la letra. Corre las
-     pruebas del proyecto **antes** de tocar nada y **después**.
+     pruebas del proyecto **antes** de tocar nada y **después**. Si el
+     playbook dice dejarlo o no se puede ahora: `larapack:realign defer <id>
+     --note="…"`; si lo tiene que decidir el dueño: `larapack:realign escalate
+     <id> --note="…"`.
    - **`decision`**: **no decidas tú.** Presenta `how.options`, con sus
      consecuencias y, si lo trae, el playbook de la decisión
-     (`how.instructions`), a quien tenga autoridad. Cuando decida:
-     `larapack:realign decide <id> <opción> --note="…"`. Después, `next` dice
+     (`how.instructions`), a quien tenga autoridad, y mientras decide sigue
+     con `meanwhile` (`larapack:realign next <meanwhile.id>`). Cuando decida:
+     `larapack:realign decide <id> <opción> --note="…"` (por elemento, con
+     `--target=<archivo>`). Después, `next` dice
      qué pide la opción. Si es dejarlo como está, pide la excepción
      (`larapack:realign except <id> --option reason="…"`) y avisa al dueño:
      **no la apruebes tú**.

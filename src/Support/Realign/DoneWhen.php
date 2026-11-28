@@ -73,8 +73,13 @@ final class DoneWhen
             default => ["No se sabe comprobar `{$kind}`: actualiza innoboxrr/larapack-generator."],
         };
 
-        if (($step['category'] ?? null) === Category::DECISION && ! is_array($step['decision'] ?? null)) {
+        $undecided = ($step['category'] ?? null) === Category::DECISION ? Navigation::undecided($step) : [];
+
+        if ($undecided === ['*'] || ($undecided !== [] && ! is_array($step['decisions'] ?? null))) {
             array_unshift($remaining, 'Falta decidir: larapack:realign decide '.($step['id'] ?? '<id>').' <opción>.');
+        } elseif ($undecided !== []) {
+            // Decidido por elemento, a medias: cuáles faltan.
+            array_unshift($remaining, ...array_map(fn (string $file): string => "{$file}: falta decidir: larapack:realign decide ".($step['id'] ?? '<id>')." <opción> --target={$file}.", $undecided));
         }
 
         $remaining = [...$remaining, ...$this->exceptionsOf($step, $remaining !== [])];
@@ -101,15 +106,8 @@ final class DoneWhen
         $id = (string) ($step['id'] ?? '');
         $exceptions = new Exceptions($this->state);
         $requests = array_filter($exceptions->requests(), fn (array $request): bool => $request['step'] === $id);
-        $chosen = null;
-
-        foreach ((array) ($step['options'] ?? []) as $option) {
-            if (is_array($option) && ($option['key'] ?? null) === ($step['decision']['option'] ?? false)) {
-                $chosen = $option;
-            }
-        }
-
-        $excepting = is_array($chosen) && str_starts_with((string) ($chosen['run'] ?? ''), 'larapack:realign except');
+        // Decidido por elemento, basta con que uno se deje como está.
+        $excepting = Navigation::decidedFor($step, 'except');
 
         if (! $excepting && ! $failing) {
             return [];

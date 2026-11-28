@@ -83,7 +83,9 @@ final class RealignGuidedStepTest extends TestCase
 
     /**
      * El siguiente paso guiado, saltando lo determinista (que en un proyecto
-     * de verdad se habría hecho ya con su orden).
+     * de verdad se habría hecho ya con su orden) y con la decisión que lo
+     * condiciona tomada: los controladores escritos a mano se quedan como
+     * código propio (si se declararan, lo guiado no se haría).
      *
      * @return array<string, mixed>
      */
@@ -99,6 +101,9 @@ final class RealignGuidedStepTest extends TestCase
         }
 
         file_put_contents($path, json_encode($plan));
+
+        $this->assertSame('unmanaged-http@.', $this->realign('next')['step']['id']);
+        $this->realign('decide', ['targets' => ['unmanaged-http@.', 'keep'], '--note' => 'Son código propio.']);
 
         return $this->realign('next');
     }
@@ -202,7 +207,8 @@ final class RealignGuidedStepTest extends TestCase
         $this->assertTrue($check['done']);
         $this->assertSame(Planner::DONE, $this->step(self::STEP)['status']);
 
-        // Y el siguiente es el otro controlador.
+        // Y el siguiente es el otro controlador; la excepción de «dejarlos
+        // como código propio» se pide después, sobre el código ya delegado.
         $this->assertSame('controller-shape@'.self::OTHER, $this->realign('next')['step']['id']);
     }
 

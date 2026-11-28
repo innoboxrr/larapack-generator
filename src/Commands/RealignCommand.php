@@ -9,6 +9,7 @@ use Innoboxrr\LarapackGenerator\Support\Realign\Completion;
 use Innoboxrr\LarapackGenerator\Support\Realign\Diagnosis;
 use Innoboxrr\LarapackGenerator\Support\Realign\DoneWhen;
 use Innoboxrr\LarapackGenerator\Support\Realign\FileClass;
+use Innoboxrr\LarapackGenerator\Support\Realign\Navigation;
 use Innoboxrr\LarapackGenerator\Support\Realign\Operations\OperationRunner;
 use Innoboxrr\LarapackGenerator\Support\Realign\Operations\Operations;
 use Innoboxrr\LarapackGenerator\Support\Realign\Planner;
@@ -41,9 +42,12 @@ use Symfony\Component\Console\Output\OutputInterface;
  *     diagnose   regenera el contrato aparte y clasifica cada archivo
  *     plan       del diagnóstico, los pasos ordenados y reanudables
  *     status     dónde se va
- *     next       el siguiente paso con todo lo necesario para hacerlo
+ *     next [<id>] el siguiente paso (o ese) con todo lo necesario para hacerlo
+ *     show <id>  cualquier paso, como lo da next
  *     check <id> comprueba su done_when y lo marca hecho, o dice qué falta
- *     decide <id> <opción>  registra una decisión
+ *     decide <id> <opción> [--target=…]  registra una decisión, entera o por elemento
+ *     defer/undefer <id>  aplaza un paso o lo devuelve al orden
+ *     escalate <id>  pasa un guiado al dueño como decisión
  *     done       el criterio de terminado: falla y dice qué falta (Completion)
  *     playbook [<nombre>]   los playbooks del paquete, o uno sin rellenar
  *
@@ -56,17 +60,17 @@ class RealignCommand extends Command
     use TargetsProject;
     use WritesJson;
 
-    private const READS = ['diagnose', 'plan', 'status', 'next', 'check', 'decide', 'done', 'playbook', 'help'];
+    private const READS = ['diagnose', 'plan', 'status', 'next', 'show', 'check', 'decide', 'defer', 'undefer', 'escalate', 'done', 'playbook', 'help'];
 
     protected function configure(): void
     {
         $this->addRootOption();
 
         $this->setName('larapack:realign')
-            ->setDescription('Realinea con el contrato un proyecto que se desvió: diagnose, plan, status, next, check, decide, done, playbook y las operaciones adopt, apply, infer y except')
+            ->setDescription('Realinea con el contrato un proyecto que se desvió: diagnose, plan, status, next, show, check, decide, defer, undefer, escalate, done, playbook y las operaciones adopt, apply, infer y except')
             ->setHelp(RealignActions::helpText())
-            ->addArgument('action', InputArgument::OPTIONAL, 'diagnose, plan, status, next, check, decide, done, playbook, adopt, apply, infer, except o help', 'help')
-            ->addArgument('targets', InputArgument::OPTIONAL | InputArgument::IS_ARRAY, 'check: el id del paso; decide: el id y la opción; playbook: su nombre; help: una acción; adopt/apply/infer/except: ids de paso (vacío, todos los que sepa hacer)')
+            ->addArgument('action', InputArgument::OPTIONAL, 'diagnose, plan, status, next, show, check, decide, defer, undefer, escalate, done, playbook, adopt, apply, infer, except o help', 'help')
+            ->addArgument('targets', InputArgument::OPTIONAL | InputArgument::IS_ARRAY, 'next (opcional), show, check, defer, undefer, escalate: el id del paso; decide: el id y la opción; playbook: su nombre; help: una acción; adopt/apply/infer/except: ids de paso (vacío, todos los que sepa hacer)')
             ->addOption('format', null, InputOption::VALUE_REQUIRED, 'Formato de salida: txt o json', 'txt')
             ->addOption('package', null, InputOption::VALUE_REQUIRED | InputOption::VALUE_IS_ARRAY, 'Sólo este paquete local (directorio, ruta o nombre de Composer), o `app` para el núcleo. Repetible')
             ->addOption('jobs', null, InputOption::VALUE_REQUIRED, 'diagnose y done: cuántas regeneraciones a la vez', '4')
@@ -74,9 +78,9 @@ class RealignCommand extends Command
             ->addOption('dry-run', null, InputOption::VALUE_NONE, 'Operaciones que escriben: dice qué haría sin escribir nada')
             ->addOption('allow-dirty', null, InputOption::VALUE_NONE, 'Operaciones que escriben: escribe aunque el árbol git tenga cambios sin comitear (no se podrá deshacer con git)')
             ->addOption('option', null, InputOption::VALUE_REQUIRED | InputOption::VALUE_IS_ARRAY, 'Operaciones que escriben: clave=valor para la operación. Repetible')
-            ->addOption('note', null, InputOption::VALUE_REQUIRED, 'decide: por qué se decide así (queda en el plan)')
+            ->addOption('note', null, InputOption::VALUE_REQUIRED, 'decide, defer, escalate: por qué (queda en el plan)')
             ->addOption('deterministic', null, InputOption::VALUE_NONE, 'apply: todos los pasos deterministas pendientes, en el orden del plan (sin ids hay que pedirlo así)')
-            ->addOption('target', null, InputOption::VALUE_REQUIRED | InputOption::VALUE_IS_ARRAY, 'except: sólo este elemento de los pasos, por su objetivo (realign:…) o su archivo. Repetible');
+            ->addOption('target', null, InputOption::VALUE_REQUIRED | InputOption::VALUE_IS_ARRAY, 'decide: sólo para este elemento del paso (su archivo); except: sólo este elemento de los pasos, por su objetivo (realign:…) o su archivo. Repetible');
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
@@ -104,6 +108,17 @@ class RealignCommand extends Command
                 $writes || $action === 'help' ? null : ($action === 'diagnose' ? 'diagnose no escribe código: no hay nada que simular.' : null));
         }
 
+        $extra = array_slice($targets, RealignActions::ARGUMENTS[$action][1] ?? count($targets));
+
+        if ($extra !== []) {
+            // Un argumento que la acción no usa es un error, como una opción:
+            // `next <id>` ignoraba el id y daba otro paso.
+            $most = RealignActions::ARGUMENTS[$action][1] ?? 0;
+
+            return $this->reportFailure($input, $output, "`{$action}` ".($most === 0 ? 'no recibe argumentos' : "recibe a lo sumo {$most}").'; sobra: '.implode(' ', $extra).'.',
+                'Uso: '.implode(' · ', RealignActions::ALL[$action]['usage']).'.', ['format_version' => RealignState::FORMAT_VERSION, 'action' => $action]);
+        }
+
         $root = $needsProject ? root_path() : '';
 
         try {
@@ -112,7 +127,10 @@ class RealignCommand extends Command
                 'diagnose' => $this->diagnose($input, $output, $root),
                 'plan' => $this->plan($input, $output, $root),
                 'status' => $this->status($input, $output, $root),
-                'next' => $this->next($input, $output, $root),
+                'next' => $this->next($input, $output, $root, $targets),
+                'show' => $this->show($input, $output, $root, $targets),
+                'defer', 'undefer' => $this->defer($input, $output, $root, $targets, $action === 'defer'),
+                'escalate' => $this->escalate($input, $output, $root, $targets),
                 'check' => $this->check($input, $output, $root, $targets),
                 'decide' => $this->decide($input, $output, $root, $targets),
                 'done' => $this->done($input, $output, $root),
@@ -340,6 +358,9 @@ class RealignCommand extends Command
             'steps' => ['total' => count($steps), 'by_status' => $byStatus, 'by_category' => $byCategory],
             'next' => $next === null ? null : ['id' => $next['id'], 'title' => $next['title'], 'category' => $next['category'], 'status' => Planner::effectiveStatus($next, $byId)],
             'last_check' => $checks[0] ?? null,
+            'awaiting_owner' => $this->awaitingOwner($steps, $byId),
+            'deferred' => array_values(array_map(fn (array $step): array => ['id' => $step['id'], 'title' => $step['title'], 'note' => $step['deferred']['note'] ?? null, 'at' => $step['deferred']['at'] ?? null],
+                array_filter($steps, fn (array $step): bool => is_array($step['deferred'] ?? null) && ($step['status'] ?? null) !== Planner::DONE))),
             'plan' => $plan === null ? null : $this->relative($state->planPath(), $root),
         ];
 
@@ -373,6 +394,22 @@ class RealignCommand extends Command
                 $output->writeln("\n  Última comprobación: ".$document['last_check']['id'].' ('.($document['last_check']['done'] ? 'hecho' : 'falta').', '.$document['last_check']['at'].')');
             }
 
+            foreach ($document['awaiting_owner'] as $waiting) {
+                $count = count($waiting['decisions']);
+                $output->writeln(sprintf("\n  <comment>Falta%s %d %s del dueño antes de seguir con lo guiado de %s</comment> (%d %s): %s.",
+                    $count === 1 ? '' : 'n', $count, $count === 1 ? 'decisión' : 'decisiones', OutputFormatter::escape($waiting['scope']),
+                    count($waiting['guided']), count($waiting['guided']) === 1 ? 'paso espera' : 'pasos esperan', implode(', ', $waiting['decisions'])));
+                $output->writeln('  Preséntaselas (larapack:realign show <id>); mientras, sigue con lo que no depende de ellas (larapack:realign next).');
+            }
+
+            if ($document['deferred'] !== []) {
+                $output->writeln("\n  Aplazados (".count($document['deferred']).'), siguen pendientes; undefer los devuelve:');
+
+                foreach ($document['deferred'] as $deferred) {
+                    $output->writeln('    '.$deferred['id'].' — '.OutputFormatter::escape((string) $deferred['note']));
+                }
+            }
+
             $output->writeln($next === null
                 ? "\n  <info>No queda nada pendiente.</info> Confírmalo con: larapack:realign diagnose"
                 : "\n  Siguiente: <info>{$next['id']}</info> — ".OutputFormatter::escape((string) $next['title']).'  (larapack:realign next)');
@@ -381,13 +418,28 @@ class RealignCommand extends Command
         return Command::SUCCESS;
     }
 
-    private function next(InputInterface $input, OutputInterface $output, string $root): int
+    /**
+     * @param  list<string>  $targets
+     */
+    private function next(InputInterface $input, OutputInterface $output, string $root, array $targets = []): int
     {
         $plan = $this->requirePlan($root);
         $byId = $this->byId($plan);
-        $step = $this->nextStep($this->stepsIn($plan, $this->scopePaths($input, $root)), $byId);
+
+        if ($targets !== []) {
+            return $this->describe($input, $output, $plan, $byId, $plan['steps'][$this->indexOf($plan, $targets[0])], 'next');
+        }
+
+        $steps = $this->stepsIn($plan, $this->scopePaths($input, $root));
+        $step = $this->nextStep($steps, $byId);
 
         if ($step === null) {
+            $left = array_values(array_filter($steps, fn (array $step): bool => Planner::effectiveStatus($step, $byId) !== Planner::DONE));
+
+            if ($left !== []) {
+                return $this->waiting($input, $output, $left, $byId);
+            }
+
             if ($this->wantsJson($input)) {
                 $this->writeJson($output, ['format_version' => RealignState::FORMAT_VERSION, 'ok' => true, 'action' => 'next', 'done' => true, 'step' => null]);
             } else {
@@ -397,23 +449,54 @@ class RealignCommand extends Command
             return Command::SUCCESS;
         }
 
+        // Una decisión sin decidir es del dueño: se ofrece primero, y se
+        // dice con qué seguir mientras tanto para no parar todo.
+        $meanwhile = Planner::effectiveStatus($step, $byId) === Planner::AWAITING_DECISION ? $this->meanwhile($steps, $byId) : null;
+
+        return $this->describe($input, $output, $plan, $byId, $step, 'next', $meanwhile);
+    }
+
+    /**
+     * @param  list<string>  $targets
+     */
+    private function show(InputInterface $input, OutputInterface $output, string $root, array $targets): int
+    {
+        if (count($targets) !== 1) {
+            return $this->reportFailure($input, $output, 'show necesita el id de un paso: larapack:realign show <id>.', extra: ['format_version' => RealignState::FORMAT_VERSION, 'action' => 'show']);
+        }
+
+        $plan = $this->requirePlan($root);
+
+        return $this->describe($input, $output, $plan, $this->byId($plan), $plan['steps'][$this->indexOf($plan, $targets[0])], 'show');
+    }
+
+    /**
+     * Un paso con todo lo necesario para hacerlo sin contexto: lo que da
+     * `next` y `show`, esté como esté.
+     *
+     * @param  array<string, mixed>  $plan
+     * @param  array<string, array<string, mixed>>  $byId
+     * @param  array<string, mixed>  $step
+     * @param  array<string, mixed>|null  $meanwhile
+     */
+    private function describe(InputInterface $input, OutputInterface $output, array $plan, array $byId, array $step, string $action, ?array $meanwhile = null): int
+    {
         $status = Planner::effectiveStatus($step, $byId);
+        $blockedBy = $this->blockedBy($step, $byId);
         $how = match ($step['category']) {
             Category::GUIDED => ['playbook' => Playbooks::resolve((string) ($step['playbook'] ?? Playbooks::GENERIC)), 'instructions' => Playbooks::render($step)],
-            Category::DECISION => is_array($step['decision'] ?? null)
-                ? $this->decided($step)
-                : ['options' => $step['options'] ?? [], 'decide' => 'larapack:realign decide '.$step['id'].' <opción> --note="por qué"']
-                    + $this->instructions($step, is_string($step['playbook'] ?? null) ? $step['playbook'] : null),
+            Category::DECISION => $this->decisionHow($step),
             default => ['command' => $step['command'] ?? null, 'available' => $this->commandAvailable((string) ($step['command'] ?? ''))]
                 // Lo que la orden salte se hace a mano: el playbook del tipo.
                 + (isset($step['playbook']) ? ['fallback' => ['playbook' => Playbooks::resolve((string) $step['playbook']), 'instructions' => Playbooks::render($step)]] : []),
         };
         $check = 'larapack:realign check '.$step['id'];
+        $meanwhile = $meanwhile === null ? null : ['id' => $meanwhile['id'], 'title' => $meanwhile['title'], 'category' => $meanwhile['category'], 'show' => 'larapack:realign next '.$meanwhile['id']];
 
         if ($this->wantsJson($input)) {
-            $this->writeJson($output, ['format_version' => RealignState::FORMAT_VERSION, 'ok' => true, 'action' => 'next', 'done' => false,
+            $this->writeJson($output, ['format_version' => RealignState::FORMAT_VERSION, 'ok' => true, 'action' => $action, 'done' => false,
                 'step' => $step + ['effective_status' => $status], 'how' => $how, 'check' => $check,
-                'done_when' => Playbooks::describeCondition((array) $step['done_when'])]);
+                'done_when' => Playbooks::describeCondition((array) $step['done_when']), 'blocked_by' => $blockedBy, 'meanwhile' => $meanwhile]);
 
             return Command::SUCCESS;
         }
@@ -423,20 +506,22 @@ class RealignCommand extends Command
         $output->writeln('  '.OutputFormatter::escape((string) $step['description']));
         $output->writeln('  Riesgo: '.OutputFormatter::escape((string) $step['risk']['why']));
 
+        if ($status === Planner::DONE || $blockedBy !== []) {
+            $output->writeln('  <comment>Estado: '.$status.($blockedBy === [] ? '' : '; espera a: '.implode(', ', $blockedBy)).'</comment>');
+        }
+
+        if (is_array($step['deferred'] ?? null)) {
+            $output->writeln('  <comment>Aplazado: '.OutputFormatter::escape((string) ($step['deferred']['note'] ?? '')).'</comment> (larapack:realign undefer '.$step['id'].')');
+        }
+
+        if (is_array($step['escalated'] ?? null)) {
+            $output->writeln('  <comment>Pasado al dueño: '.OutputFormatter::escape((string) ($step['escalated']['note'] ?? '')).'</comment>');
+        }
+
         if ($step['category'] === Category::GUIDED) {
             $output->writeln("\n".OutputFormatter::escape((string) $how['instructions']));
         } elseif ($step['category'] === Category::DECISION) {
-            if (isset($how['decided'])) {
-                $output->writeln("\n  Decidido: ".OutputFormatter::escape((string) ($how['decided']['option'] ?? '')).($how['then'] === null ? '. Hazlo como dice la opción.' : '. Ahora: '.OutputFormatter::escape((string) $how['then'])));
-            } else {
-                $output->writeln("\n  Opciones:");
-
-                foreach ((array) $how['options'] as $option) {
-                    $output->writeln('    <info>'.$option['key'].'</info>: '.OutputFormatter::escape($option['label'].'. '.$option['consequences']));
-                }
-
-                $output->writeln("\n  Decide con: ".$how['decide']);
-            }
+            $this->writeDecision($output, $how);
 
             if (isset($how['instructions'])) {
                 $output->writeln("\n".OutputFormatter::escape((string) $how['instructions']));
@@ -454,6 +539,11 @@ class RealignCommand extends Command
 
         $output->writeln("\n  Está hecho cuando ".OutputFormatter::escape(Playbooks::describeCondition((array) $step['done_when'])));
         $output->writeln("  Compruébalo con: {$check}");
+
+        if ($meanwhile !== null) {
+            $output->writeln("\n  Esta decisión es del dueño: preséntale las opciones y espera a que decida. Mientras, sigue con lo que no depende de ella: "
+                .$meanwhile['show'].' — '.OutputFormatter::escape((string) $meanwhile['title']));
+        }
 
         return Command::SUCCESS;
     }
@@ -539,20 +629,47 @@ class RealignCommand extends Command
 
         $note = $input->getOption('note');
         $decision = ['option' => $option['key'], 'note' => is_string($note) && $note !== '' ? $note : null, 'at' => gmdate('c')];
-        $plan['steps'][$index]['decision'] = $decision;
-        $plan['steps'][$index]['history'][] = ['at' => $decision['at'], 'event' => 'decided', 'detail' => $option['key'].($decision['note'] === null ? '' : ': '.$decision['note'])];
+        $files = array_values(array_unique(array_map('strval', (array) $input->getOption('target'))));
+
+        if ($files === []) {
+            // Entera: sustituye también lo decidido elemento por elemento.
+            $plan['steps'][$index]['decision'] = $decision;
+            unset($plan['steps'][$index]['decisions']);
+        } else {
+            $known = Navigation::files($step);
+            $unknown = array_values(array_diff($files, $known));
+
+            if ($unknown !== []) {
+                return $this->reportFailure($input, $output, "El paso {$id} no tiene ".implode(', ', $unknown).'.',
+                    'Sus elementos: '.implode(', ', array_slice($known, 0, 20)).(count($known) > 20 ? '… (larapack:realign show '.$id.' --format=json los da todos)' : '').'.',
+                    ['format_version' => RealignState::FORMAT_VERSION, 'action' => 'decide']);
+            }
+
+            foreach ($files as $file) {
+                $plan['steps'][$index]['decisions'][$file] = $decision;
+            }
+        }
+
+        $plan['steps'][$index]['history'][] = ['at' => $decision['at'], 'event' => 'decided', 'detail' => $option['key']
+            .($files === [] ? '' : ' en '.implode(', ', $files)).($decision['note'] === null ? '' : ': '.$decision['note'])];
         $state->savePlan($plan);
 
         $then = $option['run'] ?? null;
+        $undecided = Navigation::undecided($plan['steps'][$index]);
 
         if ($this->wantsJson($input)) {
             $this->writeJson($output, ['format_version' => RealignState::FORMAT_VERSION, 'ok' => true, 'action' => 'decide', 'id' => $id, 'decision' => $decision,
-                'then' => $then, 'check' => 'larapack:realign check '.$id]);
+                'targets' => $files, 'undecided' => $undecided, 'then' => $then, 'check' => 'larapack:realign check '.$id]);
 
             return Command::SUCCESS;
         }
 
-        $output->writeln("  Decidido en {$id}: <info>{$option['key']}</info> — ".OutputFormatter::escape((string) $option['consequences']));
+        $output->writeln("  Decidido en {$id}".($files === [] ? '' : ' para '.count($files).' de '.count(Navigation::files($step))).": <info>{$option['key']}</info> — ".OutputFormatter::escape((string) $option['consequences']));
+
+        if ($undecided !== []) {
+            $output->writeln('  Faltan por decidir '.count($undecided).': '.implode(', ', array_slice($undecided, 0, 10)).(count($undecided) > 10 ? '…' : '').'.');
+        }
+
         $output->writeln($then === null ? '  Hazlo como dice la opción, y después: larapack:realign check '.$id : "  Ahora: {$then}\n  Y después: larapack:realign check {$id}");
 
         return Command::SUCCESS;
@@ -633,6 +750,298 @@ class RealignCommand extends Command
 
         return ['decided' => $step['decision'], 'then' => $option['run'] ?? null]
             + $this->instructions($step, is_string($option['playbook'] ?? null) ? $option['playbook'] : null);
+    }
+
+    /**
+     * Lo que dice `next` de una decisión: sus opciones si falta decidir, lo
+     * que pide la opción si ya se decidió y, decidida por elemento, qué se
+     * decidió para cada uno y qué falta.
+     *
+     * @param  array<string, mixed>  $step
+     * @return array<string, mixed>
+     */
+    private function decisionHow(array $step): array
+    {
+        $mixed = is_array($step['decisions'] ?? null) && $step['decisions'] !== [];
+        $undecided = Navigation::undecided($step);
+
+        if ($undecided === [] && ! $mixed) {
+            return $this->decided($step);
+        }
+
+        $how = $undecided === []
+            ? ['decided' => $step['decision'] ?? null, 'then' => null]
+            : ['options' => $step['options'] ?? [], 'decide' => 'larapack:realign decide '.$step['id'].' <opción> --note="por qué"',
+                'decide_target' => 'larapack:realign decide '.$step['id'].' <opción> --target=<archivo> --note="por qué"'];
+
+        if ($mixed) {
+            $byOption = Navigation::byOption($step);
+            ksort($byOption);
+            $then = [];
+
+            foreach (array_keys($byOption) as $key) {
+                $then[$key] = $this->optionOf($step, (string) $key)['run'] ?? null;
+            }
+
+            $how += ['decided_by_target' => $byOption, 'undecided' => array_values(array_diff($undecided, ['*'])), 'then_by_option' => $then];
+        }
+
+        return $how + $this->instructions($step, is_string($step['playbook'] ?? null) ? $step['playbook'] : null);
+    }
+
+    /**
+     * @param  array<string, mixed>  $how
+     */
+    private function writeDecision(OutputInterface $output, array $how): void
+    {
+        foreach ((array) ($how['decided_by_target'] ?? []) as $key => $files) {
+            $run = $how['then_by_option'][$key] ?? null;
+            $output->writeln("\n  Decidido <info>{$key}</info> para ".count((array) $files).': '.OutputFormatter::escape(implode(', ', array_slice((array) $files, 0, 10))).(count((array) $files) > 10 ? '…' : '')
+                .(is_string($run) ? "\n    Ahora: ".OutputFormatter::escape($run).' (sólo toca esos)' : ''));
+        }
+
+        if (isset($how['options'])) {
+            if (($how['undecided'] ?? []) !== []) {
+                $output->writeln("\n  Faltan por decidir ".count($how['undecided']).': '.OutputFormatter::escape(implode(', ', array_slice($how['undecided'], 0, 10))).(count($how['undecided']) > 10 ? '…' : ''));
+            }
+
+            $output->writeln("\n  Opciones:");
+
+            foreach ((array) $how['options'] as $option) {
+                $output->writeln('    <info>'.$option['key'].'</info>: '.OutputFormatter::escape($option['label'].'. '.$option['consequences']));
+            }
+
+            $output->writeln("\n  Decide con: ".$how['decide']);
+            $output->writeln('  O por elemento: '.$how['decide_target']);
+        } elseif (array_key_exists('decided', $how) && ! isset($how['decided_by_target'])) {
+            $output->writeln("\n  Decidido: ".OutputFormatter::escape((string) ($how['decided']['option'] ?? '')).($how['then'] === null ? '. Hazlo como dice la opción.' : '. Ahora: '.OutputFormatter::escape((string) $how['then'])));
+        }
+    }
+
+    /**
+     * Nada que hacer ahora, pero queda: lo aplazado y lo que espera.
+     *
+     * @param  list<array<string, mixed>>  $left
+     * @param  array<string, array<string, mixed>>  $byId
+     */
+    private function waiting(InputInterface $input, OutputInterface $output, array $left, array $byId): int
+    {
+        $ids = fn (callable $filter): array => array_values(array_map(fn (array $step): string => (string) $step['id'], array_filter($left, $filter)));
+        $deferred = $ids(fn (array $step): bool => isset($step['deferred']));
+        $owner = $ids(fn (array $step): bool => ! isset($step['deferred']) && Navigation::handedOver($step));
+        $blocked = $ids(fn (array $step): bool => ! isset($step['deferred']) && ! Navigation::handedOver($step)
+            && (Planner::effectiveStatus($step, $byId) === Planner::BLOCKED || Navigation::waitsForGuided($step, $byId)));
+
+        if ($this->wantsJson($input)) {
+            $this->writeJson($output, ['format_version' => RealignState::FORMAT_VERSION, 'ok' => true, 'action' => 'next', 'done' => false, 'step' => null,
+                'waiting' => ['deferred' => $deferred, 'owner' => $owner, 'blocked' => $blocked]]);
+
+            return Command::SUCCESS;
+        }
+
+        $output->writeln(sprintf('  Nada que hacer ahora: quedan %d aplazados, %d en manos del dueño (lo pedido espera su aprobación: check dice qué falta) y %d bloqueados.', count($deferred), count($owner), count($blocked)));
+        $output->writeln('  larapack:realign status los lista; larapack:realign undefer <id> devuelve uno aplazado.');
+
+        return Command::SUCCESS;
+    }
+
+    /**
+     * Lo primero que se puede hacer sin esperar al dueño.
+     *
+     * @param  list<array<string, mixed>>  $steps
+     * @param  array<string, array<string, mixed>>  $byId
+     * @return array<string, mixed>|null
+     */
+    private function meanwhile(array $steps, array $byId): ?array
+    {
+        foreach ($steps as $step) {
+            if (! isset($step['deferred']) && ! Navigation::handedOver($step) && ! Navigation::waitsForGuided($step, $byId)
+                && ! in_array(Planner::effectiveStatus($step, $byId), [Planner::DONE, Planner::BLOCKED, Planner::AWAITING_DECISION], true)) {
+                return $step;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Los pasos de `depends_on` que todavía lo detienen.
+     *
+     * @param  array<string, mixed>  $step
+     * @param  array<string, array<string, mixed>>  $byId
+     * @return list<string>
+     */
+    private function blockedBy(array $step, array $byId): array
+    {
+        if (($step['status'] ?? null) === Planner::DONE) {
+            return [];
+        }
+
+        return array_values(array_filter(array_map('strval', (array) ($step['depends_on'] ?? [])), fn (string $id): bool => isset($byId[$id])
+            && ($byId[$id]['status'] ?? Planner::PENDING) !== Planner::DONE
+            && ! (Navigation::conditions((string) ($byId[$id]['type'] ?? '')) && Navigation::allows($step, $byId[$id]))));
+    }
+
+    /**
+     * Por ámbito, las decisiones del dueño sin tomar que detienen lo guiado,
+     * y lo guiado que detienen.
+     *
+     * @param  list<array<string, mixed>>  $steps
+     * @param  array<string, array<string, mixed>>  $byId
+     * @return list<array{scope: string, package: string|null, decisions: list<string>, guided: list<string>}>
+     */
+    private function awaitingOwner(array $steps, array $byId): array
+    {
+        $by = [];
+
+        foreach ($steps as $step) {
+            if ($step['category'] !== Category::GUIDED || isset($step['deferred'])) {
+                continue;
+            }
+
+            foreach ($this->blockedBy($step, $byId) as $id) {
+                $decision = $byId[$id];
+                $shared = array_intersect(Navigation::files($step), Navigation::files($decision));
+                $pending = array_filter($shared, fn (string $file): bool => Navigation::optionFor($decision, $file) === null);
+
+                if (! Navigation::conditions((string) $decision['type']) || $pending === []) {
+                    continue;
+                }
+
+                $package = is_string($step['scope']['package'] ?? null) ? $step['scope']['package'] : null;
+                $key = $package ?? 'app';
+                $by[$key] ??= ['scope' => $key, 'package' => $package, 'decisions' => [], 'guided' => []];
+                $by[$key]['decisions'][$id] = $id;
+                $by[$key]['guided'][(string) $step['id']] = (string) $step['id'];
+            }
+        }
+
+        return array_values(array_map(function (array $entry): array {
+            $decisions = array_values($entry['decisions']);
+            $guided = array_values($entry['guided']);
+            sort($decisions);
+            sort($guided);
+
+            return ['scope' => $entry['scope'], 'package' => $entry['package'], 'decisions' => $decisions, 'guided' => $guided];
+        }, $by));
+    }
+
+    /**
+     * `defer <id> --note=…` aplaza un paso: sigue pendiente, pero `next` lo
+     * salta y `status` lo lista. `undefer <id>` lo devuelve al orden.
+     *
+     * @param  list<string>  $targets
+     */
+    private function defer(InputInterface $input, OutputInterface $output, string $root, array $targets, bool $defer): int
+    {
+        $action = $defer ? 'defer' : 'undefer';
+        $extra = ['format_version' => RealignState::FORMAT_VERSION, 'action' => $action];
+
+        if (count($targets) !== 1) {
+            return $this->reportFailure($input, $output, "{$action} necesita el id de un paso: ".RealignActions::ALL[$action]['usage'][0].'.', extra: $extra);
+        }
+
+        $note = trim((string) $input->getOption('note'));
+
+        if ($defer && $note === '') {
+            return $this->reportFailure($input, $output, 'defer necesita la razón: --note="por qué se aplaza".', 'Es lo que lee quien retome el plan.', $extra);
+        }
+
+        $state = new RealignState($root);
+        $plan = $this->requirePlan($root);
+        $index = $this->indexOf($plan, $targets[0]);
+        $step = $plan['steps'][$index];
+        $now = gmdate('c');
+
+        if ($defer && ($step['status'] ?? null) === Planner::DONE) {
+            return $this->reportFailure($input, $output, "El paso {$step['id']} ya está hecho: no hay nada que aplazar.", extra: $extra);
+        }
+
+        if (! $defer && ! isset($step['deferred'])) {
+            return $this->reportFailure($input, $output, "El paso {$step['id']} no está aplazado.", extra: $extra);
+        }
+
+        if ($defer) {
+            $plan['steps'][$index]['deferred'] = ['note' => $note, 'at' => $now];
+        } else {
+            unset($plan['steps'][$index]['deferred']);
+        }
+
+        $plan['steps'][$index]['history'][] = ['at' => $now, 'event' => $defer ? 'deferred' : 'undeferred', 'detail' => $defer ? $note : 'Vuelve al orden del plan.'];
+        $state->savePlan($plan);
+
+        if ($this->wantsJson($input)) {
+            $this->writeJson($output, ['format_version' => RealignState::FORMAT_VERSION, 'ok' => true, 'action' => $action, 'id' => $step['id'],
+                'deferred' => $plan['steps'][$index]['deferred'] ?? null, 'next' => 'larapack:realign next']);
+
+            return Command::SUCCESS;
+        }
+
+        $output->writeln($defer
+            ? "  Aplazado {$step['id']}: sigue pendiente, next pasa al siguiente y status lo lista. Para retomarlo: larapack:realign undefer {$step['id']}"
+            : "  {$step['id']} vuelve al orden del plan. Siguiente: larapack:realign next");
+
+        return Command::SUCCESS;
+    }
+
+    /**
+     * `escalate <id> --note=…`: un paso guiado que no se debe hacer sin el
+     * dueño (el controlador de un protocolo que el playbook dice dejar) pasa
+     * a ser una decisión suya, con su nota.
+     *
+     * @param  list<string>  $targets
+     */
+    private function escalate(InputInterface $input, OutputInterface $output, string $root, array $targets): int
+    {
+        $extra = ['format_version' => RealignState::FORMAT_VERSION, 'action' => 'escalate'];
+
+        if (count($targets) !== 1) {
+            return $this->reportFailure($input, $output, 'escalate necesita el id de un paso: '.RealignActions::ALL['escalate']['usage'][0].'.', extra: $extra);
+        }
+
+        $note = trim((string) $input->getOption('note'));
+
+        if ($note === '') {
+            return $this->reportFailure($input, $output, 'escalate necesita la nota: --note="qué hay que decidir y por qué".', 'Es lo que lee el dueño.', $extra);
+        }
+
+        $state = new RealignState($root);
+        $plan = $this->requirePlan($root);
+        $index = $this->indexOf($plan, $targets[0]);
+        $step = $plan['steps'][$index];
+
+        if ($step['category'] !== Category::GUIDED) {
+            return $this->reportFailure($input, $output, "El paso {$step['id']} no es un paso guiado: es ".(Category::LABELS[$step['category']] ?? $step['category']).'.',
+                $step['category'] === Category::DECISION ? 'Ya lo decide el dueño: larapack:realign show '.$step['id'].'.' : null, $extra);
+        }
+
+        if (($step['status'] ?? null) === Planner::DONE) {
+            return $this->reportFailure($input, $output, "El paso {$step['id']} ya está hecho.", extra: $extra);
+        }
+
+        $now = gmdate('c');
+        $plan['steps'][$index] = Navigation::escalate($step, ['note' => $note, 'at' => $now]);
+        $plan['steps'][$index]['history'][] = ['at' => $now, 'event' => 'escalated', 'detail' => $note];
+        $state->savePlan($plan);
+        $escalated = $plan['steps'][$index];
+        $decide = 'larapack:realign decide '.$step['id'].' <opción> --note="por qué"';
+
+        if ($this->wantsJson($input)) {
+            $this->writeJson($output, ['format_version' => RealignState::FORMAT_VERSION, 'ok' => true, 'action' => 'escalate', 'id' => $step['id'],
+                'escalated' => $escalated['escalated'], 'options' => $escalated['options'], 'decide' => $decide]);
+
+            return Command::SUCCESS;
+        }
+
+        $output->writeln("  {$step['id']} es ahora una decisión del dueño. Opciones:");
+
+        foreach ((array) $escalated['options'] as $option) {
+            $output->writeln('    <info>'.$option['key'].'</info>: '.OutputFormatter::escape($option['label'].'. '.$option['consequences']));
+        }
+
+        $output->writeln("  La toma el dueño: {$decide}. Mientras, sigue con: larapack:realign next");
+
+        return Command::SUCCESS;
     }
 
     /**
@@ -827,7 +1236,9 @@ class RealignCommand extends Command
     private function nextStep(array $steps, array $byId): ?array
     {
         foreach ($steps as $step) {
-            if (! in_array(Planner::effectiveStatus($step, $byId), [Planner::DONE, Planner::BLOCKED], true)) {
+            // Lo aplazado y lo que ya sólo espera al dueño no se vuelve a dar.
+            if (! isset($step['deferred']) && ! Navigation::handedOver($step) && ! Navigation::waitsForGuided($step, $byId)
+                && ! in_array(Planner::effectiveStatus($step, $byId), [Planner::DONE, Planner::BLOCKED], true)) {
                 return $step;
             }
         }

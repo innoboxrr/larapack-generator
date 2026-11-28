@@ -64,19 +64,24 @@ final class RealignPlanTest extends TestCase
 
         $this->assertSame('plan', $plan['action']);
         $this->assertSame(RealignState::FORMAT_VERSION, $this->plan()['format_version']);
+        // La decisión sobre el controlador escrito a mano va antes que lo
+        // guiado sobre él: si el dueño lo declara, no se lleva a mano a su
+        // request para rehacerlo después.
         $this->assertSame([
             'adopt@.',
+            'unmanaged-http@.',
             'controller-shape@'.self::REPORT_CONTROLLER,
             'edited-outside:Requests@.',
-            'unmanaged-http@.',
         ], array_column($steps, 'id'));
         $this->assertSame([1, 2, 3, 4], array_column($steps, 'order'));
-        $this->assertSame([Category::DETERMINISTIC, Category::GUIDED, Category::GUIDED, Category::DECISION], array_column($steps, 'category'));
+        $this->assertSame([Category::DETERMINISTIC, Category::DECISION, Category::GUIDED, Category::GUIDED], array_column($steps, 'category'));
 
-        // Lo guiado y las decisiones esperan a que el manifiesto diga la verdad.
+        // Lo guiado y las decisiones esperan a que el manifiesto diga la
+        // verdad; lo guiado sobre el controlador, además, a su decisión.
         $this->assertSame(['adopt@.'], $steps[1]['depends_on']);
+        $this->assertSame(['adopt@.', 'unmanaged-http@.'], $steps[2]['depends_on']);
         $this->assertSame(['adopt@.'], $steps[3]['depends_on']);
-        $this->assertSame(Planner::BLOCKED, $plan['next'] === null ? null : Planner::effectiveStatus($steps[1], array_column($steps, null, 'id')));
+        $this->assertSame(Planner::BLOCKED, $plan['next'] === null ? null : Planner::effectiveStatus($steps[2], array_column($steps, null, 'id')));
         $this->assertSame('adopt@.', $plan['next']['id']);
     }
 
@@ -121,6 +126,7 @@ final class RealignPlanTest extends TestCase
     {
         $this->realign('plan');
         $this->markDone('adopt@.');
+        $this->realign('decide', ['targets' => ['unmanaged-http@.', 'keep']]);
 
         $next = $this->realign('next');
 
@@ -293,7 +299,7 @@ final class RealignPlanTest extends TestCase
     {
         $help = $this->realign('help');
 
-        $this->assertSame(['diagnose', 'plan', 'status', 'next', 'check', 'decide', 'done', 'playbook', 'adopt', 'apply', 'infer', 'except'], array_keys($help['actions']));
+        $this->assertSame(['diagnose', 'plan', 'status', 'next', 'show', 'check', 'decide', 'defer', 'undefer', 'escalate', 'done', 'playbook', 'adopt', 'apply', 'infer', 'except'], array_keys($help['actions']));
         $this->assertSame(Category::ALL, $help['categories']);
         $this->assertSame('docs/realign/README.md', $help['guide']);
     }

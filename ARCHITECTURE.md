@@ -636,6 +636,17 @@ tipos, con su categoría, riesgo, forma de ejecutarse y orden, es
 (`blocked`, `awaiting_decision`, `decided`) se calcula al leer
 (`Planner::effectiveStatus`): no se guarda nada que pueda desincronizarse.
 
+**Moverse por el plan** sin rehacer trabajo es
+[`Navigation`](src/Support/Realign/Navigation.php): qué decisiones condicionan
+lo guiado (`Navigation::CONDITIONS`: van antes que él y están en su
+`depends_on`, que se cumple cuando cada archivo compartido se decide con una
+opción con la que lo guiado sigue valiendo), lo decidido por elemento
+(`decide --target`, `Navigation::optionFor`; una operación sólo ve sus
+elementos, `Navigation::narrow`), cuándo una decisión ya sólo espera al dueño
+(`Navigation::handedOver`) y el guiado que se le pasa como decisión
+(`Navigation::escalate`). Lo aplazado (`defer`) es un campo del paso, no un
+estado: `next` lo salta y `status` lo lista.
+
 **`check`** corre el `done_when` del paso con
 [`DoneWhen`](src/Support/Realign/DoneWhen.php): `verify` acotado, la misma
 clasificación, el código sin gestionar o la validación del contrato. Hacer un
