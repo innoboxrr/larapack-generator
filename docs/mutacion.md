@@ -51,7 +51,7 @@ cada pieza, su suelo de
 [`.github/mutation-floors.json`](../.github/mutation-floors.json). El umbral
 conjunto solo dejaba que una pieza bajara mientras las demás la compensaban.
 
-**9.3.1 (sin publicar).** `Verifier` y `LegacyFix` ganan código —llaman a
+**9.3.1.** `Verifier` y `LegacyFix` ganan código —llaman a
 `ContractDrift` y a `RelationFix`, que no se mutan— y el `--filter` de
 `infection.json5` suma las pruebas que lo recorren (`MissingRelationTest`,
 `PreservedModelListsTest`, `RelationFixTest`, `ModelRegionsTest`). Medido sólo
@@ -60,7 +60,7 @@ sobre esas dos piezas: `Verifier` 480 mutantes, 97,92 %; `LegacyFix` 866,
 suelos no cambian. `ModelRegions`, `ModelLists`, `ContractDrift`,
 `RelationFix` y `Manifest` todavía no están en el conjunto que se mide.
 
-**9.4.0 (sin publicar).** `larapack:realign` trae código nuevo a
+**9.4.0.** `larapack:realign` trae código nuevo a
 `ControllerShape` y a `HandRolledLock` (el closure de una ruta aprobado como
 excepción, la corrida apuntada en el candado) y dos piezas que entran en lo que
 se mide: [`NamedApproval`](../src/Support/NamedApproval.php) —quién aprueba sin

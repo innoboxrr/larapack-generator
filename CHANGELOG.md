@@ -1,6 +1,6 @@
 # Changelog
 
-## 9.4.0 (sin publicar)
+## 9.4.0
 
 **El módulo de realineamiento** (`larapack:realign`): llevar de vuelta al
 contrato un proyecto que se desvió —una versión vieja de LaraPack, código
