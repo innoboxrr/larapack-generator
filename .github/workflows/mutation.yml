@@ -74,7 +74,7 @@ jobs:
               run: >-
                   "$RUNNER_TEMP/infection/vendor/bin/infection"
                   --threads=max --only-covering-test-cases --no-progress --with-uncovered
-                  --min-msi=95.6 --min-covered-msi=95.8
+                  --min-msi=95.6 --min-covered-msi=95.9
 
             # El umbral de arriba es de todas las piezas juntas: una podría
             # bajar mientras las demás la compensan. Cada una, contra su suelo;

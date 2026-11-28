@@ -46,7 +46,7 @@ comparación que estaba repetida en sesenta sitios ahora está en uno, y las
 conversiones y las guardas que no hacían nada ya no están (ver
 [Lo que se cambió en vez de anotarlo](#lo-que-se-cambió-en-vez-de-anotarlo)).
 
-La CI exige `--min-msi=95.6 --min-covered-msi=95.8` de todas juntas y, a
+La CI exige `--min-msi=95.6 --min-covered-msi=95.9` de todas juntas y, a
 cada pieza, su suelo de
 [`.github/mutation-floors.json`](../.github/mutation-floors.json). El umbral
 conjunto solo dejaba que una pieza bajara mientras las demás la compensaban.
@@ -105,6 +105,89 @@ que añade el código nuevo son conversiones `(string)`/`(array)` de un paso,
 que es un array sin tipos (ver
 [Los de `Navigation` y `NamedApproval`](#los-de-navigation-y-namedapproval)):
 su techo, sin tocar el código, es ése.
+
+**9.4.0, después de la auditoría de seguridad.** La auditoría añadió a cinco
+piezas lo que `verify` no veía: acciones heredadas de un trait o de un padre,
+clases dentro de un bloque, la acción de una ruta que no es un closure en línea
+(`[Clase::class, 'm']`, `'Clase@m'`, `Route::resource()`, `$router->…`),
+`callAction()`, `getMiddleware()` y `__destruct()` (`ControllerShape`,
+`PhpOutline`); las entradas que la guardia no leía —la orden partida en
+palabras, `cmd`, `GIT_CONFIG_*`, los campos de ruta de otras herramientas—
+(`Guard`); el manifiesto ilegible o de una versión posterior y lo que deja un
+merge (`Verifier`); el candado a través de un enlace (`HandRolledLock`); lo que
+está fuera de la raíz (`LegacyFix`). Sus pruebas eran casi todas de punta a
+punta (`GeneratedSecurityAuditTest`, `VerifyManifestDeclarationTest`…), que
+regeneran el contrato y no pueden ir en el filtro
+([abajo](#una-prueba-que-falla-siempre-mata-todo)), y las unitarias que había se
+solapaban: dos rutas al mismo método, y `$seen` deduplicaba, así que quitar
+una forma de leer la acción no cambiaba nada. La CI salió en rojo en cuatro
+piezas:
+
+| Pieza | Antes: mutantes | Antes: MSI | Mutantes | Sin recorrer | MSI | MSI recorrido | Suelo | Holgura |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| `HandRolledLock` | 191 | 98,95 % | 190 | 0 | 100,00 % | 100,00 % | 99,0 % | 1 |
+| `NamedApproval` | 178 | 99,44 % | 178 | 0 | 99,44 % | 99,44 % | 98,4 % ↑ | 1 |
+| `CiGate` | 474 | 97,89 % | 473 | 1 | 98,31 % | 98,52 % | 97,3 % ↑ | 4 |
+| `Verifier` | 550 | 97,09 % | 550 | 0 | 98,18 % | 98,18 % | 97,1 % | 5 |
+| `Guard` | 1021 | 95,98 % | 1021 | 1 | 98,14 % | 98,24 % | 97,1 % ↑ | 10 |
+| `ControllerShape` | 1059 | 88,57 % | 1045 | 0 | 97,61 % | 97,61 % | 97,3 % | 3 |
+| `PhpOutline` | 720 | 93,33 % | 702 | 1 | 96,87 % | 97,00 % | 96,0 % | 6 |
+| `LegacySecurity` | 364 | 96,43 % | 364 | 0 | 96,43 % | 96,43 % | 95,4 % | 3 |
+| `Navigation` | 327 | 91,13 % | 323 | 0 | 94,12 % | 94,12 % | 93,1 % ↑ | 3 |
+| `LegacyFix` | 872 | 91,06 % | 872 | 11 | 91,51 % | 92,68 % | 90,6 % | 8 |
+| **Las diez** | **5756** | **93,76 %** | **5718** | **14** | **96,66 %** | **96,90 %** | **95,6 % / 95,9 % ↑** | |
+
+Una corrida con tres hilos: 52 mutantes agotaron el tiempo (16 de `Guard`, 30
+de `PhpOutline`, 3 de `ControllerShape` y 3 de `LegacyFix`), los mismos bucles
+que en la medición anterior. «Antes» es la corrida de la CI que salió en rojo.
+
+Lo que se hizo, pieza por pieza, con pruebas unitarias que no regeneran nada:
+
+- `ControllerShape` (`ControllerShapeTest`): cada forma de nombrar la acción de
+  una ruta, **sola** (un proveedor de datos con diecinueve), lo que no es una
+  ruta o es un closure sin cortar el recorrido de las demás, la misma acción
+  con otra caja, la acción heredada con su origen en el mensaje, `#[HandRolled]`
+  de clase, de trait, de método y de un padre abstracto (con razón, sin razón,
+  sin argumentos), lo declarado que gana a lo heredado aunque cambie la caja,
+  un trait dentro de otro, un trait de `Http/Controllers` dentro de otro, un
+  padre concreto de dentro y de fuera, `Http/Controllers` en la raíz del
+  PSR-4, los mensajes enteros de `callAction()`, `getMiddleware()` y
+  `__destruct()`, y una excepción del realineamiento que no tapa las que sobran
+  detrás.
+- `PhpOutline` (`PhpOutlineTest`): `callsTo()` —qué es una llamada, un archivo
+  cortado en su paréntesis, los argumentos con nombre— y la raíz de una cadena
+  en ocho formas; la profundidad de los bloques: un `use` de trait detrás de un
+  método de una clase anónima no importa, uno de arriba detrás de un bloque sí.
+- `Guard` (`GuardInputsTest`): aprobar desde otro programa, `--approver` como
+  opción entera, `GIT_CONFIG_KEY_n` y `GIT_CONFIG_PARAMETERS` (con comillas
+  dentro de comillas, con varias claves), `alias.` en cualquier caja, `--` y
+  `-n` detrás de una ruta o del valor de `-m`, `command` antes que `cmd`, cada
+  palabra de una lista entre comillas, `node_modules` bajo un proyecto de npm.
+- `HandRolledLock` (`HandRolledLockFormatTest`): el candado no se escribe a
+  través de un `.larapack` enlazado fuera. Sin la prueba, quitar
+  `Files::guard()` no cambiaba nada.
+- `Verifier` (`VerifierTest`): un conflicto de merge con un manifiesto legible,
+  uno ilegible que no tapa lo demás del merge, uno de una versión posterior.
+- `Navigation` (`NavigationTest`, `RealignPlanReadingTest`): `handedOver()` con
+  opciones escritas a mano y `untested()` con un plan editado a mano.
+- `LegacyFix` (`LegacyFixTest`): lo que llega por un enlace de fuera de la raíz
+  no se reescribe. `CiGate` (`CiGateTest`): el comentario del paso de Pint.
+
+Y, sin cambiar lo que hace, se quitó código que sólo producía equivalentes:
+la comprobación de closure de `routeTarget()` que la última ya cubre, las
+conversiones de clave de `checkStale()`, el `return` de `excusedElsewhere()`
+que caía en lo mismo, el `$any` de `handedOver()` (era `$applied !== []`), el
+`array_unique` de `operationsOf()` (sólo alimenta un `array_diff`), el índice
+de más de `chainRoot()` (empieza en el nombre), la condición tras `namespace`
+(siempre la cumple), y `CiGate::binary()` es privado. Tres lecturas más pasan
+por `Files::read()`, como dice [la regla](#lo-que-se-cambió-en-vez-de-anotarlo).
+Ningún mutante destapó un fallo de comportamiento.
+
+Los suelos que suben lo hacen con la regla de siempre (lo logrado, a la
+décima hacia abajo, menos un punto): `CiGate`, `Guard`, `Navigation`,
+`NamedApproval` y el umbral conjunto de lo recorrido. Los que no suben siguen
+igual; ninguno baja. Los supervivientes nuevos son de las familias de abajo,
+algunas ampliadas.
 
 **Lo que se midió y no entra todavía.** Las demás piezas del realineamiento que
 deciden si algo se adopta, se da por hecho o se aprueba tienen desde la 9.4.0
@@ -289,13 +372,26 @@ Quedan pocos, y por una razón cada uno: el nombre de un paquete de
 `composer.json` (una clave de array, `int|string`), el de un objetivo del
 candado, lo que devuelve `realpath()` de la raíz de git, el texto saneado de
 un mensaje de `ControllerShape`, el `ability` y el `operation` de un endpoint
-del manifiesto. Quitar la conversión no cambia el valor.
+del manifiesto. Quitar la conversión no cambia el valor. Desde la auditoría, también
+`locate()` de una clase cuyo ClassOutline ya se encontró
+(`ControllerShape::fileOf()`) y el texto de una acción `'Clase@método'`, que
+es un solo token de cadena: `stringArgument()` nunca da `null` ahí.
 
 ### `isset()` no distingue `true` de `false`
 
 Las visitas de un recorrido se apuntan con `$visited[$clase] = true`; cambiarlo
 por `false` no cambia nada, porque `isset()` sólo mira si es `null`
 (`LegacySecurity`, `ControllerShape`, la comprobación de después de `fix`).
+Lo mismo con los nombres ya vistos de lo heredado, las acciones de ruta ya
+comprobadas (`$seen`) y los closures con excepción de `ControllerShape`.
+
+### Una herencia circular, que PHP no compila
+
+`ControllerShape::inherited()` apunta la propia clase como visitada, y todo en
+minúsculas, para no dar vueltas si `A extends B` y `B extends A`. Sin ciclo, la
+clase nunca vuelve a aparecer en su propia cadena ni un trait se recorre dos
+veces con efecto (lo ya recogido está en `$names`): quitar la entrada o el
+`strtolower()` no cambia nada salvo en código que PHP rechaza.
 
 ### Lo que sólo ahorra trabajo
 
@@ -331,11 +427,24 @@ Lo que se ordena con `sort()`, se expande con `...` o sólo se recorre con
 - El `?->` de la cadena `$this->resource->setAppends`: dentro de un método
   siempre hay cuatro tokens delante, y ninguno es `null`.
 - `lineStart()` de un token de la primera línea: tras `<?php` no hay ninguno.
+- `PhpOutline::callsTo()` empezando en el token 1 o en el 2, y `chainRoot()`
+  parando en el 0 o antes: el token 0 es siempre `<?php` (o HTML), que no es
+  ni un operador, ni un nombre, ni un paréntesis.
+- `count($argumento) > 2` frente a `>= 2` en un argumento con nombre: `uri:`
+  sin valor no es PHP.
 
 ### Dos caminos al mismo sitio
 
 - `Verifier::appDirectory()` desde el modelo o desde el controlador: los dos
   cuelgan del mismo `src/` o `app/`.
+- La acción de una ruta por `action:`, por `controller:` o por su posición, en
+  cualquier orden: PHP no deja nombrar un parámetro dos veces ni pasarlo por
+  nombre y por posición, así que nunca hay dos.
+- Entrar en el caso del array de `routeTarget()` cuando la acción sólo empieza
+  por `[` o sólo acaba en `]`: su primer elemento nunca es `Clase::class`
+  solo, y se cae a la misma última comprobación.
+- `LegacyFix` busca SpaController con `locate()` o en la ruta que le tocaría:
+  es la misma.
 - Buscar el valor en `$matches[0]` o en `$matches[1]` de `$hidden = [...]`: el
   valor va entre comillas, y lo que `[0]` tiene de más no lo está.
 - El `^` de un grupo opcional (`Guard::lexical()`): el primer intento ya es en
@@ -362,6 +471,9 @@ Lo que se ordena con `sort()`, se expande con `...` o sólo se recorre con
   es un pendiente, no algo que hoy se compruebe.
 - Un `mkdir()` que falla porque otro proceso acaba de crear el directorio
   (`Guard::stateDirectoryIn()`).
+- El modo de un directorio que crea `LegacyFix` para SpaController: `0777` es
+  «lo que deje la umask», y nada lee luego sus permisos. Y la barra invertida
+  de su ruta de `composer.json`, que en Linux no aparece.
 - Lo que `git` escribiría en la salida estándar al fallar, que es nada; y un
   `proc_open()` que no arranca `git`.
 
@@ -374,7 +486,9 @@ señala un `setAppends` seguido de `(`, y el bloque que escribe el arreglo es
 el que reconoce como limpio. Lo mismo con las excepciones internas de
 `LegacyFix` —un paréntesis sin cerrar, una clase sin cuerpo o sin métodos—: lo
 que llega ahí ya parseó, y `LegacySecurity` sólo marca clases con métodos.
-Quitarlas no cambia ninguna prueba. Se quedan, porque son lo que impide
+Lo mismo al reescribir el fallback de la SPA: `SpaFallback::rewrite()` sólo
+toca la forma exacta que reconoce, así que lo que escribe parsea y deja un
+closure marcado menos. Quitarlas no cambia ninguna prueba. Se quedan, porque son lo que impide
 escribir algo a medias el día que alguien amplíe las formas reconocidas.
 
 Las otras comprobaciones de después —que lo arreglado parsea, que sigue
@@ -402,6 +516,10 @@ Las dos piezas de la 9.4.0, con todo lo que les escapa (18 mutantes):
   `strval` las claves de un array que ya son nombres de opción; y las opciones
   de un guiado que se le pasa al dueño (`ESCALATED`) son, hoy, una por tipo.
 - **Un `array_values()` que sólo se recorre** (1), en `allows()`.
+
+La auditoría añadió `operationsOf()`: su `(array)` sobre `options` y las
+conversiones del `id`, el `type` y el `title` de un paso son de la primera
+familia (en un plan, siempre una lista y siempre texto).
 
 ## Los que no son equivalentes y siguen vivos
 
