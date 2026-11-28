@@ -129,6 +129,24 @@ final class RealignUntestedTest extends TestCase
         $this->assertSame(Planner::UNTESTED, $this->step(self::STEP)['status']);
     }
 
+    /**
+     * `plan` otra vez, sin volver a diagnosticar: el informe es el de antes y
+     * sigue listando el paso. Lo dejaba `done` —«el mismo informe no lo
+     * vuelve a encontrar»—, y `larapack:realign done` salía en verde sin que
+     * nadie hubiera registrado la prueba.
+     */
+    public function test_planificar_otra_vez_sin_diagnosticar_no_lo_da_por_probado(): void
+    {
+        $this->restore();
+        $this->assertSame(Planner::UNTESTED, $this->realign('check', ['targets' => [self::STEP]])['status']);
+
+        $this->realign('plan');
+
+        $this->assertSame(Planner::UNTESTED, $this->step(self::STEP)['status']);
+        $done = $this->realign('done', [], Command::FAILURE);
+        $this->assertSame([self::STEP], array_column($done['missing']['untested'], 'id'));
+    }
+
     public function test_status_brief_y_done_lo_listan_y_done_falla(): void
     {
         $this->restore();

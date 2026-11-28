@@ -524,6 +524,45 @@ final class RealignPlannerTest extends TestCase
         $this->assertSame('reopened', end($steps['adopt@.']['history'])['event']);
     }
 
+    /**
+     * `check` deja `untested` un paso que cambia comportamiento y cuya prueba
+     * nadie registró. Volver a planificar sobre el mismo informe —que lo
+     * sigue listando: es el que lo pedía— lo dejaba `done`: bastaba correr
+     * `plan` otra vez para que lo no probado acabara hecho, y `done` lo daba
+     * por terminado. Lo aceptado sin probar por el dueño y la prueba
+     * registrada tampoco se pierden por planificar dos veces.
+     */
+    public function test_planificar_otra_vez_sobre_el_mismo_informe_no_da_por_probado_lo_que_no_lo_esta(): void
+    {
+        $report = $this->report(['findings' => [
+            $this->finding('security', 'secret-exposed', 'src/R.php'),
+            $this->finding('declared-routes', 'route-not-declared', 'src/S.php'),
+            $this->finding('controller-shape', 'controller-shape', self::CONTROLLER),
+        ], 'files' => [$this->file('missing', 'f.php')]]);
+        $previous = Planner::build($report);
+        $accepted = ['by' => 'la dueña', 'note' => 'No hay entorno de pruebas.', 'at' => 'antes'];
+        $tested = ['command' => 'php artisan test', 'at' => 'antes'];
+        $previous = $this->with($previous, 'security@.', ['status' => Planner::UNTESTED]);
+        $previous = $this->with($previous, 'declared-routes@.', ['status' => Planner::DONE, 'untested_accepted' => $accepted]);
+        $previous = $this->with($previous, 'controller-shape@'.self::CONTROLLER, ['status' => Planner::DONE, 'tested' => $tested]);
+
+        // Una decisión tomada y cumplida, igual: el mismo informe no la reabre.
+        $check = ['id' => 'missing@.', 'at' => 'antes', 'done' => true, 'remaining' => 0];
+        $previous = $this->with($previous, 'missing@.', ['status' => Planner::DONE, 'decision' => ['option' => 'restore'], 'last_check' => $check]);
+
+        $steps = $this->byId(Planner::build($report, $previous));
+
+        $this->assertSame(Planner::UNTESTED, $steps['security@.']['status']);
+        $this->assertSame([], $steps['security@.']['history']);
+        $this->assertSame(Planner::DONE, $steps['declared-routes@.']['status']);
+        $this->assertSame($accepted, $steps['declared-routes@.']['untested_accepted']);
+        $this->assertSame(Planner::DONE, $steps['controller-shape@'.self::CONTROLLER]['status']);
+        $this->assertSame($tested, $steps['controller-shape@'.self::CONTROLLER]['tested']);
+        $this->assertSame(Planner::DONE, $steps['missing@.']['status']);
+        $this->assertSame($check, $steps['missing@.']['last_check']);
+        $this->assertSame(['option' => 'restore'], $steps['missing@.']['decision']);
+    }
+
     public function test_una_decision_tomada_sigue_tomada_aunque_el_problema_vuelva(): void
     {
         $report = $this->report(['files' => [$this->file('missing', 'f.php'), $this->file('untracked-edited', 'g.php')], 'scopes' => [
