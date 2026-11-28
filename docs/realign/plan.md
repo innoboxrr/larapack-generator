@@ -150,7 +150,10 @@ sus archivos y hallazgos, cómo comprobarlo, y `how`:
 - **`decision`** ya decidida: `how.decided`, lo que pide la opción
   (`how.then`, su orden) y, si la opción lo trae, su playbook.
 
-Cuando no queda nada, `done` es true y `step` es null.
+Cuando no queda nada, `done` es true y `step` es null. Eso dice que el plan
+no tiene pendientes, no que el realineamiento haya terminado: lo dice
+[`larapack:realign done`](verify.md#cuándo-se-termina), que diagnostica otra
+vez y mira también decisiones, excepciones, `validate` y `verify`.
 
 ## `check`
 

@@ -68,13 +68,14 @@ final class PreservedModelListsTest extends TestCase
         $this->import($this->contract, ['--force' => true]);
 
         $expected = str_replace(
+            // `shared` va donde la declara el contrato, no al final.
             [
-                "'last_synced_at', 'last_synced_hash',\n",
+                "'status', 'matched_by',",
                 "'linked_at' => 'datetime', 'last_synced_at' => 'datetime',\n",
             ],
             [
-                "'last_synced_at', 'last_synced_hash', 'shared',\n",
-                "'linked_at' => 'datetime', 'last_synced_at' => 'datetime', 'shared' => 'boolean',\n",
+                "'status', 'shared', 'matched_by',",
+                "'shared' => 'boolean', 'linked_at' => 'datetime', 'last_synced_at' => 'datetime',\n",
             ],
             $this->real
         );

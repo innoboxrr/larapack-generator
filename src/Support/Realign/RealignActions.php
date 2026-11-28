@@ -76,6 +76,14 @@ final class RealignActions
             'keys' => [],
             'guide' => 'docs/realign/plan.md',
         ],
+        'done' => [
+            'summary' => 'El criterio de terminado, uno para todo el proyecto: diagnostica y planifica otra vez, y falla (con lo que falta, elemento por elemento) mientras quede un paso sin hacer, una decisión sin tomar, una excepción sin aprobar, o un error o aviso de validate --strict o verify --strict en cualquier ámbito.',
+            'usage' => ['larapack:realign done [--package=…] [--jobs=4] [--no-cache]'],
+            'writes' => 'Sólo .larapack/realign/report.json, plan.json y la caché, como diagnose y plan.',
+            'options' => ['package', 'jobs', 'no-cache'],
+            'keys' => [],
+            'guide' => 'docs/realign/verify.md',
+        ],
         'playbook' => [
             'summary' => 'Lista los playbooks del paquete, o imprime uno sin rellenar con sus marcadores explicados.',
             'usage' => ['larapack:realign playbook', 'larapack:realign playbook <nombre>'],

@@ -16,28 +16,50 @@ garantiza cada una y qué no.
 
 ## Cuándo se termina
 
-1. `larapack:realign next` dice que no queda nada (`done: true`) después de
-   diagnosticar y planificar otra vez.
-2. `larapack:validate --strict` pasa en cada ámbito: el contrato es válido.
-3. `larapack:verify --strict` sale con 0: no queda ni un error ni un aviso,
-   salvo lo que cubre una excepción aprobada por el dueño.
-4. Las pruebas del proyecto pasan (eso no lo comprueba LaraPack: ver
-   [abajo](#qué-garantiza-y-qué-no)).
+**Un realineamiento está terminado cuando `larapack:realign done` sale con
+0.** Es el único criterio, y es comprobable: lo corre igual una persona, un
+agente o la CI.
 
 ```bash
-larapack:realign diagnose && larapack:realign plan
-larapack:realign status --format=json        # steps.by_status: nada pendiente
-larapack:validate --strict --format=json
-larapack:verify --strict --format=json
+larapack:realign done                    # 0: terminado; 1: lo que falta, con la orden de cada cosa
+larapack:realign done --format=json      # `done`, `missing`, `counts`, `reasons`, `declared`
+larapack:realign done --package=billing  # sólo un ámbito (repetible; `app` para el núcleo)
 ```
 
-Si queda algo que el proyecto decidió dejar fuera, sigue en el plan como un
-paso hecho con su decisión, y en `verify` como `info` con su excepción: lo que
-queda fuera de alcance está **declarado**, no olvidado.
+`done` diagnostica y planifica otra vez —sólo escribe el estado de
+`.larapack/realign/`, como `diagnose` y `plan`, conservando lo hecho y lo
+decidido— y recorre **todos los ámbitos** (la raíz y cada paquete local).
+Falla mientras haya cualquiera de estas cosas, y las lista en `missing`,
+elemento por elemento:
+
+| `missing.` | Qué falta | Quién lo resuelve |
+|---|---|---|
+| `steps` | Un paso del plan sin hacer (pendiente, decidido y sin hacer, o bloqueado), con su `check`. Un `edited-outside` cuenta aunque `verify` no lo vea. | Quien hace el paso: `next` y `check`. |
+| `decisions` | Una decisión sin tomar, con su `decide`. | El dueño. Nunca un agente. |
+| `exceptions` | Una excepción pedida y sin aprobar, o aprobada sobre otro código, con otra razón o sobre algo que ya no existe (`status`). | El dueño: `larapack:hand-rolled approve` (o `revoke`). |
+| `validate` | Un error o aviso de `larapack:validate --strict` en el contrato de cualquier ámbito (`file`). | Quien mantiene el contrato. |
+| `verify` | Un error o aviso de `larapack:verify --strict` (lo que cubre una excepción aprobada ya es `info` y no cuenta). | El paso que lo resuelve ([diagnose.md](diagnose.md#los-hallazgos-de-verify)). |
+
+No hay pasos «aplazados»: lo que se deja para después sigue pendiente, y el
+realineamiento no ha terminado. Lo que se decide no hacer se **decide**
+(`decide`) y, si se queda como está, con su excepción aprobada; entonces el
+paso está hecho y no falta.
+
+Por qué uno solo, y no «el plan sin pendientes» y «verify --strict» por
+separado: ninguno basta. `verify` no ve un archivo editado fuera de sus
+huecos —lo encuentra el diagnóstico, `edited_outside`—, y el plan no ve lo
+que se desvió después del último diagnóstico ni si el contrato valida. En una
+prueba de autonomía, un agente dio por terminado con `verify --strict` en
+verde y pasos `edited-outside` pendientes en el plan.
+
+Lo que `done` **no** comprueba son las pruebas del proyecto (ver
+[abajo](#qué-garantiza-y-qué-no)): córrelas también.
 
 **Un proyecto que se queda fuera de LaraPack** (sin contrato, decidido `keep`)
 no tiene manifiesto, y `verify --strict` siempre dirá `empty-manifest`. Ése es
-el único aviso que puede quedar, y es lo declarado fuera de alcance. El
+el único aviso que puede quedar, y es lo declarado fuera de alcance: `done` no
+lo cuenta como falta en un ámbito cuyo paso `no-contract` está hecho, ni el
+contrato que no tiene; los lista en `declared`, con el paso que lo decidió. El
 cumplimiento de lo que sí vale sin contrato —la forma de los controladores y
 las rutas— se comprueba acotando:
 
@@ -63,9 +85,10 @@ código, lo haya generado LaraPack o no (`controller-shape`, `request-handle`,
 paquete («Verificar la arquitectura»); qué paso del realineamiento resuelve
 cada una, en [diagnose.md](diagnose.md#los-hallazgos-de-verify).
 
-`--strict` es la puerta: lo que usa `larapack:ci` en la rama protegida y lo
+`--strict` es la puerta: lo que usa `larapack:ci` en la rama protegida, lo
 que exige el criterio de terminado de los pasos (`check` de un paso `verify`
-cuenta errores **y** avisos).
+cuenta errores **y** avisos) y una de las cosas que mira
+[`larapack:realign done`](#cuándo-se-termina).
 
 ## Lo que no cuenta como fallo
 
@@ -95,8 +118,8 @@ larapack:verify --package=billing          # un paquete local (o `app`, el núcl
 larapack:verify --no-packages              # sólo el manifiesto de la raíz
 ```
 
-Acotado no es terminado: el cumplimiento se dice con `verify --strict` sobre
-todo el proyecto.
+Acotado no es terminado: el cumplimiento se dice con
+[`larapack:realign done`](#cuándo-se-termina) sobre todo el proyecto.
 
 ## Que no se vuelva a desviar: `ci` y `guard`
 
@@ -118,14 +141,15 @@ larapack:skill --hooks --agents=all
 larapack:guard --doctor                    # qué capas tiene el proyecto y cuáles faltan
 ```
 
-**Actívalas al final**, con `verify` limpio: con errores previos, cada edición
+**Actívalas al final**, con `done` en 0: con errores previos, cada edición
 de esos archivos retendría a quien trabaja por algo que no causó. Durante el
 realineamiento, `larapack:realign check` es el criterio; al terminar, la rama
 protegida.
 
 ## Qué garantiza y qué no
 
-**Garantiza**, al salir con 0 `verify --strict`:
+**Garantiza**, al salir con 0 `larapack:realign done` (y con él
+`verify --strict` y `validate --strict`):
 
 - Lo generado está donde el manifiesto dice, sin borrar, y lo editado está
   registrado.
@@ -138,6 +162,9 @@ protegida.
   blanca.
 - Las listas de cada modelo y sus relaciones dicen lo que el contrato.
 - Lo que se dejó fuera está aprobado por el dueño, con su razón y su huella.
+- Nada de lo que generaría el contrato está editado fuera de sus huecos, ni
+  queda un paso, una decisión o una excepción por hacer.
+- El contrato de cada ámbito valida sin avisos.
 
 **No garantiza**:
 

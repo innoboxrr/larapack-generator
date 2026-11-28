@@ -625,6 +625,46 @@ De dos pruebas de autonomía sobre proyectos reales.
   un error que dice cuáles hay
   ([exceptions.md](docs/realign/exceptions.md#el-ciclo)).
 
+### Pruebas de autonomía: las listas en su sitio, `validate` por paquete y un criterio de terminado
+
+Lo que encontraron las pruebas de autonomía —un agente realineando un
+proyecto real de principio a fin sin nadie al lado—.
+
+- **`model-lists` (y `import --force`, `larapack:fix`) pone lo que falta en
+  la posición del contrato**, no al final de la lista. El diagnóstico compara
+  el modelo con el regenerado, y una lista con lo mismo en otro orden era
+  `edited_outside`: en el proyecto de la prueba, 9 de 11 pasos guiados
+  `edited-outside:Model` diferían sólo en eso. Se eligió insertar en su sitio
+  y no tratar el orden como formato porque el orden de `$export_cols` es el
+  de las columnas de la exportación: no da igual. `ModelRegions` inserta
+  detrás de la entrada del contrato que la precede y ya está (o delante de la
+  primera que está), con la forma que tiene la lista —en una línea, una por
+  línea, con sus comentarios—; lo que sobra se queda donde estaba.
+- **`larapack:validate` recorre los paquetes locales, como `verify`.** Sin
+  ruta, valida el `laraimport.json` de la raíz y el de cada paquete local
+  (los mismos ámbitos que `verify` desde 9.3.1, `ProjectValidation`), con
+  `--package` repetible (directorio, ruta, nombre de Composer o `app`),
+  `--no-packages` y el resumen por paquete (`summary`; cada hallazgo, con su
+  `package` y su `file`). Antes, un contrato roto en un paquete salía en
+  verde desde la raíz. Con una ruta valida ese archivo, como siempre.
+- **Un solo criterio de terminado: `larapack:realign done`.** La guía decía
+  a la vez «el plan sin pendientes» y «`verify --strict`», y ninguno basta:
+  `verify` no ve lo editado fuera de los huecos —en la prueba, un agente dio
+  por terminado con `verify --strict` en verde y pasos `edited-outside`
+  pendientes— y el plan no ve lo que se desvió después del último
+  diagnóstico. `done` diagnostica y planifica otra vez (sólo escribe el
+  estado, como `diagnose` y `plan`), recorre todos los ámbitos y sale con 1
+  mientras quede un paso sin hacer, una decisión sin tomar, una excepción sin
+  aprobar o un error o aviso de `validate --strict` o `verify --strict`; el
+  JSON lo dice en `missing`, elemento por elemento, con la orden de cada uno.
+  Lo declarado fuera (un ámbito con `no-contract` decidido: su
+  `empty-manifest` y el contrato que no tiene) va en `declared` y no falta.
+  `Completion`; la guía, el skill y el bloque de `AGENTS.md` lo dan como el
+  criterio final ([docs/realign/verify.md](docs/realign/verify.md#cuándo-se-termina)).
+  La prueba de punta a punta de los tres perfiles termina con `done` en 0
+  (antes ninguno corría `validate --strict`, y el contrato de las pruebas
+  tenía cuatro avisos).
+
 ### Al actualizar a 9.4.0
 
 - **Nada cambia si no se usa `larapack:realign`.** El esquema del contrato

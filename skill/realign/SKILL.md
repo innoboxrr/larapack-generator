@@ -32,9 +32,12 @@ larapack:realign status --format=json
 
 ## La receta
 
-1. `larapack:realign next --format=json`. Si `done` es true, `diagnose` y
-   `plan` otra vez para confirmar; si sigue sin nada, comprueba el
-   cumplimiento con `larapack:verify --strict --format=json` y se terminó.
+1. `larapack:realign next --format=json`. Si `done` es true, corre
+   `larapack:realign done --format=json`: es **el** criterio de terminado.
+   Sale con 0 sólo si no queda nada en ningún ámbito; si no, `missing` dice
+   qué falta (pasos, decisiones, excepciones, `validate`, `verify`) y lo
+   resuelves. `verify --strict` en verde **no** basta: no ve lo editado
+   fuera de los huecos.
 2. Según `step.category`:
    - **`deterministic`**: ejecuta `how.command`, primero con `--dry-run` y
      después sin él. Lo que salte (`skipped`, con su razón) lo haces a mano

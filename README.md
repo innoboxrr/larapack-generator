@@ -495,15 +495,23 @@ del `composer.json` para que una herramienta externa lo encuentre sin conocer la
 estructura del paquete.
 
 ```
-php vendor/bin/builder larapack:validate                 # valida ./laraimport.json
-php vendor/bin/builder larapack:validate ruta.json       # valida el que le digas
+php vendor/bin/builder larapack:validate                 # valida ./laraimport.json y el de cada paquete local
+php vendor/bin/builder larapack:validate ruta.json       # valida el que le digas, y sólo ése
+php vendor/bin/builder larapack:validate --package=billing   # sólo un paquete local (o `app`, el núcleo); repetible
+php vendor/bin/builder larapack:validate --no-packages   # sólo el de la raíz
 php vendor/bin/builder larapack:validate --format=json   # para la CI o un agente
 php vendor/bin/builder larapack:validate --vue --react   # también lo que necesitan las vistas
 php vendor/bin/builder larapack:schema                   # imprime el esquema
 ```
 
 `larapack:validate` sale con código distinto de cero si el archivo no es válido,
-así que sirve de puerta antes de generar. Comprueba dos cosas:
+así que sirve de puerta antes de generar. Sin ruta, en la raíz de un proyecto
+con paquetes locales valida también el `laraimport.json` de cada uno, como
+`larapack:verify` lee sus manifiestos: cada hallazgo dice su `package` y su
+`file`, y el resumen (`summary` en JSON) va por paquete. Un paquete sin
+contrato no es un fallo —sale como `contract: false`—, ni una raíz sin
+contrato que sólo agrupa paquetes; un paquete nombrado en `--package` sin
+contrato, sí. Comprueba dos cosas:
 
 **Forma**, contra el esquema: tipos de columna y componentes de formulario son
 enums cerrados; `form: true` obliga a declarar `form_component`; `foreignId`
