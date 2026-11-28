@@ -476,6 +476,11 @@ final class Planner
             $byScope[(string) $step['scope']['path']][(string) $step['type']][] = (string) $step['id'];
         }
 
+        // Los pasos que condicionan a otros (unas pocas decisiones), una vez:
+        // buscarlos entre todos por cada paso era pasos × pasos, y un plan
+        // tiene un paso por cada controlador escrito a mano.
+        $conditioning = array_filter($steps, fn (array $step): bool => Navigation::conditions((string) $step['type']));
+
         foreach ($steps as $index => $step) {
             if ($step['category'] === Category::DETERMINISTIC) {
                 $steps[$index]['depends_on'] = [];
@@ -492,8 +497,8 @@ final class Planner
 
             // Lo guiado espera a las decisiones que tocan sus archivos: si el
             // dueño los declara en el contrato, el trabajo no se hace dos veces.
-            foreach ($steps as $other) {
-                if (Navigation::conditions((string) $other['type']) && Navigation::dependents($other, [$step]) !== []) {
+            foreach ($conditioning as $other) {
+                if (Navigation::dependents($other, [$step]) !== []) {
                     $depends[] = (string) $other['id'];
                 }
             }
