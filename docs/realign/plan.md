@@ -225,10 +225,17 @@ pide actualizar el paquete.
   usage, writes, options, keys, guide, available}`.
 - Las operaciones (`adopt`, `apply`, `infer`, `except`): `{format_version, ok,
   action, dry_run, steps, fixed, skipped, unchanged, notes}`. Cada elemento de
-  `fixed`/`skipped`/`unchanged` es `{file, reason, step}` más lo suyo: `diff`
-  en una simulación de `apply`, `to` y `references` en `controller-concern`,
-  `model` y `stub` en `adopt`, `stamped` en la línea de la versión anotada en
-  lo heredado (`file: null`).
+  `fixed`/`skipped`/`unchanged` es `{file, reason, step, steps}` más lo suyo:
+  `diff` en una simulación de `apply`, `to` y `references` en
+  `controller-concern`, `model` y `stub` en `adopt`, `target` en `except`,
+  `scope` y `stamped` en la línea de la versión anotada en lo heredado
+  (`file: null`). **`step` está siempre**: el id del paso, o `null` si el
+  elemento no es de ninguno. Un elemento que es de varios pasos —el
+  `unchanged` que resume cuántos archivos de una comprobación de `fix` ya
+  estaban bien, la versión anotada en un ámbito que tocaron varios pasos— trae
+  en `step` el primero, en el orden del plan, y en `steps` todos; en uno de un
+  solo paso, `steps` es `[step]`. `file` es `null` en lo que no es de un
+  archivo.
 - Un error, en cualquiera: `{ok: false, error, format_version, action}`.
 
 **El manifiesto v2.** Desde 9.4.0 cada archivo del manifiesto dice qué versión

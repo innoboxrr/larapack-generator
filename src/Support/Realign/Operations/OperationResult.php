@@ -12,9 +12,13 @@ namespace Innoboxrr\LarapackGenerator\Support\Realign\Operations;
  *    hace que el comando termine con un código distinto de cero.
  *  - `unchanged`: lo que ya estaba bien.
  *
- * Cada elemento es `{file, reason}`, con la ruta relativa a la raíz del
- * proyecto, más lo que la operación quiera añadir (`diff` en una
- * simulación, `step`).
+ * Cada elemento es `{file, reason, step, steps}`, con la ruta relativa a la
+ * raíz del proyecto, más lo que la operación quiera añadir (`diff` en una
+ * simulación). `step` está siempre: el id del paso al que pertenece, o el
+ * primero (en el orden del plan) si pertenece a varios, o null si no es de
+ * ninguno; `steps` lista todos, en ese orden (`[step]` si es uno). Antes
+ * unos elementos traían `step` y otros sólo `steps`, y el de la versión
+ * anotada ninguno: un consumidor tenía que adivinar cuál leer.
  *
  * @phpstan-type Item array{file: string|null, reason: string}&array<string, mixed>
  */
@@ -105,6 +109,32 @@ final class OperationResult
      */
     public function toArray(): array
     {
-        return ['fixed' => $this->fixed, 'skipped' => $this->skipped, 'unchanged' => $this->unchanged, 'notes' => $this->notes];
+        return [
+            'fixed' => array_map(self::normalise(...), $this->fixed),
+            'skipped' => array_map(self::normalise(...), $this->skipped),
+            'unchanged' => array_map(self::normalise(...), $this->unchanged),
+            'notes' => $this->notes,
+        ];
+    }
+
+    /**
+     * `step` y `steps` en todo elemento, con la misma forma.
+     *
+     * @param  array<string, mixed>  $item
+     * @return array<string, mixed>
+     */
+    private static function normalise(array $item): array
+    {
+        $steps = array_values(array_filter((array) ($item['steps'] ?? []), fn (mixed $id): bool => is_string($id) && $id !== ''));
+        $step = is_string($item['step'] ?? null) && $item['step'] !== '' ? $item['step'] : null;
+
+        if ($step !== null && ! in_array($step, $steps, true)) {
+            array_unshift($steps, $step);
+        }
+
+        $steps = array_values(array_unique($steps));
+        unset($item['step'], $item['steps']);
+
+        return ['file' => $item['file'] ?? null, 'reason' => $item['reason'] ?? '', 'step' => $step ?? ($steps[0] ?? null), 'steps' => $steps] + $item;
     }
 }

@@ -66,7 +66,7 @@ final class RealignOperationsTest extends TestCase
 
         $this->assertTrue($document['dry_run']);
         $this->assertSame(['adopt@.'], $document['steps']);
-        $this->assertSame([['file' => self::CONTROLLER, 'reason' => 'simulado']], $document['fixed']);
+        $this->assertSame([['file' => self::CONTROLLER, 'reason' => 'simulado', 'step' => null, 'steps' => []]], $document['fixed']);
         $this->assertTrue($this->calls[0]->dryRun());
         $this->assertSame([], $this->step('adopt@.')['history']);
     }
@@ -81,7 +81,7 @@ final class RealignOperationsTest extends TestCase
         $this->assertSame([], $this->calls);
 
         $allowed = $this->realign('adopt', ['targets' => ['adopt@.'], '--allow-dirty' => true]);
-        $this->assertSame([['file' => self::CONTROLLER, 'reason' => 'hecho']], $allowed['fixed']);
+        $this->assertSame([['file' => self::CONTROLLER, 'reason' => 'hecho', 'step' => null, 'steps' => []]], $allowed['fixed']);
     }
 
     public function test_el_estado_del_realineamiento_no_ensucia_el_arbol(): void

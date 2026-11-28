@@ -63,6 +63,9 @@ final class AdoptOperation implements RealignOperation
 
         Manifest::batch(function () use ($context, $result): void {
             $scopes = [];
+            // Ruta del ámbito => los pasos que lo tocaron: la versión anotada
+            // es de todos ellos.
+            $ids = [];
 
             foreach ($context->steps as $step) {
                 $path = (string) ($step['scope']['path'] ?? '.');
@@ -90,6 +93,7 @@ final class AdoptOperation implements RealignOperation
                 }
 
                 $scopes[$path] = $reference;
+                $ids[$path][] = (string) $step['id'];
 
                 foreach ($this->filesOf($step) as $file) {
                     $this->one((string) $step['type'], $file, $reference, $context, $result, (string) $step['id']);
@@ -97,7 +101,7 @@ final class AdoptOperation implements RealignOperation
             }
 
             foreach ($scopes as $path => $reference) {
-                $this->stamp($path, $reference, $context, $result);
+                $this->stamp($path, $reference, $context, $result, $ids[$path] ?? []);
             }
         });
 
@@ -254,8 +258,10 @@ final class AdoptOperation implements RealignOperation
      * sin Pint (idéntico o igual salvo espacios por tokens): lo que necesita
      * la Pint del proyecto para saberse igual se queda sin versión, y el
      * diagnóstico lo sigue tratando como de una versión anterior.
+     *
+     * @param  list<string>  $steps  los pasos que tocaron el ámbito
      */
-    private function stamp(string $path, ScopeReference $reference, OperationContext $context, OperationResult $result): void
+    private function stamp(string $path, ScopeReference $reference, OperationContext $context, OperationResult $result, array $steps): void
     {
         if (! $reference->hasReference()) {
             return;
@@ -288,7 +294,7 @@ final class AdoptOperation implements RealignOperation
         if ($stamped > 0) {
             $result->fixed(null, sprintf('%s: %d %s heredados sin editar e iguales a lo que generaría hoy el contrato %s la versión %s.',
                 $path === '.' ? 'app (núcleo)' : $path, $stamped, $stamped === 1 ? 'archivo' : 'archivos',
-                $context->dryRun() ? 'se anotarían con' : 'quedan anotados con', GeneratorVersion::current()), ['scope' => $path, 'stamped' => $stamped]);
+                $context->simulated() ? 'se anotarían con' : 'quedan anotados con', GeneratorVersion::current()), ['steps' => $steps, 'scope' => $path, 'stamped' => $stamped]);
         }
     }
 }
