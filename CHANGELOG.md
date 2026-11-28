@@ -416,6 +416,22 @@ tercer diagnóstico.
 archivos, sus hallazgos y sus órdenes). La caché ocupó 176 MB en
 school-management y 24 MB en expediente.
 
+### El contrato ampliado: tres huecos que encontró la revisión
+
+- **Un `route_name` que coincide con el nombre derivado de otro endpoint es
+  un error en cualquier orden.** Declarado primero (`route_name:
+  import.roster`) y seguido de un endpoint `importRoster`, pasaba: dos rutas
+  con el mismo nombre, `route()` resolvía a la última y el nombre que conserva
+  el front se desviaba sin aviso. Al revés sí se rechazaba. Ahora se juntan
+  primero los nombres finales, declarados y derivados, de los endpoints de un
+  modelo y de `controllers[]`.
+- **`pin-foreign-keys` lee la tabla que declara `table`.** Con `table:
+  legacy_people` buscaba `people`: no fijaba la cascada real o fijaba las
+  acciones de otra tabla. La tabla declarada va tal cual, sin prefijo.
+- **Declarar `use_current` en una columna que ya existe la altera**
+  (`->useCurrent()->change()`, y `down()` lo quita). Antes no escribía nada ni
+  avisaba; la longitud y la precisión sí se comparaban.
+
 ### Al actualizar a 9.4.0
 
 - **Nada cambia si no se usa `larapack:realign`.** El esquema del contrato

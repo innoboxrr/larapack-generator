@@ -7,10 +7,10 @@ namespace Innoboxrr\LarapackGenerator\Tools\Migration\Schema;
  * argumentos y modificadores, ya leídos.
  *
  * Lo que el laraimport sabe expresar —el tipo, si admite nulos, el valor por
- * omisión y la llave— se compara por lo que significa. Lo que no sabe
- * expresar —una longitud, un `comment()`, un `useCurrent()`— se guarda para
- * no perderlo al reescribir la columna con `->change()`, que la sustituye
- * entera.
+ * omisión, la llave y, si los declara, la medida y `useCurrent()`— se compara
+ * por lo que significa. Lo que no declara —una longitud que calla, un
+ * `comment()`— se guarda para no perderlo al reescribir la columna con
+ * `->change()`, que la sustituye entera.
  */
 final class ColumnDefinition
 {
@@ -60,6 +60,13 @@ final class ColumnDefinition
             return false;
         }
 
+        // `use_current` es lo único de los modificadores que el laraimport
+        // dice: declararlo en una columna que no lo tiene la cambia. Que la
+        // columna lo tenga y el laraimport calle no cuenta, como la longitud.
+        if ($desired->useCurrent() && ! $this->useCurrent()) {
+            return false;
+        }
+
         $mine = $this->default?->stored();
         $theirs = $desired->default?->stored();
 
@@ -86,8 +93,22 @@ final class ColumnDefinition
             $desired->default,
             $sameType && $this->unsigned,
             null,
-            $this->extras,
+            $desired->useCurrent() && ! $this->useCurrent() ? [...$this->extras, ['useCurrent', []]] : $this->extras,
         );
+    }
+
+    /**
+     * Si lleva `->useCurrent()`: el valor por omisión es la hora actual.
+     */
+    public function useCurrent(): bool
+    {
+        foreach ($this->extras as [$modifier]) {
+            if ($modifier === 'useCurrent') {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

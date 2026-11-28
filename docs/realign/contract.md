@@ -41,7 +41,10 @@ las instantáneas de lo generado no cambiaron. El esquema completo está en
 Van a la migración de creación. En una tabla que ya existe, el siguiente
 `larapack:import` compara lo declarado con lo que dicen sus migraciones: si
 declaras una medida distinta de la que tiene, escribe una alteración con
-`->change()`. Sin medida declarada, la que tenga la columna no cuenta. **Al
+`->change()`. Sin medida declarada, la que tenga la columna no cuenta. Igual
+con `use_current`: declararlo en una columna que no lo tiene escribe
+`->useCurrent()->change()`; que la columna lo tenga y el contrato calle no
+cuenta (no se quita). **Al
 adoptar, declara la medida que ya tiene la base** (es lo que hace `infer`), o
 el import propondrá cambiarla ([risks.md](risks.md#migraciones-y-datos)).
 
@@ -90,8 +93,9 @@ tabla son un error.
 
 - **`route_name`** en un endpoint de un modelo o de `controllers[]`: el nombre
   de la ruta, relativo al grupo de su archivo (`api.<ns>.<archivo>.`). Sin él,
-  el nombre es el que genera LaraPack. Un `route_name` repetido, o igual al de
-  una acción CRUD que exista, es un error.
+  el nombre es el que genera LaraPack. Un `route_name` repetido, igual al que
+  deriva otro endpoint del mismo archivo (vaya antes o después) o al de una
+  acción CRUD que exista, es un error.
 - **La `uri` admite** segmentos con `_`, mayúsculas o `.` y parámetros en
   camelCase (`{campaignId}`), para conservar la URI que ya usa el front.
 
@@ -110,7 +114,8 @@ Existían antes de 9.4.0. Desde la 8.0, lo que no se declara **restringe**
 (`restrict`). Un proyecto generado con 7.x tiene migraciones en cascada y un
 contrato que calla: `pin-foreign-keys` ([apply.md](apply.md#pin-foreign-keys))
 escribe en el contrato lo que hacen hoy las migraciones, para que el contrato
-diga lo que hace producción. Cambiar esa acción de verdad es una decisión
+diga lo que hace producción (de la tabla del modelo: la de `table`, tal cual,
+o la deducida con el prefijo). Cambiar esa acción de verdad es una decisión
 aparte, con su migración.
 
 ## Lo que se relajó al validar
