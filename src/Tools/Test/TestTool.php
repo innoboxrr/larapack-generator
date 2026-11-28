@@ -3,6 +3,7 @@
 namespace Innoboxrr\LarapackGenerator\Tools\Test;
 
 use Innoboxrr\LarapackGenerator\Exceptions\MakerException;
+use Innoboxrr\LarapackGenerator\Support\Files;
 use Innoboxrr\LarapackGenerator\Support\Generation;
 use Innoboxrr\LarapackGenerator\Tools\ModelArtifact;
 use Innoboxrr\LarapackGenerator\Tools\Tool;
@@ -109,7 +110,7 @@ class TestTool extends Tool implements ModelArtifact
 
         }
 
-        if (! copy($template, $destination)) {
+        if (! Files::copy($template, $destination)) {
 
             throw MakerException::copyFailed($template, $destination);
         }
@@ -181,7 +182,7 @@ class TestTool extends Tool implements ModelArtifact
             if ($this->copyOnce($templateFile, $phpunitFile)) {
 
                 // El directorio de cobertura depende de si es paquete (src) o proyecto (app).
-                file_put_contents($phpunitFile, str_replace(
+                Files::write($phpunitFile, str_replace(
                     '__SOURCE_DIR__',
                     app_dir_name(),
                     self::contents($phpunitFile)
@@ -226,7 +227,7 @@ class TestTool extends Tool implements ModelArtifact
 
             }
 
-            if (copy($templateFile, $testFile)) {
+            if (Files::copy($templateFile, $testFile)) {
 
                 $this->applyBlocks($testFile);
 

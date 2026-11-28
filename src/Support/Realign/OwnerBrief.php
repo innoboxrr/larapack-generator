@@ -154,6 +154,8 @@ final class OwnerBrief
         $json = json_encode($brief, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR)."\n";
 
         foreach ([self::JSON => $json, self::MARKDOWN => self::markdown($brief)] as $name => $content) {
+            Files::guard($state->directory().'/'.$name, $this->root);
+
             if (file_put_contents($state->directory().'/'.$name, $content) === false) {
                 throw new RuntimeException('No se pudo escribir '.$state->directory().'/'.$name.'.');
             }

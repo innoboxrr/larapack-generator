@@ -2,6 +2,7 @@
 
 namespace Innoboxrr\LarapackGenerator\Support\Realign\Operations;
 
+use Innoboxrr\LarapackGenerator\Support\Files;
 use Innoboxrr\LarapackGenerator\Support\Import\ImportDocument;
 use Innoboxrr\LarapackGenerator\Support\Import\SemanticValidator;
 use Innoboxrr\LarapackGenerator\Support\ProjectSources;
@@ -156,8 +157,8 @@ final class InferOperation implements RealignOperation
                 mkdir($state, 0755, true);
             }
 
-            file_put_contents($target, json_encode($draft, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)."\n");
-            file_put_contents($state.'/'.$slug.'.json', json_encode($report, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)."\n");
+            Files::write($target, json_encode($draft, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)."\n");
+            Files::write($state.'/'.$slug.'.json', json_encode($report, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)."\n");
         }
 
         $verb = $context->dryRun() ? 'escribiría' : 'escrito';

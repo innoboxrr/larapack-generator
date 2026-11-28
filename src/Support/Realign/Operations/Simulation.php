@@ -43,6 +43,24 @@ final class Simulation
     private const LINKED = ['vendor', 'node_modules'];
 
     /**
+     * La caché de lo regenerado de cada copia en curso (ruta del enlace en la
+     * copia => true): el único enlace hacia fuera de la raíz a través del que
+     * la regeneración escribe, porque lo puso esta clase.
+     *
+     * @var array<string, true>
+     */
+    private static array $caches = [];
+
+    /**
+     * Si esa caché (`<raíz>/.larapack/realign/cache`) es el enlace que una
+     * simulación en curso puso hacia la del proyecto.
+     */
+    public static function linkedCache(string $cache): bool
+    {
+        return isset(self::$caches[str_replace('\\', '/', $cache)]);
+    }
+
+    /**
      * @param  list<array<string, mixed>>  $steps
      * @param  array<string, string>  $options
      * @param  list<string>  $only
@@ -58,6 +76,12 @@ final class Simulation
             // Con /tmp enlazado (macOS), la raíz que se fija es la real.
             $real = realpath($copy) ?: $copy;
 
+            // Sólo si la del proyecto es un directorio de verdad: un enlace
+            // que ya traía el proyecto se copia como enlace, y no es de fiar.
+            if (is_dir($root.'/'.RealignState::DIRECTORY.'/cache') && ! is_link($root.'/'.RealignState::DIRECTORY.'/cache') && is_link($real.'/'.RealignState::DIRECTORY.'/cache')) {
+                self::$caches[str_replace('\\', '/', $real).'/'.RealignState::DIRECTORY.'/cache'] = true;
+            }
+
             ScopeReference::forget();
             $result = ProjectRoot::using($real, fn (): array => $operation->run(
                 new OperationContext($real, new RealignState($real), $steps, false, $options, $only, true)
@@ -70,6 +94,7 @@ final class Simulation
         } finally {
             // Lo que se cacheó de la copia no vale para el proyecto.
             ScopeReference::forget();
+            unset(self::$caches[str_replace('\\', '/', realpath($copy) ?: $copy).'/'.RealignState::DIRECTORY.'/cache']);
             self::remove($copy);
         }
     }

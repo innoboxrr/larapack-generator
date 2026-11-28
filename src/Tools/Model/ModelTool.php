@@ -2,6 +2,7 @@
 
 namespace Innoboxrr\LarapackGenerator\Tools\Model;
 
+use Innoboxrr\LarapackGenerator\Support\Files;
 use Innoboxrr\LarapackGenerator\Support\Generation;
 use Innoboxrr\LarapackGenerator\Support\ModelLists;
 use Innoboxrr\LarapackGenerator\Support\ModelRegions;
@@ -68,7 +69,7 @@ class ModelTool extends Tool implements ModelArtifact
         }
 
         if ($result['added'] !== [] && ! Generation::isDryRun()) {
-            file_put_contents($destination, $result['code']);
+            Files::write($destination, $result['code']);
         }
 
         Generation::regions($destination, $result['added'], $result['skipped']);
@@ -126,7 +127,7 @@ class ModelTool extends Tool implements ModelArtifact
         $updatedFileContent = str_replace('//LOADABLECOUNTS//', $loadableCounts, $updatedFileContent);
 
         // Guardar el archivo de nuevo con las modificaciones
-        file_put_contents($modelFile, $updatedFileContent);
+        Files::write($modelFile, $updatedFileContent);
     }
 
     /**

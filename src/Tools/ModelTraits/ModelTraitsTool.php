@@ -3,6 +3,7 @@
 namespace Innoboxrr\LarapackGenerator\Tools\ModelTraits;
 
 use Innoboxrr\LarapackGenerator\Exceptions\MakerException;
+use Innoboxrr\LarapackGenerator\Support\Files;
 use Innoboxrr\LarapackGenerator\Support\Generation;
 use Innoboxrr\LarapackGenerator\Support\Import\Relations;
 use Innoboxrr\LarapackGenerator\Tools\ModelArtifact;
@@ -112,7 +113,7 @@ class ModelTraitsTool extends Tool implements ModelArtifact
             if ($this->simulated($templateFile, $assignmentTraitFile)) {
                 return $this;
             }
-            if (copy($templateFile, $assignmentTraitFile)) {
+            if (Files::copy($templateFile, $assignmentTraitFile)) {
                 $this->replaceData($assignmentTraitFile);
             } else {
                 throw MakerException::copyFailed($templateFile, $assignmentTraitFile);
@@ -130,7 +131,7 @@ class ModelTraitsTool extends Tool implements ModelArtifact
             if ($this->simulated($templateFile, $mutatorsTraitFile)) {
                 return $this;
             }
-            if (copy($templateFile, $mutatorsTraitFile)) {
+            if (Files::copy($templateFile, $mutatorsTraitFile)) {
                 $this->replaceData($mutatorsTraitFile);
             } else {
                 throw MakerException::copyFailed($templateFile, $mutatorsTraitFile);
@@ -148,7 +149,7 @@ class ModelTraitsTool extends Tool implements ModelArtifact
             if ($this->simulated($templateFile, $operationsTraitFile)) {
                 return $this;
             }
-            if (copy($templateFile, $operationsTraitFile)) {
+            if (Files::copy($templateFile, $operationsTraitFile)) {
                 $this->applyBlocks($operationsTraitFile);
                 $this->replaceData($operationsTraitFile);
                 $this->applyEndpoints($operationsTraitFile);
@@ -214,7 +215,7 @@ class ModelTraitsTool extends Tool implements ModelArtifact
             if ($this->simulated($templateFile, $relationsTraitFile)) {
                 return $this;
             }
-            if (copy($templateFile, $relationsTraitFile)) {
+            if (Files::copy($templateFile, $relationsTraitFile)) {
                 // Los traits se copian sin pasar por generate(), así que los
                 // bloques de metas se resuelven aquí.
                 $this->applyBlocks($relationsTraitFile);
@@ -290,7 +291,7 @@ class ModelTraitsTool extends Tool implements ModelArtifact
         $fileContent = str_replace('//EDIT//', rtrim($relationsCode, "\n"), $fileContent);
 
         // Guardar el archivo modificado
-        file_put_contents($traitFile, $fileContent);
+        Files::write($traitFile, $fileContent);
     }
 
     private function createStorageTrait(): static
@@ -301,7 +302,7 @@ class ModelTraitsTool extends Tool implements ModelArtifact
             if ($this->simulated($templateFile, $storageTraitFile)) {
                 return $this;
             }
-            if (copy($templateFile, $storageTraitFile)) {
+            if (Files::copy($templateFile, $storageTraitFile)) {
                 $this->applyBlocks($storageTraitFile);
                 $this->replaceData($storageTraitFile);
             } else {

@@ -3,6 +3,7 @@
 namespace Innoboxrr\LarapackGenerator\Tools\Migration;
 
 use Innoboxrr\LarapackGenerator\Exceptions\MakerException;
+use Innoboxrr\LarapackGenerator\Support\Files;
 use Innoboxrr\LarapackGenerator\Support\Generation;
 use Innoboxrr\LarapackGenerator\Support\MigrationTimestamp;
 use Innoboxrr\LarapackGenerator\Support\TablePrefix;
@@ -739,13 +740,13 @@ class MigrationTool extends Tool implements ModelArtifact
      */
     private function writeAlter(string $stub, string $destination, array $up, array $down): void
     {
-        if (! copy($stub, $destination)) {
+        if (! Files::copy($stub, $destination)) {
             throw MakerException::copyFailed($stub, $destination);
         }
 
         $this->replaceData($destination);
 
-        file_put_contents($destination, strtr(self::contents($destination), [
+        Files::write($destination, strtr(self::contents($destination), [
             '//UP//' => implode("\n            ", $up),
             '//DOWN//' => implode("\n            ", $down),
         ]));
@@ -796,7 +797,7 @@ class MigrationTool extends Tool implements ModelArtifact
         // Solo proceder en caso de los archivos no existan
         if (! file_exists($migrationFile)) {
             $templateFile = $this->migrationTemplatePath.'/DropTemplate.txt';
-            if (copy($templateFile, $migrationFile)) {
+            if (Files::copy($templateFile, $migrationFile)) {
                 // Remplace dummy data
                 $this->replaceData($migrationFile);
             } else {
@@ -821,7 +822,7 @@ class MigrationTool extends Tool implements ModelArtifact
             $columnsSchema .= "\n            ".self::indexStatement($index);
         }
         $updatedFileContent = str_replace('//EDIT//', $columnsSchema, $fileContent);
-        file_put_contents($migrationFile, $updatedFileContent);
+        Files::write($migrationFile, $updatedFileContent);
     }
 
     /**
