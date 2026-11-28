@@ -431,6 +431,13 @@ proyecto real de principio a fin sin nadie al lado—.
   detrás de la entrada del contrato que la precede y ya está (o delante de la
   primera que está), con la forma que tiene la lista —en una línea, una por
   línea, con sus comentarios—; lo que sobra se queda donde estaba.
+- **`larapack:validate` recorre los paquetes locales, como `verify`.** Sin
+  ruta, valida el `laraimport.json` de la raíz y el de cada paquete local
+  (los mismos ámbitos que `verify` desde 9.3.1, `ProjectValidation`), con
+  `--package` repetible (directorio, ruta, nombre de Composer o `app`),
+  `--no-packages` y el resumen por paquete (`summary`; cada hallazgo, con su
+  `package` y su `file`). Antes, un contrato roto en un paquete salía en
+  verde desde la raíz. Con una ruta valida ese archivo, como siempre.
 
 ### Al actualizar a 9.4.0
 

@@ -81,6 +81,30 @@ final class ProjectVerification
     }
 
     /**
+     * Los ámbitos que se miden: la raíz del proyecto y, salvo
+     * `withPackages: false`, cada paquete local que está dentro de ella,
+     * acotados a lo nombrado en --package. Es lo que recorre
+     * `larapack:validate` para validar el contrato de cada uno, con los
+     * mismos nombres que `verify`.
+     *
+     * @return list<array{package: string|null, path: string, root: string}>
+     */
+    public function scopes(): array
+    {
+        $scopes = [];
+
+        foreach ([$this->sources->root(), ...($this->withPackages ? $this->packageRoots() : [])] as $root) {
+            if (! $this->selected($root) || ($root !== $this->sources->root() && ! $this->inside($root))) {
+                continue;
+            }
+
+            $scopes[] = ['package' => $this->packageOf($root), 'path' => $this->pathOf($root), 'root' => $root];
+        }
+
+        return $scopes;
+    }
+
+    /**
      * @param  array<int, string>  $only  sólo estas comprobaciones; vacío, todas
      * @return array{findings: list<ScopedFinding>, summary: list<Scope>, exceptions: list<array{target: string, reason: string, fingerprint: string|null, status: string}>}
      */
