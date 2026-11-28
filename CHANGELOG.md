@@ -416,6 +416,59 @@ tercer diagnóstico.
 archivos, sus hallazgos y sus órdenes). La caché ocupó 176 MB en
 school-management y 24 MB en expediente.
 
+### `larapack:hand-rolled approve` lo confirma una persona, también sin la guardia
+
+Hasta ahora `approve` y `revoke` no preguntaban nada y confiaban en las capas
+de fuera —la guardia de los agentes, el hook de git, CODEOWNERS—. En un
+proyecto sin la guardia ni el hook instalados, `larapack:hand-rolled approve
+--all </dev/null` desde un proceso sin terminal aprobaba todo: un agente
+aprobaba sus propias excepciones. Ahora el propio comando exige a una
+persona (OwnerConfirmation):
+
+- **En su terminal.** Se le enseña lo que se va a aprobar o retirar —cada
+  objetivo, su razón, lo que cubre (archivo y línea, o la entidad) y el
+  mensaje del hallazgo— y escribe `apruebo <n>` (`retiro <n>`), con el número
+  de excepciones, para que no se confirme a ciegas un `--all`. La pregunta va
+  a `/dev/tty`, no a la entrada estándar: una tubería (`yes | …`,
+  `echo apruebo 1 | …`) no la contesta. Sin terminal falla sin tocar nada, y
+  dice por qué.
+- **Sin terminal, nombrándose** (una CI de aprobación, una persona en un
+  entorno sin tty): la variable `LARAPACK_APPROVER` con su nombre **y**
+  `--approver` con el mismo. Su nombre queda en cada entrada que aprueba
+  (`approved_by` en `.larapack/hand-rolled.lock`), a la vista en el diff que
+  revisa CODEOWNERS. Hacen falta las dos: la variable sola —heredada de un
+  perfil de la shell por el agente que se lanza desde ella— no vale, y la
+  opción hay que escribirla en la orden. La guardia de los agentes bloquea
+  `--approver` y dar valor a `LARAPACK_APPROVER` (con `export`, `env` o
+  delante de una orden), y la prueba de humo de la guardia lo comprueba
+  también en Windows.
+- **Windows.** Se usa la consola si la entrada lo es (PowerShell, cmd,
+  Windows Terminal). Desde Git Bash (mintty) la entrada es una tubería y no
+  se puede saber si hay alguien delante —lo mismo que ya resolvía el hook de
+  git con `/dev/tty`—: el comando lo dice, y la persona lo corre desde
+  PowerShell, con `winpty` o nombrándose.
+- Lo que no cambia el candado (`approve` de lo ya aprobado igual, `--all`
+  sin nada que aprobar) no pregunta.
+
+**Las excepciones de una entidad ya no se aprueban a ciegas.** El objetivo de
+un hallazgo sin archivo (`realign:inconsistent-entity:model:Tag#…`) se
+aprobaba con la huella que traía la solicitud —que escribe quien pide,
+también un agente— sin comprobar que verify dijera hoy esa frase, y `list` la
+daba siempre por `approved`. Ahora la solicitud guarda el mensaje del
+hallazgo (`message` en `.larapack/realign/exceptions.json`), `approve` corre
+verify con su comprobación y sólo aprueba si hay un hallazgo **de hoy** con
+esa huella, que es el que se le enseña al dueño; una frase que verify no dice
+no se aprueba (tampoco con `--all`). Su estado es real, como el de las demás:
+`approved` mientras verify la diga, `code-changed` si la huella aprobada no es
+la de hoy y `stale` cuando verify ya no la dice (el `check` del paso lo dice
+igual).
+
+**Al actualizar:** quien aprobaba desde un script o una CI sin terminal pone
+`LARAPACK_APPROVER` y `--approver` con su nombre. Un candado con
+`approved_by` lo lee una versión anterior (lo ignora y lo quita si lo
+reescribe). Las solicitudes pedidas antes, sin `message`, se aprueban igual:
+el hallazgo que se enseña es el de hoy.
+
 ### Al actualizar a 9.4.0
 
 - **Nada cambia si no se usa `larapack:realign`.** El esquema del contrato
