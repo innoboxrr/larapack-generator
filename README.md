@@ -391,6 +391,15 @@ Lo que no cierra, dicho claro:
   `larapack:skill --hooks`), y `--doctor` lo detecta si falta. Si el proyecto ya
   usa otro `core.hooksPath` (husky) o tiene hooks propios en `.git/hooks`, no se
   cambia nada: se dice qué línea añadir para encadenar.
+- **La guardia no protege su propia instalación.** Un agente puede reescribir
+  `.githooks/pre-commit` (un `exit 0` basta), `.claude/settings.json` o
+  `.git/config`, o sacar los commits desde otro clon sin hooks; la guardia lee
+  órdenes de shell, y una ruta armada con una variable o un script propio no
+  se ve. `--doctor` detecta un hook que ya no llama a LaraPack, y con
+  `larapack:ci --owner` los hooks versionados (`/.githooks/`) son del dueño en
+  CODEOWNERS: el cambio se ve en el PR. Nada local lo impide.
+- **El `pre-push` sólo comprueba la rama que tienes en el árbol.** Empujar
+  otra rama sale con un aviso; lo que llega a la rama protegida lo frena la CI.
 - **Un hook de git se salta con `--no-verify`.** Los hooks de los agentes que
   los tienen lo impiden, y el `pre-push` frena lo que se comiteó así, pero un
   agente sin hooks o una persona pueden hacerlo. Por eso la CI.
@@ -1424,6 +1433,7 @@ Contra el manifiesto:
 | `secret-exposed` | error | Una columna `secret` fuera de `$hidden`, en la exportación, en el Resource o en la tabla. |
 | `endpoint-tests-outdated` | aviso | Un `<Modelo>EndpointsTest` sin alguna de las pruebas que cierran la autorización (`test_…_cada_accion_requiere_sesion`, `…_cada_accion_pregunta_a_la_politica` y, si hay listado, `…_index_pasa_por_su_managed_filter`): se generó antes de 9.1. Ese test no se regenera ni está en el manifiesto, así que no se reescribe: el mensaje dice cómo traerlas. |
 | `relation-missing` | aviso | Contra el mismo `laraimport.json`: una relación de `load_relations` que ni el modelo ni sus traits (`Models/Traits/*/<Modelo>*.php`) definen. El trait de relaciones se escribe una sola vez y es del proyecto, así que no la recibe al reimportar. El mensaje trae el método y el `use` exactos; `larapack:fix relation-missing` los añade al trait si es seguro. |
+| `manifest-declaration` | error / aviso | Contra el `laraimport.json` de la raíz: lo que el manifiesto anota de la forma de un modelo —acciones, `immutable`, columnas `secret`, endpoints— no es lo que declara el contrato (error), o el contrato declara un modelo que el manifiesto no tiene (aviso). Las cuatro comprobaciones de arriba miran el código contra esa anotación: sin esto, borrarla del manifiesto las apagaba con el contrato intacto. `larapack:import` la vuelve a escribir. |
 | `model-lists-outdated` | aviso (info si sólo sobra o difiere) | Contra el `laraimport.json` de la raíz, sin regenerar: a `$fillable`, `$hidden`, `$creatable`, `$updatable`, `$export_cols`, `$loadable_relations`, `$loadable_counts` o `casts()` del modelo le falta lo que el contrato declara —típico de un modelo editado a mano tras añadir una columna—. `larapack:import --force` lo completa sin tocar el resto del modelo. Lo que sobra o un cast con otro valor sale como info y no se cambia solo. |
 
 Sobre todo el código, lo haya generado LaraPack o no, en la raíz y en los
@@ -1432,13 +1442,13 @@ manifiesto:
 
 | Comprobación | Nivel | Qué detecta |
 | --- | --- | --- |
-| `controller-shape` | error | Una acción de controlador que hace algo más que `return $request->handle();`: recibe `Request` o `FormRequest` base, llama a `validate()`, pasa una expresión a `handle()`. También `__call`, un constructor que hace algo más que asignar lo inyectado y registrar middleware, y un `middleware()` con un closure. |
+| `controller-shape` | error | Una acción de controlador que hace algo más que `return $request->handle();`: recibe `Request` o `FormRequest` base, llama a `validate()`, pasa una expresión a `handle()`. También `__call`, un `callAction()` redefinido, un `__destruct()` con cuerpo, un constructor que hace algo más que asignar lo inyectado y registrar middleware, y un `middleware()` o un `getMiddleware()` con un closure. Cuenta igual la acción que el controlador **hereda** de un trait o de un padre del proyecto (estén donde estén), y la de una clase del proyecto de fuera de `Http/Controllers` que un `routes/*.php` pone como acción (`[Exportar::class, 'run']`, `Exportar::class`, `Route::resource()`): para el router es un controlador. |
 | `request-handle` | error | La request de una acción no define `handle()`. Una de `vendor/` sólo se informa. |
 | `controller-concern` | error / aviso | Un trait con lógica en `Http/Controllers`: error si lo usa un controlador, aviso si sólo lo usan requests (va en `Http/Requests/Concerns`). |
 | `hand-rolled` | aviso / info | Una acción marcada `#[HandRolled('razón')]`: aviso sin candado; info si el dueño la aprobó en `.larapack/hand-rolled.lock`. Sin razón, error. |
 | `hand-rolled-unapproved` | error | Con candado: una excepción que no está aprobada, o cuya razón o cuyo código (la huella) cambió desde que se aprobó. |
 | `hand-rolled-stale` | aviso | Con candado: una aprobación de algo que ya no lleva `#[HandRolled]`. |
-| `route-closure` | aviso | Un closure con cuerpo como acción de una ruta. Si es el fallback de la SPA de laravel-setup <= 7.2.0, el mensaje dice que `larapack:fix` lo corrige. |
+| `route-closure` | aviso | Un closure con cuerpo como acción de una ruta, o una acción que no se puede leer sin ejecutarla (una variable, `funcion(...)`, un objeto, un closure dentro de un array). Si es el fallback de la SPA de laravel-setup <= 7.2.0, el mensaje dice que `larapack:fix` lo corrige. |
 | `index-managed` | aviso | Una request que usa el `Builder` de SearchSurge sin forzar `managed`: el listado se salta `ManagedFilter::canView()`. |
 | `resource-appends` | aviso | Un `setAppends()` que recibe lo que manda el cliente sin una lista blanca. |
 
@@ -2132,8 +2142,9 @@ php artisan larapack:ci --owner=@organizacion/arquitectura
   monorepo donde `verify` tarda minutos, el runner alojado los cobra en cada PR,
   y un job que no arranca deja el check exigido sin llegar.
 - Con `--owner` (repetible: `@usuario`, `@organización/equipo` o un correo)
-  fusiona en el CODEOWNERS que GitHub ya lee `/.larapack/hand-rolled.lock`, el
-  workflow, el de aprobación (aunque no exista) y el propio CODEOWNERS, sin
+  fusiona en el CODEOWNERS que GitHub ya lee `/.larapack/hand-rolled.lock`,
+  `/.github/workflows/` (y, con su línea, el workflow y el de aprobación,
+  aunque no exista), `/.githooks/` y las tres rutas de CODEOWNERS, sin
   duplicar ni tocar líneas ajenas. Sin `--owner` no inventa un dueño.
 - Con `--approval` crea además `.github/workflows/larapack-approve.yml`, el
   workflow de aprobación sin terminal: lo lanza a mano una persona en Actions
@@ -2169,6 +2180,37 @@ sale en rojo y el PR se fusiona igual. Una de tres vías:
    los campos exactos. PUT sustituye la protección entera: si ya exige otros
    checks, se añaden a la orden. No fija de qué app llega el check: por eso el
    ruleset va primero.
+
+**Lo que la puerta no cierra, dicho claro.**
+
+- **El job corre el código del PR.** Instala las dependencias que dice el
+  `composer.json` del PR y ejecuta su `vendor/bin/builder` (o su `artisan`):
+  un PR que cambie de dónde sale `innoboxrr/larapack-generator`, que añada un
+  script o un plugin de Composer, o que en una aplicación registre un comando
+  llamado `larapack:verify`, decide lo que responde el check. `verify` no
+  carga el código del proyecto, pero quien lo lanza sí es del PR. Desde un
+  paquete no se cierra: si el riesgo importa, pon también `composer.json`,
+  `composer.lock` y, en una aplicación, `artisan` y `bootstrap/` a nombre del
+  dueño en CODEOWNERS, y revisa esos diffs como revisas el candado.
+- **Las acciones van por etiqueta** (`actions/checkout@v5`,
+  `shivammathur/setup-php@v2`), no por SHA: fíjalas si tu política lo pide.
+- **El workflow de aprobación corre código de la rama con permiso de
+  escritura** (`contents: write`, para empujar la rama del candado). Lánzalo
+  sobre una rama cuyo diff hayas leído; lo que escribe se revisa igual en el
+  PR del candado.
+- **`verify` mira la forma, no la intención.** Un `authorize()` que devuelve
+  `true`, una política abierta o un `handle()` que hace lo que no debe pasan:
+  eso es lo que revisa una persona. Tampoco ve una ruta registrada fuera de
+  `routes/*.php` (en un proveedor, con `app('router')`), un componente de
+  Livewire o una página de Filament.
+- **Con `--owner`, CODEOWNERS cubre** el candado, todos los workflows
+  (`/.github/workflows/`: cualquiera puede declarar un job llamado como el
+  check exigido), los hooks versionados (`/.githooks/`) y las tres rutas donde
+  GitHub busca CODEOWNERS (usa la primera que existe, así que uno nuevo en
+  `.github/` le quitaría el sitio al de la raíz). Si ya corriste `larapack:ci
+  --owner` con una versión anterior, **vuelve a correrlo**: añade las líneas
+  que faltan. La protección clásica (vía 3) pide ahora
+  `dismiss_stale_reviews=true`; si la pusiste antes, repite la orden.
 
 En un repositorio privado de una cuenta Free, GitHub no aplica ni rulesets ni
 protección de ramas: hace falta Pro, Team o Enterprise. En GitHub Enterprise

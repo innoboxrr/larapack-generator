@@ -248,7 +248,7 @@ final class CiGate
         $labels = [];
 
         foreach ($values as $label) {
-            if (! is_string($label) || preg_match('/^[A-Za-z0-9._-]{1,100}$/', $label) !== 1) {
+            if (! is_string($label) || preg_match('/^[A-Za-z0-9._-]{1,100}\z/', $label) !== 1) {
                 throw new UnexpectedValueException('--runs-on: «'.(is_string($label) ? $label : json_encode($label)).'» no es una etiqueta de runner (letras, dígitos, ., _ y -).');
             }
 

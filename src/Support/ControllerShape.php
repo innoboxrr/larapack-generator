@@ -29,9 +29,9 @@ use RuntimeException;
  * con cuerpo de routes/*.php, que son acciones sin controlador.
  *
  * Qué se recorre lo decide ProjectSources, que también explica lo que queda
- * fuera a propósito: Livewire, Filament y los controladores que no cuelgan de
- * `Http/Controllers` no tienen el patrón FormRequest::handle() que se
- * comprueba aquí.
+ * fuera a propósito: Livewire y Filament no tienen el patrón
+ * FormRequest::handle() que se comprueba aquí. Una clase de fuera de
+ * `Http/Controllers` que una ruta usa de controlador sí (checkRouteActions()).
  *
  * Lo que de verdad no puede seguir la forma se declara con
  * #[HandRolled('razón')]. Es una excepción que aprueba el dueño del proyecto,

@@ -24,16 +24,14 @@ namespace Innoboxrr\LarapackGenerator\Support;
  *  - Dentro, todos los .php salvo el `vendor/` y el `node_modules/` de cada
  *    raíz y los directorios ocultos; los directorios enlazados se siguen.
  *
- * Lo que queda fuera de la guardia, a propósito: sólo se miran las clases que
- * cuelgan de `Http/Controllers`, `Http/Requests` y `Http/Resources`. Un
- * componente de Livewire, un recurso o una página de Filament, o un
- * controlador colocado fuera de `Http/Controllers` (un `Actions/`, un
- * `Handlers/`) no siguen el patrón que se comprueba: no reciben un FormRequest
- * ni delegan en su `handle()`, sino que validan, autorizan y responden con el
- * ciclo de vida de su propio framework. Exigirles `return $request->handle();`
- * sería un falso positivo en cada archivo, y la única salida sería un
- * #[HandRolled] por clase que no diría nada. Si algún día tienen su propia
- * forma comprobable, será otra comprobación, no ésta ensanchada.
+ * Lo que queda fuera de la guardia, a propósito: un componente de Livewire o
+ * un recurso o una página de Filament no siguen el patrón que se comprueba
+ * —validan, autorizan y responden con el ciclo de vida de su framework—, y
+ * exigirles `return $request->handle();` sería un falso positivo en cada
+ * archivo. Una clase del proyecto de fuera de `Http/Controllers` (un
+ * `Actions/`, un `Handlers/`) sí se comprueba desde 9.4.0 cuando un
+ * `routes/*.php` la pone como acción (ControllerShape::checkRouteActions):
+ * dejarla fuera era la forma más corta de saltarse verify.
  */
 final class ProjectSources
 {

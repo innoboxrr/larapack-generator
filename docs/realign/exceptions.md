@@ -420,6 +420,17 @@ lo firma quien comitea. Una versión anterior los ignora.
   sin terminal no se fía de un nombre: es la cuenta que lanzó la corrida, y la
   CI la comprueba; [lo que no garantiza](#aprobar-sin-terminal-el-workflow-de-aprobación),
   dicho allí.
+- **La corrida prueba quién, no qué.** La CI comprueba que `approved_run`
+  existe, es del workflow de aprobación, la lanzó a mano quien dice
+  `approved_by` y terminó bien. GitHub no dice qué entradas escribió: una
+  corrida de verdad citada en otra entrada pasa esa comprobación, y una
+  entrada sin `approved_by` no se comprueba (es «aprobada en la terminal»).
+  Lo que frena las dos es que son líneas nuevas del candado en el diff que
+  revisa su dueño.
+- **Lo que enseña la confirmación.** El objetivo, el archivo (sale del
+  objetivo) y la huella son de hoy. El texto del hallazgo de una excepción
+  con archivo lo trae la solicitud, que escribe quien pide: sale marcado
+  «según quien la pidió (no se comprobó; lee el código)».
 - **Exceptuar un hallazgo de seguridad es aceptar el agujero.** Se puede; la
   razón queda escrita y la aprobación en el historial.
 - **Lo que cubre una excepción ya no lo vigila nadie** mientras no cambie.
