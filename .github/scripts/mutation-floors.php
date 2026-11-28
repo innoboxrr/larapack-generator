@@ -3,7 +3,7 @@
 /*
  * El MSI de cada pieza contra su suelo, y qué mutantes nuevos escaparon.
  *
- * `--min-msi` de Infection mira las ocho piezas juntas: una podía bajar
+ * `--min-msi` de Infection mira todas las piezas juntas: una podía bajar
  * mientras las otras lo compensaban. Esto lee el informe JSON de la corrida
  * (`logs.json` de infection.json5) y compara cada pieza con el suelo
  * apuntado en mutation-floors.json (la política, en docs/mutacion.md).

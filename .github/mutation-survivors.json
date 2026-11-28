@@ -821,6 +821,136 @@
             "added": "if (PhpOutline::is($tokens[$i], '(', '[', '{') && $depth++ === -1) {"
         }
     ],
+    "NamedApproval": [
+        {
+            "line": 269,
+            "mutator": "CastString",
+            "kind": "escaped",
+            "removed": "return trim((string) preg_replace('/[\\p{Cc}\\p{Cf}]+/u', ' ', mb_scrub($value, 'UTF-8')));",
+            "added": "return trim(preg_replace('/[\\p{Cc}\\p{Cf}]+/u', ' ', mb_scrub($value, 'UTF-8')));"
+        }
+    ],
+    "Navigation": [
+        {
+            "line": 71,
+            "mutator": "CastString",
+            "kind": "escaped",
+            "removed": "if (!self::conditions((string) ($decision['type'] ?? ''))) {",
+            "added": "if (!self::conditions($decision['type'] ?? '')) {"
+        },
+        {
+            "line": 80,
+            "mutator": "CastString",
+            "kind": "escaped",
+            "removed": "$ids[] = (string) $step['id'];",
+            "added": "$ids[] = $step['id'];"
+        },
+        {
+            "line": 101,
+            "mutator": "CastString",
+            "kind": "escaped",
+            "removed": "if (!self::conditions((string) ($step['type'] ?? '')) || !self::decided($step)) {",
+            "added": "if (!self::conditions($step['type'] ?? '') || !self::decided($step)) {"
+        },
+        {
+            "line": 101,
+            "mutator": "LogicalOr",
+            "kind": "escaped",
+            "removed": "if (!self::conditions((string) ($step['type'] ?? '')) || !self::decided($step)) {",
+            "added": "if (!self::conditions((string) ($step['type'] ?? '')) && !self::decided($step)) {"
+        },
+        {
+            "line": 102,
+            "mutator": "ReturnRemoval",
+            "kind": "escaped",
+            "removed": "return false;",
+            "added": ""
+        },
+        {
+            "line": 188,
+            "mutator": "CastString",
+            "kind": "escaped",
+            "removed": "$decided = (string) ($event['at'] ?? '');",
+            "added": "$decided = $event['at'] ?? '';"
+        },
+        {
+            "line": 188,
+            "mutator": "Coalesce",
+            "kind": "escaped",
+            "removed": "$decided = (string) ($event['at'] ?? '');",
+            "added": "$decided = (string) ('' ?? $event['at']);"
+        },
+        {
+            "line": 190,
+            "mutator": "CastString",
+            "kind": "escaped",
+            "removed": "$applied = (string) ($event['at'] ?? '');",
+            "added": "$applied = $event['at'] ?? '';"
+        },
+        {
+            "line": 190,
+            "mutator": "Coalesce",
+            "kind": "escaped",
+            "removed": "$applied = (string) ($event['at'] ?? '');",
+            "added": "$applied = (string) ('' ?? $event['at']);"
+        },
+        {
+            "line": 234,
+            "mutator": "UnwrapArrayMap",
+            "kind": "escaped",
+            "removed": "return array_map('strval', $chosen);",
+            "added": "return $chosen;"
+        },
+        {
+            "line": 246,
+            "mutator": "CastString",
+            "kind": "escaped",
+            "removed": "$continues = self::CONDITIONS[(string) ($decision['type'] ?? '')] ?? [];",
+            "added": "$continues = self::CONDITIONS[$decision['type'] ?? ''] ?? [];"
+        },
+        {
+            "line": 247,
+            "mutator": "UnwrapArrayValues",
+            "kind": "escaped",
+            "removed": "$shared = array_values(array_intersect(self::files($guided), self::files($decision)));",
+            "added": "$shared = array_intersect(self::files($guided), self::files($decision));"
+        },
+        {
+            "line": 318,
+            "mutator": "CastString",
+            "kind": "escaped",
+            "removed": "$keep = self::ESCALATED[(string) $step['type']] ?? self::ESCALATED['default'];",
+            "added": "$keep = self::ESCALATED[$step['type']] ?? self::ESCALATED['default'];"
+        },
+        {
+            "line": 324,
+            "mutator": "CastString",
+            "kind": "escaped",
+            "removed": "$step['options'] = [['key' => 'refactor', 'label' => 'Hacerlo como dice el playbook', 'consequences' => 'Se sigue el playbook del paso (' . $playbook . ') hasta que su comprobación pase.', 'playbook' => $playbook], ...array_map(fn(array $option): array => isset($option['run']) ? ['run' => strtr($option['run'], ['{id}' => (string) $step['id']])] + $option : $option, $keep)];",
+            "added": "$step['options'] = [['key' => 'refactor', 'label' => 'Hacerlo como dice el playbook', 'consequences' => 'Se sigue el playbook del paso (' . $playbook . ') hasta que su comprobación pase.', 'playbook' => $playbook], ...array_map(fn(array $option): array => isset($option['run']) ? ['run' => strtr($option['run'], ['{id}' => $step['id']])] + $option : $option, $keep)];"
+        },
+        {
+            "line": 324,
+            "mutator": "SpreadOneItem",
+            "kind": "escaped",
+            "removed": "$step['options'] = [['key' => 'refactor', 'label' => 'Hacerlo como dice el playbook', 'consequences' => 'Se sigue el playbook del paso (' . $playbook . ') hasta que su comprobación pase.', 'playbook' => $playbook], ...array_map(fn(array $option): array => isset($option['run']) ? ['run' => strtr($option['run'], ['{id}' => (string) $step['id']])] + $option : $option, $keep)];",
+            "added": "$step['options'] = [['key' => 'refactor', 'label' => 'Hacerlo como dice el playbook', 'consequences' => 'Se sigue el playbook del paso (' . $playbook . ') hasta que su comprobación pase.', 'playbook' => $playbook], [...array_map(fn(array $option): array => isset($option['run']) ? ['run' => strtr($option['run'], ['{id}' => (string) $step['id']])] + $option : $option, $keep)][0]];"
+        },
+        {
+            "line": 354,
+            "mutator": "CastString",
+            "kind": "escaped",
+            "removed": "$option = self::optionFor($step, (string) ($request['file'] ?? ''));",
+            "added": "$option = self::optionFor($step, $request['file'] ?? '');"
+        },
+        {
+            "line": 369,
+            "mutator": "CastString",
+            "kind": "escaped",
+            "removed": "$keys[] = (string) $option['key'];",
+            "added": "$keys[] = $option['key'];"
+        }
+    ],
     "PhpOutline": [
         {
             "line": 68,

@@ -251,9 +251,19 @@ las piezas que sostienen la garantía: lo que `verify` comprueba
 ([`PhpOutline`](src/Support/PhpOutline.php)), la aprobación de las excepciones
 ([`HandRolledLock`](src/Support/HandRolledLock.php)), lo que la guardia deja
 pasar ([`Guard`](src/Support/Guard.php)), lo que `fix` reescribe
-([`LegacyFix`](src/Support/LegacyFix.php)) y la puerta de la CI
-([`CiGate`](src/Support/CiGate.php)). Y los tests que corre son los suyos, con
-el `--filter` del mismo archivo: la suite entera tardaría una hora.
+([`LegacyFix`](src/Support/LegacyFix.php)), la puerta de la CI
+([`CiGate`](src/Support/CiGate.php)) y, del realineamiento, quién aprueba sin
+terminal ([`NamedApproval`](src/Support/NamedApproval.php)) y qué ve cada
+operación de lo que se decidió ([`Navigation`](src/Support/Realign/Navigation.php)).
+Y los tests que corre son los suyos, con el `--filter` del mismo archivo: la
+suite entera tardaría una hora.
+
+**Una prueba que regenera el contrato no va en ese `--filter`**: las que
+montan un paquete generado y corren `larapack:realign diagnose` (el trait
+`RealignProject`, o `generated()` de `SmallRealignProject`). Bajo Infection
+dan error con cualquier mutante —el porqué, en
+[`docs/mutacion.md`](docs/mutacion.md#una-prueba-que-falla-siempre-mata-todo)—
+y todo lo que recorren sale «muerto». `MutationFloorsTest` lo comprueba.
 
 Infection no está en `require-dev`, y es a propósito: trae su propio
 `nikic/php-parser` y su Symfony, y como el repositorio no versiona
@@ -289,7 +299,7 @@ corre lo mismo con PHP 8.3, PHPUnit 12.5 e Infection 0.31.9 —la configuración
 con la que se midió—, en cada pull request que toca `src/`, `tests/` o la
 propia configuración, y a mano desde Actions. Tiene dos barreras:
 
-- `--min-msi` y `--min-covered-msi`, de las ocho piezas juntas.
+- `--min-msi` y `--min-covered-msi`, de todas las piezas juntas.
 - El suelo de cada pieza, en [`.github/mutation-floors.json`](.github/mutation-floors.json),
   que comprueba [`.github/scripts/mutation-floors.php`](.github/scripts/mutation-floors.php)
   (`MutationFloorsTest`). Sin él, una pieza podía bajar mientras las otras la

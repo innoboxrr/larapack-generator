@@ -5,6 +5,8 @@
     "HandRolledLock": 99.0,
     "LegacyFix": 90.6,
     "LegacySecurity": 95.4,
+    "NamedApproval": 98.3,
+    "Navigation": 90.4,
     "PhpOutline": 96.0,
     "Verifier": 97.1
 }

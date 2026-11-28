@@ -6,7 +6,7 @@ use PHPUnit\Framework\TestCase;
 
 /**
  * `.github/scripts/mutation-floors.php`: el suelo de cada pieza en el trabajo
- * «Mutación». El umbral de Infection es de las ocho juntas, y una podía bajar
+ * «Mutación». El umbral de Infection es de todas juntas, y una podía bajar
  * mientras las demás la compensaban; esto es lo que lo impide, así que se
  * prueba como cualquier otra barrera.
  */
@@ -309,5 +309,46 @@ final class MutationFloorsTest extends TestCase
             'mutation-floors.php .infection/infection.json .github/mutation-floors.json .github/mutation-survivors.json',
             $workflow
         );
+    }
+
+    /**
+     * Una prueba que regenera el contrato (`larapack:realign diagnose` sobre
+     * un paquete con laraimport) no puede estar en el `--filter` de
+     * infection.json5. Regeneration lanza un proceso hijo con descriptores
+     * `file`, y bajo Infection `file://` es su interceptor: `posix_spawn`
+     * falla, la prueba da error con cualquier mutante y todo lo que recorre
+     * sale «muerto». RealignExceptionsTest estuvo en el filtro así, y
+     * `HandRolledLock` y `ControllerShape` pasaban su suelo con mutantes que
+     * ninguna prueba mataba de verdad (docs/mutacion.md).
+     *
+     * Las que regeneran son las que montan un paquete generado: el trait
+     * RealignProject, o `generated()` de SmallRealignProject.
+     */
+    public function test_ninguna_prueba_del_filtro_regenera_el_contrato(): void
+    {
+        $root = dirname(__DIR__, 2);
+        preg_match("/--filter='([^']+)'/", (string) file_get_contents($root.'/infection.json5'), $filter);
+        $files = [...(glob($root.'/tests/Unit/*Test.php') ?: []), ...(glob($root.'/tests/Feature/*Test.php') ?: [])];
+        $matched = 0;
+
+        foreach (explode('|', $filter[1] ?? '') as $pattern) {
+            foreach ($files as $file) {
+                // Como lo compara PHPUnit: con el nombre completo de la clase.
+                $class = 'Innoboxrr\\LarapackGenerator\\Tests\\'.basename(dirname($file)).'\\'.basename($file, '.php');
+
+                if (preg_match('/'.$pattern.'/', $class.'::test') !== 1) {
+                    continue;
+                }
+
+                $matched++;
+                $this->assertDoesNotMatchRegularExpression(
+                    '/\buse RealignProject;|->generated\(\)|->generatedPackage\(\)/',
+                    (string) file_get_contents($file),
+                    basename($file).' regenera el contrato y está en el --filter de infection.json5 (como '.$pattern.'): bajo Infection daría por muerto todo lo que recorre.'
+                );
+            }
+        }
+
+        $this->assertGreaterThan(30, $matched);
     }
 }
