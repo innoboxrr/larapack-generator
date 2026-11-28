@@ -2,6 +2,7 @@
 
 namespace Innoboxrr\LarapackGenerator\Support\Realign;
 
+use Innoboxrr\LarapackGenerator\Support\Files;
 use Innoboxrr\LarapackGenerator\Support\Formatter;
 use Innoboxrr\LarapackGenerator\Support\ProjectRoot;
 
@@ -74,25 +75,8 @@ final class PintPass
             }
         }
 
-        self::remove($directory);
+        Files::remove($directory);
 
         return $equal;
-    }
-
-    private static function remove(string $path): void
-    {
-        if (! is_dir($path)) {
-            @unlink($path);
-
-            return;
-        }
-
-        foreach (scandir($path) ?: [] as $entry) {
-            if ($entry !== '.' && $entry !== '..') {
-                self::remove($path.'/'.$entry);
-            }
-        }
-
-        @rmdir($path);
     }
 }

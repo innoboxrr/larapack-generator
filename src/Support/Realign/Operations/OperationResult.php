@@ -99,11 +99,6 @@ final class OperationResult
         return $this;
     }
 
-    public function hasSkipped(): bool
-    {
-        return $this->skipped !== [];
-    }
-
     /**
      * @return array{fixed: list<array<string, mixed>>, skipped: list<array<string, mixed>>, unchanged: list<array<string, mixed>>, notes: list<string>}
      */

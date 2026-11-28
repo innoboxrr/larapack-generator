@@ -253,7 +253,7 @@ final class Regeneration
 
         // Lo de una clave anterior de este ámbito ya no sirve: se borra para
         // que la caché no crezca con cada cambio del contrato.
-        self::remove(dirname($directory));
+        Files::remove(dirname($directory));
 
         if (! @mkdir($directory, 0777, true) && ! is_dir($directory)) {
             throw new RuntimeException("No se pudo crear {$directory}.");
@@ -315,26 +315,5 @@ final class Regeneration
         file_put_contents($directory.'.done', (string) json_encode(['seconds' => $seconds]));
 
         return ['ok' => true, 'directory' => $directory, 'cached' => false, 'key' => $job['key'], 'ui' => $job['ui'], 'seconds' => $seconds, 'error' => null];
-    }
-
-    private static function remove(string $path): void
-    {
-        if (is_link($path) || is_file($path)) {
-            @unlink($path);
-
-            return;
-        }
-
-        if (! is_dir($path)) {
-            return;
-        }
-
-        foreach (scandir($path) ?: [] as $entry) {
-            if ($entry !== '.' && $entry !== '..') {
-                self::remove($path.'/'.$entry);
-            }
-        }
-
-        @rmdir($path);
     }
 }
