@@ -58,6 +58,11 @@ larapack:realign status --format=json
      qué pide la opción. Si es dejarlo como está, pide la excepción
      (`larapack:realign except <id> --option reason="…"`) y avisa al dueño:
      **no la apruebes tú**.
+   - **Si lo que queda es del dueño** (decisiones, excepciones sin aprobar) y
+     no está, no preguntes de una en una: `larapack:realign brief` lo junta
+     todo en `.larapack/realign/brief.md`, con la orden exacta de cada cosa.
+     Avísale con su resumen, sigue con lo de `meanwhile` y retoma con
+     `larapack:realign status` cuando decida. Es el camino normal.
 3. `larapack:realign check <id> --format=json`. Si `done` es false, resuelve
    `remaining` y vuelve a comprobar. Sólo `check` da un paso por hecho.
 4. Un commit por paso, con `.larapack/realign/plan.json`. Vuelve al 1.
@@ -102,6 +107,7 @@ En `vendor/innoboxrr/larapack-generator/docs/realign/`:
 | `adopt.md`, `apply.md` | Lo determinista. |
 | `guided.md` | Los playbooks (`larapack:realign playbook` los lista). |
 | `exceptions.md` | Dejar algo como está, con la aprobación del dueño. |
+| `owner.md` | `brief`: preparar al dueño todo lo suyo de una vez y seguir. |
 | `infer.md`, `contract.md` | Un proyecto sin contrato, y lo que el contrato puede declarar. |
 | `verify.md` | Cuándo se termina y qué garantiza. |
 | `risks.md` | Limitaciones y riesgos de cada operación. |

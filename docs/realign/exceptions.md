@@ -120,6 +120,11 @@ vendor/bin/builder larapack:realign check route-closure@.
   `approved`, `reason-changed` (se pidió con otra razón que la aprobada),
   `code-changed` (lo aprobado ya no es el código de hoy) o `stale` (lo
   aprobado ya no existe).
+- **Si el dueño no está**, el agente no le pregunta una por una:
+  `larapack:realign brief` le prepara un documento con cada excepción sin
+  aprobar —objetivo, motivo, el mensaje del hallazgo y la orden exacta
+  `larapack:hand-rolled approve "<objetivo>"`— junto con las decisiones
+  pendientes, y sigue con lo demás ([owner.md](owner.md)).
 - `larapack:hand-rolled approve` acepta el objetivo entero o su final, si es
   único: `"routes/web.php#post('/csp-report')"`, `"post('/csp-report')"`,
   `src/Http/Controllers/HookController.php`. `--all` aprueba también todas las

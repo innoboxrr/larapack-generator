@@ -12,6 +12,7 @@ use Innoboxrr\LarapackGenerator\Support\Realign\FileClass;
 use Innoboxrr\LarapackGenerator\Support\Realign\Navigation;
 use Innoboxrr\LarapackGenerator\Support\Realign\Operations\OperationRunner;
 use Innoboxrr\LarapackGenerator\Support\Realign\Operations\Operations;
+use Innoboxrr\LarapackGenerator\Support\Realign\OwnerBrief;
 use Innoboxrr\LarapackGenerator\Support\Realign\Planner;
 use Innoboxrr\LarapackGenerator\Support\Realign\Playbooks;
 use Innoboxrr\LarapackGenerator\Support\Realign\RealignActions;
@@ -49,6 +50,7 @@ use Symfony\Component\Console\Output\OutputInterface;
  *     defer/undefer <id>  aplaza un paso o lo devuelve al orden
  *     escalate <id>  pasa un guiado al dueño como decisión
  *     done       el criterio de terminado: falla y dice qué falta (Completion)
+ *     brief      lo que espera al dueño, en un documento (OwnerBrief)
  *     playbook [<nombre>]   los playbooks del paquete, o uno sin rellenar
  *
  * Las que escriben (adopt, apply, infer, except) tienen --dry-run, exigen el
@@ -60,16 +62,16 @@ class RealignCommand extends Command
     use TargetsProject;
     use WritesJson;
 
-    private const READS = ['diagnose', 'plan', 'status', 'next', 'show', 'check', 'decide', 'defer', 'undefer', 'escalate', 'done', 'playbook', 'help'];
+    private const READS = ['diagnose', 'plan', 'status', 'next', 'show', 'check', 'decide', 'defer', 'undefer', 'escalate', 'done', 'brief', 'playbook', 'help'];
 
     protected function configure(): void
     {
         $this->addRootOption();
 
         $this->setName('larapack:realign')
-            ->setDescription('Realinea con el contrato un proyecto que se desvió: diagnose, plan, status, next, show, check, decide, defer, undefer, escalate, done, playbook y las operaciones adopt, apply, infer y except')
+            ->setDescription('Realinea con el contrato un proyecto que se desvió: diagnose, plan, status, next, show, check, decide, defer, undefer, escalate, done, brief, playbook y las operaciones adopt, apply, infer y except')
             ->setHelp(RealignActions::helpText())
-            ->addArgument('action', InputArgument::OPTIONAL, 'diagnose, plan, status, next, show, check, decide, defer, undefer, escalate, done, playbook, adopt, apply, infer, except o help', 'help')
+            ->addArgument('action', InputArgument::OPTIONAL, 'diagnose, plan, status, next, show, check, decide, defer, undefer, escalate, done, brief, playbook, adopt, apply, infer, except o help', 'help')
             ->addArgument('targets', InputArgument::OPTIONAL | InputArgument::IS_ARRAY, 'next (opcional), show, check, defer, undefer, escalate: el id del paso; decide: el id y la opción; playbook: su nombre; help: una acción; adopt/apply/infer/except: ids de paso (vacío, todos los que sepa hacer)')
             ->addOption('format', null, InputOption::VALUE_REQUIRED, 'Formato de salida: txt o json', 'txt')
             ->addOption('package', null, InputOption::VALUE_REQUIRED | InputOption::VALUE_IS_ARRAY, 'Sólo este paquete local (directorio, ruta o nombre de Composer), o `app` para el núcleo. Repetible')
@@ -134,6 +136,7 @@ class RealignCommand extends Command
                 'check' => $this->check($input, $output, $root, $targets),
                 'decide' => $this->decide($input, $output, $root, $targets),
                 'done' => $this->done($input, $output, $root),
+                'brief' => $this->brief($input, $output, $root, $targets),
                 'playbook' => $this->playbook($input, $output, $targets),
                 default => $this->write($input, $output, $root, $action, $targets),
             };
@@ -671,6 +674,38 @@ class RealignCommand extends Command
         }
 
         $output->writeln($then === null ? '  Hazlo como dice la opción, y después: larapack:realign check '.$id : "  Ahora: {$then}\n  Y después: larapack:realign check {$id}");
+
+        return Command::SUCCESS;
+    }
+
+    /**
+     * Lo que espera al dueño, en un documento: lo escribe en
+     * .larapack/realign/brief.{md,json} y lo imprime (OwnerBrief).
+     *
+     * @param  list<string>  $targets
+     */
+    private function brief(InputInterface $input, OutputInterface $output, string $root, array $targets): int
+    {
+        if ($targets !== []) {
+            return $this->reportFailure($input, $output, 'brief no recibe ids: junta todo lo que espera al dueño (acótalo con --package).');
+        }
+
+        $state = new RealignState($root);
+        $plan = $this->requirePlan($root);
+        $report = $state->report();
+        $paths = $this->scopePaths($input, $root);
+        $brief = new OwnerBrief($root);
+        $document = $brief->build($plan, $this->stepsIn($plan, $paths), $this->byId($plan), $paths, $this->stale($report, $root), $report['generated_at'] ?? null);
+        $brief->save($document);
+
+        if ($this->wantsJson($input)) {
+            $this->writeJson($output, $document);
+
+            return Command::SUCCESS;
+        }
+
+        $output->writeln(OutputFormatter::escape(OwnerBrief::markdown($document)));
+        $output->writeln('  Escrito en '.$document['files']['markdown'].' (para el dueño) y '.$document['files']['json'].' (para un agente). Se retoma con: larapack:realign status');
 
         return Command::SUCCESS;
     }

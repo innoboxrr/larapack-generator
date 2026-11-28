@@ -272,6 +272,12 @@ Quien decide es quien tiene autoridad sobre el proyecto. Un agente presenta
 las opciones (`next`) y espera; no elige por su cuenta, aunque una opción
 parezca obvia.
 
+Cuando son muchas, o el dueño no está, el agente no las pregunta de una en
+una: `larapack:realign brief` las junta en un documento, cada una con su
+evidencia, su recomendación cuando la hay y la orden exacta de `decide`, junto
+con las excepciones que esperan aprobación ([owner.md](owner.md)). El agente
+sigue con lo que no depende del dueño y retoma con `status`.
+
 ## `defer` y `undefer`
 
 ```bash
@@ -312,6 +318,7 @@ Antes, `next <id>` ignoraba el id y daba el siguiente.
   report.json        el último diagnóstico
   plan.json          los pasos, su estado y su historia
   exceptions.json    las excepciones pedidas, sin aprobar (exceptions.md)
+  brief.md, .json    lo que espera al dueño (owner.md); se rehace con brief
   infer/             los informes de infer (infer.md)
   .gitignore         deja fuera cache/
   cache/             lo regenerado para comparar
@@ -340,6 +347,9 @@ pide actualizar el paquete.
 - `defer`/`undefer --format=json`: `{format_version, ok, action, id, deferred,
   next}`; `escalate --format=json`: `{format_version, ok, action, id,
   escalated, options, decide}`.
+- `brief --format=json` y `brief.json`: `{format_version, ok, action, summary,
+  decisions, exceptions, meanwhile, resume, files, …}`
+  ([owner.md](owner.md#el-formato-json)).
 - `help --format=json`: `{format_version, ok, action, actions, categories,
   classes, guide, guides, entry_point}`; con una acción, `{…, topic, summary,
   usage, writes, options, keys, guide, available}`.

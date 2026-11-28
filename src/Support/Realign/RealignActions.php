@@ -116,6 +116,14 @@ final class RealignActions
             'keys' => [],
             'guide' => 'docs/realign/verify.md',
         ],
+        'brief' => [
+            'summary' => 'Junta en un documento todo lo que espera al dueño del proyecto: cada decisión pendiente con su evidencia agrupada, sus opciones, la recomendación del paquete y la orden exacta, y cada excepción pedida sin aprobar con su orden de aprobación. No decide ni aprueba nada.',
+            'usage' => ['larapack:realign brief [--package=…]'],
+            'writes' => 'Sólo .larapack/realign/brief.md (para una persona) y .larapack/realign/brief.json (para un agente); se rehacen cada vez.',
+            'options' => ['package'],
+            'keys' => [],
+            'guide' => 'docs/realign/owner.md',
+        ],
         'playbook' => [
             'summary' => 'Lista los playbooks del paquete, o imprime uno sin rellenar con sus marcadores explicados.',
             'usage' => ['larapack:realign playbook', 'larapack:realign playbook <nombre>'],
