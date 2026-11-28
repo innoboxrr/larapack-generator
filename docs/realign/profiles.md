@@ -13,7 +13,7 @@ estás sin preguntarle a nadie:
 
 Las cifras son de copias de proyectos reales, ensayadas sin tocar los
 originales (CHANGELOG de 9.4.0). Los tres recorridos, de `diagnose` a
-`verify --strict`, están además en una prueba de punta a punta del paquete
+`larapack:realign done`, están además en una prueba de punta a punta del paquete
 (`RealignProfilesTest`), sobre proyectos sintéticos con las formas de los
 reales.
 
@@ -39,7 +39,7 @@ larapack:realign apply --deterministic          # la segunda pasada adopta lo qu
 larapack:realign next                           # lo guiado: edited-outside por familia, algún controller-shape
 larapack:realign check <id>
 # … y las decisiones, al final, con el dueño
-larapack:verify --strict
+larapack:realign done                           # el criterio de terminado: 0, o lo que falta
 ```
 
 **Qué esperar** (un monorepo de 82 ámbitos y 22 846 archivos):
@@ -158,7 +158,8 @@ barata contra la deriva, y no obliga a adoptar nada. Los pasos
 decisión `no-contract`, `unmanaged-http`, `unmanaged-models` y
 `route-closure` se decide `keep`/`except` con su excepción aprobada, y al
 final `verify --strict` sólo dice `empty-manifest`: no hay manifiesto porque
-el proyecto no usa LaraPack ([verify.md](verify.md#cuándo-se-termina)).
+el proyecto no usa LaraPack. `larapack:realign done` sale con 0 y lo lista en
+`declared`, fuera por decisión ([verify.md](verify.md#cuándo-se-termina)).
 
 **Cuidado con:** la interfaz y la autorización no se infieren (adoptar y
 regenerar el front daría pantallas sin campos; un endpoint de modelo nace con

@@ -27,6 +27,30 @@ trait RealignProject
     }
 
     /**
+     * Quita del contrato las banderas que el laraimport de las pruebas pone
+     * en `payload` y que el generador ignora (cuatro avisos de validate):
+     * así el contrato pasa `validate --strict`, que es parte del criterio de
+     * terminado (`larapack:realign done`), y genera lo mismo.
+     */
+    protected function withoutIgnoredFlags(): void
+    {
+        $path = $this->project->path.'/laraimport.json';
+        $contract = json_decode((string) file_get_contents($path), true);
+
+        foreach ($contract['models'] as $model => $definition) {
+            foreach ($definition['props'] as $index => $prop) {
+                if ($prop['name'] === 'payload') {
+                    foreach (['fillable', 'creatable', 'updatable', 'exports_cols'] as $flag) {
+                        unset($contract['models'][$model]['props'][$index][$flag]);
+                    }
+                }
+            }
+        }
+
+        file_put_contents($path, json_encode($contract, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)."\n");
+    }
+
+    /**
      * @param  array<string, mixed>  $arguments
      * @return array<string, mixed>
      */

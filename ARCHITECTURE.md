@@ -640,6 +640,15 @@ tipos, con su categoría, riesgo, forma de ejecutarse y orden, es
 clasificación, el código sin gestionar o la validación del contrato. Hacer un
 paso no lo marca hecho; sólo esto.
 
+**`done`** es el criterio de terminado del realineamiento entero
+([`Completion`](src/Support/Realign/Completion.php)): diagnostica y planifica
+otra vez, y falla mientras quede un paso sin hacer, una decisión sin tomar,
+una excepción sin aprobar, o un error o aviso de `validate --strict`
+([`ProjectValidation`](src/Support/ProjectValidation.php), cada contrato
+local) o de `verify --strict` (`ProjectVerification`) en cualquier ámbito.
+Lo declarado fuera (un `no-contract` decidido) va en `declared`. La guía:
+[docs/realign/verify.md](docs/realign/verify.md#cuándo-se-termina).
+
 **`next`** rellena el playbook de un paso guiado con
 [`Playbooks`](src/Support/Realign/Playbooks.php)
 (`resources/realign/playbooks/<tipo>.md`, `generic.md` si no hay), con sus

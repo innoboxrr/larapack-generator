@@ -438,6 +438,23 @@ proyecto real de principio a fin sin nadie al lado—.
   `--no-packages` y el resumen por paquete (`summary`; cada hallazgo, con su
   `package` y su `file`). Antes, un contrato roto en un paquete salía en
   verde desde la raíz. Con una ruta valida ese archivo, como siempre.
+- **Un solo criterio de terminado: `larapack:realign done`.** La guía decía
+  a la vez «el plan sin pendientes» y «`verify --strict`», y ninguno basta:
+  `verify` no ve lo editado fuera de los huecos —en la prueba, un agente dio
+  por terminado con `verify --strict` en verde y pasos `edited-outside`
+  pendientes— y el plan no ve lo que se desvió después del último
+  diagnóstico. `done` diagnostica y planifica otra vez (sólo escribe el
+  estado, como `diagnose` y `plan`), recorre todos los ámbitos y sale con 1
+  mientras quede un paso sin hacer, una decisión sin tomar, una excepción sin
+  aprobar o un error o aviso de `validate --strict` o `verify --strict`; el
+  JSON lo dice en `missing`, elemento por elemento, con la orden de cada uno.
+  Lo declarado fuera (un ámbito con `no-contract` decidido: su
+  `empty-manifest` y el contrato que no tiene) va en `declared` y no falta.
+  `Completion`; la guía, el skill y el bloque de `AGENTS.md` lo dan como el
+  criterio final ([docs/realign/verify.md](docs/realign/verify.md#cuándo-se-termina)).
+  La prueba de punta a punta de los tres perfiles termina con `done` en 0
+  (antes ninguno corría `validate --strict`, y el contrato de las pruebas
+  tenía cuatro avisos).
 
 ### Al actualizar a 9.4.0
 

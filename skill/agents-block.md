@@ -23,7 +23,8 @@ lee `{{skill}}` y sigue su flujo.
   piden llevar el proyecto de vuelta al contrato, empieza por
   `larapack:realign status` y sigue la guía del paquete
   (`vendor/innoboxrr/larapack-generator/docs/realign/README.md`): las
-  decisiones y las excepciones las toma y aprueba el dueño, no tú.
+  decisiones y las excepciones las toma y aprueba el dueño, no tú. Está
+  terminado sólo cuando `larapack:realign done --format=json` sale con 0.
 
 ```
 php artisan larapack:<comando>               # dentro de una aplicación Laravel

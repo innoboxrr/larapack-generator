@@ -5,6 +5,7 @@ namespace Innoboxrr\LarapackGenerator\Commands;
 use Innoboxrr\LarapackGenerator\Commands\Concerns\TargetsProject;
 use Innoboxrr\LarapackGenerator\Commands\Concerns\WritesJson;
 use Innoboxrr\LarapackGenerator\Support\Realign\Category;
+use Innoboxrr\LarapackGenerator\Support\Realign\Completion;
 use Innoboxrr\LarapackGenerator\Support\Realign\Diagnosis;
 use Innoboxrr\LarapackGenerator\Support\Realign\DoneWhen;
 use Innoboxrr\LarapackGenerator\Support\Realign\FileClass;
@@ -43,6 +44,7 @@ use Symfony\Component\Console\Output\OutputInterface;
  *     next       el siguiente paso con todo lo necesario para hacerlo
  *     check <id> comprueba su done_when y lo marca hecho, o dice qué falta
  *     decide <id> <opción>  registra una decisión
+ *     done       el criterio de terminado: falla y dice qué falta (Completion)
  *     playbook [<nombre>]   los playbooks del paquete, o uno sin rellenar
  *
  * Las que escriben (adopt, apply, infer, except) tienen --dry-run, exigen el
@@ -54,21 +56,21 @@ class RealignCommand extends Command
     use TargetsProject;
     use WritesJson;
 
-    private const READS = ['diagnose', 'plan', 'status', 'next', 'check', 'decide', 'playbook', 'help'];
+    private const READS = ['diagnose', 'plan', 'status', 'next', 'check', 'decide', 'done', 'playbook', 'help'];
 
     protected function configure(): void
     {
         $this->addRootOption();
 
         $this->setName('larapack:realign')
-            ->setDescription('Realinea con el contrato un proyecto que se desvió: diagnose, plan, status, next, check, decide, playbook y las operaciones adopt, apply, infer y except')
+            ->setDescription('Realinea con el contrato un proyecto que se desvió: diagnose, plan, status, next, check, decide, done, playbook y las operaciones adopt, apply, infer y except')
             ->setHelp(RealignActions::helpText())
-            ->addArgument('action', InputArgument::OPTIONAL, 'diagnose, plan, status, next, check, decide, playbook, adopt, apply, infer, except o help', 'help')
+            ->addArgument('action', InputArgument::OPTIONAL, 'diagnose, plan, status, next, check, decide, done, playbook, adopt, apply, infer, except o help', 'help')
             ->addArgument('targets', InputArgument::OPTIONAL | InputArgument::IS_ARRAY, 'check: el id del paso; decide: el id y la opción; playbook: su nombre; help: una acción; adopt/apply/infer/except: ids de paso (vacío, todos los que sepa hacer)')
             ->addOption('format', null, InputOption::VALUE_REQUIRED, 'Formato de salida: txt o json', 'txt')
             ->addOption('package', null, InputOption::VALUE_REQUIRED | InputOption::VALUE_IS_ARRAY, 'Sólo este paquete local (directorio, ruta o nombre de Composer), o `app` para el núcleo. Repetible')
-            ->addOption('jobs', null, InputOption::VALUE_REQUIRED, 'diagnose: cuántas regeneraciones a la vez', '4')
-            ->addOption('no-cache', null, InputOption::VALUE_NONE, 'diagnose: regenera aunque nada haya cambiado')
+            ->addOption('jobs', null, InputOption::VALUE_REQUIRED, 'diagnose y done: cuántas regeneraciones a la vez', '4')
+            ->addOption('no-cache', null, InputOption::VALUE_NONE, 'diagnose y done: regenera aunque nada haya cambiado')
             ->addOption('dry-run', null, InputOption::VALUE_NONE, 'Operaciones que escriben: dice qué haría sin escribir nada')
             ->addOption('allow-dirty', null, InputOption::VALUE_NONE, 'Operaciones que escriben: escribe aunque el árbol git tenga cambios sin comitear (no se podrá deshacer con git)')
             ->addOption('option', null, InputOption::VALUE_REQUIRED | InputOption::VALUE_IS_ARRAY, 'Operaciones que escriben: clave=valor para la operación. Repetible')
@@ -112,6 +114,7 @@ class RealignCommand extends Command
                 'next' => $this->next($input, $output, $root),
                 'check' => $this->check($input, $output, $root, $targets),
                 'decide' => $this->decide($input, $output, $root, $targets),
+                'done' => $this->done($input, $output, $root),
                 'playbook' => $this->playbook($input, $output, $targets),
                 default => $this->write($input, $output, $root, $action, $targets),
             };
@@ -548,6 +551,68 @@ class RealignCommand extends Command
         $output->writeln($then === null ? '  Hazlo como dice la opción, y después: larapack:realign check '.$id : "  Ahora: {$then}\n  Y después: larapack:realign check {$id}");
 
         return Command::SUCCESS;
+    }
+
+    /**
+     * El criterio de terminado (Completion): sale con 0 sólo si no falta
+     * nada en ningún ámbito; si no, con 1 y lo que falta, por fuente.
+     */
+    private function done(InputInterface $input, OutputInterface $output, string $root): int
+    {
+        $jobs = (int) $input->getOption('jobs');
+
+        if ($jobs < 1) {
+            return $this->reportFailure($input, $output, '--jobs tiene que ser un entero mayor que cero.');
+        }
+
+        $packages = $this->packages($input);
+        $roots = $packages === [] ? [] : (new Scopes($root))->resolve($packages);
+        $result = (new Completion($root, $jobs, ! $input->getOption('no-cache')))->run($packages, $roots, $this->scopePaths($input, $root));
+
+        if ($this->wantsJson($input)) {
+            $this->writeJson($output, ['format_version' => RealignState::FORMAT_VERSION, 'ok' => $result['done'], 'action' => 'done']
+                + ($result['done'] ? [] : ['error' => 'El realineamiento no ha terminado: '.implode('; ', $result['reasons']).'.'])
+                + $result);
+
+            return $result['done'] ? Command::SUCCESS : Command::FAILURE;
+        }
+
+        foreach ($result['declared'] as $declared) {
+            $output->writeln('  <fg=gray>fuera, por decisión ('.OutputFormatter::escape((string) $declared['step']).'):</> '.OutputFormatter::escape((string) $declared['message']));
+        }
+
+        if ($result['done']) {
+            $output->writeln('  <info>Terminado.</info> Nada pendiente en el plan, ninguna decisión ni excepción por aprobar, y validate y verify --strict en verde en cada ámbito.');
+            $output->writeln('  Lo que no comprueba LaraPack: que las pruebas del proyecto pasen.');
+
+            return Command::SUCCESS;
+        }
+
+        $output->writeln('  <comment>No ha terminado.</comment> Falta:');
+
+        foreach ($result['reasons'] as $reason) {
+            $output->writeln('    - '.OutputFormatter::escape($reason));
+        }
+
+        $lines = [
+            ...array_map(fn (array $row): string => 'paso '.$row['id'].' ('.$row['status'].'): '.$row['check'], $result['missing']['steps']),
+            ...array_map(fn (array $row): string => 'decisión '.$row['id'].': '.$row['decide'], $result['missing']['decisions']),
+            ...array_map(fn (array $row): string => 'excepción '.$row['target'].' ('.$row['status'].')', $result['missing']['exceptions']),
+            ...array_map(fn (array $row): string => 'validate '.$row['file'].' '.$row['path'].': '.$row['message'], $result['missing']['validate']),
+            ...array_map(fn (array $row): string => 'verify '.$row['check'].' '.($row['file'] ?? $row['model'] ?? '').': '.$row['message'], $result['missing']['verify']),
+        ];
+
+        $output->writeln('');
+
+        foreach (array_slice($lines, 0, 50) as $line) {
+            $output->writeln('    '.OutputFormatter::escape($line));
+        }
+
+        if (count($lines) > 50) {
+            $output->writeln('    … y '.(count($lines) - 50).' más (--format=json los da todos).');
+        }
+
+        return Command::FAILURE;
     }
 
     /**

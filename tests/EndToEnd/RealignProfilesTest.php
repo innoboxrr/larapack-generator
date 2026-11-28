@@ -322,6 +322,20 @@ final class RealignProfilesTest extends TestCase
         $this->assertSame($outOfScope, $failing, 'verify --strict: '.$this->lastOutput);
         $this->assertSame($outOfScope === [] ? Command::SUCCESS : Command::FAILURE, $exit);
 
+        // El criterio de terminado, uno: `done` lo comprueba todo —también
+        // validate --strict, que verify no mira: el agente corrige los avisos
+        // del contrato— y sale con 0. Lo que queda fuera por decisión sale en
+        // `declared`, no falta.
+        if ($this->project->has('laraimport.json')) {
+            $this->assertFalse($this->realign('done', [], Command::FAILURE)['done'], 'Con avisos en el contrato no está terminado.');
+            $this->withoutIgnoredFlags();
+            $this->commitAll();
+        }
+
+        $done = $this->realign('done');
+        $this->assertTrue($done['done'], json_encode($done['missing'], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+        $this->assertSame($outOfScope, array_values(array_unique(array_map(fn (array $declared): string => $declared['source'] === 'verify' ? 'empty-manifest' : 'no-contract', array_filter($done['declared'], fn (array $declared): bool => $declared['source'] === 'verify')))));
+
         if ($outOfScope !== []) {
             // Sin lo declarado fuera, la forma de todo el código cumple.
             $checks = array_values(array_diff(['controller-shape', 'request-handle', 'controller-concern', 'route-closure', 'hand-rolled'], $outOfScope));

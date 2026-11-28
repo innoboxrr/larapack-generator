@@ -107,7 +107,7 @@ documentación:
 ## El ciclo
 
 ```
-diagnose → plan → next → (hacer el paso) → check → next → … → diagnose → plan
+diagnose → plan → next → (hacer el paso) → check → next → … → done
 ```
 
 ```bash
@@ -117,6 +117,7 @@ vendor/bin/builder larapack:realign next         # el siguiente paso, con todo l
 # … hacer lo que dice el paso …
 vendor/bin/builder larapack:realign check <id>   # ¿está hecho? lo marca, o dice qué falta
 vendor/bin/builder larapack:realign status       # dónde se va
+vendor/bin/builder larapack:realign done         # ¿terminado? 0, o lo que falta
 ```
 
 Todas aceptan `--root=<proyecto>` y `--format=json`. Las que leen el proyecto
@@ -127,9 +128,16 @@ su guía; `larapack:realign --help` las lista todas.
 
 Al terminar los pasos deterministas (`apply --deterministic`), **vuelve a
 diagnosticar y planificar**: una corrección puede dejar un archivo igual a lo
-regenerado, y eso sale como `adopt` en la pasada siguiente. Cuando `plan` no
-tiene nada pendiente, la prueba de que el proyecto cumple es
-[`larapack:verify --strict`](verify.md).
+regenerado, y eso sale como `adopt` en la pasada siguiente.
+
+**Se termina cuando `larapack:realign done` sale con 0.** Es el único
+criterio: diagnostica y planifica otra vez y recorre todos los ámbitos, y
+falla —diciendo qué falta, elemento por elemento— mientras quede un paso sin
+hacer, una decisión sin tomar, una excepción sin aprobar, o un error o aviso
+de `validate --strict` o de `verify --strict`. Ni «el plan sin pendientes»
+ni «verify en verde» bastan solos: `verify` no ve lo editado fuera de los
+huecos, y el plan no ve lo que se desvió después del último diagnóstico.
+Todo en [verify.md](verify.md#cuándo-se-termina).
 
 ## El estado: reanudable por cualquiera
 
@@ -160,7 +168,7 @@ estaba.
 Los principios, que valen para todas las acciones:
 
 - **Lo que sólo lee es seguro siempre.** `diagnose`, `plan`, `status`, `next`,
-  `check`, `decide`, `playbook` y `help` no escriben código: como mucho, su
+  `check`, `decide`, `done`, `playbook` y `help` no escriben código: como mucho, su
   estado en `.larapack/realign/`.
 - **Lo que escribe se puede simular y deshacer.** `adopt`, `apply`, `infer` y
   `except` aceptan `--dry-run` (no escribe nada y dice qué haría; `apply`, con
@@ -197,6 +205,7 @@ pasen, que el contrato diga lo que hace la base de producción— está en
 | `next` | nada | El siguiente paso con todo lo necesario para hacerlo sin contexto. | [plan.md](plan.md#next) |
 | `check` | estado | Corre el criterio de terminado de un paso y lo marca hecho. | [plan.md](plan.md#check) |
 | `decide` | estado | Registra la opción elegida en una decisión. | [plan.md](plan.md#decide) |
+| `done` | estado | El criterio de terminado: falla y dice qué falta mientras quede algo en cualquier ámbito. | [verify.md](verify.md#cuándo-se-termina) |
 | `playbook` | nada | Lista los playbooks o imprime uno sin rellenar. | [guided.md](guided.md) |
 | `adopt` | manifiesto | Adopta, vuelve a enlazar y olvida, sin tocar un archivo. | [adopt.md](adopt.md) |
 | `apply` | código, contrato y manifiesto | Los pasos deterministas que reescriben. | [apply.md](apply.md) |
@@ -218,9 +227,10 @@ Esta es toda la lógica que hace falta; no hay que inventar nada por proyecto.
 
 1. `larapack:realign status --format=json`. Si `plan` es null o `stale` no está
    vacío: `larapack:realign diagnose` y `larapack:realign plan`.
-2. `larapack:realign next --format=json`. Si `done` es true, `diagnose` y
-   `plan` otra vez para confirmar; si sigue sin nada, comprueba el
-   cumplimiento ([verify.md](verify.md)) y se terminó.
+2. `larapack:realign next --format=json`. Si `done` es true,
+   `larapack:realign done --format=json`: si sale con 0, se terminó; si no,
+   `missing` dice qué falta y en qué ámbito (lo resuelves y vuelves al 2).
+   Es el criterio final ([verify.md](verify.md#cuándo-se-termina)).
 3. Según `step.category`:
    - `deterministic`: si `how.available`, ejecuta `how.command`, primero con
      `--dry-run` y después sin él. Lo que la orden salte (`skipped`, con su
@@ -273,7 +283,7 @@ vendor/bin/builder larapack:realign plan               # la segunda pasada adopt
 vendor/bin/builder larapack:realign apply --deterministic
 vendor/bin/builder larapack:realign status             # lo que queda: guiados y decisiones
 vendor/bin/builder larapack:realign next               # uno por uno, con su playbook
-vendor/bin/builder larapack:verify --strict            # al final: el cumplimiento
+vendor/bin/builder larapack:realign done              # al final: el criterio de terminado (0 = terminado)
 ```
 
 Sin contrato, el primer paso es `larapack:realign infer no-contract@.` y la
