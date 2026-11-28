@@ -262,4 +262,100 @@ final class PhpOutlineTest extends TestCase
         $this->assertNull(PhpOutline::stringArgument($args("other: 'x'"), 0, 'reason'));
         $this->assertNull(PhpOutline::stringArgument($args(''), 0, 'reason'));
     }
+
+    // callsTo() Y LA PROFUNDIDAD DE LOS BLOQUES (auditoría de seguridad de 9.4.0)
+
+    /**
+     * [nombre, raíz] de cada llamada a `get`.
+     *
+     * @return list<array{0: string, 1: string}>
+     */
+    private static function gets(string $code): array
+    {
+        return array_map(fn (array $call): array => [$call['call'], $call['root']], PhpOutline::ofCode($code)->callsTo(['get']));
+    }
+
+    public function test_calls_to_solo_cuenta_las_llamadas_sobre_algo_con_ese_nombre(): void
+    {
+        $this->assertSame([], self::gets("<?php\n\nget('/a');\nRoute::post('/b');\n\$route->get;\n"));
+        $this->assertSame([['GET', 'Route']], self::gets("<?php\n\nRoute::GET('/a');\n"));
+    }
+
+    public function test_calls_to_ve_la_llamada_aunque_el_archivo_se_corte_en_su_parentesis(): void
+    {
+        $this->assertSame([['get', 'Route']], self::gets("<?php\n\nRoute::get("));
+    }
+
+    public function test_la_raiz_de_una_cadena_de_llamadas(): void
+    {
+        $this->assertSame([
+            ['get', 'Route'],
+            ['get', '$router'],
+            ['get', 'Route'],
+            ['get', 'app'],
+            ['get', '$this'],
+            ['get', 'static'],
+            ['get', ''],
+            ['get', ''],
+        ], self::gets(<<<'PHP'
+        <?php
+
+        Route::get('/a');
+        $router->get('/b');
+        Route::middleware(['auth'])->prefix('x')->get('/c');
+        app('router')->get('/d');
+        $this->routes[0]->get('/e');
+        static::make()?->get('/f');
+        $x = (new Router)->get('/g');
+        ($factory)()->get('/h');
+        PHP));
+    }
+
+    public function test_los_argumentos_por_posicion_y_con_nombre(): void
+    {
+        $calls = PhpOutline::ofCode("<?php\n\nRoute::get('/a', action: [X::class, 'run'], name: 'x');\n")->callsTo(['get']);
+
+        $this->assertCount(1, $calls[0]['arguments']);
+        $this->assertSame(['action', 'name'], array_keys($calls[0]['named']));
+        $this->assertSame('[', $calls[0]['named']['action'][0][1]);
+        $this->assertSame(3, $calls[0]['line']);
+    }
+
+    public function test_el_use_de_un_trait_en_una_clase_anonima_no_importa_aunque_vaya_detras_de_un_metodo(): void
+    {
+        $classes = PhpOutline::ofCode(<<<'PHP'
+        <?php
+
+        namespace App;
+
+        $x = new class {
+            public function a() {}
+
+            use Lib\Helper;
+        };
+
+        class Foo extends Helper {}
+        PHP)->classes();
+
+        $this->assertSame('App\Helper', $classes[0]['extends']);
+    }
+
+    public function test_un_use_de_arriba_detras_de_un_bloque_importa(): void
+    {
+        $classes = PhpOutline::ofCode(<<<'PHP'
+        <?php
+
+        namespace App;
+
+        if (true) {
+            if (false) {}
+        }
+
+        use Lib\Helper;
+
+        class Foo extends Helper {}
+        PHP)->classes();
+
+        $this->assertSame('Lib\Helper', $classes[0]['extends']);
+    }
 }

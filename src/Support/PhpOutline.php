@@ -277,21 +277,19 @@ final class PhpOutline
                 }
             }
 
-            $calls[] = ['call' => $token[1], 'root' => $this->chainRoot($index - 1), 'line' => $token[2], 'arguments' => $arguments, 'named' => $named];
+            $calls[] = ['call' => $token[1], 'root' => $this->chainRoot($index), 'line' => $token[2], 'arguments' => $arguments, 'named' => $named];
         }
 
         return $calls;
     }
 
     /**
-     * Lo que empieza la cadena de llamadas cuyo operador (`::`, `->`) está en
-     * `$operator`: se retrocede por cada `nombre(...)` anterior hasta lo que
-     * ya no cuelga de otro operador.
+     * Lo que empieza la cadena de llamadas cuyo nombre (`get` en
+     * `Route::get(`) está en `$index`: se retrocede por cada `nombre(...)`
+     * anterior hasta lo que ya no cuelga de otro operador.
      */
-    private function chainRoot(int $operator): string
+    private function chainRoot(int $index): string
     {
-        $index = $operator - 1;
-
         while ($index >= 0) {
             if (self::is($this->tokens[$index], ')', ']')) {
                 $depth = 0;
@@ -481,7 +479,9 @@ final class PhpOutline
             $token = $this->tokens[$this->i];
 
             switch (true) {
-                case $depth === 0 && $token[0] === T_NAMESPACE && ($this->isNameAt($this->i + 1) || self::is($this->tokens[$this->i + 1] ?? null, '{')):
+                // Tras `namespace` va siempre su nombre o la llave de uno sin
+                // nombre: `namespace\Foo` es un solo token, T_NAME_RELATIVE.
+                case $depth === 0 && $token[0] === T_NAMESPACE:
                     $this->namespace = $this->isNameAt($this->i + 1) ? ltrim($this->tokens[++$this->i][1], '\\') : '';
                     $this->uses = [];
                     $this->i++;
