@@ -485,6 +485,9 @@ final class CiGate
      *    rama se llama como el job, y cualquier workflow puede declarar un
      *    job con ese nombre que no compruebe nada, o correr con permisos de
      *    escritura. El de aprobación va aunque el proyecto no lo tenga.
+     *  - **Los hooks de git versionados** (`/.githooks/`): un `exit 0` al
+     *    principio del pre-commit lo desactiva para todos los clones, y nada
+     *    local lo impide; que al menos lo vea el dueño en el PR.
      *  - **Las tres rutas donde GitHub busca CODEOWNERS**, no sólo la que el
      *    proyecto usa: GitHub lee la primera que existe (`.github/`, la raíz,
      *    `docs/`), así que en un proyecto con el suyo en la raíz bastaba
@@ -500,6 +503,7 @@ final class CiGate
     {
         return array_values(array_unique([
             '/.github/workflows/',
+            '/'.GitHooks::DIRECTORY.'/',
             '/'.HandRolledLock::PATH,
             '/'.self::WORKFLOW,
             '/'.NamedApproval::WORKFLOW,

@@ -49,6 +49,11 @@ final class Guard
     private const SHELL_SEPARATORS = [';', '&', '|', "\n", '(', ')', '`', '<', '>'];
 
     /**
+     * Cómo nombran las herramientas el archivo que escriben.
+     */
+    private const PATH_KEYS = ['file_path', 'notebook_path', 'path', 'filePath', 'target_file'];
+
+    /**
      * Las órdenes que ejecutan como órdenes lo que reciben por la entrada.
      */
     private const SHELLS = ['bash', 'sh', 'zsh', 'dash', 'ksh'];
@@ -133,7 +138,11 @@ final class Guard
     public static function touchedFiles(array $payload): array
     {
         $input = is_array($payload['tool_input'] ?? null) ? $payload['tool_input'] : [];
-        $candidates = [$input['file_path'] ?? null];
+        // `file_path` es el de Write y Edit; un cuaderno (`notebook_path`) y
+        // las herramientas de archivos de un servidor MCP (`path`,
+        // `filePath`, `target_file`) nombran el suyo de otra forma, y con
+        // sólo el primero el candado se escribía por cualquiera de ellas.
+        $candidates = array_map(fn (string $key): mixed => $input[$key] ?? null, self::PATH_KEYS);
 
         foreach (is_array($input['edits'] ?? null) ? $input['edits'] : [] as $edit) {
             $candidates[] = is_array($edit) ? ($edit['file_path'] ?? null) : null;
@@ -468,7 +477,15 @@ final class Guard
     private static function bashCommand(array $payload): ?string
     {
         $input = is_array($payload['tool_input'] ?? null) ? $payload['tool_input'] : [];
-        $command = $input['command'] ?? null;
+        $command = $input['command'] ?? $input['cmd'] ?? null;
+
+        // Algunas herramientas de shell (la `shell` de Codex, las de un
+        // servidor MCP) mandan la orden ya partida en palabras:
+        // `["bash", "-lc", "…"]`. Se lee como la misma orden, cada palabra
+        // entre comillas; antes no era una cadena y pasaba sin leerse.
+        if (is_array($command) && $command !== [] && array_filter($command, 'is_string') === $command) {
+            return implode(' ', array_map(fn (string $word): string => "'".str_replace("'", "'\\''", $word)."'", $command));
+        }
 
         return is_string($command) ? $command : null;
     }

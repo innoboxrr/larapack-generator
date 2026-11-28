@@ -278,7 +278,7 @@ final class CiCommandTest extends TestCase
 
         $lines = explode("\n", $this->project->read('CODEOWNERS'));
 
-        foreach (['/.github/workflows/', '/.larapack/hand-rolled.lock', '/.github/workflows/larapack.yml', '/.github/workflows/larapack-approve.yml', '/CODEOWNERS', '/.github/CODEOWNERS', '/docs/CODEOWNERS'] as $path) {
+        foreach (['/.github/workflows/', '/.githooks/', '/.larapack/hand-rolled.lock', '/.github/workflows/larapack.yml', '/.github/workflows/larapack-approve.yml', '/CODEOWNERS', '/.github/CODEOWNERS', '/docs/CODEOWNERS'] as $path) {
             $this->assertContains("{$path} @acme/arquitectura", $lines);
         }
 

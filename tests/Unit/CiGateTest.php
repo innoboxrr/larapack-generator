@@ -452,11 +452,11 @@ final class CiGateTest extends TestCase
         // nuevo le quitaba el sitio al de la raíz) y todos los workflows
         // (cualquiera puede declarar un job llamado como el check exigido).
         $this->assertSame(
-            ['/.github/workflows/', '/.larapack/hand-rolled.lock', '/.github/workflows/larapack.yml', '/.github/workflows/larapack-approve.yml', '/CODEOWNERS', '/.github/CODEOWNERS', '/docs/CODEOWNERS'],
+            ['/.github/workflows/', '/.githooks/', '/.larapack/hand-rolled.lock', '/.github/workflows/larapack.yml', '/.github/workflows/larapack-approve.yml', '/CODEOWNERS', '/.github/CODEOWNERS', '/docs/CODEOWNERS'],
             CiGate::ownedPaths('CODEOWNERS')
         );
         $this->assertSame(
-            ['/.github/workflows/', '/.larapack/hand-rolled.lock', '/.github/workflows/larapack.yml', '/.github/workflows/larapack-approve.yml', '/.github/CODEOWNERS', '/CODEOWNERS', '/docs/CODEOWNERS'],
+            ['/.github/workflows/', '/.githooks/', '/.larapack/hand-rolled.lock', '/.github/workflows/larapack.yml', '/.github/workflows/larapack-approve.yml', '/.github/CODEOWNERS', '/CODEOWNERS', '/docs/CODEOWNERS'],
             CiGate::ownedPaths('.github/CODEOWNERS')
         );
     }
