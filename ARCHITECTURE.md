@@ -842,6 +842,54 @@ garantizada.
 Tienen que funcionar en un proyecto sin dependencias instaladas y no pueden
 tener efectos.
 
+**El proyecto no es de fiar; quien corre el comando, sí.** El generador se
+ejecuta sobre repositorios que ha escrito otro —un clon, la rama de un PR, lo
+que dejó un agente—, y nada de lo que traen puede sacarlo de la raíz ni colarle
+código:
+
+- *Las cadenas del contrato* salen como literal del lenguaje donde acaban
+  (`Literal`), y lo que es un nombre lo acota el esquema con patrones anclados.
+  `GeneratedLiteralsFuzzTest` lo comprueba con cadenas hostiles en cada campo
+  libre (`default`, `cast`, `constraint`, `enum`, `rules`).
+- *El namespace de composer.json* va tal cual al `namespace` de cada archivo:
+  `get_namespace()` sólo acepta un namespace de PHP.
+- *Los enlaces simbólicos*: toda escritura y todo borrado del proyecto pasan por
+  `Files::guard()` (`Files::write()`, `Files::copy()`, `get_path()`,
+  `Tool::generate()`), que resuelve el camino real y falla si acaba fuera de la
+  raíz. Un enlace que se queda dentro vale; uno roto cuenta como fuera.
+- *El manifiesto y el plan del realineamiento* son archivos del proyecto: una
+  ruta con `..` o absoluta, o un `namespace` que no lo es, hacen que `Manifest`
+  no lo interprete, y `Changes` no escribe fuera de su raíz
+  (`Files::assertInside()` estricto).
+- *Las fuentes de fuera de la raíz* —un repositorio `path` con `../*`, un `src`
+  enlazado— se leen (`verify` mide lo que el proyecto carga) pero `LegacyFix` no
+  las reescribe.
+
+Lo fija `GeneratorInjectionAuditTest`, con un ataque por prueba.
+
+Lo que **no** se puede cerrar desde un paquete, y no se promete:
+
+- *Quien puede escribir `vendor/` ya ejecuta código.* El `builder` instalado
+  carga el `vendor/autoload.php` del proyecto, y lo generado se formatea con la
+  Pint del proyecto si la tiene (`Formatter::pint()`, `PintPass`): es un PHP de
+  `vendor/laravel/pint` que se ejecuta. Con un clon del generador y `--root`
+  hacia un repositorio ajeno que versiona su `vendor/`, `LARAPACK_PINT=off` (o
+  una Pint propia en esa variable) evita ejecutarla.
+- *`pint.json` es configuración del proyecto.* No ejecuta código, pero sus
+  reglas reescriben lo generado, y las hay que cambian el comportamiento.
+- *La orden de pruebas de `.larapack/realign/config.json`* (`ProjectTests`) se
+  corre con la shell, como un script de Composer: `larapack:realign check` en un
+  repositorio ajeno ejecuta lo que diga ese archivo. Léelo antes.
+- *git*: `realign` y `larapack:ci` llaman a `git` en el proyecto, y git obedece
+  a su `.git/config` (`core.fsmonitor`, alias). Un clon no lo trae; un
+  directorio descomprimido, sí.
+- *La caché de lo regenerado* (`.larapack/realign/cache`) se cree si su clave
+  coincide. Está en el `.gitignore` del estado; si un repositorio la versiona,
+  bórrala o usa `--no-cache`.
+- *Lo que se cita del proyecto en la terminal* (un valor del contrato en un
+  mensaje de `validate`) sale tal cual, con sus secuencias de escape si las
+  trae.
+
 **Fallar cerrado.** Una condición de plantilla desconocida, un nombre de modelo
 que no es un identificador o una `--root` que no existe son errores, no un
 «seguimos como podamos».
