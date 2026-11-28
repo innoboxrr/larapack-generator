@@ -63,14 +63,10 @@ final class CiGate
      */
     public static function workflow(string $root, ?string $branch, array $runsOn = []): string
     {
-        $application = self::isApplication($root);
-        [$php, $why] = self::phpVersion($root);
-        $locked = is_file(self::join($root, 'composer.lock'));
-        $extensions = self::extensions($root);
         $branches = $branch === null ? '[main, master]' : '['.self::yamlScalar($branch).']';
-        $binary = $application ? 'php artisan' : 'php vendor/bin/builder';
+        $binary = self::binary($root);
 
-        $lines = [
+        return implode("\n", [
             'name: LaraPack',
             '',
             '# Generado por `larapack:ci`. El contrato de LaraPack como puerta de la rama:',
@@ -87,12 +83,57 @@ final class CiGate
             '    verify:',
             '        name: '.self::JOB,
             '        runs-on: '.self::runsOnYaml($runsOn),
-            '        # Sólo lectura: verify no escribe nada, y el último paso sólo lee',
-            '        # las reglas de la rama.',
+            '        # Sólo lectura: verify no escribe nada, y los dos últimos pasos sólo',
+            '        # leen las reglas de la rama y las corridas de aprobación.',
             '        permissions:',
             '            contents: read',
+            '            actions: read',
             '',
             '        steps:',
+            ...self::setupSteps($root),
+            '            - name: Contrato de LaraPack',
+            "              run: {$binary} larapack:verify --strict --format=json",
+            '',
+            ...self::namedApprovalsStep($binary),
+            '',
+            ...self::protectionStep($binary),
+        ])."\n";
+    }
+
+    /**
+     * El workflow de aprobación sin terminal (NamedApproval), con la misma
+     * preparación que el de la puerta.
+     *
+     * @param  list<string>  $runsOn  las etiquetas del runner (runsOn()); vacío, el alojado
+     */
+    public static function approvalWorkflow(string $root, array $runsOn = []): string
+    {
+        return NamedApproval::workflow(self::binary($root), self::setupSteps($root), self::runsOnYaml($runsOn));
+    }
+
+    /**
+     * Cómo se llama a LaraPack en el proyecto: Artisan en una aplicación, el
+     * binario en un paquete.
+     */
+    public static function binary(string $root): string
+    {
+        return self::isApplication($root) ? 'php artisan' : 'php vendor/bin/builder';
+    }
+
+    /**
+     * Los pasos que dejan el proyecto listo para correr LaraPack: el código,
+     * PHP con las extensiones que declara, `.env` si es una aplicación y las
+     * dependencias.
+     *
+     * @return list<string>
+     */
+    private static function setupSteps(string $root): array
+    {
+        [$php, $why] = self::phpVersion($root);
+        $locked = is_file(self::join($root, 'composer.lock'));
+        $extensions = self::extensions($root);
+
+        $lines = [
             '            - uses: actions/checkout@v5',
             '',
             '            - uses: shivammathur/setup-php@v2',
@@ -104,7 +145,7 @@ final class CiGate
             '',
         ];
 
-        if ($application && is_file(self::join($root, '.env.example'))) {
+        if (self::isApplication($root) && is_file(self::join($root, '.env.example'))) {
             $lines = [...$lines,
                 '            # Artisan arranca la aplicación; verify no toca la base ni usa APP_KEY.',
                 '            - name: Preparar .env',
@@ -113,15 +154,37 @@ final class CiGate
             ];
         }
 
-        return implode("\n", [...$lines,
+        return [...$lines,
             '            - name: Instalar dependencias',
             '              run: composer '.($locked ? 'install' : 'update').' --prefer-dist --no-interaction --no-progress',
             '',
-            '            - name: Contrato de LaraPack',
-            "              run: {$binary} larapack:verify --strict --format=json",
-            '',
-            ...self::protectionStep($binary),
-        ])."\n";
+        ];
+    }
+
+    /**
+     * El paso que enseña en el PR cada aprobación sin terminal del candado
+     * (`approved_by`) y comprueba con GitHub que su corrida es la del
+     * workflow de aprobación, lanzada a mano por esa persona.
+     *
+     * Sale como anotación sobre la línea del candado —en el diff del PR,
+     * donde mira quien revisa— y falla el job si alguna no se puede
+     * comprobar: una aprobación con un nombre y una corrida inventados no
+     * entra. Corre también si verify falló (`!cancelled()`).
+     *
+     * @return list<string>
+     */
+    private static function namedApprovalsStep(string $binary): array
+    {
+        return [
+            '            # Cada aprobación sin terminal del candado (approved_by), a la vista en',
+            '            # el diff del PR y comprobada con GitHub: la corrida tiene que ser la del',
+            '            # workflow de aprobación, lanzada a mano por quien dice. Si no, falla.',
+            '            - name: Aprobaciones sin terminal',
+            '              if: ${{ !cancelled() }}',
+            '              env:',
+            '                  GH_TOKEN: ${{ github.token }}',
+            "              run: {$binary} larapack:hand-rolled list --format=github",
+        ];
     }
 
     /**
@@ -413,15 +476,17 @@ final class CiGate
 
     /**
      * Lo que tiene que revisar el dueño: el candado de las excepciones, y lo
-     * que sostiene la puerta —este workflow y el propio CODEOWNERS—. Si el
-     * workflow o CODEOWNERS se pudieran cambiar sin su revisión, quitar la
-     * puerta costaría un commit.
+     * que sostiene la puerta —este workflow, el de aprobación sin terminal
+     * (NamedApproval) y el propio CODEOWNERS—. Si el workflow o CODEOWNERS se
+     * pudieran cambiar sin su revisión, quitar la puerta costaría un commit.
+     * El de aprobación va aunque el proyecto no lo tenga: si no, cualquiera
+     * podría añadir uno que aprobara lo que quisiera.
      *
      * @return list<string>
      */
     public static function ownedPaths(string $codeowners): array
     {
-        return ['/'.HandRolledLock::PATH, '/'.self::WORKFLOW, '/'.$codeowners];
+        return ['/'.HandRolledLock::PATH, '/'.self::WORKFLOW, '/'.NamedApproval::WORKFLOW, '/'.$codeowners];
     }
 
     /**

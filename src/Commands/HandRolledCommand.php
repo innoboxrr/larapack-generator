@@ -4,8 +4,11 @@ namespace Innoboxrr\LarapackGenerator\Commands;
 
 use Innoboxrr\LarapackGenerator\Commands\Concerns\TargetsProject;
 use Innoboxrr\LarapackGenerator\Commands\Concerns\WritesJson;
+use Innoboxrr\LarapackGenerator\Support\BranchProtection;
+use Innoboxrr\LarapackGenerator\Support\CiGate;
 use Innoboxrr\LarapackGenerator\Support\ControllerShape;
 use Innoboxrr\LarapackGenerator\Support\HandRolledLock;
+use Innoboxrr\LarapackGenerator\Support\NamedApproval;
 use Innoboxrr\LarapackGenerator\Support\OwnerConfirmation;
 use Innoboxrr\LarapackGenerator\Support\Realign\Exceptions;
 use Innoboxrr\LarapackGenerator\Support\Realign\ExceptionTargets;
@@ -29,13 +32,25 @@ use Symfony\Component\Console\Output\OutputInterface;
  * Desde 9.4.0 `approve` y `revoke` los confirma una persona
  * (OwnerConfirmation): en su terminal —/dev/tty, no la entrada estándar,
  * que una tubería contesta—, viendo qué se aprueba (el objetivo, la razón y
- * lo que cubre) y escribiendo `apruebo <n>`; o, sin terminal, nombrándose
- * con `LARAPACK_APPROVER` y `--approver`, y su nombre queda en el candado.
+ * lo que cubre) y escribiendo `apruebo <n>`; o, sin terminal, dentro del
+ * workflow de aprobación de GitHub Actions que lanza a mano (NamedApproval),
+ * y su cuenta y la corrida quedan en el candado.
  * Antes no preguntaba nada, y en un proyecto sin la guardia ni el hook de git
  * un agente aprobaba sus propias excepciones con `approve --all`. Lo demás
  * sigue: el candado pide la revisión del dueño (CODEOWNERS, `larapack:ci
  * --owner`) y la guardia de los agentes bloquea `approve`, `revoke` y la vía
  * sin terminal antes de que se ejecuten.
+ *
+ * Un rechazo sale siempre con un código distinto de cero y no enseña cómo
+ * saltárselo: a quien no tiene terminal le dice que un agente no lo intenta
+ * y remite a la documentación para personas (NamedApproval::DOCS), no a una
+ * orden lista para copiar. En una prueba de autonomía, el propio mensaje le
+ * enseñó a un agente la orden con la que se aprobó sus excepciones.
+ *
+ * `list --format=github` es el paso de la CI que genera `larapack:ci`: cada
+ * aprobación sin terminal del candado sale como anotación sobre su línea
+ * —en el diff del PR— y se comprueba con GitHub que su corrida es la que
+ * dice; si alguna no, sale con error.
  *
  * Los objetivos se escriben como los da `list`: el nombre completo de la
  * clase, con `::metodo` si la excepción es de una acción. Basta el final que
@@ -67,8 +82,8 @@ class HandRolledCommand extends Command
             ->addArgument('action', InputArgument::REQUIRED, 'list, approve o revoke')
             ->addArgument('targets', InputArgument::OPTIONAL | InputArgument::IS_ARRAY, 'Clase o Clase::metodo, como los da list')
             ->addOption('all', null, InputOption::VALUE_NONE, 'Con approve: aprueba todas las excepciones del código')
-            ->addOption('approver', null, InputOption::VALUE_REQUIRED, 'Sin terminal: el nombre de la persona que aprueba, igual que en la variable '.OwnerConfirmation::APPROVER_ENV.' (queda en el candado)')
-            ->addOption('format', null, InputOption::VALUE_REQUIRED, 'Formato de salida: txt o json', 'txt');
+            ->addOption('approver', null, InputOption::VALUE_REQUIRED, 'Sólo lo usa el workflow de aprobación que genera larapack:ci --approval (ver '.NamedApproval::DOCS.'); fuera de él no aprueba nada')
+            ->addOption('format', null, InputOption::VALUE_REQUIRED, 'Formato de salida: txt o json; con list, también github (las aprobaciones sin terminal, comprobadas, como anotaciones del PR)', 'txt');
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
@@ -87,6 +102,12 @@ class HandRolledCommand extends Command
         // `revoke` por su nombre exacto.
         if (! in_array($action, self::ACTIONS, true)) {
             return $this->reportFailure($input, $output, "Acción desconocida: {$action}.", 'Usa list, approve o revoke.');
+        }
+
+        $format = (string) $input->getOption('format');
+
+        if (! in_array($format, $action === 'list' ? ['txt', 'json', 'github'] : ['txt', 'json'], true)) {
+            return $this->reportFailure($input, $output, "--format={$format} no existe aquí.", $action === 'list' ? 'Usa txt, json o github.' : 'Usa txt o json (github sólo con list).');
         }
 
         if ($action === 'list' && ($targets !== [] || $all)) {
@@ -121,6 +142,10 @@ class HandRolledCommand extends Command
             $requested = $realign->requests();
         } catch (RuntimeException $e) {
             return $this->reportFailure($input, $output, $e->getMessage(), 'Las solicitudes las escribe larapack:realign except; corrígelas o bórralas y vuelve a pedirlas.');
+        }
+
+        if ($action === 'list' && $format === 'github') {
+            return $this->annotateNamed($root, $approved ?? [], $output);
         }
 
         if ($action === 'list') {
@@ -181,6 +206,7 @@ class HandRolledCommand extends Command
 
         $changed = $approved === null || HandRolledLock::encode($next) !== HandRolledLock::encode($current);
         $approver = null;
+        $run = null;
 
         // Lo que cambia el candado lo confirma una persona.
         if ($changed) {
@@ -191,9 +217,11 @@ class HandRolledCommand extends Command
             }
 
             $approver = $confirmation['approver'];
+            $run = $confirmation['run'];
 
             foreach ($action === 'approve' && $approver !== null ? $chosen : [] as $target) {
-                $next[$target] = ['reason' => $exceptions[$target]['reason'], 'fingerprint' => $exceptions[$target]['fingerprint'], 'approved_by' => $approver];
+                $next[$target] = ['reason' => $exceptions[$target]['reason'], 'fingerprint' => $exceptions[$target]['fingerprint'], 'approved_by' => $approver]
+                    + ($run === null ? [] : ['approved_run' => $run]);
             }
 
             HandRolledLock::write($root, $next);
@@ -203,7 +231,7 @@ class HandRolledCommand extends Command
             + ($action === 'approve' ? ['reason' => $exceptions[$target]['reason']] : []), $chosen);
 
         if ($this->wantsJson($input)) {
-            $this->writeJson($output, ['ok' => true, 'action' => $action, 'lock' => HandRolledLock::PATH, 'changed' => $changed, 'approved_by' => $approver, 'targets' => $done]);
+            $this->writeJson($output, ['ok' => true, 'action' => $action, 'lock' => HandRolledLock::PATH, 'changed' => $changed, 'approved_by' => $approver, 'approved_run' => $run, 'targets' => $done]);
 
             return Command::SUCCESS;
         }
@@ -234,11 +262,11 @@ class HandRolledCommand extends Command
     /**
      * La persona que confirma el cambio: en su terminal, viendo lo que
      * aprueba o retira y escribiendo la frase; o sin terminal, nombrándose
-     * (OwnerConfirmation).
+     * en el workflow de aprobación (OwnerConfirmation, NamedApproval).
      *
      * @param  list<string>  $targets
      * @param  array<string, array{reason: string, file?: string, line?: int, finding?: string|null}>  $entries
-     * @return array{approver: string|null, error: string|null}
+     * @return array{approver: string|null, run: string|null, error: string|null}
      */
     private function confirm(InputInterface $input, OutputInterface $output, string $action, array $targets, array $entries): array
     {
@@ -254,7 +282,7 @@ class HandRolledCommand extends Command
         if ($named['approver'] !== null) {
             if (! $this->wantsJson($input)) {
                 $output->writeln(array_map(fn (string $line): string => OutputFormatter::escape($line), $summary));
-                $output->writeln('  Lo aprueba '.OutputFormatter::escape(Exceptions::sanitise($named['approver'])).' sin terminal ('.OwnerConfirmation::APPROVER_ENV.'); su nombre queda en '.HandRolledLock::PATH.".\n");
+                $output->writeln('  Lo aprueba '.OutputFormatter::escape(Exceptions::sanitise($named['approver'])).' sin terminal, en la corrida '.OutputFormatter::escape((string) $named['run']).'; las dos cosas quedan en '.HandRolledLock::PATH.".\n");
             }
 
             return $named;
@@ -263,9 +291,11 @@ class HandRolledCommand extends Command
         $terminal = OwnerConfirmation::openTerminal();
 
         if ($terminal === null) {
-            return ['approver' => null, 'error' => ($action === 'approve' ? 'Aprobar' : 'Retirar').' una excepción lo confirma una persona en su terminal, y este proceso no tiene ninguna (/dev/tty): no se cambió nada. '
-                .'Si eres un agente, no lo intentes por otra vía: pide al dueño del proyecto que lo corra él. '
-                .'Una persona sin terminal (una CI de aprobación) se nombra: '.OwnerConfirmation::APPROVER_ENV.'="Su nombre" y --approver="Su nombre", y el nombre queda en '.HandRolledLock::PATH.'. '
+            // Sin la orden para copiar: quien no tiene terminal casi siempre es
+            // un agente, y el mensaje le enseñaría cómo saltárselo.
+            return ['approver' => null, 'run' => null, 'error' => ($action === 'approve' ? 'Aprobar' : 'Retirar').' una excepción lo confirma una persona en su terminal, y este proceso no tiene ninguna (/dev/tty): no se cambió nada. '
+                .'Si eres un agente, no lo intentes por ninguna otra vía: pide al dueño del proyecto que lo haga él (larapack:realign brief le prepara la lista). '
+                .'Si eres una persona sin terminal, lee '.NamedApproval::DOCS.'. '
                 .'En Git Bash para Windows, córrelo desde PowerShell o con winpty.'];
         }
 
@@ -275,10 +305,10 @@ class HandRolledCommand extends Command
         $terminal->write("\n");
 
         if ($answer === null || trim($answer) !== $phrase) {
-            return ['approver' => null, 'error' => "No se confirmó (había que escribir «{$phrase}»): no se cambió nada."];
+            return ['approver' => null, 'run' => null, 'error' => "No se confirmó (había que escribir «{$phrase}»): no se cambió nada."];
         }
 
-        return ['approver' => null, 'error' => null];
+        return ['approver' => null, 'run' => null, 'error' => null];
     }
 
     /**
@@ -313,6 +343,49 @@ class HandRolledCommand extends Command
         }
 
         return $lines;
+    }
+
+    /**
+     * `list --format=github`: el paso de la CI que genera `larapack:ci`. Cada
+     * entrada del candado aprobada sin terminal (`approved_by`) sale como
+     * anotación sobre su línea, que GitHub enseña en el diff del PR, y se
+     * comprueba con GitHub (NamedApproval::verify()): `notice` si la corrida
+     * es la que dice, `error` si no. Sale con error si alguna no se pudo
+     * comprobar; sin ninguna, no dice nada y sale bien.
+     *
+     * @param  array<string, array{reason: string, fingerprint: string|null, approved_by?: string|null, approved_run?: string|null}>  $approved
+     */
+    private function annotateNamed(string $root, array $approved, OutputInterface $output): int
+    {
+        $named = array_filter($approved, fn (array $approval): bool => isset($approval['approved_by']));
+
+        if ($named === []) {
+            return Command::SUCCESS;
+        }
+
+        $environment = getenv('GITHUB_REPOSITORY');
+        $repository = is_string($environment) && $environment !== '' ? $environment : CiGate::repository($root);
+        $api = BranchProtection::api();
+        $failed = false;
+
+        foreach ($named as $target => $approval) {
+            $by = (string) $approval['approved_by'];
+            $run = $approval['approved_run'] ?? null;
+            $problem = NamedApproval::verify($api, $repository, $by, $run);
+            $failed = $failed || $problem !== null;
+            $what = Exceptions::sanitise((string) $target).': aprobada sin terminal por '.Exceptions::sanitise($by)
+                .($run === null ? '' : ' en '.Exceptions::sanitise($run)).' — «'.Exceptions::sanitise($approval['reason']).'».';
+
+            $output->writeln(NamedApproval::annotation(
+                $problem === null ? 'notice' : 'error',
+                HandRolledLock::PATH,
+                HandRolledLock::lineOf($root, (string) $target),
+                $problem === null ? 'Aprobada sin terminal' : 'Aprobación sin terminal que no se puede comprobar',
+                $what.($problem === null ? ' GitHub confirma la corrida: revisa que la quisiste aprobar.' : ' '.ucfirst($problem).' No cuenta como aprobada por esa persona: que el dueño lo revise.')
+            ), OutputInterface::OUTPUT_RAW);
+        }
+
+        return $failed ? Command::FAILURE : Command::SUCCESS;
     }
 
     /**

@@ -16,6 +16,7 @@ qué cubre exactamente, cuándo caduca, cómo lo ve verify y qué riesgos tiene.
 - [La huella: cuándo caduca](#la-huella-cuándo-caduca)
 - [Cómo lo ve verify](#cómo-lo-ve-verify)
 - [Por qué un agente no puede aprobar](#por-qué-un-agente-no-puede-aprobar)
+- [Aprobar sin terminal: el workflow de aprobación](#aprobar-sin-terminal-el-workflow-de-aprobación)
 - [Los formatos](#los-formatos)
 - [Limitaciones y riesgos](#limitaciones-y-riesgos)
 
@@ -132,7 +133,9 @@ vendor/bin/builder larapack:realign check route-closure@.
 - `approve` y `revoke` **los confirma una persona** (ver
   [abajo](#por-qué-un-agente-no-puede-aprobar)): enseñan en la terminal cada
   objetivo, su razón, lo que cubre y el mensaje del hallazgo, y hay que escribir
-  `apruebo <n>` (`retiro <n>`). Sin terminal no cambian nada.
+  `apruebo <n>` (`retiro <n>`). Sin terminal no cambian nada (salvo dentro
+  del [workflow de aprobación](#aprobar-sin-terminal-el-workflow-de-aprobación)),
+  y todo rechazo sale con un código distinto de cero.
 - La excepción de **un hallazgo sin archivo** (`model:`) se aprueba con el
   hallazgo **de hoy**: `approve` corre verify con su comprobación, y si verify
   ya no dice esa frase no hay nada que aprobar. El mensaje que trae la
@@ -225,39 +228,108 @@ candado y la misma orden:
      `.larapack/hand-rolled.lock` se revisa siempre en el PR**. En Windows vale la consola (PowerShell, cmd, Windows
      Terminal); desde Git Bash (mintty) la entrada es una tubería y no hay
      forma fiable de saber si hay alguien delante: se corre desde PowerShell,
-     con `winpty` o nombrándose.
-   - **sin terminal, nombrándose** (una CI de aprobación que lanza el dueño,
-     una persona en un entorno sin tty):
-
-     ```bash
-     LARAPACK_APPROVER="Ana Pérez" vendor/bin/builder larapack:hand-rolled approve --all --approver="Ana Pérez"
-     ```
-
-     El nombre queda en cada entrada aprobada (`approved_by`), a la vista en
-     el diff que revisa CODEOWNERS. Por qué así y no otra cosa: una variable
-     sola se hereda —un agente lanzado desde una shell con la variable en el
-     perfil la tendría sin quererlo—, y una opción sola la escribe cualquiera.
-     Con las dos, usarla es un acto explícito en la propia orden, que la
-     guardia de los agentes bloquea, y que deja el nombre de quien la usó. Un
-     `CI=true` o la identidad del job no valen: los agentes también corren en
-     CI.
+     con `winpty` o, sin terminal, en el workflow de aprobación.
+   - **sin terminal, sólo en el workflow de aprobación** de GitHub Actions,
+     lanzado a mano por una persona: ver
+     [Aprobar sin terminal](#aprobar-sin-terminal-el-workflow-de-aprobación).
+     Fuera de él, nombrarse (`LARAPACK_APPROVER` y `--approver`) no aprueba
+     nada.
+   - **El rechazo no enseña cómo saltárselo.** Sale con un código distinto de
+     cero y, a quien no tiene terminal, le dice que un agente no lo intenta
+     por ninguna otra vía y le remite a esta página; no le da una orden lista
+     para copiar.
 1. **La guardia de los agentes** (`larapack:guard --pre`, instalado con
    `larapack:skill --hooks`) bloquea antes de ejecutarse cualquier forma de
    `larapack:hand-rolled approve` o `revoke` —abreviada, dentro de `bash -c`,
    de `eval`, de un heredoc— y cualquier escritura de `.larapack/hand-rolled.lock`
    (con Write/Edit o desde la shell: `>`, `tee`, `cp`, `sed -i`, `php -r`…),
    y la vía sin terminal: cualquier orden con `--approver` o que dé valor a
-   `LARAPACK_APPROVER` (`export`, `env`, delante de otra orden). Leer o buscar
+   `LARAPACK_APPROVER` (`export`, `env`, delante de otra orden). El workflow
+   de aprobación no la necesita: corre en GitHub, no en la sesión del agente. Leer o buscar
    la variable no se bloquea. `larapack:realign except` **no** se bloquea:
    pedir es libre.
 2. **El hook de git** (`larapack:guard --git`, que también pone `larapack:skill --hooks`)
    pregunta en la terminal (`/dev/tty`) cuando un commit cambia el candado. Un
    agente no tiene terminal en la que contestar.
 3. **CODEOWNERS** (`larapack:ci --owner`) pide la revisión del dueño en el pull
-   request que toque el candado.
+   request que toque el candado, el workflow de la puerta o el de aprobación.
+4. **La CI enseña y comprueba cada aprobación sin terminal.** El job que
+   genera `larapack:ci` corre `larapack:hand-rolled list --format=github`:
+   cada entrada con `approved_by` sale como anotación sobre su línea del
+   candado —en el diff del PR, donde mira quien revisa— y se pregunta a
+   GitHub si su corrida (`approved_run`) existe, es del workflow de
+   aprobación, se lanzó a mano y la lanzó quien dice. Si no, es un error y el
+   check no pasa. `larapack:verify` también las lista («Aprobadas sin
+   terminal», y `named_approvals` en JSON).
 
 Ninguna es perfecta por separado (ver las limitaciones del README); juntas
 hacen que aprobar sea un acto del dueño, visible en el historial.
+
+## Aprobar sin terminal: el workflow de aprobación
+
+Para una **persona** que no tiene terminal —aprueba desde el navegador, o el
+proyecto se trabaja sólo con agentes—. Un agente no lo usa: no tiene cuenta
+en GitHub con la que lanzarlo, y si la tuviera, la aprobación quedaría a su
+nombre y la CI lo diría.
+
+1. El dueño lo crea una vez, con la puerta:
+
+   ```bash
+   vendor/bin/builder larapack:ci --owner=@dueño --approval
+   ```
+
+   Escribe `.github/workflows/larapack-approve.yml` (`workflow_dispatch`, sin
+   más disparadores) y CODEOWNERS lo cubre —aunque no se cree, para que nadie
+   añada uno a su gusto—.
+2. La persona abre Actions → «LaraPack approve» → *Run workflow*, elige la rama
+   con las solicitudes y escribe qué aprobar (uno por línea, como los da
+   `larapack:hand-rolled list`) o marca `all` después de leerlas
+   (`larapack:realign brief` las prepara).
+3. La corrida aprueba **a nombre de quien la lanzó** (`github.triggering_actor`):
+   cada entrada lleva `approved_by` (su cuenta) y `approved_run` (la corrida),
+   y empuja el candado a una rama nueva, `larapack/approve-<corrida>`. El
+   resumen de la corrida da el enlace para abrir el PR.
+4. En ese PR, el job de la puerta anota cada aprobación sin terminal sobre su
+   línea del candado y comprueba con GitHub la corrida; CODEOWNERS pide la
+   revisión del dueño. **La aprobación es ese PR.**
+
+Qué exige `approve` para aceptar la vía sin terminal (si falta algo, no
+cambia nada y sale con error):
+
+- `GITHUB_ACTIONS=true` y `GITHUB_EVENT_NAME=workflow_dispatch`: una corrida
+  de Actions lanzada a mano. Un `CI=true`, un `push` o un `pull_request` no
+  valen: los agentes también corren en CI.
+- `GITHUB_WORKFLOW_REF` es `.github/workflows/larapack-approve.yml` de este
+  repositorio.
+- `LARAPACK_APPROVER`, `--approver` y el actor que la lanzó son el mismo, no
+  es un bot (`…[bot]`) y no la relanzó otra persona.
+
+**Por qué así y no con un secreto o una firma.** Un secreto viviría donde
+vive el agente (una variable del job, el llavero de quien lo lanza), o habría
+que repartir y rotar claves. Quién lanza una corrida lo dice GitHub, y no se
+falsifica desde fuera: `workflow_dispatch` sólo lo lanza quien tiene permiso
+de escritura, y su `triggering_actor` es esa cuenta. La comprobación de la
+corrida en la CI es la que da valor a esa identidad.
+
+**Lo que no se puede garantizar, dicho:**
+
+- **Las variables `GITHUB_*` se pueden escribir a mano** fuera de Actions; el
+  comando no distingue un entorno de verdad de uno imitado. Por eso la
+  aprobación lleva la corrida y la CI pregunta a GitHub por ella: una
+  inventada, de otro workflow o de otra persona falla el check. Sin la puerta
+  de `larapack:ci` (o con un job que no corre ese paso) esa comprobación no
+  existe, y sólo queda la revisión del diff.
+- **Una cuenta con permiso para lanzar workflows lanza la corrida a su
+  nombre.** Si un agente tiene un token con `actions: write` (el de la
+  persona, por ejemplo), la corrida es «de» esa persona, y la CI la da por
+  buena. No le des a un agente un token que pueda lanzar workflows.
+- **La corrida usa el workflow de la rama que se elige.** Un cambio en
+  `larapack-approve.yml` dentro de esa rama corre en la aprobación. CODEOWNERS
+  hace que ese cambio lo revise el dueño antes de fusionarse, no antes de
+  correr: mira qué rama eliges.
+- **La capa que no se salta es la de fuera del proceso**: CODEOWNERS sobre el
+  candado y la revisión de su diff en el PR, que la rama protegida exige. Todo
+  lo demás lo hace más difícil o más visible, no imposible.
 
 ## Los formatos
 
@@ -292,13 +364,14 @@ de `#[HandRolled]`:
 ```json
 [
   {"target": "realign:route-closure:routes/web.php#post('/csp-report')", "reason": "Sin datos de nadie y sin sesión.", "fingerprint": "sha256:…"},
-  {"target": "realign:no-contract:packages/x/laraimport.json", "reason": "…", "fingerprint": "sha256:…", "approved_by": "Ana Pérez"}
+  {"target": "realign:no-contract:packages/x/laraimport.json", "reason": "…", "fingerprint": "sha256:…", "approved_by": "ana", "approved_run": "https://github.com/acme/notes/actions/runs/4242"}
 ]
 ```
 
-`approved_by` sólo lo llevan las aprobadas sin terminal (`LARAPACK_APPROVER`
-y `--approver`): lo aprobado en la terminal lo firma quien comitea. Una
-versión anterior lo ignora.
+`approved_by` y `approved_run` sólo los llevan las aprobadas sin terminal (en
+el [workflow de aprobación](#aprobar-sin-terminal-el-workflow-de-aprobación)):
+la cuenta de GitHub de quien la lanzó y la corrida. Lo aprobado en la terminal
+lo firma quien comitea. Una versión anterior los ignora.
 
 ## Limitaciones y riesgos
 
@@ -324,9 +397,10 @@ versión anterior lo ignora.
   la confirmación enseña cada una y pide escribir cuántas son.
 - **La terminal es de la persona, no prueba quién es.** Un agente que corre
   dentro de la terminal de alguien puede abrir `/dev/tty`; entonces quien lee
-  la pregunta y escribe la frase es esa persona, que tiene que leerla. Y quien
-  pone `LARAPACK_APPROVER` y `--approver` puede escribir cualquier nombre: lo
-  que lo hace visible es el diff del candado y la revisión de CODEOWNERS.
+  la pregunta y escribe la frase es esa persona, que tiene que leerla. La vía
+  sin terminal no se fía de un nombre: es la cuenta que lanzó la corrida, y la
+  CI la comprueba; [lo que no garantiza](#aprobar-sin-terminal-el-workflow-de-aprobación),
+  dicho allí.
 - **Exceptuar un hallazgo de seguridad es aceptar el agujero.** Se puede; la
   razón queda escrita y la aprobación en el historial.
 - **Lo que cubre una excepción ya no lo vigila nadie** mientras no cambie.

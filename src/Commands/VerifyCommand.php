@@ -4,8 +4,11 @@ namespace Innoboxrr\LarapackGenerator\Commands;
 
 use Innoboxrr\LarapackGenerator\Commands\Concerns\TargetsProject;
 use Innoboxrr\LarapackGenerator\Commands\Concerns\WritesJson;
+use Innoboxrr\LarapackGenerator\Support\HandRolledLock;
 use Innoboxrr\LarapackGenerator\Support\ProjectVerification;
+use Innoboxrr\LarapackGenerator\Support\Realign\Exceptions;
 use Innoboxrr\LarapackGenerator\Support\Verifier;
+use RuntimeException;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Formatter\OutputFormatter;
 use Symfony\Component\Console\Input\InputInterface;
@@ -109,6 +112,7 @@ class VerifyCommand extends Command
         $warnings = $this->count($findings, Verifier::WARNING);
 
         $failed = $errors > 0 || ($input->getOption('strict') && $warnings > 0);
+        $named = $this->namedApprovals(root_path());
 
         if ($this->wantsJson($input)) {
             $this->writeJson($output, [
@@ -118,6 +122,7 @@ class VerifyCommand extends Command
                 'findings' => $findings,
                 'summary' => $summary,
                 'exceptions' => $exceptions,
+                'named_approvals' => $named,
             ] + ($only === [] ? [] : ['checks' => $only]) + ($paths === [] ? [] : ['paths' => $paths]));
 
             return $failed ? Command::FAILURE : Command::SUCCESS;
@@ -164,9 +169,48 @@ class VerifyCommand extends Command
                 $approved, count($exceptions) > $approved ? ', '.(count($exceptions) - $approved).' que ya no cubren lo que se aprobó' : ''));
         }
 
+        // A la vista de quien revisa: lo que se aprobó sin terminal no lo
+        // firma el commit de quien aprobó, sino la corrida del workflow de
+        // aprobación, y eso hay que mirarlo (larapack:hand-rolled list
+        // --format=github lo comprueba con GitHub en la CI).
+        if ($named !== []) {
+            $output->writeln("\n  <comment>Aprobadas sin terminal en ".HandRolledLock::PATH.' ('.count($named).'):</comment> revisa que quien figura las quiso aprobar.');
+
+            foreach ($named as $entry) {
+                $output->writeln('    '.OutputFormatter::escape(Exceptions::sanitise($entry['target'])).' — por '.OutputFormatter::escape(Exceptions::sanitise($entry['approved_by']))
+                    .($entry['approved_run'] === null ? ', sin corrida apuntada' : ' en '.OutputFormatter::escape(Exceptions::sanitise($entry['approved_run']))));
+            }
+        }
+
         $output->writeln(sprintf("\n  %d errores, %d avisos", $errors, $warnings));
 
         return $failed ? Command::FAILURE : Command::SUCCESS;
+    }
+
+    /**
+     * Las entradas del candado aprobadas sin terminal (`approved_by`), en el
+     * orden del candado. Un candado ilegible no da ninguna: ese error ya lo
+     * dice la comprobación hand-rolled.
+     *
+     * @return list<array{target: string, approved_by: string, approved_run: string|null, line: int}>
+     */
+    private function namedApprovals(string $root): array
+    {
+        try {
+            $approved = HandRolledLock::read($root) ?? [];
+        } catch (RuntimeException) {
+            return [];
+        }
+
+        $named = [];
+
+        foreach ($approved as $target => $approval) {
+            if (isset($approval['approved_by'])) {
+                $named[] = ['target' => (string) $target, 'approved_by' => $approval['approved_by'], 'approved_run' => $approval['approved_run'] ?? null, 'line' => HandRolledLock::lineOf($root, (string) $target)];
+            }
+        }
+
+        return $named;
     }
 
     /**

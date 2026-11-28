@@ -1527,19 +1527,18 @@ candado vacío.
 guardia ni el hook de git: el comando enseña en la terminal lo que va a aprobar
 o retirar —el objetivo, la razón, lo que cubre y el mensaje del hallazgo— y hay
 que escribir `apruebo <n>` (`retiro <n>`). La pregunta va a `/dev/tty`, no a la
-entrada estándar: una tubería no la contesta, y sin terminal no se cambia nada.
-Una persona sin terminal —una CI de aprobación— se nombra con la variable y la
-opción, iguales, y su nombre queda en el candado (`approved_by`):
-
-```
-LARAPACK_APPROVER="Ana Pérez" php artisan larapack:hand-rolled approve --all --approver="Ana Pérez"
-```
-
-La variable sola no vale (un agente la heredaría de un perfil de la shell) y la
-guardia de los agentes bloquea `--approver` y dar valor a `LARAPACK_APPROVER`.
+entrada estándar: una tubería no la contesta, y sin terminal no se cambia nada
+(y sale con error). Una persona sin terminal aprueba en el **workflow de
+aprobación** de GitHub Actions (`larapack:ci --approval`), que lanza a mano:
+queda a nombre de su cuenta y con la corrida en el candado (`approved_by`,
+`approved_run`), y el job de la puerta las anota en el diff del PR y comprueba
+con GitHub que la corrida es la que dicen. Fuera de ese workflow, nombrarse con
+`LARAPACK_APPROVER` y `--approver` no aprueba nada, y la guardia de los agentes
+lo bloquea igual. Los pasos y lo que no garantiza, en
+[docs/realign/exceptions.md](docs/realign/exceptions.md#aprobar-sin-terminal-el-workflow-de-aprobación).
 En Windows vale la consola (PowerShell, cmd); desde Git Bash (mintty) no hay
-forma fiable de saber si hay alguien delante, así que se corre desde PowerShell,
-con `winpty` o nombrándose. Sin candado, `verify` la lista como aviso y con `--strict` falla,
+forma fiable de saber si hay alguien delante, así que se corre desde PowerShell
+o con `winpty`. Sin candado, `verify` la lista como aviso y con `--strict` falla,
 como en 9.0. Con candado, lo aprobado se informa y `--strict` pasa; lo que no
 está aprobado es error (`hand-rolled-unapproved`) y lo aprobado que ya no está
 en el código, aviso (`hand-rolled-stale`). El candado es de la raíz sobre la que
@@ -2062,8 +2061,10 @@ php artisan larapack:ci --owner=@organizacion/arquitectura
   en una aplicación, el builder en un paquete; el PHP de `config.platform.php`
   o el mínimo con el que se instala `composer.lock`; las `ext-*` de
   `composer.json`; `pull_request` y `push` a la rama por defecto de `origin`;
-  `permissions: contents: read`). Su último paso comprueba que la rama exija el
-  check (abajo).
+  `permissions: contents: read` y `actions: read`). Su último paso comprueba
+  que la rama exija el check (abajo); el anterior, `larapack:hand-rolled list
+  --format=github`, anota en el diff del PR cada aprobación sin terminal del
+  candado y comprueba con GitHub su corrida (si no cuadra, el check falla).
 - Crea `.github/rulesets/larapack-verify.json`, el ruleset para importar en
   GitHub. El workflow y el ruleset van juntos: si uno de los dos difiere, no
   pisa ninguno sin `--force` ni escribe nada más. No edita otros workflows.
@@ -2073,8 +2074,12 @@ php artisan larapack:ci --owner=@organizacion/arquitectura
   y un job que no arranca deja el check exigido sin llegar.
 - Con `--owner` (repetible: `@usuario`, `@organización/equipo` o un correo)
   fusiona en el CODEOWNERS que GitHub ya lee `/.larapack/hand-rolled.lock`, el
-  workflow y el propio CODEOWNERS, sin duplicar ni tocar líneas ajenas. Sin
-  `--owner` no inventa un dueño.
+  workflow, el de aprobación (aunque no exista) y el propio CODEOWNERS, sin
+  duplicar ni tocar líneas ajenas. Sin `--owner` no inventa un dueño.
+- Con `--approval` crea además `.github/workflows/larapack-approve.yml`, el
+  workflow de aprobación sin terminal: lo lanza a mano una persona en Actions
+  y aprueba las excepciones a nombre de su cuenta, en una rama nueva para
+  revisar en un PR ([docs/realign/exceptions.md](docs/realign/exceptions.md#aprobar-sin-terminal-el-workflow-de-aprobación)).
 - Imprime, paso a paso, lo que no puede hacer: proteger la rama. Nunca lo
   ejecuta —cambia quién puede fusionar, y eso lo decide el dueño—.
 
