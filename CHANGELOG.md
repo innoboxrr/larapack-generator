@@ -2,6 +2,17 @@
 
 ## 9.4.0 (sin publicar)
 
+**El módulo de realineamiento** (`larapack:realign`): llevar de vuelta al
+contrato un proyecto que se desvió —una versión vieja de LaraPack, código
+editado fuera de los huecos, controladores y modelos escritos a mano, o sin
+contrato— sin reconstruirlo, y sin depender de nadie ni de un prompt por
+proyecto. Todo está en el paquete: el diagnóstico, el plan reanudable, las
+correcciones deterministas, los playbooks de los pasos guiados, las
+decisiones y las excepciones con la aprobación del dueño, la inferencia del
+contrato y la documentación para personas y agentes
+([docs/realign/README.md](docs/realign/README.md)). Las secciones de abajo,
+una por pieza; lo que hay que hacer al actualizar, al final de la versión.
+
 ### `larapack:realign`: el núcleo del realineamiento
 
 Llevar de vuelta al contrato un proyecto que empezó (o no) con LaraPack y se
@@ -339,6 +350,73 @@ Ensayado sobre copias, sin tocar los originales:
   primera. La forma de `.larapack/realign/exceptions.json` cambió respecto a
   la del núcleo (era `exceptions`, ahora `requests` con su objetivo), que
   ninguna versión publicada escribía.
+
+### La documentación, la ayuda del comando y la guía para agentes
+
+Para que cualquiera —persona o agente, sin contexto— realine un proyecto solo,
+todo lo necesario vive en el paquete y se comprueba.
+
+- **`docs/realign/`**, una página por operación: la entrada
+  ([README.md](docs/realign/README.md): cuándo usarlo, modelo mental, las
+  cuatro categorías, el ciclo, el estado, la seguridad y la receta para un
+  agente), [diagnose.md](docs/realign/diagnose.md) (leer el informe y cada
+  clasificación), [plan.md](docs/realign/plan.md) (pasos, `status`, `next`,
+  `check`, `decide` y los formatos JSON), [adopt.md](docs/realign/adopt.md),
+  [apply.md](docs/realign/apply.md) (también el salto de versión mayor),
+  [guided.md](docs/realign/guided.md), [exceptions.md](docs/realign/exceptions.md),
+  [infer.md](docs/realign/infer.md), [contract.md](docs/realign/contract.md)
+  (las claves nuevas y lo que el contrato todavía no puede decir),
+  [verify.md](docs/realign/verify.md) (cuándo se termina, qué garantiza
+  `verify --strict` y qué no, `ci` y `guard` para que no se vuelva a
+  desviar), [risks.md](docs/realign/risks.md) (por operación y por tema:
+  migraciones y datos, el front, 403/422, dependencias, monorepos, Windows,
+  rendimiento) y [profiles.md](docs/realign/profiles.md) (el recorrido según
+  el proyecto tenga contrato al día, una versión vieja con deuda o ninguno).
+- **La ayuda sale de un solo sitio** (`RealignActions`): `larapack:realign
+  --help` explica cada acción con su uso, lo que escribe y su guía;
+  `larapack:realign help <acción>` (texto o JSON) la detalla, con las claves
+  de `--option` que lee. `help` y `playbook` responden sin un proyecto. Una
+  clave de `--option` que la operación no lee es un error, como una opción
+  (`infer --option escribir=…` ya no se ignora en silencio). La lista de
+  playbooks nombra por su tipo los que se titulan con el del paso.
+- **`larapack:skill` instala la guía del realineamiento para agentes**
+  (`.claude/skills/larapack-realign/SKILL.md`, junto al skill; `--no-realign`
+  la salta), y el bloque de `AGENTS.md` —el mismo de las reglas de Cursor,
+  Codex, Gemini, Copilot y Windsurf— manda a `larapack:realign status` y a
+  la guía del paquete. El skill de LaraPack tiene su sección corta.
+- **`RealignDocTest`**: cada orden `larapack:…` que citan `docs/realign`, el
+  skill y el bloque de los agentes existe con esas opciones; en
+  `larapack:realign`, la acción, cada opción de esa acción y cada clave de
+  `--option`; cada enlace y cada ancla resuelven, y ninguna página queda sin
+  enlazar desde la entrada.
+- **`RealignProfilesTest`** (EndToEnd): los tres perfiles de punta a punta,
+  sobre proyectos sintéticos con formas recortadas de las aplicaciones:
+  diagnose → plan → apply determinista → adopt → next y check de un paso
+  guiado → decisión del dueño y except aprobado → `verify --strict` en verde
+  (el proyecto sin contrato que se queda fuera, con sólo `empty-manifest`).
+
+### Al actualizar a 9.4.0
+
+- **Nada cambia si no se usa `larapack:realign`.** El esquema del contrato
+  sólo añade claves opcionales y lo que no se declara se genera igual que en
+  9.3.1; el manifiesto pasa a la versión 2 la primera vez que se escribe (una
+  versión anterior del generador lo sigue leyendo).
+- **Antes de empezar un realineamiento**: una rama, el árbol limpio, las
+  pruebas del proyecto en verde (para saber qué fallaba ya) y
+  [docs/realign/risks.md](docs/realign/risks.md). Después,
+  `larapack:realign status`.
+- **Agentes**: vuelve a correr `larapack:skill` (con `--agents=…` si los
+  usas) para instalar la guía del realineamiento y poner al día el bloque de
+  `AGENTS.md`.
+- **Excepciones**: la primera aprobación crea `.larapack/hand-rolled.lock` y
+  desde ahí un `#[HandRolled]` sin aprobar es error; todo el equipo y la CI en
+  9.4.0 antes de aprobar la primera (un verify anterior ve las aprobaciones
+  `realign:` como sobrantes).
+- **Versiona** `.larapack/realign/plan.json` y `exceptions.json`; la caché
+  (`.larapack/realign/cache/`) ya viene ignorada.
+- **Un `import` después de adoptar** puede escribir alteraciones (columnas,
+  índices o un `->change()` si lo declarado difiere): `--dry-run` y revísalas
+  antes de migrar.
 
 ## 9.3.1
 

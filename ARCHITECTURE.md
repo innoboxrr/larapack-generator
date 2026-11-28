@@ -492,7 +492,10 @@ es la misma regla, ejecutada.
   `AGENTS.md` (`AgentHooks::installAgentsBlock`). `larapack:skill` escribe el
   bloque (salvo con `--no-agents`) y, con `--hooks`, los hooks; `larapack:new`
   deja las dos cosas puestas. El skill completo,
-  [`skill/SKILL.md`](skill/SKILL.md), lo copia [`Skill`](src/Support/Skill.php).
+  [`skill/SKILL.md`](skill/SKILL.md), lo copia [`Skill`](src/Support/Skill.php),
+  y a su lado la guía del realineamiento,
+  [`skill/realign/SKILL.md`](skill/realign/SKILL.md) (`Skill::installRealign`,
+  en `Skill::realignTargetFor`; `--no-realign` la salta).
 - [`GuardCommand`](src/Commands/GuardCommand.php) (`larapack:guard`) recibe por
   la entrada estándar el JSON del hook. Tras cada edición (PostToolUse) mira si
   el archivo es arquitectura (`Guard::WATCHED`, menos los huecos de
