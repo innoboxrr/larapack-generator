@@ -126,7 +126,16 @@ final class Verifier
         // vacío: es un error, y lo demás que deja un merge se sigue mirando.
         try {
             $this->manifest = $live->snapshot();
+
+            // Uno de una versión posterior del formato se lee, pero lo que
+            // trae de nuevo no se entiende: dar por bueno el código contra él
+            // sería comprobar menos de lo que el manifiesto dice.
+            if ($this->manifest->formatVersion() > Manifest::VERSION) {
+                throw MakerException::manifestTooNewToRead(Manifest::RELATIVE_PATH, $this->manifest->formatVersion(), Manifest::VERSION);
+            }
         } catch (MakerException $e) {
+            $this->manifest = $live;
+
             return [
                 $this->finding(self::ERROR, MergeDrift::MANIFEST_UNREADABLE, null, Manifest::RELATIVE_PATH, $e->getMessage()),
                 ...(new MergeDrift($live->root(), null))->run(),

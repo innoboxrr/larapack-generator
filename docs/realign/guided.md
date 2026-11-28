@@ -245,11 +245,12 @@ workflow de aprobación lanzada a mano por una persona en GitHub, con las
 mismas condiciones que para aprobar una excepción
 ([exceptions.md](exceptions.md#aprobar-sin-terminal-el-workflow-de-aprobación)),
 y la guardia de los agentes bloquea cualquier orden con `--approver` o que dé
-valor a la variable. **Límite:** el workflow que escribe `larapack:ci
---approval` sólo corre `larapack:hand-rolled approve`; no trae un paso para
-`accept-untested`. Hoy, aceptar sin probar se hace desde una terminal; la
-salida habitual sin ella es que alguien con el entorno corra las pruebas y
-registre `check <id> --tested="…"`.
+valor a la variable. El workflow que escribe `larapack:ci --approval` trae las
+entradas `untested` (los ids, uno por línea, como los da `brief`) y
+`untested_note`: corre `accept-untested` por cada paso a nombre de quien lo
+lanzó y empuja `plan.json` con el candado a la rama del PR. Sigue siendo
+preferible que alguien con el entorno corra las pruebas y registre
+`check <id> --tested="…"`: aceptar sin probar es aceptar un riesgo.
 
 ## Después de los pasos guiados: otra pasada
 

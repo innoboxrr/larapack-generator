@@ -140,7 +140,7 @@ final class NamedApprovalTest extends TestCase
 
     public function test_la_puerta_comprueba_con_github_que_la_corrida_es_la_aprobacion_que_dice(): void
     {
-        $run = ['path' => NamedApproval::WORKFLOW.'@refs/heads/feature', 'event' => 'workflow_dispatch', 'actor' => ['login' => 'otra'], 'triggering_actor' => ['login' => 'ana']];
+        $run = ['path' => NamedApproval::WORKFLOW.'@refs/heads/feature', 'event' => 'workflow_dispatch', 'actor' => ['login' => 'otra'], 'triggering_actor' => ['login' => 'ana'], 'status' => 'completed', 'conclusion' => 'success'];
         $api = fn (mixed $json, int $status = 200): FakeGitHubApi => (new FakeGitHubApi)->json('repos/acme/notes/actions/runs/4242', $json, $status);
 
         $github = $api($run);
@@ -159,6 +159,11 @@ final class NamedApprovalTest extends TestCase
         $this->assertSame('la corrida la lanzó ana, no otra.', NamedApproval::verify($api($run), 'acme/notes', 'otra', self::RUN));
         $this->assertSame('la corrida la lanzó otra cuenta, no ana.', NamedApproval::verify($api(['actor' => null, 'triggering_actor' => null] + $run), 'acme/notes', 'ana', self::RUN));
         $this->assertSame('la corrida la lanzó otra cuenta, no ana.', NamedApproval::verify($api(['triggering_actor' => ['login' => 7]] + $run), 'acme/notes', 'ana', self::RUN));
+
+        // Una corrida que falló, se canceló o sigue en marcha no aprobó nada.
+        $this->assertSame('la corrida no terminó bien (failure): no aprobó nada.', NamedApproval::verify($api(['conclusion' => 'failure'] + $run), 'acme/notes', 'ana', self::RUN));
+        $this->assertSame('la corrida no terminó bien (in_progress): no aprobó nada.', NamedApproval::verify($api(['status' => 'in_progress', 'conclusion' => null] + $run), 'acme/notes', 'ana', self::RUN));
+        $this->assertSame('la corrida no terminó bien (sin conclusión): no aprobó nada.', NamedApproval::verify($api(array_diff_key($run, ['status' => 0, 'conclusion' => 0])), 'acme/notes', 'ana', self::RUN));
 
         // GitHub no la da, o no da un objeto.
         $this->assertSame('GitHub no da esa corrida (HTTP 404: Not Found).', NamedApproval::verify(new FakeGitHubApi, 'acme/notes', 'ana', self::RUN));
@@ -201,11 +206,21 @@ final class NamedApprovalTest extends TestCase
         $this->assertStringContainsString("        name: LaraPack approve\n        runs-on: ubuntu-latest\n", $workflow);
         $this->assertStringContainsString("        permissions:\n            contents: write\n\n        steps:\n            - uses: actions/checkout@v5\n            - run: composer install\n            # Las entradas", $workflow);
         // Quien aprueba es quien la disparó, no un nombre libre.
-        $this->assertSame(2, substr_count($workflow, 'LARAPACK_APPROVER: ${{ github.triggering_actor }}'));
-        $this->assertStringContainsString('                  vendor/bin/builder larapack:hand-rolled approve "$@" --approver="$LARAPACK_APPROVER"'."\n", $workflow);
+        $this->assertSame(3, substr_count($workflow, 'LARAPACK_APPROVER: ${{ github.triggering_actor }}'));
+        $this->assertStringContainsString('                      vendor/bin/builder larapack:hand-rolled approve "$@" --approver="$LARAPACK_APPROVER"'."\n", $workflow);
+        // Sin objetivos no se aprueba nada: la corrida puede venir sólo a
+        // aceptar pasos sin probar.
+        $this->assertStringContainsString('                  if [ "$#" -gt 0 ]; then', $workflow);
+        // Aceptar sin probar, también a nombre de quien la lanzó, con su nota.
+        $this->assertStringContainsString("            untested:\n", $workflow);
+        $this->assertStringContainsString("            untested_note:\n", $workflow);
+        $this->assertStringContainsString('vendor/bin/builder larapack:realign accept-untested "$step" --note="$NOTE" --approver="$LARAPACK_APPROVER"', $workflow);
+        // Lo que se aceptó queda en el plan, que va en la misma rama; sin
+        // nada que aprobar ni aceptar, no se empuja nada.
+        $this->assertStringContainsString('                  for file in '.HandRolledLock::PATH.' .larapack/realign/plan.json; do', $workflow);
+        $this->assertStringContainsString('                  if git diff --cached --quiet; then', $workflow);
         $this->assertStringContainsString('                      set -- --all', $workflow);
         // El candado va a una rama nueva: se revisa en un PR.
-        $this->assertStringContainsString('                  git add '.HandRolledLock::PATH."\n", $workflow);
         $this->assertStringContainsString('branch="larapack/approve-$GITHUB_RUN_ID"', $workflow);
         $this->assertSame('LaraPack approve', NamedApproval::JOB);
         $this->assertSame('.github/workflows/larapack-approve.yml', NamedApproval::WORKFLOW);

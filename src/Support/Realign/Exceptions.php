@@ -197,6 +197,16 @@ final class Exceptions
     }
 
     /**
+     * Si un hallazgo de esa comprobación se puede cubrir con una excepción
+     * del realineamiento. Lo que tiene su propio mecanismo (OWN_MECHANISM) no:
+     * una excepción aprobada con ese objetivo no lo cubre en ningún sitio.
+     */
+    public static function exceptable(string $check): bool
+    {
+        return ! in_array($check, self::OWN_MECHANISM, true);
+    }
+
+    /**
      * Si un elemento del diagnóstico (un archivo, código sin gestionar, un
      * hallazgo de verify) lo cubre una excepción aprobada sobre el mismo
      * código. Sin aprobación —sólo solicitada— no lo cubre.

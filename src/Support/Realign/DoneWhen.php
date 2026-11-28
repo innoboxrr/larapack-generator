@@ -192,7 +192,11 @@ final class DoneWhen
                 continue;
             }
 
-            if ($exceptions->covers(['type' => StepTypes::forFinding($finding), 'file' => $finding['file'], 'check' => $finding['check']])) {
+            // Lo que tiene su propio mecanismo (#[HandRolled], el closure
+            // aprobado en el candado) no lo cubre una excepción del
+            // realineamiento, igual que en Exceptions::review().
+            if (Exceptions::exceptable($finding['check'])
+                && $exceptions->covers(['type' => StepTypes::forFinding($finding), 'file' => $finding['file'], 'check' => $finding['check']])) {
                 continue;
             }
 

@@ -168,9 +168,15 @@ final class Navigation
     }
 
     /**
-     * Una decisión tomada cuya orden ya se ejecutó después de decidirla: lo
-     * que falta (aprobar las excepciones pedidas, por ejemplo) es del dueño,
-     * no de quien sigue el plan. `next` no la vuelve a dar.
+     * Una decisión tomada cuyas órdenes ya se ejecutaron después de decidirla:
+     * lo que falta (aprobar las excepciones pedidas, por ejemplo) es del
+     * dueño, no de quien sigue el plan. `next` no la vuelve a dar.
+     *
+     * Cuenta la última decisión: decidir otra vez después de aplicar vuelve a
+     * dejar el paso en manos de quien sigue el plan. Y con decisiones por
+     * elemento que ejecutan órdenes distintas, tienen que haber corrido todas.
+     * Un `applied` sin `operation` (un plan de antes de anotarla) vale por
+     * cualquiera.
      *
      * @param  Step  $step
      */
@@ -180,18 +186,55 @@ final class Navigation
             return false;
         }
 
-        $decided = null;
-        $applied = null;
+        $decided = false;
+        $applied = [];
+        $any = false;
 
         foreach ((array) ($step['history'] ?? []) as $event) {
-            if (is_array($event) && ($event['event'] ?? null) === 'decided') {
-                $decided = (string) ($event['at'] ?? '');
-            } elseif (is_array($event) && ($event['event'] ?? null) === 'applied' && $decided !== null) {
-                $applied = (string) ($event['at'] ?? '');
+            if (! is_array($event)) {
+                continue;
+            }
+
+            if (($event['event'] ?? null) === 'decided') {
+                $decided = true;
+                $applied = [];
+                $any = false;
+            } elseif (($event['event'] ?? null) === 'applied' && $decided) {
+                $any = true;
+                $applied[] = is_string($event['operation'] ?? null) ? $event['operation'] : '*';
             }
         }
 
-        return $decided !== null && $applied !== null;
+        if (! $decided || ! $any) {
+            return false;
+        }
+
+        if (in_array('*', $applied, true)) {
+            return true;
+        }
+
+        return array_diff(self::operationsOf($step), $applied) === [];
+    }
+
+    /**
+     * Las operaciones que ejecutan las opciones elegidas en el paso.
+     *
+     * @param  Step  $step
+     * @return list<string>
+     */
+    private static function operationsOf(array $step): array
+    {
+        $chosen = self::chosen($step);
+        $operations = [];
+
+        foreach ((array) ($step['options'] ?? []) as $option) {
+            if (is_array($option) && in_array((string) ($option['key'] ?? ''), $chosen, true) && is_string($option['run'] ?? null)
+                && preg_match('/^larapack:realign (\S+)/', $option['run'], $match) === 1) {
+                $operations[] = $match[1];
+            }
+        }
+
+        return array_values(array_unique($operations));
     }
 
     /**

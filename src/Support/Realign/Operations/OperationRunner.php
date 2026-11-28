@@ -73,7 +73,7 @@ final class OperationRunner
 
             foreach ($plan['steps'] as $index => $step) {
                 if (in_array($step['id'] ?? null, $ids, true)) {
-                    $plan['steps'][$index]['history'][] = ['at' => $now, 'event' => 'applied', 'detail' => sprintf(
+                    $plan['steps'][$index]['history'][] = ['at' => $now, 'event' => 'applied', 'operation' => $action, 'detail' => sprintf(
                         '%s: %d cambiados, %d saltados, %d sin cambios.',
                         $action,
                         count($result['fixed']),

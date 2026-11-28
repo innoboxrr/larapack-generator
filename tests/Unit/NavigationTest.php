@@ -249,6 +249,36 @@ final class NavigationTest extends TestCase
         $this->assertFalse(Navigation::handedOver(['category' => Category::GUIDED] + $step + ['history' => [$decided, $applied]]));
     }
 
+    public function test_decidir_otra_vez_despues_de_aplicar_devuelve_el_paso(): void
+    {
+        // La orden que se corrió era la de la decisión anterior: la nueva
+        // todavía no se ha ejecutado, y `next` tiene que volver a darla.
+        $step = $this->decision('unmanaged-http', [self::A], ['decision' => ['option' => 'keep']]);
+        $decided = ['at' => 't1', 'event' => 'decided'];
+        $except = ['at' => 't2', 'event' => 'applied', 'operation' => 'except'];
+        $infer = ['at' => 't2', 'event' => 'applied', 'operation' => 'infer'];
+
+        $this->assertTrue(Navigation::handedOver($step + ['history' => [$decided, $except]]));
+        $this->assertFalse(Navigation::handedOver($step + ['history' => [$decided, $except, $decided]]));
+        $this->assertTrue(Navigation::handedOver($step + ['history' => [$decided, $except, $decided, $except]]));
+        // La orden de otra opción no es la de la decidida.
+        $this->assertFalse(Navigation::handedOver($step + ['history' => [$decided, $infer]]));
+    }
+
+    public function test_con_decisiones_por_elemento_tienen_que_correr_todas_sus_ordenes(): void
+    {
+        $step = $this->decision('unmanaged-http', [self::A, self::B], ['decisions' => [self::A => ['option' => 'keep'], self::B => ['option' => 'declare']]]);
+        $decided = ['at' => 't1', 'event' => 'decided'];
+        $except = ['at' => 't2', 'event' => 'applied', 'operation' => 'except'];
+        $infer = ['at' => 't3', 'event' => 'applied', 'operation' => 'infer'];
+
+        $this->assertFalse(Navigation::handedOver($step + ['history' => [$decided, $except]]));
+        $this->assertFalse(Navigation::handedOver($step + ['history' => [$decided, $infer]]));
+        $this->assertTrue(Navigation::handedOver($step + ['history' => [$decided, $except, $infer]]));
+        // Un plan de antes de anotar la operación: cualquier `applied` vale.
+        $this->assertTrue(Navigation::handedOver($step + ['history' => [$decided, ['at' => 't2', 'event' => 'applied']]]));
+    }
+
     public function test_una_operacion_solo_ve_los_elementos_que_se_decidio_que_hiciera(): void
     {
         $step = $this->decision('unmanaged-http', [self::A, self::B, self::C], [

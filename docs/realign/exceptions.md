@@ -303,10 +303,14 @@ nombre y la CI lo diría.
 2. La persona abre Actions → «LaraPack approve» → *Run workflow*, elige la rama
    con las solicitudes y escribe qué aprobar (uno por línea, como los da
    `larapack:hand-rolled list`) o marca `all` después de leerlas
-   (`larapack:realign brief` las prepara).
+   (`larapack:realign brief` las prepara). En la misma corrida puede aceptar
+   pasos sin probar: sus ids en `untested`, uno por línea, y por qué en
+   `untested_note` (`accept-untested` los rechaza sin nota). Una corrida sin
+   nada que aprobar ni aceptar falla sin empujar nada.
 3. La corrida aprueba **a nombre de quien la lanzó** (`github.triggering_actor`):
    cada entrada lleva `approved_by` (su cuenta) y `approved_run` (la corrida),
-   y empuja el candado a una rama nueva, `larapack/approve-<corrida>`. El
+   los pasos aceptados llevan `untested_accepted.by`, y empuja el candado y
+   `plan.json` a una rama nueva, `larapack/approve-<corrida>`. El
    resumen de la corrida da el enlace para abrir el PR.
 4. En ese PR, el job de la puerta anota cada aprobación sin terminal sobre su
    línea del candado y comprueba con GitHub la corrida; CODEOWNERS pide la

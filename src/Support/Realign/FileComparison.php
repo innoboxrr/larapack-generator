@@ -130,11 +130,14 @@ final class FileComparison
     private static function normalise(string $content, string $kind, bool $comments): string
     {
         if ($kind === 'json') {
-            $decoded = json_decode($content, true);
+            // Sin `assoc`: decodificado a arrays, `{}` y `[]` quedan iguales,
+            // y un objeto con claves "0","1" igual que una lista. Son valores
+            // distintos, y darlos por formato adoptaría la edición.
+            $decoded = json_decode($content);
 
             return $decoded === null && trim($content) !== 'null'
                 ? self::lines($content)
-                : (string) json_encode(self::sortKeys($decoded));
+                : self::canonical($decoded);
         }
 
         if ($kind === 'text') {
@@ -165,22 +168,28 @@ final class FileComparison
     }
 
     /**
-     * El orden de las claves de un objeto JSON no cambia su valor; el de una
-     * lista sí.
+     * Un valor JSON escrito siempre igual: el orden de las claves de un
+     * objeto no cambia su valor (se ordenan); el de una lista sí (se deja).
+     * Un objeto y una lista se escriben distinto aunque estén vacíos.
      */
-    private static function sortKeys(mixed $value): mixed
+    private static function canonical(mixed $value): string
     {
-        if (! is_array($value)) {
-            return $value;
+        if ($value instanceof \stdClass) {
+            $members = get_object_vars($value);
+            ksort($members, SORT_STRING);
+
+            return '{'.implode(',', array_map(
+                fn (int|string $key, mixed $member): string => json_encode((string) $key, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES).':'.self::canonical($member),
+                array_keys($members),
+                $members
+            )).'}';
         }
 
-        $value = array_map(self::sortKeys(...), $value);
-
-        if (! array_is_list($value)) {
-            ksort($value);
+        if (is_array($value)) {
+            return '['.implode(',', array_map(self::canonical(...), $value)).']';
         }
 
-        return $value;
+        return (string) json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRESERVE_ZERO_FRACTION);
     }
 
     /**

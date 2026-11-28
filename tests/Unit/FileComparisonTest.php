@@ -196,6 +196,18 @@ final class FileComparisonTest extends TestCase
         $this->assertSame(FileComparison::FORMAT, FileComparison::compare("<?php\nUSE B;\nuse A;\nclass X {}\n", "<?php\nuse A;\nUSE B;\nclass X {}\n", 'php'));
     }
 
+    public function test_un_objeto_json_no_es_una_lista_aunque_este_vacio(): void
+    {
+        // Decodificados a arrays de PHP, los dos lados de cada par eran
+        // iguales: el cambio se daba por formato y se adoptaba.
+        $this->assertSame(FileComparison::DIFFERENT, FileComparison::compare('{"a": {}}', '{"a": []}', 'json'));
+        $this->assertSame(FileComparison::DIFFERENT, FileComparison::compare('{"0": "x", "1": "y"}', '["x", "y"]', 'json'));
+        $this->assertSame(FileComparison::DIFFERENT, FileComparison::compare('{"a": 1.0}', '{"a": 1}', 'json'));
+        // Lo que sí es formato sigue siéndolo.
+        $this->assertSame(FileComparison::FORMAT, FileComparison::compare('{"a": {}, "b": []}', "{\n  \"b\": [],\n  \"a\": {}\n}\n", 'json'));
+        $this->assertSame(FileComparison::FORMAT, FileComparison::compare('{"a": "ñ/x"}', '{"a":"\\u00f1\\/x"}', 'json'));
+    }
+
     public function test_un_json_se_compara_por_su_valor_hasta_el_fondo(): void
     {
         // El orden de las claves no cambia el valor, tampoco dentro de un objeto anidado o de una lista.

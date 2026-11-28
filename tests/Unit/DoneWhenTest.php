@@ -336,8 +336,12 @@ final class DoneWhenTest extends TestCase
         $this->assertCount(1, $this->check(['id' => 'x', 'done_when' => ['kind' => 'verify', 'checks' => ['controller-shape'], 'package' => 'app']])['remaining']);
     }
 
-    public function test_un_hallazgo_que_cubre_una_excepcion_aprobada_no_cuenta(): void
+    public function test_un_controlador_que_no_delega_no_lo_cubre_una_excepcion_del_realineamiento(): void
     {
+        // controller-shape tiene su propio mecanismo (#[HandRolled] en el
+        // código) y `except` no lo acepta: una entrada `realign:controller-shape`
+        // escrita en el candado no puede dar el paso por hecho, igual que
+        // Exceptions::review() no la cuenta.
         $this->bare();
         $this->handwritten();
         $step = ['id' => 'x', 'done_when' => ['kind' => 'verify', 'checks' => ['controller-shape'], 'files' => [self::REPORT]]];
@@ -346,10 +350,6 @@ final class DoneWhenTest extends TestCase
         $this->assertFalse($this->check($step)['done']);
 
         $this->approve([$target => 'Se queda así.']);
-        $this->assertTrue($this->check($step)['done']);
-
-        // Sobre otro código ya no lo cubre.
-        $this->write(self::REPORT, str_replace('required|date', 'required', $this->project->read(self::REPORT)));
         $this->assertFalse($this->check($step)['done']);
     }
 

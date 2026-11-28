@@ -226,6 +226,33 @@ verde, ejecutando cada orden citada y comparando cada formato con la salida real
   ejemplos JSON y los playbooks; `RealignDocShapesTest` compara cada salida `--format=json`, `report.json`,
   `brief` y los campos de un paso, clave por clave, con la salida real, y ejecuta lo que `faq.md` afirma.
 
+### Lo que dejaron abierto las auditorías
+
+Cuatro defectos que las auditorías de mantenibilidad y de enjambre vieron y no tocaron por cambiar comportamiento.
+Cada uno tiene una prueba que falla sin el arreglo.
+
+- **Un objeto JSON no es una lista aunque esté vacío.** El realineamiento comparaba los JSON decodificados a arrays
+  de PHP: `{}` y `[]` eran iguales, y un objeto con claves `"0"`, `"1"` igual que una lista. Un cambio así salía como
+  formato y se adoptaba. Ahora se comparan sin perder la diferencia (`FileComparison`); `1.0` y `1` tampoco son
+  iguales.
+- **Decidir otra vez después de aplicar devuelve el paso.** Una decisión cuya orden ya había corrido seguía «en manos
+  del dueño» aunque se volviera a decidir, y `next` no la daba otra vez. Con decisiones por elemento que ejecutan
+  órdenes distintas bastaba correr una. Ahora cuenta la última decisión, cada `applied` del plan anota su operación y
+  tienen que haber corrido todas las de las opciones elegidas. Un plan de antes, sin la operación anotada, se lee
+  como antes.
+- **Lo que tiene su propio mecanismo no lo cubre una excepción del realineamiento, tampoco al dar un paso por
+  hecho.** `realign:controller-shape:<archivo>` aprobada en el candado no cerraba un hallazgo en `review` y sí daba
+  el paso por terminado en `done`. Ahora las dos miran la misma regla (`Exceptions::exceptable()`): un controlador
+  que no delega lleva `#[HandRolled]`.
+- **`verify` no da por comprobado un manifiesto de una versión posterior del formato.** Escribirlo ya se negaba;
+  leerlo no, y lo que esa versión añade no se comprobaba. Ahora es el error `manifest-unreadable`, con la versión
+  encontrada y hasta cuál se entiende.
+- **Aceptar sin probar también desde el workflow de aprobación.** `accept-untested` sin terminal sólo valía dentro
+  de la corrida de aprobación, y el workflow que escribe `larapack:ci --approval` no lo corría: no había camino. Trae
+  ahora las entradas `untested` (ids, uno por línea) y `untested_note`, los acepta a nombre de quien lanzó la corrida
+  y empuja `plan.json` con el candado a la rama del PR. Una corrida sin nada que aprobar ni aceptar falla sin empujar.
+  **Al actualizar:** vuelve a correr `larapack:ci --approval --force` para regenerar `.github/workflows/larapack-approve.yml` (sin `--force` no se pisa uno que ya existe).
+
 ### Lo que encontró la segunda revisión, sobre lo integrado
 
 ### Qué es

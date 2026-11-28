@@ -102,6 +102,11 @@ class MakerException extends Exception
         return new self("{$manifest} está en la versión {$found} del formato, y este LaraPack sólo escribe hasta la {$supported}: reescribirlo perdería lo que no entiende. Actualiza innoboxrr/larapack-generator.");
     }
 
+    public static function manifestTooNewToRead(string $manifest, int $found, int $supported): self
+    {
+        return new self("{$manifest} está en la versión {$found} del formato, y este LaraPack entiende hasta la {$supported}: lo escribió una versión posterior y lo que no conoce no se comprueba. Actualiza innoboxrr/larapack-generator.");
+    }
+
     public static function invalidComposerJson(string $file, string $reason): self
     {
         return new self("{$file} no es un objeto JSON válido ({$reason}): no se modifica un composer.json que no se entiende.");

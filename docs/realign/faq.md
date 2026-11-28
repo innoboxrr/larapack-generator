@@ -82,7 +82,7 @@ termina mientras siga así. Tiene tres salidas:
 |---|---|---|
 | Las pruebas se pueden correr y pasan | `larapack:realign check <id> --tested="<la orden que corriste>"` | Quien las corrió |
 | El proyecto corre sus pruebas siempre en el mismo sitio | Registrar la orden una vez en `.larapack/realign/config.json` (`{"format_version": 1, "tests": "php artisan test"}`); `check` la corre él | Una persona |
-| No se pueden correr y se acepta así | `larapack:realign accept-untested <id> --note="por qué y cuándo se probará"` | **Sólo el dueño**, en su terminal |
+| No se pueden correr y se acepta así | `larapack:realign accept-untested <id> --note="por qué y cuándo se probará"` | **Sólo el dueño**, en su terminal o en el workflow de aprobación ([exceptions.md](exceptions.md#aprobar-sin-terminal-el-workflow-de-aprobación)) |
 
 Si las pruebas fallan, el paso está mal hecho: se arregla, o se revierte su
 commit. Detalle: [guided.md](guided.md#el-estado-untested).

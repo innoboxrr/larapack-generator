@@ -192,8 +192,9 @@ final class NamedApproval
      *
      * Se lanza a mano en la pestaña Actions, sobre la rama con las
      * solicitudes; aprueba lo que se le pide a nombre de quien lo lanzó y
-     * empuja el candado a una rama nueva (`larapack/approve-<corrida>`), de la
-     * que la persona abre un PR: el candado se revisa como siempre.
+     * empuja el candado —y el plan del realineamiento, si se aceptaron pasos
+     * sin probar— a una rama nueva (`larapack/approve-<corrida>`), de la que
+     * la persona abre un PR: se revisa como siempre.
      *
      * @param  list<string>  $setup  los pasos que preparan PHP y Composer (CiGate)
      * @param  string  $runsOn  el `runs-on` ya escrito en YAML
@@ -204,10 +205,12 @@ final class NamedApproval
             'name: LaraPack approve',
             '',
             '# Generado por `larapack:ci --approval`. La aprobación sin terminal de las',
-            '# excepciones (larapack:hand-rolled approve): la lanza a mano una persona,',
+            '# excepciones (larapack:hand-rolled approve) y de los pasos que se aceptan',
+            '# sin probar (larapack:realign accept-untested): la lanza a mano una persona,',
             '# en Actions, sobre la rama con las solicitudes, y queda a su nombre',
-            '# (github.triggering_actor) y con esta corrida en .larapack/hand-rolled.lock.',
-            '# El candado se empuja a una rama nueva y se revisa en un PR, como siempre.',
+            '# (github.triggering_actor) y con esta corrida en .larapack/hand-rolled.lock',
+            '# y en .larapack/realign/plan.json. Los dos se empujan a una rama nueva y se',
+            '# revisan en un PR, como siempre.',
             '# Lo cubre CODEOWNERS: un cambio aquí lo revisa el dueño.',
             'on:',
             '    workflow_dispatch:',
@@ -220,6 +223,14 @@ final class NamedApproval
             "                description: 'Aprobar todas las excepciones pedidas (léelas antes)'",
             '                type: boolean',
             '                default: false',
+            '            untested:',
+            "                description: 'Pasos del realineamiento que se aceptan sin probar, un id por línea, como los da larapack:realign brief'",
+            '                required: false',
+            '                default: \'\'',
+            '            untested_note:',
+            "                description: 'Por qué se aceptan sin probar y cuándo se probarán (obligatorio si hay pasos)'",
+            '                required: false',
+            '                default: \'\'',
             '',
             'jobs:',
             '    approve:',
@@ -245,7 +256,22 @@ final class NamedApproval
             '                      mapfile -t targets < <(printf \'%s\n\' "$TARGETS" | sed \'/^[[:space:]]*$/d\')',
             '                      set -- "${targets[@]}"',
             '                  fi',
-            "                  {$binary} larapack:hand-rolled approve \"\$@\" --approver=\"\$LARAPACK_APPROVER\"",
+            '                  # Sin nada que aprobar no se aprueba nada (puede venir sólo a',
+            '                  # aceptar pasos sin probar).',
+            '                  if [ "$#" -gt 0 ]; then',
+            "                      {$binary} larapack:hand-rolled approve \"\$@\" --approver=\"\$LARAPACK_APPROVER\"",
+            '                  fi',
+            '',
+            '            - name: Aceptar sin probar',
+            '              env:',
+            '                  LARAPACK_APPROVER: ${{ github.triggering_actor }}',
+            '                  UNTESTED: ${{ inputs.untested }}',
+            '                  NOTE: ${{ inputs.untested_note }}',
+            '              run: |',
+            '                  mapfile -t steps < <(printf \'%s\n\' "$UNTESTED" | sed \'/^[[:space:]]*$/d\')',
+            '                  for step in "${steps[@]}"; do',
+            "                      {$binary} larapack:realign accept-untested \"\$step\" --note=\"\$NOTE\" --approver=\"\$LARAPACK_APPROVER\"",
+            '                  done',
             '',
             '            - name: Empujar el candado a una rama nueva',
             '              env:',
@@ -255,8 +281,14 @@ final class NamedApproval
             '                  git config user.name "github-actions[bot]"',
             '                  git config user.email "41898282+github-actions[bot]@users.noreply.github.com"',
             '                  git switch -c "$branch"',
-            '                  git add '.HandRolledLock::PATH,
-            '                  git commit -m "Excepciones aprobadas por $LARAPACK_APPROVER (corrida $GITHUB_RUN_ID)"',
+            '                  for file in '.HandRolledLock::PATH.' .larapack/realign/plan.json; do',
+            '                      if [ -e "$file" ]; then git add "$file"; fi',
+            '                  done',
+            '                  if git diff --cached --quiet; then',
+            '                      echo "No se pidió nada que aprobar ni que aceptar." >&2',
+            '                      exit 1',
+            '                  fi',
+            '                  git commit -m "Aprobado por $LARAPACK_APPROVER (corrida $GITHUB_RUN_ID)"',
             '                  git push origin "$branch"',
             '                  echo "Abre un PR desde $branch: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/compare/$GITHUB_REF_NAME...$branch" >> "$GITHUB_STEP_SUMMARY"',
         ])."\n";

@@ -234,6 +234,23 @@ final class SwarmChecksTest extends TestCase
 
     // ─── El manifiesto ilegible ──────────────────────────────────────────────
 
+    public function test_un_manifiesto_de_una_version_posterior_no_se_da_por_comprobado(): void
+    {
+        // Lo escribió un LaraPack más nuevo: lo que trae y éste no conoce no
+        // se comprueba, y un verify en verde sería comprobar menos de lo que
+        // el manifiesto dice.
+        $path = $this->project->path.'/.larapack/manifest.json';
+        $manifest = json_decode((string) file_get_contents($path), true);
+        $manifest['version'] = Manifest::VERSION + 1;
+        file_put_contents($path, json_encode($manifest, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+
+        $findings = $this->findings();
+
+        $this->assertSame(['manifest-unreadable'], array_column($findings, 'check'));
+        $this->assertSame('error', $findings[0]['level']);
+        $this->assertStringContainsString('versión posterior', $findings[0]['message']);
+    }
+
     public function test_un_manifiesto_a_medio_fusionar_es_un_error_y_no_un_manifiesto_vacio(): void
     {
         $path = $this->project->path.'/.larapack/manifest.json';
