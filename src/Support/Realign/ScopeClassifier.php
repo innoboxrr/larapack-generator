@@ -612,12 +612,18 @@ final class ScopeClassifier
         $composer = ProjectSources::composer($this->scope['root']);
         $psr4 = $composer['autoload']['psr-4'] ?? [];
         $directories = [];
+        // Lo que la raíz carga de un paquete que es su propio ámbito
+        // (`"Acme\\Billing\\": "packages/billing/src"`) es de ese paquete: si
+        // no, su código sin gestionar salía dos veces, una con la raíz.
+        $packages = $this->scope['path'] === '.' ? (new Scopes($this->scope['root']))->packagePaths() : [];
 
         foreach (is_array($psr4) ? $psr4 : [] as $paths) {
             foreach ((array) $paths as $path) {
                 $path = trim(str_replace('\\', '/', (string) $path), '/');
 
-                if ($path !== '' && is_dir($this->scope['root'].'/'.$path)) {
+                $owned = array_filter($packages, fn (string $package): bool => $path === $package || str_starts_with($path, $package.'/'));
+
+                if ($path !== '' && $owned === [] && is_dir($this->scope['root'].'/'.$path)) {
                     $directories[] = $path;
                 }
             }

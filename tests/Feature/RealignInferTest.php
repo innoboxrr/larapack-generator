@@ -116,6 +116,32 @@ final class RealignInferTest extends TestCase
         $this->assertContains('(rutas)', array_column($report['lost'], 'model'), 'La ruta con closure se dice.');
     }
 
+    public function test_la_simulacion_da_el_informe_entero_sin_escribirlo(): void
+    {
+        // El brief recomienda `infer <id> --dry-run` para saber si las rutas se
+        // conservan; antes remitía a un informe que el dry-run no escribe.
+        $this->projectWithoutContract();
+        $step = $this->stepOfType('no-contract');
+
+        $simulated = $this->realign('infer', ['targets' => [$step], '--dry-run' => true]);
+        $this->assertNull($simulated['fixed'][0]['report']);
+        $this->assertFalse($this->project->has('.larapack/realign/infer/app.json'), 'Simular escribió el informe.');
+        $report = $simulated['fixed'][0]['infer'];
+        $this->assertSame(1, $report['format_version']);
+        $this->assertSame('api.app.panel', array_column($report['decisions'], 'subject', 'type')['route-not-preservable']);
+        $this->assertNotSame([], $report['provenance']);
+
+        // En texto: por tipo de decisión, con cuántas y ejemplos.
+        $this->runCommand('larapack:realign', ['action' => 'infer', 'targets' => [$step], '--dry-run' => true, '--root' => $this->project->path]);
+        $this->assertMatchesRegularExpression('/route-not-preservable \d+ \(api\.app\.panel/', $this->lastOutput);
+        $this->assertStringNotContainsString('están en .larapack/realign/infer/app.json', $this->lastOutput);
+
+        // Sin --dry-run, el informe se escribe y el resultado lo nombra.
+        $written = $this->realign('infer', ['targets' => [$step]]);
+        $this->assertSame('.larapack/realign/infer/app.json', $written['fixed'][0]['report']);
+        $this->assertArrayNotHasKey('infer', $written['fixed'][0]);
+    }
+
     public function test_con_write_contract_escribe_el_contrato_solo_si_no_existe(): void
     {
         $this->projectWithoutContract();

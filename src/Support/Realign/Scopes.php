@@ -17,6 +17,14 @@ use RuntimeException;
  * `packages/*`, sólo los que están dentro de la raíz. Uno de fuera es una
  * dependencia, no parte de lo que se realinea.
  *
+ * En un proyecto que no usa LaraPack (la raíz sin contrato ni manifiesto),
+ * cada paquete local es su propio ámbito aunque tampoco tenga nada: su
+ * `no-contract`, su código sin gestionar y sus controladores se deciden y se
+ * hacen por paquete. Lo encontró una prueba de autonomía sobre un monorepo
+ * de 20 paquetes sin contrato: todo salía con el ámbito de la raíz. En un
+ * proyecto que sí usa LaraPack, un paquete sin nada sigue sin ser ámbito
+ * (un paquete de soporte no es una decisión): su código lo mide la raíz.
+ *
  * @phpstan-type Scope array{package: string|null, path: string, root: string, contract: bool, manifest: bool}
  */
 final class Scopes
@@ -37,6 +45,7 @@ final class Scopes
         $root = $this->sources->root();
         $selected = $this->resolve($only);
         $scopes = [];
+        $managed = is_file($root.'/laraimport.json') || is_file($root.'/.larapack/manifest.json');
 
         foreach ($this->sources->roots() as $directory) {
             if ($directory !== $root && ! str_starts_with($directory, $root.'/')) {
@@ -50,9 +59,10 @@ final class Scopes
             $contract = is_file($directory.'/laraimport.json');
             $manifest = is_file($directory.'/.larapack/manifest.json');
 
-            // Un paquete sin nada de LaraPack no es un ámbito: su código lo
-            // mide el de la raíz (verify recorre packages/*).
-            if ($directory !== $root && ! $contract && ! $manifest) {
+            // En un proyecto con LaraPack, un paquete sin nada de LaraPack no
+            // es un ámbito: su código lo mide el de la raíz (verify recorre
+            // packages/*). Sin LaraPack en la raíz, cada paquete es el suyo.
+            if ($directory !== $root && ! $contract && ! $manifest && $managed) {
                 continue;
             }
 
@@ -102,6 +112,17 @@ final class Scopes
         $name = ProjectSources::composer($directory)['name'] ?? null;
 
         return is_string($name) && $name !== '' ? $name : substr($directory, strlen($this->sources->root()) + 1);
+    }
+
+    /**
+     * Las rutas (relativas a la raíz) de los paquetes locales que son
+     * ámbito: lo que hay debajo es de ellos, no de la raíz.
+     *
+     * @return list<string>
+     */
+    public function packagePaths(): array
+    {
+        return array_values(array_filter(array_column($this->all(), 'path'), fn (string $path): bool => $path !== '.'));
     }
 
     public function sources(): ProjectSources

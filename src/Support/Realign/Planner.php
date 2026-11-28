@@ -158,7 +158,9 @@ final class Planner
         });
 
         $steps = self::dependencies($steps);
-        $steps = self::merge($steps, is_array($previous['steps'] ?? null) ? $previous['steps'] : []);
+        // El mismo informe que el plan anterior: nada se ha vuelto a mirar.
+        $sameReport = is_string($report['id'] ?? null) && ($previous['report_id'] ?? null) === $report['id'];
+        $steps = self::merge($steps, is_array($previous['steps'] ?? null) ? $previous['steps'] : [], $sameReport);
 
         foreach ($steps as $index => $step) {
             $steps[$index]['order'] = $index + 1;
@@ -168,6 +170,7 @@ final class Planner
             'generator' => $report['generator'] ?? null,
             'planned_at' => gmdate('c'),
             'report_generated_at' => $report['generated_at'] ?? null,
+            'report_id' => $report['id'] ?? null,
             'steps' => $steps,
         ];
     }
@@ -208,7 +211,11 @@ final class Planner
     {
         $type = $group['type'];
         $meta = StepTypes::get($type);
-        $scopePath = $type === 'controller-shape' ? self::scopeOfFile($group['scope'], $report) : $group['scope'];
+        // Un paso por controlador tiene por ámbito el del hallazgo (el de su
+        // paquete, lo diga o no un contrato), y si no lo trae, el ámbito más
+        // largo que contiene el archivo.
+        $findingScope = $group['items'][0]['finding']['scope'] ?? null;
+        $scopePath = $type !== 'controller-shape' ? $group['scope'] : (is_string($findingScope) && $findingScope !== '' ? $findingScope : self::scopeOfFile($group['scope'], $report));
         $scope = is_array($report['scopes'][$scopePath] ?? null) ? $report['scopes'][$scopePath] : null;
         $package = $scope['package'] ?? self::packageOfFindings($group['items']);
 
@@ -386,9 +393,10 @@ final class Planner
     /**
      * @param  list<Step>  $steps
      * @param  array<int|string, mixed>  $previous
+     * @param  bool  $sameReport  si el plan anterior salió del mismo informe
      * @return list<Step>
      */
-    private static function merge(array $steps, array $previous): array
+    private static function merge(array $steps, array $previous, bool $sameReport = false): array
     {
         $old = [];
 
@@ -426,6 +434,21 @@ final class Planner
                 // Una decisión tomada sigue tomada; un paso hecho cuyo
                 // problema vuelve a salir se reabre.
                 if ($steps[$index]['category'] === Category::DECISION && (isset($before['decision']) || isset($before['decisions']))) {
+                    continue;
+                }
+
+                // El mismo informe no lo vuelve a encontrar: es el que lo
+                // pedía. Volver a planificar sin volver a diagnosticar reabría
+                // lo que `check` acababa de cerrar, y status contaba un hecho
+                // menos y las decisiones que esperaban a ese paso como
+                // bloqueadas.
+                if ($sameReport) {
+                    $steps[$index]['status'] = self::DONE;
+
+                    if (isset($before['last_check'])) {
+                        $steps[$index]['last_check'] = $before['last_check'];
+                    }
+
                     continue;
                 }
 

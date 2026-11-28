@@ -29,6 +29,40 @@ una por pieza; lo que hay que hacer al actualizar, al final de la versión.
 - **`brief` ve las aprobaciones caducadas sin solicitud**, igual que `done`, y `done` y `brief` rechazan
   argumentos que no usan.
 
+### Pruebas de autonomía sobre un monorepo sin contrato y un 7.x: cada paquete, su ámbito
+
+Una prueba sobre un monorepo sin contrato con 20 paquetes en `packages/`, y otra sobre un proyecto 7.x.
+
+- **Cada paquete local es su propio ámbito, de punta a punta, cuando la raíz no usa LaraPack.** Los pasos
+  `controller-shape` de los paquetes salían con el ámbito de la raíz, `no-contract` sólo en la raíz,
+  `status` atribuía a cada paquete la decisión `unmanaged-http@.` de la raíz y la salida de texto de
+  `diagnose` resumía sólo «app (núcleo)». Ahora, con la raíz sin contrato ni manifiesto, cada paquete es un
+  ámbito (`Scopes`): su `no-contract@packages/x`, sus `unmanaged-http`/`unmanaged-models`, sus
+  `controller-shape` (que llevan el ámbito del hallazgo también en un proyecto con contrato) y su línea en
+  `diagnose`, `status`, `brief` y `done`. El código de un paquete que la raíz carga en su `autoload` es del
+  paquete, no se cuenta dos veces. En un proyecto que sí usa LaraPack, un paquete sin nada sigue sin ser
+  ámbito.
+- **`infer no-contract@.` infiere sólo la raíz.** Escribía también los borradores de todos los paquetes sin
+  contrato, y el plan seguía pidiendo la decisión de cada uno. Cada paquete, con su `no-contract@packages/x`;
+  `--option packages=0` desaparece.
+- **`infer --dry-run` da el detalle.** Remitía a `.larapack/realign/infer/<ámbito>.json`, que una simulación
+  no escribe, y el brief recomienda justo el dry-run para saber si las rutas se conservan. Ahora el informe
+  entero va en el resultado (`infer`, con `report: null`), y en texto una nota resume las decisiones por tipo,
+  con cuántas son y ejemplos (`route-not-preservable 913 (api.v1.posts.index, …)`).
+- **`except` exige la decisión tomada.** Sobre una decisión que nadie había tomado, o tomada con una opción que
+  no pide excepción, la pedía igual. Ahora se niega y dice la orden `decide` que falta.
+- **Lo que una operación deja sin comitear, lo dice.** `adopt` y `apply` dejaban cambios y la siguiente se
+  negaba por el árbol sucio. El resultado trae `commit` (`{required, files, command}`) y la nota «Comitea
+  antes de seguir» con la orden sugerida.
+- **`plan` sin volver a diagnosticar ya no reabre lo comprobado.** Sobre el mismo informe, reabría lo que
+  `check` acababa de dar por hecho: `status` contaba un hecho menos (de 11 a 10) y las decisiones tomadas que
+  esperaban a ese paso como bloqueadas («blocked: 4, 0 decididos»). El informe lleva un `id` y el plan lo
+  guarda (`report_id`); sobre el mismo, lo hecho sigue hecho.
+- **Lo que no cabe en un hueco: `escalate` antes que `except`.** El playbook `edited-outside`, el README y
+  guided.md decían cosas distintas. Ahora lo mismo: si el dueño no ha dicho que se quede así, `escalate`; si
+  ya lo decidió, `except`; un controlador, `#[HandRolled]`. La salida «sin pruebas» de guided.md dice cómo
+  aplazar el paso (`defer`) para seguir con otros.
+
 ### `larapack:realign`: el núcleo del realineamiento
 
 Llevar de vuelta al contrato un proyecto que empezó (o no) con LaraPack y se
@@ -231,15 +265,14 @@ Para los pasos `no-contract`, `unmanaged-models` y `unmanaged-http`. Guía
 completa en [docs/realign/infer.md](docs/realign/infer.md).
 
 ```bash
-larapack:realign infer no-contract@. [--dry-run] [--option write=contract] [--option packages=0] [--option http=0]
+larapack:realign infer no-contract@. [--dry-run] [--option write=contract] [--option http=0]
 ```
 
 - **Lee y no toca nada.** Escribe `laraimport.inferred.json` junto al
   contrato y **nunca** `laraimport.json` si ya existe (`--option
   write=contract` lo escribe sólo si no existe). Con contrato, el borrador es
   el contrato que hay **más** lo que le falta; varios pasos del mismo ámbito
-  van a un borrador. En un `no-contract` de la raíz infiere también cada
-  paquete local sin contrato.
+  van a un borrador. Cada ámbito, el suyo: `no-contract@.` es sólo la raíz.
 - **El esquema**, de `SchemaHistory` sobre las migraciones de TODOS los
   ámbitos (comparten base) y las que carga cada proveedor con
   `loadMigrationsFrom`. **Los modelos**, de su clase y de sus traits:

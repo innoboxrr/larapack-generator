@@ -243,6 +243,35 @@ final class RealignPlanTest extends TestCase
         $this->assertSame('reopened', end($step['history'])['event']);
     }
 
+    public function test_planificar_sin_volver_a_diagnosticar_no_reabre_lo_comprobado(): void
+    {
+        // Lo encontró una prueba de autonomía sobre un 7.x: `plan` sobre el
+        // informe de antes reabría lo que `check` ya había dado por hecho, y
+        // status contaba un hecho menos y las decisiones ya tomadas como
+        // bloqueadas («blocked: 4, 0 decididos»).
+        $this->realign('plan');
+        $this->commitAll();
+        $this->realign('adopt', ['targets' => ['adopt@.']]);
+        $this->commitAll();
+        $this->assertTrue($this->realign('check', ['targets' => ['adopt@.']])['done']);
+        $this->realign('decide', ['targets' => ['unmanaged-http@.', 'keep'], '--note' => 'Se queda a mano.']);
+
+        $before = $this->realign('status')['steps']['by_status'];
+        $this->assertSame(1, $before[Planner::DECIDED]);
+
+        $this->realign('plan');
+
+        $this->assertSame(Planner::DONE, $this->step('adopt@.')['status']);
+        $this->assertNotSame('reopened', end($this->step('adopt@.')['history'])['event']);
+        $this->assertSame($before, $this->realign('status')['steps']['by_status']);
+
+        // Un diagnóstico de después que lo vuelve a encontrar sí lo reabre.
+        file_put_contents($this->project->path.'/'.self::CONTROLLER, str_replace('    ', "\t", $this->project->read(self::CONTROLLER)).' ');
+        $this->realign('diagnose');
+        $this->realign('plan');
+        $this->assertSame(Planner::PENDING, $this->step('adopt@.')['status']);
+    }
+
     public function test_status_dice_donde_se_va_y_si_el_diagnostico_esta_viejo(): void
     {
         $before = $this->realign('status');

@@ -87,8 +87,12 @@ corre `larapack:realign diagnose` y `larapack:realign plan` y vuelve a pedir
    que nadie pidió. Lo que el import haría en el resto del ámbito ya lo hacen
    los pasos deterministas (`regenerate`, `adopt`).
 4. **Si una pieza no cabe en ningún hueco** y no se puede declarar en el
-   contrato, no la fuerces: es una excepción y la decide el dueño
-   (`larapack:realign except`). Déjala anotada en el informe del paso.
+   contrato, no la fuerces ni la exceptúes tú: dejarla así lo decide el
+   dueño. Pásaselo con `larapack:realign escalate {{id}} --note="qué no cabe
+   y por qué"`: el paso pasa a ser una decisión (`refactor` o `except`). Si
+   el dueño decide `except`, entonces pides la excepción
+   (`larapack:realign except {{id}} --option reason="…"`) y él la aprueba.
+   Déjala anotada en el informe del paso.
 5. **Corre las pruebas del proyecto antes y después.** Si no se pueden correr
    (sin `vendor`, sin base de datos), el paso no se da por hecho aunque
    `check` pase: ver «Sin pruebas» en la guía de los pasos guiados
@@ -112,8 +116,9 @@ campo de `rules()` que no está.
   propósito: un comentario, un commit que lo dice (`git log -p -- <archivo>`),
   una columna secreta (`hidden`, una contraseña, un token) o algo que cambia
   quién ve qué. Ahí la pregunta es si el **contrato** está mal: o se quita
-  del contrato (y se vuelve a diagnosticar) o se exceptúa
-  (`larapack:realign except`). Lo decide el dueño, no tú.
+  del contrato (y se vuelve a diagnosticar) o se exceptúa. Lo decide el
+  dueño, no tú: `larapack:realign escalate {{id}} --note="…"`, como en el
+  paso 4.
 - **No lo copies tal cual** cuando el archivo tiene a la vez `+` propios: mueve
   primero lo tuyo (pasos 1 y 2) y copia después.
 

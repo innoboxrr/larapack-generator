@@ -20,6 +20,9 @@ use RuntimeException;
  *     haga se pueda deshacer con git. `--allow-dirty` lo salta, dicho.
  *  3. Llama a la operación y anota en la historia de cada paso lo que hizo.
  *     No lo da por hecho: eso lo decide `check`, con su `done_when`.
+ *  4. Si deja el árbol con cambios, lo dice (`commit`, y una nota): comitea
+ *     antes de seguir, con la orden sugerida. La siguiente operación lo
+ *     exige limpio.
  *
  * Con `--dry-run`, `apply` y `adopt` corren de verdad sobre una copia
  * temporal del proyecto (Simulation): un paso escribe lo que lee el
@@ -34,7 +37,7 @@ final class OperationRunner
      * @param  list<string>  $packages  rutas de ámbito a las que acotar (`.` es el núcleo); vacío, todos
      * @param  array<string, string>  $options
      * @param  list<string>  $only  `--target`: sólo estos elementos de los pasos (lo entiende `except`)
-     * @return array{action: string, dry_run: bool, steps: list<string>, result: array{fixed: list<array<string, mixed>>, skipped: list<array<string, mixed>>, unchanged: list<array<string, mixed>>, notes: list<string>}}
+     * @return array{action: string, dry_run: bool, steps: list<string>, result: array{fixed: list<array<string, mixed>>, skipped: list<array<string, mixed>>, unchanged: list<array<string, mixed>>, notes: list<string>}, commit: array{required: true, files: int, command: string, message: string}|null}
      */
     public function run(string $action, array $targets, array $packages, bool $dryRun, bool $allowDirty, array $options = [], array $only = []): array
     {
@@ -83,7 +86,43 @@ final class OperationRunner
             $state->savePlan($plan);
         }
 
-        return ['action' => $action, 'dry_run' => $dryRun, 'steps' => $ids, 'result' => $result];
+        $commit = $dryRun ? null : $this->commitAdvice($action, $ids);
+
+        if ($commit !== null) {
+            $result['notes'][] = $commit['message'];
+        }
+
+        return ['action' => $action, 'dry_run' => $dryRun, 'steps' => $ids, 'result' => $result, 'commit' => $commit];
+    }
+
+    /**
+     * Lo que queda sin comitear después de escribir, con la orden sugerida.
+     * La siguiente operación exige el árbol limpio (ensureClean): sin decirlo
+     * aquí, un agente encadenaba `adopt` y `apply` y el segundo se negaba
+     * por un árbol sucio que había ensuciado el primero. Null si no quedó
+     * nada (o si no es un repositorio git: eso ya lo dijo ensureClean).
+     *
+     * @param  list<string>  $ids
+     * @return array{required: true, files: int, command: string, message: string}|null
+     */
+    private function commitAdvice(string $action, array $ids): ?array
+    {
+        $lines = $this->dirtyLines();
+
+        if ($lines === null || $lines === []) {
+            return null;
+        }
+
+        $subject = 'realign: '.$action.($ids === [] ? '' : ' '.implode(' ', array_slice($ids, 0, 3)).(count($ids) > 3 ? ' (+'.(count($ids) - 3).')' : ''));
+        $command = 'git add -A && git commit -m '.escapeshellarg($subject);
+
+        return [
+            'required' => true,
+            'files' => count($lines),
+            'command' => $command,
+            'message' => 'Comitea antes de seguir: quedan '.count($lines).' archivos sin comitear, y la siguiente operación que escribe exige el árbol limpio. '
+                .'Corre las pruebas del proyecto y después: '.$command,
+        ];
     }
 
     /**
@@ -175,6 +214,28 @@ final class OperationRunner
      */
     private function ensureClean(): void
     {
+        $lines = $this->dirtyLines();
+
+        if ($lines === null) {
+            throw new RuntimeException("{$this->root} no es un repositorio git: lo que se escriba no se podrá deshacer con git. Con --allow-dirty se escribe igual.");
+        }
+
+        if ($lines !== []) {
+            $shown = array_slice($lines, 0, 10);
+
+            throw new RuntimeException('El árbol git tiene cambios sin comitear ('.count($lines).'): '.implode('; ', array_map('trim', $shown))
+                .(count($lines) > 10 ? '…' : '').'. Comítalos o guárdalos antes, para poder deshacer lo que escriba el realineamiento; --allow-dirty lo salta.');
+        }
+    }
+
+    /**
+     * Lo que git da por cambiado, fuera de `.larapack/realign/` (estado, no
+     * código), o null si no se pudo preguntar (no es un repositorio git).
+     *
+     * @return list<string>|null
+     */
+    private function dirtyLines(): ?array
+    {
         $command = ['git', '-C', $this->root, 'status', '--porcelain', '--untracked-files=all', '--', '.', ':(exclude).larapack/realign'];
         $process = proc_open($command, [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
 
@@ -187,19 +248,11 @@ final class OperationRunner
         stream_get_contents($pipes[2]);
         fclose($pipes[1]);
         fclose($pipes[2]);
-        $exit = proc_close($process);
 
-        if ($exit !== 0) {
-            throw new RuntimeException("{$this->root} no es un repositorio git: lo que se escriba no se podrá deshacer con git. Con --allow-dirty se escribe igual.");
+        if (proc_close($process) !== 0) {
+            return null;
         }
 
-        $lines = array_values(array_filter(explode("\n", $output), fn (string $line): bool => trim($line) !== ''));
-
-        if ($lines !== []) {
-            $shown = array_slice($lines, 0, 10);
-
-            throw new RuntimeException('El árbol git tiene cambios sin comitear ('.count($lines).'): '.implode('; ', array_map('trim', $shown))
-                .(count($lines) > 10 ? '…' : '').'. Comítalos o guárdalos antes, para poder deshacer lo que escriba el realineamiento; --allow-dirty lo salta.');
-        }
+        return array_values(array_filter(explode("\n", $output), fn (string $line): bool => trim($line) !== ''));
     }
 }

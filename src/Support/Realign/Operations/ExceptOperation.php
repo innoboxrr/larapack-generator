@@ -5,8 +5,10 @@ namespace Innoboxrr\LarapackGenerator\Support\Realign\Operations;
 use Innoboxrr\LarapackGenerator\Support\Files;
 use Innoboxrr\LarapackGenerator\Support\HandRolledLock;
 use Innoboxrr\LarapackGenerator\Support\ProjectVerification;
+use Innoboxrr\LarapackGenerator\Support\Realign\Category;
 use Innoboxrr\LarapackGenerator\Support\Realign\Exceptions;
 use Innoboxrr\LarapackGenerator\Support\Realign\ExceptionTargets;
+use Innoboxrr\LarapackGenerator\Support\Realign\Navigation;
 use Innoboxrr\LarapackGenerator\Support\Verifier;
 use RuntimeException;
 
@@ -79,6 +81,10 @@ final class ExceptOperation implements RealignOperation
             throw new RuntimeException('except necesita la razón: --option reason="por qué se deja así". Es lo que lee el dueño del proyecto al aprobarla, y lo que queda en '.HandRolledLock::PATH.'.');
         }
 
+        foreach ($context->steps as $step) {
+            $this->requireDecision($step);
+        }
+
         $exceptions = new Exceptions($context->state);
         $existing = $exceptions->requests();
         $approvals = $exceptions->approvals();
@@ -145,6 +151,42 @@ final class ExceptOperation implements RealignOperation
             .'`larapack:hand-rolled approve <objetivo>`, revisa '.HandRolledLock::PATH.' y lo comitea. Un agente no la aprueba ni edita el candado.');
 
         return $result;
+    }
+
+    /**
+     * Una decisión se exceptúa cuando el dueño la tomó con una opción que
+     * pide la excepción («dejarlo como está»): except es lo que sigue a
+     * `decide`, no lo que la sustituye. Antes se aceptaba sobre una decisión
+     * que nadie había tomado, y la solicitud llegaba al dueño como si él ya
+     * hubiera elegido. Lo que no es una decisión (un paso determinista o
+     * guiado que se acepta) se pide sin más.
+     *
+     * @param  array<string, mixed>  $step
+     */
+    private function requireDecision(array $step): void
+    {
+        if (($step['category'] ?? null) !== Category::DECISION || Navigation::decidedFor($step, 'except')) {
+            return;
+        }
+
+        $id = (string) ($step['id'] ?? '?');
+        $keys = [];
+
+        foreach ((array) ($step['options'] ?? []) as $option) {
+            if (is_array($option) && str_starts_with((string) ($option['run'] ?? ''), 'larapack:realign except ')) {
+                $keys[] = (string) $option['key'];
+            }
+        }
+
+        $chosen = Navigation::chosen($step);
+        $now = $chosen === []
+            ? "{$id} es una decisión que nadie ha tomado"
+            : "{$id} se decidió ".implode(', ', $chosen).', que no pide una excepción';
+
+        throw new RuntimeException($now.': except sigue a la decisión del dueño, no la toma. '
+            .($keys === []
+                ? 'Ninguna de sus opciones pide una excepción: sigue la que se decida (larapack:realign show '.$id.').'
+                : 'Preséntasela (larapack:realign show '.$id.'); si el dueño decide dejarlo como está: larapack:realign decide '.$id.' '.$keys[0].' --note="…", y después este except.'));
     }
 
     /**
