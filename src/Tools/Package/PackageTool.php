@@ -4,6 +4,7 @@ namespace Innoboxrr\LarapackGenerator\Tools\Package;
 
 use Innoboxrr\LarapackGenerator\Exceptions\MakerException;
 use Innoboxrr\LarapackGenerator\Support\Ecosystem;
+use Innoboxrr\LarapackGenerator\Support\Files;
 use Innoboxrr\LarapackGenerator\Support\Generation;
 use Innoboxrr\LarapackGenerator\Tools\Tool;
 
@@ -158,7 +159,7 @@ class PackageTool extends Tool
             throw MakerException::directoryNotCreated($directory);
         }
 
-        file_put_contents($destination, $this->replaceTokens(self::contents($stub)));
+        Files::write($destination, $this->replaceTokens(self::contents($stub)));
 
         Generation::record('create', $destination, $stub);
     }

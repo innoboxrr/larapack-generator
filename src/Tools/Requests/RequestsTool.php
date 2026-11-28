@@ -3,6 +3,7 @@
 namespace Innoboxrr\LarapackGenerator\Tools\Requests;
 
 use Innoboxrr\LarapackGenerator\Exceptions\MakerException;
+use Innoboxrr\LarapackGenerator\Support\Files;
 use Innoboxrr\LarapackGenerator\Tools\ModelArtifact;
 use Innoboxrr\LarapackGenerator\Tools\Tool;
 
@@ -170,7 +171,7 @@ class RequestsTool extends Tool implements ModelArtifact
             ) ?? throw MakerException::rewriteFailed($filePath);
         }
 
-        file_put_contents($filePath, str_replace(
+        Files::write($filePath, str_replace(
             '//RULES//',
             $this->buildRules($rules),
             $fileContent

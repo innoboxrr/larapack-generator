@@ -260,7 +260,7 @@ final class Translations
         // "\n", ese `false` dejaba el archivo vacío y se llevaba todas las
         // traducciones escritas a mano. Bastaba un archivo del proyecto en
         // Latin-1 con un `t('canción')` en el mismo src.
-        file_put_contents(
+        Files::write(
             $path,
             json_encode((object) $merged, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR)."\n"
         );

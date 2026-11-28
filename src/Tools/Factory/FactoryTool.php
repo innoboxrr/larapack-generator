@@ -2,6 +2,7 @@
 
 namespace Innoboxrr\LarapackGenerator\Tools\Factory;
 
+use Innoboxrr\LarapackGenerator\Support\Files;
 use Innoboxrr\LarapackGenerator\Support\Import\SemanticValidator;
 use Innoboxrr\LarapackGenerator\Tools\ModelArtifact;
 use Innoboxrr\LarapackGenerator\Tools\Tool;
@@ -69,7 +70,7 @@ class FactoryTool extends Tool implements ModelArtifact
 
         $definitionContent = $this->generateFactoryDefinition($props);
         $updatedFileContent = str_replace('//EDIT//', $definitionContent, $fileContent);
-        file_put_contents($factoryFile, $updatedFileContent);
+        Files::write($factoryFile, $updatedFileContent);
     }
 
     /**

@@ -2,6 +2,7 @@
 
 namespace Innoboxrr\LarapackGenerator\Tools\Controller;
 
+use Innoboxrr\LarapackGenerator\Support\Files;
 use Innoboxrr\LarapackGenerator\Tools\ModelArtifact;
 use Innoboxrr\LarapackGenerator\Tools\Tool;
 
@@ -101,7 +102,7 @@ class ControllerTool extends Tool implements ModelArtifact
 
         $except = implode(', ', array_map(fn (string $name): string => "'{$name}'", $public));
 
-        file_put_contents($file, str_replace(
+        Files::write($file, str_replace(
             "new Middleware('auth:sanctum'),",
             "new Middleware('auth:sanctum', except: [{$except}]),",
             self::contents($file)
