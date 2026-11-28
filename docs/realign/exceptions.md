@@ -87,8 +87,27 @@ vendor/bin/builder larapack:realign check route-closure@.
 - `except` **no escribe código ni el candado**: sólo la solicitud. Como toda
   operación del realineamiento, sin `--dry-run` exige el árbol git limpio (o
   `--allow-dirty`). Informa `fixed` (solicitada), `unchanged` (ya estaba
-  pedida o aprobada igual) y `skipped` (lo que no sabe nombrar con exactitud,
-  con la razón).
+  pedida o aprobada igual, o ya no hace falta) y `skipped` (lo que no sabe
+  nombrar con exactitud, con la razón).
+- **Pide por lo de hoy, no por lo del plan.** Antes de pedir, vuelve a mirar
+  cada elemento del paso: un hallazgo, con la misma comprobación de verify
+  sobre el código de ahora; un archivo (`missing`, `untracked-edited`…), con
+  la misma clasificación que el diagnóstico; uno a mano (`unmanaged-http`), si
+  sigue existiendo; un closure, por su línea. Lo que ya no está —un archivo que
+  `apply` o una persona arreglaron después de planificar— **no se pide**: sale
+  en `unchanged` con «verify ya no lo señala» o «ya no es …», y que el plan es
+  de antes. No hace falta volver a diagnosticar para pedir lo que queda, pero
+  `diagnose && plan` ponen el paso al día.
+- **`--target`, repetible, acota a esos elementos**, por su objetivo
+  (`realign:fix/index-managed:src/…`) o por su archivo:
+
+  ```bash
+  vendor/bin/builder larapack:realign except fix:index-managed@. --option reason="…" \
+      --target=src/Http/Requests/Post/ReportRequest.php
+  ```
+
+  Un `--target` que no es ningún elemento de esos pasos es un error que dice
+  cuáles hay, no una corrida vacía. Sólo lo acepta `except`.
 - Se pueden mezclar decisiones: llevar unos closures a un controlador
   (`closure-to-controller`) y pedir la excepción sólo para los legítimos. El
   paso queda hecho cuando verify ya no encuentra ninguno sin resolver.

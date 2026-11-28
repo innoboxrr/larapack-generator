@@ -282,6 +282,47 @@ final class RealignExceptionsTest extends TestCase
         $this->assertSame('code-changed', Exceptions::forRoot($this->project->path)->status('realign:no-contract:laraimport.json'));
     }
 
+    public function test_except_reclasifica_antes_de_pedir_y_se_acota_con_target(): void
+    {
+        // Dos requests que listan sin forzar `managed`: un paso fix con dos
+        // hallazgos. Uno se arregla después de planificar.
+        $index = 'src/Http/Requests/Post/IndexRequest.php';
+        $report = 'src/Http/Requests/Post/ReportRequest.php';
+        $merge = "        \$this->merge([\n            'managed' => true,\n        ]);\n";
+        $original = $this->project->read($index);
+        $this->edit($index, $merge, '');
+        file_put_contents($this->project->path.'/'.$report, str_replace('class IndexRequest', 'class ReportRequest', $this->project->read($index)));
+        $this->commitAll();
+        $this->realign('diagnose');
+        $this->realign('plan');
+
+        $id = 'fix:index-managed@.';
+        $this->assertEqualsCanonicalizing([$index, $report], array_column($this->step($id)['details']['findings'], 'file'));
+
+        file_put_contents($this->project->path.'/'.$index, $original);
+        $this->commitAll();
+        $reason = ['reason=La usa un informe interno que ve todas las filas.'];
+
+        // Sin volver a diagnosticar: lo ya arreglado no se pide.
+        $document = $this->realign('except', ['targets' => [$id], '--option' => $reason, '--dry-run' => true]);
+        $this->assertSame([$report], array_column($document['fixed'], 'file'));
+        $this->assertSame([$index], array_column($document['unchanged'], 'file'));
+        $this->assertStringContainsString('ya no lo señala', $document['unchanged'][0]['reason']);
+
+        // --target acota a esos elementos (por archivo o por objetivo).
+        $only = $this->realign('except', ['targets' => [$id], '--option' => $reason, '--target' => [$report]]);
+        $this->assertSame([$report], array_column($only['fixed'], 'file'));
+        $this->assertSame([], $only['unchanged']);
+        $this->assertSame(['realign:fix/index-managed:'.$report], array_keys(Exceptions::forRoot($this->project->path)->requests()));
+
+        // Uno que no es de esos pasos es un error, no una corrida vacía.
+        $refused = $this->realign('except', ['targets' => [$id], '--option' => $reason, '--target' => ['src/Nada.php']], Command::FAILURE);
+        $this->assertStringContainsString('src/Nada.php', $refused['error']);
+
+        // Y --target es sólo de except.
+        $this->realign('apply', ['targets' => [$id], '--target' => [$report]], Command::FAILURE);
+    }
+
     /**
      * @param  list<string>  $values
      * @return list<string>

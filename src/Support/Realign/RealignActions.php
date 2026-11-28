@@ -117,9 +117,9 @@ final class RealignActions
         ],
         'except' => [
             'summary' => 'Pide una excepción por cada elemento de un paso que se decide dejar como está, con su razón y su huella. No cubre nada hasta que el dueño la aprueba con larapack:hand-rolled approve.',
-            'usage' => ['larapack:realign except <id>… --option reason="…" [--dry-run] [--allow-dirty]'],
+            'usage' => ['larapack:realign except <id>… --option reason="…" [--target=<objetivo|archivo>…] [--dry-run] [--allow-dirty]'],
             'writes' => 'Sólo .larapack/realign/exceptions.json (las solicitudes). La aprobación la escribe larapack:hand-rolled en .larapack/hand-rolled.lock.',
-            'options' => ['package', 'dry-run', 'allow-dirty', 'option'],
+            'options' => ['package', 'dry-run', 'allow-dirty', 'option', 'target'],
             'keys' => [
                 'reason' => 'Obligatoria: por qué se deja así. La lee el dueño antes de aprobar y queda en el candado.',
             ],
