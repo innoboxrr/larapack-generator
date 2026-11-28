@@ -184,6 +184,42 @@ final class HandRolledLockFormatTest extends TestCase
         $this->assertSame('Ana Pérez', HandRolledLock::read($this->root)['A']['approved_by'] ?? null);
     }
 
+    public function test_la_corrida_que_aprobo_tiene_que_ser_una_direccion(): void
+    {
+        // `approved_run` es la dirección de la corrida de aprobación lanzada a
+        // mano en GitHub: lo que no es una URL https no prueba nada.
+        foreach (['""', '"http://x/1"', '"https://"', '"https://a b"', '7', '["https://x"]'] as $run) {
+            $this->assertUnreadable(
+                '[{"target": "A", "reason": "r", "fingerprint": null}, {"target": "B", "reason": "r", "fingerprint": null, "approved_run": '.$run.'}]',
+                '.larapack/hand-rolled.lock tiene un `approved_run` que no es la dirección de una corrida (posición 1).'
+            );
+        }
+
+        $this->lock('[{"target": "A", "reason": "r", "fingerprint": null, "approved_by": "ana", "approved_run": "https://github.com/acme/notes/actions/runs/4242"}]');
+        $read = HandRolledLock::read($this->root);
+        $this->assertSame('https://github.com/acme/notes/actions/runs/4242', $read['A']['approved_run'] ?? null);
+        $this->assertSame("[\n    {\n        \"target\": \"A\",\n        \"reason\": \"r\",\n        \"fingerprint\": null,\n        \"approved_by\": \"ana\",\n        \"approved_run\": \"https://github.com/acme/notes/actions/runs/4242\"\n    }\n]\n", HandRolledLock::encode((array) $read));
+    }
+
+    public function test_la_linea_de_un_objetivo_en_el_candado(): void
+    {
+        // Sin candado, la primera línea.
+        $this->assertSame(1, HandRolledLock::lineOf($this->root, 'App\\A'));
+
+        $this->lock(HandRolledLock::encode([
+            'App\\Http\\Controllers\\A' => ['reason' => 'r', 'fingerprint' => null],
+            'realign:route-closure:routes/web.php#get(\'/año\')' => ['reason' => 'r', 'fingerprint' => null],
+        ]));
+
+        // Cada uno donde empieza su entrada, con barras y acentos tal cual.
+        $this->assertSame(3, HandRolledLock::lineOf($this->root, 'App\\Http\\Controllers\\A'));
+        $this->assertSame(8, HandRolledLock::lineOf($this->root, 'realign:route-closure:routes/web.php#get(\'/año\')'));
+        // Lo que no está, la primera línea; y un objetivo no se confunde con
+        // otro que lo contiene.
+        $this->assertSame(1, HandRolledLock::lineOf($this->root, 'App\\Http'));
+        $this->assertSame(1, HandRolledLock::lineOf($this->root, 'r'));
+    }
+
     public function test_un_objetivo_aprobado_dos_veces_no_se_lee(): void
     {
         // Con dos entradas, ¿cuál vale? Ninguna: el candado lo revisa el
