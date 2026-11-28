@@ -86,6 +86,17 @@ class MakerException extends Exception
             : "No se pudo escribir {$manifest} ({$reason}), ni reintentándolo: otro proceso lo tiene bloqueado. Lo registrado en esta corrida está en {$pending}; cuando se libere, muévelo encima de {$manifest}. Sin eso, lo que se generó queda sin registrar y --force lo tomará por editado a mano.");
     }
 
+    /**
+     * Un manifiesto que existe y no se puede leer no es un manifiesto vacío:
+     * tratarlo como tal hacía que la siguiente importación lo reescribiera
+     * desde cero y se perdiera el registro de todo lo generado. Lo habitual
+     * es un merge de git a medio resolver.
+     */
+    public static function manifestUnreadable(string $manifest, string $reason): self
+    {
+        return new self("El manifiesto {$manifest} no se puede leer: {$reason}. No se ha tocado nada. Si viene de un merge, `larapack:reconcile` lo recompone a partir de las dos ramas; si no, recupéralo de git.");
+    }
+
     public static function manifestTooNew(string $manifest, int $found, int $supported): self
     {
         return new self("{$manifest} está en la versión {$found} del formato, y este LaraPack sólo escribe hasta la {$supported}: reescribirlo perdería lo que no entiende. Actualiza innoboxrr/larapack-generator.");

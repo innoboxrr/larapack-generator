@@ -37,7 +37,13 @@ final class ContractDrift
 
     public const DECLARATION = 'manifest-declaration';
 
-    public const CHECKS = [self::MODEL_LISTS, self::RELATION_MISSING, self::DECLARATION];
+    /**
+     * Lo generado corresponde a otro contrato: el laraimport cambió —a mano o
+     * al fusionar dos ramas— y no se volvió a importar (ContractFingerprint).
+     */
+    public const CONTRACT_OUTDATED = 'contract-outdated';
+
+    public const CHECKS = [self::MODEL_LISTS, self::RELATION_MISSING, self::DECLARATION, self::CONTRACT_OUTDATED];
 
     /**
      * @var array<string, array<string, mixed>>|null por nombre; null si no se ha leído
@@ -66,7 +72,7 @@ final class ContractDrift
             ]];
         }
 
-        $findings = [];
+        $findings = $this->outdated($models);
 
         foreach ($models as $model) {
             if (! isset($contract[$model])) {
@@ -188,6 +194,68 @@ final class ContractDrift
         };
 
         return (string) json_encode($sort($value), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    }
+
+    /**
+     * Las piezas cuyo contrato ya no es el que había al generarlas.
+     *
+     * Es un error y no un aviso: no es deuda que se pueda ir pagando, es que
+     * el código y el contrato dicen cosas distintas ahora mismo. Lo arregla
+     * `larapack:import --force` (o, tras un merge, `larapack:reconcile`), que
+     * regenera lo no editado y vuelve a anotar la huella.
+     *
+     * Un manifiesto que no dice ninguna huella —de antes de 9.4.0— no se
+     * compara: no hay con qué. La primera importación con --force las anota.
+     *
+     * @param  array<int, string>  $models  los del manifiesto
+     * @return list<Finding>
+     */
+    private function outdated(array $models): array
+    {
+        $declared = ContractFingerprint::ofFile($this->manifest->root().'/laraimport.json');
+
+        if ($declared === null || ! $this->manifest->tracksContract()) {
+            return [];
+        }
+
+        $finding = fn (?string $model, string $message): array => [
+            'level' => Verifier::ERROR,
+            'check' => self::CONTRACT_OUTDATED,
+            'model' => $model,
+            'file' => 'laraimport.json',
+            'message' => $message,
+        ];
+
+        $fix = 'Corre `larapack:import --force` (tras un merge, `larapack:reconcile`) y revisa lo que conserve por estar editado a mano.';
+        $findings = [];
+
+        foreach ($declared['models'] as $model => $fingerprint) {
+            $recorded = $this->manifest->contractOf($model);
+
+            if (! in_array($model, $models, true)) {
+                $findings[] = $finding($model, "El laraimport declara {$model} y no hay nada generado de él. {$fix}");
+            } elseif ($recorded !== null && ! ContractFingerprint::matches($recorded, $fingerprint)) {
+                $findings[] = $finding($model, "Lo generado de {$model} corresponde a otro contrato: su declaración en el laraimport (o algo de lo que depende: el prefijo de tablas, el modelo al que apunta una clave ajena) cambió desde la última importación. {$fix}");
+            }
+        }
+
+        foreach ($models as $model) {
+            if (! isset($declared['models'][$model]) && $this->manifest->contractOf($model) !== null) {
+                $findings[] = $finding($model, "El manifiesto registra {$model}, generado desde el laraimport, y el laraimport ya no lo declara. Si se retiró, `larapack:remove-full-model {$model}` borra lo generado; si se perdió en un merge, devuélvelo al laraimport.");
+            }
+        }
+
+        $pivots = $this->manifest->pivotContracts();
+
+        foreach ($declared['pivots'] as $pivot => $fingerprint) {
+            if (! ContractFingerprint::matches($pivots[$pivot] ?? null, $fingerprint)) {
+                $findings[] = $finding(null, isset($pivots[$pivot])
+                    ? "El pivote {$pivot} cambió en el laraimport desde la última importación. {$fix}"
+                    : "El laraimport declara el pivote {$pivot} y no se ha importado. {$fix}");
+            }
+        }
+
+        return $findings;
     }
 
     /**

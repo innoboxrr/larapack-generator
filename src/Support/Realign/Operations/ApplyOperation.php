@@ -3,6 +3,7 @@
 namespace Innoboxrr\LarapackGenerator\Support\Realign\Operations;
 
 use Innoboxrr\LarapackGenerator\Exceptions\MakerException;
+use Innoboxrr\LarapackGenerator\Support\ContractFingerprint;
 use Innoboxrr\LarapackGenerator\Support\Files;
 use Innoboxrr\LarapackGenerator\Support\Import\ImportDocument;
 use Innoboxrr\LarapackGenerator\Support\LegacyFix;
@@ -579,10 +580,25 @@ final class ApplyOperation implements RealignOperation
             return;
         }
 
-        $this->write([$reference->scope['root'].'/laraimport.json' => $outcome['json']], $context, $result, $file, $extra,
+        $contract = $reference->scope['root'].'/laraimport.json';
+        $manifest = new Manifest($reference->scope['root']);
+        $before = ContractFingerprint::ofFile($contract)['models'] ?? [];
+
+        // Los modelos cuyo código correspondía al contrato antes de fijar:
+        // fijar declara lo que el código ya hace, así que siguen
+        // correspondiendo y su huella se vuelve a anotar. Los que ya estaban
+        // desfasados lo siguen estando (contract-outdated).
+        $inSync = array_filter(
+            array_unique(array_map(fn (array $pin): string => (string) ($pin['model'] ?? ''), $pins)),
+            fn (string $model): bool => isset($before[$model]) && ContractFingerprint::matches($manifest->contractOf($model), $before[$model])
+        );
+
+        $this->write([$contract => $outcome['json']], $context, $result, $file, $extra,
             'Fijadas en el contrato las acciones que hacen hoy las migraciones: '.implode('; ', $outcome['pinned']).'. La base no cambia.', false, null);
 
         if (! $context->dryRun()) {
+            $manifest->stampContracts(array_intersect_key(ContractFingerprint::ofFile($contract)['models'] ?? [], array_flip($inSync)));
+
             // El contrato cambió: lo regenerado de antes ya no vale.
             ScopeReference::forget();
             $this->documents = [];

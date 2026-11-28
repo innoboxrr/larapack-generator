@@ -1,5 +1,5 @@
 {
-    ".larapack/manifest.json": "dff04c8782424a25ab2b99f5d5adf1c411f2a663dded76e8332773fc72ac7aeb",
+    ".larapack/manifest.json": "6d48dfe809e2ac8561cbb0c90d1cd154c1c62e15663e47c434fb1ff58f44d458",
     "app/Exports/PostsExports.php": "bb89ed23dc4cc4ce457201dd4b5dd79ef9274ad3262a8d50e959bc7b7d95540a",
     "app/Http/Controllers/PostController.php": "ef7dcefe0c5c179fafbcd576b8ccc31a6a629b8285bc5301b8fe8fcb3362fd6f",
     "app/Http/Events/Post/Events/CreateEvent.php": "81fbba4d12c4926bf6dda1912e9f3a15fbb165ee65609c0b9ef49831365ef0bc",

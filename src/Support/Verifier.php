@@ -2,6 +2,7 @@
 
 namespace Innoboxrr\LarapackGenerator\Support;
 
+use Innoboxrr\LarapackGenerator\Exceptions\MakerException;
 use Innoboxrr\LarapackGenerator\Support\Import\Actions;
 use Innoboxrr\LarapackGenerator\Support\Import\Endpoints;
 
@@ -59,7 +60,7 @@ final class Verifier
     public const MANIFEST_CHECKS = [
         'empty-manifest', 'missing-file', 'customised', 'inconsistent-entity', 'route-prefix',
         'route-not-declared', 'endpoint-missing', 'immutable-write', 'secret-exposed',
-        'endpoint-tests-outdated', ...ContractDrift::CHECKS,
+        'endpoint-tests-outdated', ...ContractDrift::CHECKS, ...MergeDrift::CHECKS,
     ];
 
     /**
@@ -120,10 +121,23 @@ final class Verifier
         // lo consulta por modelo y por archivo, y releerlo del disco en cada
         // consulta hacía que un proyecto grande tardara minutos.
         $live = $this->manifest;
-        $this->manifest = $live->snapshot();
+
+        // Uno que no se puede leer —un merge a medio resolver— no es uno
+        // vacío: es un error, y lo demás que deja un merge se sigue mirando.
+        try {
+            $this->manifest = $live->snapshot();
+        } catch (MakerException $e) {
+            return [
+                $this->finding(self::ERROR, MergeDrift::MANIFEST_UNREADABLE, null, Manifest::RELATIVE_PATH, $e->getMessage()),
+                ...(new MergeDrift($live->root(), null))->run(),
+            ];
+        }
 
         try {
-            return $this->checks();
+            return [
+                ...(new MergeDrift($live->root(), $this->manifest))->run(),
+                ...$this->checks(),
+            ];
         } finally {
             $this->manifest = $live;
         }

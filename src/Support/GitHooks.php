@@ -79,6 +79,11 @@ final class GitHooks
      */
     private const LOCK = '#(^|/)\.larapack/hand-rolled\.lock$#i';
 
+    /**
+     * El contrato y el manifiesto, en cualquier proyecto del repositorio.
+     */
+    private const STATE = '#(^|/)(laraimport\.json|\.larapack/manifest\.json)$#';
+
     private const ZERO = '/^0+$/';
 
     /**
@@ -366,13 +371,18 @@ final class GitHooks
             $managed = is_file($manifest->path());
 
             // El candado se mira siempre: un candado roto o que aprueba lo que
-            // ya no existe es un hallazgo suyo.
-            if (preg_match(self::LOCK, $relative) !== 1) {
+            // ya no existe es un hallazgo suyo. Y el contrato y el manifiesto
+            // (9.4.0): un laraimport que cambió sin volver a importar, o
+            // cualquiera de los dos con un merge a medio resolver, es lo que
+            // una rama no debe empujar a las demás.
+            if (preg_match(self::LOCK, $relative) !== 1 && preg_match(self::STATE, $relative) !== 1) {
                 if (! $managed && ! Guard::isShapeFile($relative)) {
                     continue;
                 }
 
-                if (! Guard::watches($relative, $manifest->snapshot())) {
+                // Con el manifiesto ilegible no se sabe qué es generado: se
+                // comprueba todo lo preparado, y el Verifier dirá el porqué.
+                if ($manifest->unreadable() === null && ! Guard::watches($relative, $manifest->snapshot())) {
                     continue;
                 }
             }

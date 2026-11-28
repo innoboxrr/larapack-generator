@@ -52,6 +52,10 @@ jobs:
 
         steps:
             - uses: actions/checkout@v5
+              with:
+                  # Con historial: larapack:reconcile --check compara las dos ramas
+                  # de la fusión, y sin sus commits no tiene qué comparar.
+                  fetch-depth: 0
 
             - uses: shivammathur/setup-php@v2
               with:
@@ -63,6 +67,12 @@ jobs:
 
             - name: Contrato de LaraPack
               run: php vendor/bin/builder larapack:verify --strict --format=json
+
+            # Varias ramas a la vez: que entre las dos de esta fusión no quede nada
+            # por reconciliar (el laraimport, el manifiesto, migraciones repetidas).
+            - name: Fusión reconciliada
+              if: ${{ !cancelled() }}
+              run: php vendor/bin/builder larapack:reconcile --check
 
             # La puerta sólo vale si la rama exige este check, y eso lo decide el
             # dueño en GitHub (`larapack:ci` deja el ruleset para importarlo e

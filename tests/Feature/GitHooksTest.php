@@ -158,6 +158,54 @@ final class GitHooksTest extends TestCase
         }
     }
 
+    /**
+     * Varias consolas a la vez (9.4.0): lo que una rama no debe empujar a las
+     * demás es un contrato que no corresponde a lo generado.
+     */
+    public function test_un_laraimport_cambiado_sin_volver_a_importar_no_entra(): void
+    {
+        $contract = fn (string $type): string => (string) json_encode(['models' => [['name' => 'Tag', 'props' => [['name' => 'label', 'type' => $type]]]]], JSON_PRETTY_PRINT);
+        $import = fn (): array => $this->project->run([PHP_BINARY, 'vendor/bin/builder', 'larapack:import', '--root='.$this->project->path, '--force']);
+
+        $this->install();
+        $this->project->write('laraimport.json', $contract('string'));
+        $this->assertSame(0, $import()['code']);
+        $this->project->git('add', '--all');
+        $this->assertSame(0, $this->commit('generado')['code']);
+
+        $this->project->write('laraimport.json', $contract('text'));
+        $this->project->git('add', 'laraimport.json');
+        $stale = $this->commit('el contrato, sin importar');
+
+        $this->assertSame(1, $stale['code']);
+        $this->assertStringContainsString('[contract-outdated] laraimport.json', $stale['stderr']);
+        $this->assertStringContainsString('larapack:import --force', $stale['stderr']);
+
+        $this->assertSame(0, $import()['code']);
+        $this->project->git('add', '--all');
+        $imported = $this->commit('el contrato y lo que genera');
+
+        $this->assertSame(0, $imported['code'], $imported['stderr']);
+    }
+
+    public function test_un_manifiesto_a_medio_fusionar_no_entra(): void
+    {
+        $this->install();
+        $this->project->write('laraimport.json', (string) json_encode(['models' => [['name' => 'Tag', 'props' => [['name' => 'label', 'type' => 'string']]]]]));
+        $this->assertSame(0, $this->project->run([PHP_BINARY, 'vendor/bin/builder', 'larapack:import', '--root='.$this->project->path])['code']);
+        $this->project->git('add', '--all');
+        $this->assertSame(0, $this->commit('generado')['code']);
+
+        $manifest = (string) file_get_contents($this->project->path.'/.larapack/manifest.json');
+        $this->project->write('.larapack/manifest.json', "<<<<<<< HEAD\n{$manifest}=======\n{$manifest}>>>>>>> otra\n");
+        $this->project->git('add', '--all');
+        $conflicted = $this->commit('con los marcadores dentro');
+
+        $this->assertSame(1, $conflicted['code']);
+        $this->assertStringContainsString('[manifest-unreadable] .larapack/manifest.json', $conflicted['stderr']);
+        $this->assertStringContainsString('larapack:reconcile', $conflicted['stderr']);
+    }
+
     public function test_un_commit_limpio_entra_y_uno_con_logica_en_el_controlador_no(): void
     {
         $this->install();
