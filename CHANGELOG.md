@@ -416,6 +416,56 @@ tercer diagnóstico.
 archivos, sus hallazgos y sus órdenes). La caché ocupó 176 MB en
 school-management y 24 MB en expediente.
 
+### Moverse por el plan: un paso cualquiera, las decisiones antes, por elemento, aplazar y escalar
+
+Lo encontraron dos pruebas de autonomía —agentes sin contexto sobre copias de
+proyectos— al recorrer el plan:
+
+- **`next <id>` ignoraba el id** y daba el siguiente en orden, sin error. Ahora
+  da ese paso, esté como esté, y `show <id>` hace lo mismo con el id
+  obligatorio: el playbook rellenado de un guiado bloqueado, las opciones de
+  una decisión o la orden de un determinista, con lo que lo bloquea
+  (`blocked_by`). Y **un argumento que la acción no usa es un error en todas**
+  (`RealignActions::ARGUMENTS`), como ya lo era una opción: `status <id>` o
+  `check <id> <otro>` dicen qué sobra.
+- **Las decisiones que condicionan lo guiado salían al final**, y si el dueño
+  elegía declarar en el contrato los controladores escritos a mano, el trabajo
+  de llevarlos a su request se tiraba. Ahora `unmanaged-http`,
+  `unmanaged-models`, `hand-rolled` y `route-closure`, cuando tocan los
+  archivos de un paso guiado, van antes que él y están en su `depends_on`; la
+  dependencia se cumple al decidir cada archivo con una opción con la que lo
+  guiado sigue valiendo (`keep`, `refactor`) o al terminar la decisión. `next`
+  las ofrece primero y dice en `meanwhile` con qué seguir mientras el dueño
+  decide —lo que no depende de ellas no espera—, y `status` dice «Falta 1
+  decisión del dueño antes de seguir con lo guiado de app» (`awaiting_owner`).
+  Una decisión de este tipo ya tomada se cumple después de lo guiado: la
+  excepción de «dejarlos como código propio» se pide sobre el código ya
+  trabajado (pedirla antes la caducaba). Y una decisión cuya orden ya se
+  ejecutó no vuelve a salir en `next`: lo que falta es del dueño.
+- **Una decisión valía para el paso entero** (84 controladores a la vez).
+  `decide <id> <opción> --target=<archivo>` (repetible) decide por elemento;
+  el plan guarda lo mixto (`decisions`), `next` lo muestra
+  (`decided_by_target`, `undecided`), `check` dice qué falta por decidir y la
+  orden de cada opción sólo toca sus elementos (`except` pide excepciones sólo
+  de los que se dejan).
+- **No había cómo aplazar un paso guiado** (el callback de OAuth2 que el
+  playbook dice dejar). `defer <id> --note=…` lo aplaza —sigue pendiente,
+  `next` pasa al siguiente, `status` lo lista en `deferred`— y `undefer` lo
+  devuelve. `escalate <id> --note=…` convierte un guiado en decisión del
+  dueño: hacerlo como dice el playbook o dejarlo como está (`#[HandRolled]`
+  en un controlador, una excepción en lo demás). Volver a planificar no
+  pierde ninguno de los dos.
+- **`status` arrastraba «Última comprobación: … (falta)»** de antes de un
+  diagnóstico nuevo: volver a planificar ya no conserva `last_check`.
+- La ayuda: `help` da la lista y `--help` el texto completo, cada acción una
+  sola vez en cada uno (`RealignHelpTest`). La salida doble que vio una de las
+  pruebas no se reproduce en esta versión, ni con `builder` ni con Artisan; la
+  prueba lo fija.
+
+La guía: [plan.md](docs/realign/plan.md#next) (`next`, `show`, `decide`,
+`defer`, `escalate`, el orden), [guided.md](docs/realign/guided.md#cómo-se-usa)
+y la receta del [README](docs/realign/README.md#para-un-agente-la-receta).
+
 ### Al actualizar a 9.4.0
 
 - **Nada cambia si no se usa `larapack:realign`.** El esquema del contrato

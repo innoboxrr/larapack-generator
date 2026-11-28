@@ -38,7 +38,7 @@ Las guías de cada parte:
 | Guía | Qué explica |
 |---|---|
 | [Diagnosticar](diagnose.md) | `diagnose`: cómo se compara el proyecto con su contrato, cómo leer el informe y qué significa cada clasificación. |
-| [El plan y el estado](plan.md) | `plan`, `status`, `next`, `check` y `decide`: los pasos, su orden, su comprobación de terminado y los formatos JSON. |
+| [El plan y el estado](plan.md) | `plan`, `status`, `next`, `show`, `check`, `decide`, `defer` y `escalate`: los pasos, su orden, su comprobación de terminado y los formatos JSON. |
 | [Adoptar código existente](adopt.md) | `adopt`: que el manifiesto diga la verdad sin tocar un archivo. |
 | [Correcciones automáticas](apply.md) | `apply`: lo determinista que reescribe código o el contrato, y el salto de versión mayor. |
 | [Pasos guiados](guided.md) | Cómo hace un agente lo que no es determinista, con los playbooks del paquete. |
@@ -160,8 +160,8 @@ estaba.
 Los principios, que valen para todas las acciones:
 
 - **Lo que sólo lee es seguro siempre.** `diagnose`, `plan`, `status`, `next`,
-  `check`, `decide`, `playbook` y `help` no escriben código: como mucho, su
-  estado en `.larapack/realign/`.
+  `show`, `check`, `decide`, `defer`, `undefer`, `escalate`, `playbook` y `help`
+  no escriben código: como mucho, su estado en `.larapack/realign/`.
 - **Lo que escribe se puede simular y deshacer.** `adopt`, `apply`, `infer` y
   `except` aceptan `--dry-run` (no escribe nada y dice qué haría; `apply`, con
   el diff), y sin él **exigen un árbol git limpio** —fuera de
@@ -194,9 +194,12 @@ pasen, que el contrato diga lo que hace la base de producción— está en
 | `diagnose` | estado | Regenera el contrato aparte y clasifica cada archivo y cada hallazgo de verify. | [diagnose.md](diagnose.md) |
 | `plan` | estado | Convierte el diagnóstico en pasos ordenados y reanudables. | [plan.md](plan.md) |
 | `status` | nada | Dónde se va y qué sigue. | [plan.md](plan.md#status) |
-| `next` | nada | El siguiente paso con todo lo necesario para hacerlo sin contexto. | [plan.md](plan.md#next) |
+| `next` | nada | El siguiente paso (o, con un id, ése) con todo lo necesario para hacerlo sin contexto. | [plan.md](plan.md#next) |
+| `show` | nada | Cualquier paso, como lo da `next`. | [plan.md](plan.md#show) |
 | `check` | estado | Corre el criterio de terminado de un paso y lo marca hecho. | [plan.md](plan.md#check) |
-| `decide` | estado | Registra la opción elegida en una decisión. | [plan.md](plan.md#decide) |
+| `decide` | estado | Registra la opción elegida en una decisión, entera o por elemento (`--target`). | [plan.md](plan.md#decide) |
+| `defer`, `undefer` | estado | Aplaza un paso (sigue pendiente; `next` lo salta) o lo devuelve al orden. | [plan.md](plan.md#defer-y-undefer) |
+| `escalate` | estado | Pasa un paso guiado al dueño como decisión. | [plan.md](plan.md#escalate) |
 | `playbook` | nada | Lista los playbooks o imprime uno sin rellenar. | [guided.md](guided.md) |
 | `adopt` | manifiesto | Adopta, vuelve a enlazar y olvida, sin tocar un archivo. | [adopt.md](adopt.md) |
 | `apply` | código, contrato y manifiesto | Los pasos deterministas que reescriben. | [apply.md](apply.md) |
@@ -209,8 +212,8 @@ larapack:realign <acción> [<id>…] [--package=…] [--dry-run] [--allow-dirty]
 larapack:realign apply --deterministic [--package=…] [--dry-run] [--allow-dirty]
 ```
 
-Una opción que la acción no usa es un error, también una clave de `--option`
-que la operación no lee: ignorarla haría creer que hizo algo.
+Una opción o un argumento que la acción no usa es un error, también una clave
+de `--option` que la operación no lee: ignorarla haría creer que hizo algo.
 
 ## Para un agente: la receta
 
@@ -228,11 +231,18 @@ Esta es toda la lógica que hace falta; no hay que inventar nada por proyecto.
      rápido, `larapack:realign apply --deterministic` hace todos los
      deterministas de una vez; después, `diagnose` y `plan` otra vez.
    - `guided`: sigue `how.instructions` al pie de la letra (el playbook del
-     tipo y sus anexos), con las pruebas del proyecto antes y después.
+     tipo y sus anexos), con las pruebas del proyecto antes y después. Si el
+     playbook dice dejarlo (un controlador de un protocolo), o no se puede
+     ahora, aplázalo con su razón (`larapack:realign defer <id> --note="…"`);
+     si hacerlo o no es cosa del dueño, pásaselo
+     (`larapack:realign escalate <id> --note="…"`).
    - `decision`: **no decidas tú**. Presenta `how.options` —y
      `how.instructions` si trae el playbook de la decisión— a quien tenga
-     autoridad y, cuando decida, `larapack:realign decide <id> <opción>
-     --note="…"`. Decidido, `next` da lo que sigue (`how.then` y, si la
+     autoridad y, **mientras decide, sigue con `meanwhile`** (`larapack:realign
+     next <meanwhile.id>`): lo que no depende de esa decisión. Las decisiones
+     que condicionan lo guiado salen antes que él para que no se rehaga nada.
+     Cuando decida, `larapack:realign decide <id> <opción> --note="…"`, o por
+     elemento con `--target=<archivo>` (repetible). Decidido, `next` da lo que sigue (`how.then` y, si la
      opción lo trae, su playbook). Si lo decidido es dejarlo como está,
      pide la excepción (`larapack:realign except <id> --option reason="…"`)
      y **no la apruebes**: díselo al dueño (`larapack:hand-rolled approve`).

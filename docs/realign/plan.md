@@ -1,4 +1,4 @@
-# El plan y el estado: `plan`, `status`, `next`, `check`, `decide`
+# El plan y el estado: `plan`, `status`, `next`, `show`, `check`, `decide`, `defer`, `escalate`
 
 Parte de [`larapack:realign`](README.md). Del diagnóstico a pasos que cualquiera
 puede retomar, con un criterio de terminado que no depende de la opinión de
@@ -14,8 +14,11 @@ nadie. Ninguna de estas acciones escribe código: sólo el estado en
 - [Volver a planificar](#volver-a-planificar)
 - [`status`](#status)
 - [`next`](#next)
+- [`show`](#show)
 - [`check`](#check)
 - [`decide`](#decide)
+- [`defer` y `undefer`](#defer-y-undefer)
+- [`escalate`](#escalate)
 - [El estado en disco y los formatos JSON](#el-estado-en-disco-y-los-formatos-json)
 
 ## `plan`
@@ -45,12 +48,16 @@ Cada paso agrupa lo que se resuelve junto y lleva:
 | `playbook`, `annexes` | Pasos `guided`: el playbook y sus anexos ([guided.md](guided.md)). |
 | `options` | Pasos `decision`: `{key, label, consequences, run?, playbook?}`. |
 | `done_when` | La comprobación de terminado ([`check`](#check)). |
-| `depends_on` | Lo que tiene que estar hecho antes; mientras no, el paso está `blocked`. |
+| `depends_on` | Lo que tiene que estar hecho antes; mientras no, el paso está `blocked`. Una decisión que condiciona lo guiado ([El orden](#el-orden)) deja de bloquearlo antes: en cuanto cada archivo compartido está decidido con una opción con la que lo guiado sigue valiendo. |
 | `status`, `decision`, `history`, `last_check`, `order` | El estado. |
+| `decisions` | Lo decidido elemento por elemento (`decide --target`): `{<archivo>: {option, note, at}}`. Manda sobre `decision`. |
+| `deferred` | `{note, at}` si se aplazó ([`defer`](#defer-y-undefer)). |
+| `escalated` | `{from, note, at}` si un paso guiado se le pasó al dueño ([`escalate`](#escalate)). |
 
-Los estados: `pending`, `done`, `awaiting_decision` (una decisión sin decidir),
-`decided` (decidida y todavía sin cumplir) y `blocked` (calculado al leer:
-espera a un paso de `depends_on`).
+Los estados: `pending`, `done`, `awaiting_decision` (una decisión sin decidir,
+o decidida sólo para algunos de sus elementos), `decided` (decidida entera, o
+cada elemento, y todavía sin cumplir) y `blocked` (calculado al leer: espera a
+un paso de `depends_on`). Aplazar no es un estado: el paso sigue en el suyo.
 
 ## Los tipos de paso
 
@@ -92,14 +99,24 @@ Los define `src/Support/Realign/StepTypes.php`:
    `endpoint-tests`, `model-lists`). `pin-foreign-keys` va el último de los
    deterministas: cambia el contrato, y lo que va detrás se compararía con otra
    regeneración.
-2. **Lo guiado, por ámbito, del que más cumple al que menos**: así los primeros
+2. **Las decisiones que condicionan lo guiado**: `unmanaged-http` (declarar en
+   el contrato los controladores escritos a mano o dejarlos como código
+   propio), `unmanaged-models` (adoptar el modelo o dejarlo), `hand-rolled` y
+   `route-closure`, cuando tocan los archivos de un paso guiado. Si el dueño
+   elige declararlos, el contrato los regenera: llevarlos antes a mano a su
+   request era trabajo tirado.
+3. **Lo guiado, por ámbito, del que más cumple al que menos**: así los primeros
    pasos terminan paquetes enteros.
-3. **Las decisiones**, agrupadas por tipo.
+4. **Las demás decisiones**, agrupadas por tipo.
 
 Lo guiado y las decisiones de un ámbito esperan a su `relink`, `prune` y
 `adopt` (`depends_on`); `edited-outside` espera además a `regenerate`, `fix` y
 `model-lists`: no se devuelve a mano lo que una corrección automática iba a
-cambiar.
+cambiar. Un paso guiado espera además a cada decisión del punto 2 que toca sus
+archivos, hasta que se decide con una opción con la que lo guiado sigue
+valiendo (`keep` en `unmanaged-http` y `unmanaged-models`, `refactor` en
+`hand-rolled` y `route-closure`) o hasta que la decisión está hecha. Lo demás
+no espera: el agente sigue con lo que no depende de ella.
 
 ## Volver a planificar
 
@@ -109,7 +126,10 @@ Después de hacer pasos, diagnosticar y planificar otra vez **no pierde nada**:
 - uno hecho cuyo problema vuelve a salir se reabre (`reopened` en su
   historia): alguien lo deshizo o una corrección lo cambió;
 - uno pendiente que ya no sale se cierra (`resolved`);
-- una decisión tomada sigue tomada.
+- una decisión tomada sigue tomada, también la tomada por elemento;
+- lo aplazado sigue aplazado y lo pasado al dueño sigue siendo una decisión;
+- la última comprobación (`last_check`) **no** pasa: era de otro diagnóstico,
+  y `status` la daría como si fuera de éste.
 
 Hay que volver a diagnosticar cuando `status` lo dice (`stale`: el contrato o
 el manifiesto de un ámbito cambió después del diagnóstico) y siempre después de
@@ -124,8 +144,15 @@ larapack:realign status [--package=…] [--format=json]
 El punto de entrada de quien llega sin contexto. Dice cuándo se diagnosticó y
 planificó, si el diagnóstico está viejo (`stale`, con los ámbitos), cuántos
 pasos hay por estado y por categoría, el siguiente paso y la última
-comprobación. Sin plan, dice que hay que diagnosticar y planificar. No escribe
-nada.
+comprobación hecha después del diagnóstico. Sin plan, dice que hay que
+diagnosticar y planificar. No escribe nada.
+
+Además:
+
+- **`awaiting_owner`**: por ámbito, las decisiones del dueño sin tomar que
+  detienen lo guiado y lo guiado que detienen. En texto: «Falta 1 decisión del
+  dueño antes de seguir con lo guiado de app (2 pasos esperan): …».
+- **`deferred`**: lo aplazado, con su nota. Sigue pendiente.
 
 ## `next`
 
@@ -133,9 +160,14 @@ nada.
 larapack:realign next [--package=…] [--format=json]
 ```
 
+```bash
+larapack:realign next <id> [--format=json]
+```
+
 Da el primer paso que no esté hecho ni bloqueado (con `--package`, de ese
-ámbito), con todo lo necesario para hacerlo **sin contexto**: qué es, su riesgo,
-sus archivos y hallazgos, cómo comprobarlo, y `how`:
+ámbito) —o, con un id, **ese paso**, esté como esté—, con todo lo necesario
+para hacerlo **sin contexto**: qué es, su riesgo, sus archivos y hallazgos,
+cómo comprobarlo, lo que lo bloquea (`blocked_by`) y `how`:
 
 - **`deterministic`**: `how.command`, la orden (y `how.available`, si esa
   operación existe en esta versión). Si el tipo tiene playbook,
@@ -149,8 +181,39 @@ sus archivos y hallazgos, cómo comprobarlo, y `how`:
   pensarla.
 - **`decision`** ya decidida: `how.decided`, lo que pide la opción
   (`how.then`, su orden) y, si la opción lo trae, su playbook.
+- **`decision`** decidida por elemento: `how.decided_by_target` (opción →
+  archivos), `how.then_by_option` (la orden de cada opción, que sólo toca los
+  suyos) y `how.undecided`, lo que falta; mientras falte algo, también
+  `how.options`.
 
-Cuando no queda nada, `done` es true y `step` es null.
+Sin id, `next` salta:
+
+- lo **aplazado** ([`defer`](#defer-y-undefer));
+- una decisión que condiciona lo guiado y ya está decidida, mientras quede
+  algo guiado que dependa de ella: lo que pide (la excepción de «dejarlos como
+  código propio») se hace sobre el código ya trabajado, porque pedirla antes la
+  caducaría al cambiar el archivo;
+- una decisión cuya orden ya se ejecutó después de decidirla: lo que falta
+  (aprobar las excepciones) es del dueño.
+
+Si lo que toca es una decisión sin tomar, `next` la da —es del dueño:
+preséntasela— y en `meanwhile` (`{id, title, category, show}`) **con qué
+seguir mientras**: el primer paso que no espera a nadie. `larapack:realign next
+<meanwhile.id>` lo da entero.
+
+Cuando no queda nada, `done` es true y `step` es null. Si queda algo pero nada
+que hacer ahora, `done` es false, `step` es null y `waiting` dice qué espera:
+`{deferred, owner, blocked}`.
+
+## `show`
+
+```bash
+larapack:realign show <id> [--format=json]
+```
+
+Lo mismo que `next <id>`: cualquier paso, con el playbook rellenado, las
+opciones o la orden, lo que lo bloquea y cómo comprobarlo. Hecho, bloqueado o
+aplazado, se ve igual. No escribe nada.
 
 ## `check`
 
@@ -183,14 +246,61 @@ quién le toca.
 larapack:realign decide <id> <opción> --note="por qué"
 ```
 
+```bash
+larapack:realign decide <id> <opción> --target=<archivo> [--target=<archivo>…] --note="por qué"
+```
+
 Registra la opción en el plan (con la nota y la hora) y dice qué hacer para
 cumplirla: la orden de la opción, si la tiene, y su playbook. **Decidir no es
 hacer**: el paso sigue pendiente hasta que su `done_when` pasa. Decidir otra
 vez sustituye la decisión y queda en la historia.
 
+**Por elemento**: con `--target` (un archivo del paso, repetible) la opción vale
+sólo para esos; el resto sigue por decidir. Así 84 controladores escritos a
+mano no se deciden de golpe: unos se declaran y otros se quedan. Una decisión
+sin `--target` vale para todo el paso y sustituye lo decidido por elemento. La
+orden de cada opción sólo ve sus elementos: `except` pide excepciones sólo de
+los que se dejan, y `adopt` y `apply` sólo tocan los suyos. `infer` escribe el
+borrador del ámbito entero (no toca el código ni el contrato): de él se declara
+sólo lo que se decidió declarar. `check` dice qué elementos faltan por
+decidir.
+
 Quien decide es quien tiene autoridad sobre el proyecto. Un agente presenta
 las opciones (`next`) y espera; no elige por su cuenta, aunque una opción
 parezca obvia.
+
+## `defer` y `undefer`
+
+```bash
+larapack:realign defer <id> --note="por qué"
+larapack:realign undefer <id>
+```
+
+Aplaza un paso que no se puede hacer ahora —un controlador de un protocolo
+(el callback de OAuth2) que el playbook dice dejar, algo que espera a otro
+equipo—: **sigue pendiente**, `next` pasa al siguiente y `status` lo lista en
+`deferred` con su nota. La nota es obligatoria: es lo que lee quien retome el
+plan. `undefer` lo devuelve al orden. Las dos quedan en la historia del paso.
+Una operación sin ids (`apply --deterministic`) tampoco toca lo aplazado.
+
+## `escalate`
+
+```bash
+larapack:realign escalate <id> --note="qué hay que decidir"
+```
+
+Convierte un paso **guiado** en una decisión del dueño, con su nota, cuando
+hacerlo no le toca a quien sigue el plan. Las opciones: `refactor` (hacerlo
+como dice su playbook) y dejarlo como está —`hand-rolled` en un controlador
+(`#[HandRolled]` y la aprobación del dueño), `except` en lo demás—. Su
+`done_when` no cambia. Lo decide el dueño con `decide`; volver a planificar no
+lo pierde.
+
+## Argumentos
+
+Un argumento que la acción no usa es un error, igual que una opción: `next
+<id> <otro>`, `status <id>` o `check <id> <otro>` fallan diciendo qué sobra.
+Antes, `next <id>` ignoraba el id y daba el siguiente.
 
 ## El estado en disco y los formatos JSON
 
@@ -212,14 +322,21 @@ pide actualizar el paquete.
 - `diagnose --format=json` y `report.json`: [diagnose.md](diagnose.md#el-informe-reportjson).
 - `plan --format=json` y `status --format=json`: `{format_version, ok, action,
   diagnosed_at, planned_at, stale, totals, verify, steps: {total, by_status,
-  by_category}, next, last_check, plan}`. `stale` lista los ámbitos cuyo
-  contrato o manifiesto cambió después del diagnóstico.
-- `next --format=json`: `{format_version, ok, action, done, step, how, check,
-  done_when}`.
+  by_category}, next, last_check, awaiting_owner, deferred, plan}`. `stale`
+  lista los ámbitos cuyo contrato o manifiesto cambió después del diagnóstico;
+  `awaiting_owner` es `[{scope, package, decisions, guided}]` y `deferred`,
+  `[{id, title, note, at}]`.
+- `next --format=json` y `show --format=json`: `{format_version, ok, action,
+  done, step, how, check, done_when, blocked_by, meanwhile}`; sin nada que
+  hacer ahora, `{…, done: false, step: null, waiting: {deferred, owner,
+  blocked}}`.
 - `check --format=json`: `{format_version, ok, action, id, done, remaining,
   kind}`.
-- `decide --format=json`: `{format_version, ok, action, id, decision, then,
-  check}`.
+- `decide --format=json`: `{format_version, ok, action, id, decision, targets,
+  undecided, then, check}`.
+- `defer`/`undefer --format=json`: `{format_version, ok, action, id, deferred,
+  next}`; `escalate --format=json`: `{format_version, ok, action, id,
+  escalated, options, decide}`.
 - `help --format=json`: `{format_version, ok, action, actions, categories,
   classes, guide, guides, entry_point}`; con una acción, `{…, topic, summary,
   usage, writes, options, keys, guide, available}`.

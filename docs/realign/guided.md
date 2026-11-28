@@ -25,6 +25,23 @@ vendor/bin/builder larapack:realign next --format=json   # how.instructions es e
 vendor/bin/builder larapack:realign check <id>
 ```
 
+El playbook rellenado de **cualquier** paso, no sólo del siguiente —uno que
+está bloqueado, una decisión, uno ya hecho—:
+
+```bash
+vendor/bin/builder larapack:realign show <id> --format=json    # o: larapack:realign next <id>
+```
+
+Un paso guiado que el playbook dice dejar (el controlador del callback de
+OAuth2, por ejemplo) o que no se puede hacer ahora se aplaza con su razón, y
+`next` sigue con el siguiente; si hacerlo o no lo tiene que decidir el dueño,
+se le pasa como decisión ([plan.md](plan.md#escalate)):
+
+```bash
+vendor/bin/builder larapack:realign defer <id> --note="es el callback de OAuth2: el playbook dice dejarlo"
+vendor/bin/builder larapack:realign escalate <id> --note="¿se queda escrito a mano?"
+```
+
 Sin un paso delante, para leer un playbook antes de empezar:
 
 ```bash
