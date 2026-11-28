@@ -200,6 +200,8 @@ final class NavigationTest extends TestCase
         $this->assertFalse(Navigation::waitsForGuided($decision, $byId(['depends_on' => ['adopt@.']] + $pending)));
         $this->assertFalse(Navigation::waitsForGuided($decision, $byId(['category' => Category::DECISION] + $pending)));
         $this->assertFalse(Navigation::waitsForGuided($decision, $byId(['depends_on' => null] + $pending)));
+        // Una sola dependencia escrita sin lista sigue siendo una dependencia.
+        $this->assertTrue(Navigation::waitsForGuided($decision, $byId(['depends_on' => 'unmanaged-http@.'] + $pending)));
 
         // Sin decidir no espera a nadie: es ella la que falta.
         $undecided = $this->decision('unmanaged-http', [self::A, self::B]);
@@ -232,6 +234,11 @@ final class NavigationTest extends TestCase
 
         $this->assertFalse(Navigation::handedOver($step), 'sin historia');
         $this->assertFalse(Navigation::handedOver($step + ['history' => [$decided]]));
+        $this->assertTrue(Navigation::handedOver($step + ['history' => [$decided, $applied]]));
+        // Comprobarla no es correr su orden, y lo que no es un evento no cuenta.
+        $this->assertFalse(Navigation::handedOver($step + ['history' => [$decided, ['at' => 't2', 'event' => 'checked']]]));
+        $this->assertFalse(Navigation::handedOver($step + ['history' => ['basura', $applied]]));
+        $this->assertFalse(Navigation::handedOver($step + ['history' => 'no es una lista']));
         $this->assertTrue(Navigation::handedOver($step + ['history' => [$decided, ['event' => 'checked'], 'basura', $applied]]));
         // Una orden que se corrió antes de decidir no es la de la decisión.
         $this->assertFalse(Navigation::handedOver($step + ['history' => [$applied, $decided]]));
@@ -247,7 +254,7 @@ final class NavigationTest extends TestCase
         $step = $this->decision('unmanaged-http', [self::A, self::B, self::C], [
             'decisions' => [self::A => ['option' => 'keep'], self::B => ['option' => 'declare'], self::C => ['option' => 'keep']],
             'details' => [
-                'files' => [],
+                'files' => [['file' => self::A, 'class' => 'x'], ['file' => self::B, 'class' => 'y']],
                 'findings' => [['file' => self::A, 'check' => 'x'], ['file' => self::B, 'check' => 'y'], ['file' => null, 'check' => 'sin archivo'], 'suelto'],
                 'unmanaged' => [['file' => self::A, 'kind' => 'controller'], ['file' => self::B, 'kind' => 'controller'], ['file' => self::C, 'kind' => 'routes']],
                 'contract' => [['file' => self::B, 'model' => 'Post']],
@@ -264,7 +271,7 @@ final class NavigationTest extends TestCase
         // Lo que no dice de qué archivo es no se quita.
         $this->assertSame([['file' => self::A, 'check' => 'x'], ['file' => null, 'check' => 'sin archivo'], 'suelto'], $except['details']['findings']);
         $this->assertSame([], $except['details']['contract']);
-        $this->assertSame([], $except['details']['files']);
+        $this->assertSame([['file' => self::A, 'class' => 'x']], $except['details']['files']);
         $this->assertSame([['file' => self::B]], $except['details']['otra']);
         $this->assertSame($step['decisions'], $except['decisions']);
 
