@@ -160,6 +160,8 @@ final class ImportDocument
                         $document['models'][$index]['props'][$position]['datatable'] = false;
                     }
                 }
+
+                $document['models'][$index]['indexes'] = self::withUniqueEmail($document['models'][$index]);
             }
 
             if (! empty($model['metas'])) {
@@ -190,6 +192,35 @@ final class ImportDocument
         }
 
         return $document;
+    }
+
+    /**
+     * Los índices de un usuario que inicia sesión, con el único del correo.
+     *
+     * Se inicia sesión por el correo, e isAdmin() decide por él quién
+     * administra: sin índice único, quien pudiera escribir el suyo tomaba el
+     * de un administrador. Laravel lo trae en su tabla `users`; la que crea
+     * LaraPack no lo traía. Si el laraimport ya declara ese índice, no se
+     * repite, y en una tabla que ya lo tiene la migración no lo añade.
+     *
+     * @param  array<string, mixed>  $model
+     * @return list<array<string, mixed>>
+     */
+    private static function withUniqueEmail(array $model): array
+    {
+        $indexes = array_values((array) ($model['indexes'] ?? []));
+
+        if (! in_array('email', array_column($model['props'] ?? [], 'name'), true)) {
+            return $indexes;
+        }
+
+        foreach ($indexes as $index) {
+            if (! empty($index['unique']) && array_values((array) ($index['columns'] ?? [])) === ['email']) {
+                return $indexes;
+            }
+        }
+
+        return [...$indexes, ['columns' => ['email'], 'unique' => true]];
     }
 
     /**

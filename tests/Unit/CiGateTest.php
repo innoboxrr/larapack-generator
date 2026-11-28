@@ -447,9 +447,17 @@ final class CiGateTest extends TestCase
         $this->put('CODEOWNERS', '');
         $this->assertSame('CODEOWNERS', CiGate::codeownersFile($this->root));
 
+        // Auditoría de seguridad de 9.4.0: las tres rutas donde GitHub busca
+        // CODEOWNERS (la primera que existe manda: un `.github/CODEOWNERS`
+        // nuevo le quitaba el sitio al de la raíz) y todos los workflows
+        // (cualquiera puede declarar un job llamado como el check exigido).
         $this->assertSame(
-            ['/.larapack/hand-rolled.lock', '/.github/workflows/larapack.yml', '/.github/workflows/larapack-approve.yml', '/CODEOWNERS'],
+            ['/.github/workflows/', '/.githooks/', '/.larapack/hand-rolled.lock', '/.github/workflows/larapack.yml', '/.github/workflows/larapack-approve.yml', '/CODEOWNERS', '/.github/CODEOWNERS', '/docs/CODEOWNERS'],
             CiGate::ownedPaths('CODEOWNERS')
+        );
+        $this->assertSame(
+            ['/.github/workflows/', '/.githooks/', '/.larapack/hand-rolled.lock', '/.github/workflows/larapack.yml', '/.github/workflows/larapack-approve.yml', '/.github/CODEOWNERS', '/CODEOWNERS', '/docs/CODEOWNERS'],
+            CiGate::ownedPaths('.github/CODEOWNERS')
         );
     }
 
@@ -511,6 +519,8 @@ final class CiGateTest extends TestCase
             ." -f 'required_status_checks[contexts][]=LaraPack verify'"
             ." -F 'enforce_admins=true'"
             ." -F 'required_pull_request_reviews[require_code_owner_reviews]=true'"
+            // Sin esto se aprueba el PR y después se empuja el candado.
+            ." -F 'required_pull_request_reviews[dismiss_stale_reviews]=true'"
             ." -F 'required_pull_request_reviews[required_approving_review_count]=1'"
             ." -F 'restrictions=null'",
             CiGate::protectionCommand('acme/app', 'main')

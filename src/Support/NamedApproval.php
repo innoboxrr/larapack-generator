@@ -41,6 +41,13 @@ use Innoboxrr\LarapackGenerator\Support\GitHub\Api;
  * una cuenta con permiso para lanzar workflows (un token que el agente tenga
  * con `actions: write`) lanza la corrida a su nombre: la capa que no se salta
  * sigue siendo CODEOWNERS sobre el candado y la revisión de su diff.
+ *
+ * Tampoco dice QUÉ aprobó la corrida: GitHub da quién la lanzó y cómo acabó,
+ * no qué entradas escribió. Una corrida de verdad, de esa persona y que
+ * terminó bien, citada en otra entrada que ella no aprobó, pasa esta
+ * comprobación; lo que la frena es que esa entrada es una línea nueva del
+ * candado en el diff que revisa su dueño. Una corrida fallida o cancelada sí
+ * se rechaza: no aprobó nada.
  */
 final class NamedApproval
 {
@@ -169,6 +176,12 @@ final class NamedApproval
 
         if (! is_string($by) || $by !== $approver) {
             return 'la corrida la lanzó '.(is_string($by) ? $by : 'otra cuenta').', no '.$approver.'.';
+        }
+
+        // Una corrida que falló, se canceló o sigue en marcha no aprobó
+        // nada: citarla es apuntarse la intención de otro.
+        if (($json['status'] ?? null) !== 'completed' || ($json['conclusion'] ?? null) !== 'success') {
+            return 'la corrida no terminó bien ('.self::clean(is_string($json['conclusion'] ?? null) ? $json['conclusion'] : (is_string($json['status'] ?? null) ? $json['status'] : 'sin conclusión')).'): no aprobó nada.';
         }
 
         return null;

@@ -99,6 +99,13 @@ final class Changes
      */
     public function commit(bool $format = false, ?Manifest $manifest = null): ?string
     {
+        // Antes de escribir nada: las rutas salen del plan y del informe, que
+        // son archivos del proyecto. Una con `..`, o un enlace plantado en el
+        // camino, escribía (o borraba) fuera de la raíz.
+        foreach (array_keys($this->writes) as $file) {
+            Files::assertInside($this->projectRoot, $file, true);
+        }
+
         foreach ($this->writes as $file => $content) {
             if ($content === null) {
                 if (is_file($file)) {
@@ -112,7 +119,7 @@ final class Changes
                 mkdir(dirname($file), 0777, true);
             }
 
-            file_put_contents($file, $content);
+            Files::write($file, $content);
         }
 
         $written = array_keys(array_filter($this->writes, fn (?string $content): bool => $content !== null));
@@ -155,6 +162,8 @@ final class Changes
     public function revert(): void
     {
         foreach ($this->originals as $file => $original) {
+            Files::assertInside($this->projectRoot, $file, true);
+
             if ($original === null) {
                 if (is_file($file)) {
                     unlink($file);
@@ -167,12 +176,15 @@ final class Changes
                 mkdir(dirname($file), 0777, true);
             }
 
-            file_put_contents($file, $original);
+            Files::write($file, $original);
         }
     }
 
     private function remember(string $file): void
     {
+        // Tampoco se lee: lo que había sale en el diff de --dry-run.
+        Files::assertInside($this->projectRoot, $file, true);
+
         if (! array_key_exists($file, $this->originals)) {
             $this->originals[$file] = is_file($file) ? Files::read($file) : null;
         }

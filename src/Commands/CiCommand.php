@@ -5,6 +5,7 @@ namespace Innoboxrr\LarapackGenerator\Commands;
 use Innoboxrr\LarapackGenerator\Commands\Concerns\TargetsProject;
 use Innoboxrr\LarapackGenerator\Support\BranchProtection;
 use Innoboxrr\LarapackGenerator\Support\CiGate;
+use Innoboxrr\LarapackGenerator\Support\Files;
 use Innoboxrr\LarapackGenerator\Support\Guard;
 use Innoboxrr\LarapackGenerator\Support\HandRolledLock;
 use Innoboxrr\LarapackGenerator\Support\NamedApproval;
@@ -564,6 +565,10 @@ class CiCommand extends Command
 
     private function write(string $file, string $contents): void
     {
+        // `.github/workflows` (o el archivo) como enlace hacia fuera: el
+        // workflow se escribiría donde apunte.
+        Files::guard($file);
+
         $directory = dirname($file);
 
         if (! is_dir($directory) && ! mkdir($directory, 0777, true) && ! is_dir($directory)) {

@@ -12,6 +12,11 @@ on:
 
 jobs:
     release:
+        # Sólo el Tests en verde de un push a este repositorio (o a mano):
+        # `types: [completed]` dispara también si Tests falló, y `branches`
+        # casa con la rama de cabeza, también la `main` de un fork.
+        if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_repository.full_name == github.repository)
+
         # Explícito y no heredado: el reutilizable necesita `contents: write` para
         # empujar el tag, y un repositorio cuyo permiso por defecto sea de sólo
         # lectura no puede concedérselo. Eso no falla el job: falla el arranque

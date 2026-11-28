@@ -89,6 +89,12 @@ final class Manifest
      */
     private static ?\Closure $move = null;
 
+    /**
+     * Lo que puede traer `namespace`: vacío o un namespace de PHP, con o sin
+     * el separador final.
+     */
+    private const NAMESPACE = '/^(?:[A-Za-z_\x80-\xff][A-Za-z0-9_\x80-\xff]*(?:\\\\[A-Za-z_\x80-\xff][A-Za-z0-9_\x80-\xff]*)*\\\\?)?\z/';
+
     public function __construct(private ?string $root = null) {}
 
     /**
@@ -241,7 +247,47 @@ final class Manifest
         // forma 1: así nacieron todos.
         $decoded['version'] = is_int($decoded['version'] ?? null) ? $decoded['version'] : 1;
 
+        $this->assertSafePaths($decoded);
+
         return $decoded + self::EMPTY;
+    }
+
+    /**
+     * El manifiesto es un archivo del proyecto, y lo que trae se usa después
+     * para escribir: sus claves son rutas que se leen, se reescriben
+     * (`larapack:fix`, `realign apply`) y se comparan, y su `namespace` va a
+     * un `use` del trait de relaciones.
+     *
+     * Con `"../../otro/Models/Post.php"` registrado como el modelo,
+     * `larapack:fix relation-missing` añadía la relación a un trait de fuera
+     * del proyecto; con `"namespace": "X;\nsystem(…);//"`, lo que seguía al
+     * `;` quedaba como código al principio del trait. El generador sólo anota
+     * rutas relativas a la raíz y namespaces de PHP; otra cosa es un
+     * manifiesto editado, y no se interpreta.
+     *
+     * @param  array<mixed>  $decoded
+     */
+    private function assertSafePaths(array $decoded): void
+    {
+        $buckets = [$decoded['package'] ?? null, ...array_values(is_array($decoded['models']) ? $decoded['models'] : [])];
+
+        foreach ($buckets as $bucket) {
+            if (! is_array($bucket)) {
+                continue;
+            }
+
+            foreach (is_array($bucket['files'] ?? null) ? array_keys($bucket['files']) : [] as $relative) {
+                if (! Files::isRelativeInside((string) $relative)) {
+                    throw MakerException::unsafeManifestPath($this->path(), (string) $relative);
+                }
+            }
+
+            $namespace = $bucket['namespace'] ?? '';
+
+            if (! is_string($namespace) || preg_match(self::NAMESPACE, $namespace) !== 1) {
+                throw MakerException::unsafeManifestNamespace($this->path(), is_string($namespace) ? $namespace : (string) json_encode($namespace));
+            }
+        }
     }
 
     /**
@@ -826,6 +872,11 @@ final class Manifest
     private static function persist(string $path, array $manifest): void
     {
         $directory = dirname($path);
+
+        // `.larapack` enlazado a otro directorio: el manifiesto se escribiría
+        // (y su temporal) fuera del proyecto. El manifiesto mismo como enlace
+        // no importa: rename() sustituye el enlace, no escribe a través de él.
+        Files::assertInside(dirname($directory), $directory);
 
         if (! is_dir($directory) && ! @mkdir($directory, 0777, true) && ! is_dir($directory)) {
             throw MakerException::directoryNotCreated($directory);

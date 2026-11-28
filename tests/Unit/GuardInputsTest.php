@@ -518,4 +518,46 @@ final class GuardInputsTest extends TestCase
         // El renombrado trae detrás su ruta de origen, que ya no es del árbol.
         $this->assertSame(['renamed.php', 'a'], Guard::sessionFiles([], $this->root));
     }
+
+    // ---- Auditoría de seguridad de 9.4.0: entradas que no se leían ----
+
+    /**
+     * La `shell` de Codex y las de un servidor MCP mandan la orden ya partida
+     * en palabras: no era una cadena, y pasaba sin leerse.
+     */
+    public function test_una_orden_que_llega_como_lista_de_palabras_se_lee_igual(): void
+    {
+        $cwd = str_replace('\\', '/', (string) realpath(sys_get_temp_dir()));
+        $approve = ['tool_input' => ['command' => ['bash', '-lc', 'php vendor/bin/builder larapack:hand-rolled approve --all']]];
+        $direct = ['tool_input' => ['command' => ['php', 'artisan', 'larapack:hand-rolled', 'approve', "it's"]]];
+        $bypass = ['tool_input' => ['cmd' => ['git', 'commit', '--no-verify', '-m', 'x']]];
+        $write = ['cwd' => $cwd, 'tool_input' => ['command' => ['tee', '.larapack/hand-rolled.lock']]];
+        $harmless = ['tool_input' => ['command' => ['php', 'artisan', 'larapack:verify']]];
+
+        $this->assertTrue(Guard::approvesHandRolled($approve));
+        $this->assertTrue(Guard::approvesHandRolled($direct));
+        $this->assertSame(['git commit --no-verify'], Guard::bypassesGitHooks($bypass));
+        $this->assertSame([$cwd.'/.larapack/hand-rolled.lock'], Guard::touchedLocks($write));
+        $this->assertFalse(Guard::approvesHandRolled($harmless));
+        $this->assertFalse(Guard::approvesHandRolled(['tool_input' => ['command' => ['php', 7]]]));
+    }
+
+    /**
+     * Un cuaderno y las herramientas de archivos de un servidor MCP no
+     * nombran su archivo `file_path`.
+     */
+    public function test_el_candado_se_reconoce_con_cualquier_nombre_del_campo_de_ruta(): void
+    {
+        $cwd = str_replace('\\', '/', (string) realpath(sys_get_temp_dir()));
+
+        foreach (['file_path', 'notebook_path', 'path', 'filePath', 'target_file'] as $key) {
+            $this->assertSame(
+                [$cwd.'/.larapack/hand-rolled.lock'],
+                Guard::touchedLocks(['cwd' => $cwd, 'tool_input' => [$key => '.larapack/hand-rolled.lock']]),
+                $key
+            );
+        }
+
+        $this->assertSame([], Guard::touchedLocks(['cwd' => $cwd, 'tool_input' => ['path' => 'src/Models/Post.php']]));
+    }
 }

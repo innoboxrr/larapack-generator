@@ -4,6 +4,7 @@ namespace Innoboxrr\LarapackGenerator\Commands;
 
 use Innoboxrr\LarapackGenerator\Commands\Concerns\ReportsGeneration;
 use Innoboxrr\LarapackGenerator\Support\AgentHooks;
+use Innoboxrr\LarapackGenerator\Support\Files;
 use Innoboxrr\LarapackGenerator\Support\Generation;
 use Innoboxrr\LarapackGenerator\Support\GitHooks;
 use Innoboxrr\LarapackGenerator\Support\ProjectRoot;
@@ -33,9 +34,14 @@ class NewPackageCommand extends Command
     /**
      * El formato de nombre que acepta Composer.
      */
-    private const NAME = '/^[a-z0-9]([_.-]?[a-z0-9]+)*\/[a-z0-9](([_.]|-{1,2})?[a-z0-9]+)*$/';
+    /**
+     * Las dos terminan en `\z` y no en `$`: `$` también casa delante de un
+     * salto de línea final, y «acme/shop\n» pasaba al nombre del directorio y
+     * a composer.json.
+     */
+    private const NAME = '/^[a-z0-9]([_.-]?[a-z0-9]+)*\/[a-z0-9](([_.]|-{1,2})?[a-z0-9]+)*\z/';
 
-    private const NAMESPACE = '/^[A-Z][A-Za-z0-9]*(\\\\[A-Z][A-Za-z0-9]*)+$/';
+    private const NAMESPACE = '/^[A-Z][A-Za-z0-9]*(\\\\[A-Z][A-Za-z0-9]*)+\z/';
 
     private const PROVIDERS = ['App', 'Auth', 'Event', 'Route'];
 
@@ -127,7 +133,7 @@ class NewPackageCommand extends Command
     {
         $composerFile = root_path().'/composer.json';
 
-        file_put_contents($composerFile, json_encode(PackageTool::composerJson($name, $namespace, $description, $license), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)."\n");
+        Files::write($composerFile, json_encode(PackageTool::composerJson($name, $namespace, $description, $license), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)."\n");
 
         Generation::record('create', $composerFile, 'ecosystem.json');
 
@@ -172,7 +178,7 @@ class NewPackageCommand extends Command
         // ruido.
         $composer = json_decode((string) file_get_contents($composerFile), true);
 
-        file_put_contents($composerFile, json_encode($composer, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)."\n");
+        Files::write($composerFile, json_encode($composer, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)."\n");
     }
 
     /**

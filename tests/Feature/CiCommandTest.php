@@ -263,6 +263,29 @@ final class CiCommandTest extends TestCase
         $this->assertStringStartsWith("* @acme/todos\n", $this->project->read('CODEOWNERS'));
     }
 
+    /**
+     * Auditoría de seguridad de 9.4.0. GitHub lee el primer CODEOWNERS que
+     * existe (.github/, la raíz, docs/): con el del proyecto en la raíz, un
+     * `.github/CODEOWNERS` nuevo —que no era de nadie— le quitaba el sitio y
+     * dejaba el candado sin dueño. Y cualquier workflow puede declarar un job
+     * llamado como el check exigido: todos son del dueño.
+     */
+    public function test_el_dueno_lo_es_de_las_tres_rutas_de_codeowners_y_de_todos_los_workflows(): void
+    {
+        file_put_contents($this->project->path.'/CODEOWNERS', "* @acme/todos\n");
+
+        $this->ci(['--owner' => ['@acme/arquitectura']]);
+
+        $lines = explode("\n", $this->project->read('CODEOWNERS'));
+
+        foreach (['/.github/workflows/', '/.githooks/', '/.larapack/hand-rolled.lock', '/.github/workflows/larapack.yml', '/.github/workflows/larapack-approve.yml', '/CODEOWNERS', '/.github/CODEOWNERS', '/docs/CODEOWNERS'] as $path) {
+            $this->assertContains("{$path} @acme/arquitectura", $lines);
+        }
+
+        // El directorio va antes que sus archivos: gana la última línea.
+        $this->assertLessThan(array_search('/.github/workflows/larapack.yml @acme/arquitectura', $lines, true), array_search('/.github/workflows/ @acme/arquitectura', $lines, true));
+    }
+
     public function test_un_owner_invalido_no_escribe_nada(): void
     {
         $this->assertSame(Command::FAILURE, $this->ci(['--owner' => ['acme']]));
@@ -285,7 +308,7 @@ final class CiCommandTest extends TestCase
 
         $this->assertSame(['trunk'], $this->workflow()['on']['push']['branches']);
         $this->assertStringContainsString(
-            "gh api --method PUT 'repos/acme/notes/branches/trunk/protection' -F 'required_status_checks[strict]=false' -f 'required_status_checks[contexts][]=LaraPack verify' -F 'enforce_admins=true' -F 'required_pull_request_reviews[require_code_owner_reviews]=true' -F 'required_pull_request_reviews[required_approving_review_count]=1' -F 'restrictions=null'",
+            "gh api --method PUT 'repos/acme/notes/branches/trunk/protection' -F 'required_status_checks[strict]=false' -f 'required_status_checks[contexts][]=LaraPack verify' -F 'enforce_admins=true' -F 'required_pull_request_reviews[require_code_owner_reviews]=true' -F 'required_pull_request_reviews[dismiss_stale_reviews]=true' -F 'required_pull_request_reviews[required_approving_review_count]=1' -F 'restrictions=null'",
             $this->lastOutput
         );
         $this->assertStringContainsString('Require review from Code Owners', $this->lastOutput);

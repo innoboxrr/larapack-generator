@@ -13,6 +13,120 @@ contrato y la documentación para personas y agentes
 ([docs/realign/README.md](docs/realign/README.md)). Las secciones de abajo,
 una por pieza; lo que hay que hacer al actualizar, al final de la versión.
 
+### Auditoría de seguridad
+
+Una auditoría adversaria de las tres superficies —las capas que impiden que un agente se desvíe o se apruebe a sí
+mismo, el código que se genera y el propio generador delante de un proyecto que no es de fiar—. Cada hallazgo se
+reprodujo en un proyecto temporal, tiene una prueba que falla sin el arreglo y está arreglado; lo que no se puede
+cerrar desde un paquete está dicho donde se promete lo contrario (README «Lo que la puerta no cierra» y «Lo que no
+cierra, dicho claro», ARCHITECTURE «El proyecto no es de fiar; quien corre el comando, sí»,
+docs/realign/exceptions.md y plan.md).
+
+**Lo que `verify --strict` dejaba pasar (la puerta de la CI).**
+
+- **Acciones heredadas.** Un controlador vacío que recibe sus acciones —con su validación y sus consultas— de un
+  trait o de un padre de fuera de `Http/Controllers`, o de un padre abstracto de dentro, no tenía ningún hallazgo.
+  Ahora cada acción heredada de código del proyecto se comprueba en el controlador concreto.
+- **Una clase dentro de un bloque.** `if (! class_exists(X::class)) { class X { … } }` sacaba la clase del análisis:
+  `PhpOutline` se saltaba los bloques enteros. Ahora los recorre.
+- **Un directorio llamado `vendor` o `node_modules` dentro del código** (`src/Http/Controllers/vendor/`), que PSR-4
+  carga como cualquier otro, se saltaba por el nombre, en verify y en la guardia. Sólo se saltan los de la raíz del
+  proyecto y de cada paquete local. Se siguen además los directorios enlazados y lo que composer carga por
+  `classmap` o PSR-0.
+- **Un controlador fuera de `Http/Controllers`.** `Route::get('/x', [App\Actions\Exportar::class, 'run'])` quedaba
+  fuera «a propósito», y era la forma más corta de saltarse la regla. Una clase del proyecto que un `routes/*.php`
+  pone como acción (también invocable, `'Clase@metodo'` y `Route::resource()`) se comprueba como controlador. Un
+  componente de Livewire, cuyo `__invoke` viene de vendor, sigue fuera. **Al actualizar:** un proyecto con
+  controladores de una sola acción en `Actions/` verá `controller-shape` en los que no deleguen; se llevan a su
+  request o se declaran con `#[HandRolled]`.
+- **Acciones de ruta que no son un closure en línea**: una variable (`$h = function () {…}; Route::get('/x', $h)`),
+  `funcion(...)`, `[new X, 'run']`, `Closure::fromCallable()` o un closure dentro de un array. Son `route-closure`.
+- **Puertas laterales nuevas**: `callAction()` redefinido, un closure en `getMiddleware()` y un `__destruct()` con
+  cuerpo son `controller-shape`, como `__call`.
+- **`manifest-declaration`: el manifiesto no dice menos que el contrato.** `secret-exposed`, `immutable-write`,
+  `route-not-declared` y `endpoint-missing` comprueban el código contra lo que anota `.larapack/manifest.json`, y
+  bastaba borrarle `"secret": ["token"]` para que un secreto en el Resource dejara de ser error con
+  `laraimport.json` intacto. Ahora es error que la anotación difiera del contrato, y aviso que el contrato declare
+  un modelo que el manifiesto no tiene. **Al actualizar:** un contrato cambiado y sin regenerar sale aquí;
+  `larapack:import` lo pone al día.
+
+**CODEOWNERS, la protección y la aprobación con nombre.**
+
+- **CODEOWNERS sin sombra.** GitHub lee el primer CODEOWNERS que existe (`.github/`, la raíz, `docs/`): con el del
+  proyecto en la raíz, un `.github/CODEOWNERS` nuevo —que no era de nadie— dejaba el candado sin dueño en el PR
+  siguiente. `larapack:ci --owner` cubre las tres rutas, **todos los workflows** (`/.github/workflows/`: cualquiera
+  puede declarar un job llamado como el check exigido) y los hooks de git versionados (`/.githooks/`). **Vuelve a
+  correr `larapack:ci --owner`** para añadir las líneas.
+- **La protección clásica descarta las revisiones al empujar** (`dismiss_stale_reviews=true`): sin eso se aprobaba el
+  PR y después se empujaba el candado. El ruleset ya lo hacía. Repite la orden si usaste esa vía.
+- **`approved_run` tiene que haber terminado bien.** Una corrida fallida, cancelada o en marcha del workflow de
+  aprobación no aprobó nada, y citarla valía.
+- **Lo que el dueño lee al aprobar.** El «cubre» sale del objetivo y no de `exceptions.json`, que escribe quien
+  pide, y el hallazgo de la solicitud se enseña como «según quien la pidió (no se comprobó; lee el código)».
+- **El candado no se escribe a través de un enlace** que saque del proyecto.
+
+**Los hooks.**
+
+- **El `pre-push` compara con la rama del remoto que se actualiza.** Miraba «los commits que no tiene ningún
+  remoto»: empujados antes a otra rama —que por no ser HEAD no se comprueba—, al empujar la de verdad salían sin
+  mirar ni el contrato ni el candado.
+- **La guardia lee la orden que llega partida en palabras** (`["bash", "-lc", "…"]`, la `shell` de Codex y las de
+  un servidor MCP; también `cmd`) y reconoce el candado por `notebook_path`, `path`, `filePath` o `target_file`,
+  no sólo por `file_path`.
+
+**El código generado.**
+
+- **`show` sólo carga las relaciones declaradas.** `load_relations` y `load_counts` tienen que llegar como lista.
+  `Rule::in` validaba los valores y no las claves, y Eloquent toma una clave de texto por el nombre de la relación:
+  `load_relations[folder.notes]=next` cargaba una relación que no está en `$loadable_relations` —y con ella
+  registros que la política no deja ver— o respondía 500. Ahora responde 422. Regenera `ShowRequest`
+  (`larapack:import --force`); en uno editado, añade `'list'` a las dos reglas.
+- **El listado pagina siempre.** `paginate=0` era «todo» para SearchSurge y una petición traía la tabla entera.
+  `IndexRequest` lo convierte en `search-surge.pagination.max_per_page` (1000 por omisión). La exportación no
+  cambia. Un front que pidiera `paginate=0` para llenar un selector recibe como mucho ese tope, paginado.
+- **Un secreto no viaja en los eventos.** `CreateEvent`, `UpdateEvent`, `DeleteEvent`, `RestoreEvent` y
+  `ForceDeleteEvent` llevaban `$request->all()`: una columna `secret`, o la contraseña de un `authenticatable` y su
+  `password_confirmation`, en claro; un listener en cola los dejaba en `jobs` y `failed_jobs`. `data` va ahora sin
+  las columnas `$hidden` del modelo ni su `_confirmation`.
+- **El usuario que inicia sesión: correo único e `isAdmin()` exacto.** Un modelo `authenticatable` lleva índice
+  único en `email` aunque no declare `indexes`, e `isAdmin()` compara el correo tal cual está guardado. Antes,
+  quien pudiera editar su perfil tomaba el correo de un administrador, o el mismo con otra mayúscula en PostgreSQL
+  y SQLite. **Al actualizar:** reimportar sobre una tabla creada por LaraPack escribe una migración con
+  `$table->unique('email')`, que falla si ya hay correos repetidos; y `auth.admins` tiene que llevar los correos
+  exactamente como están en la tabla. En la `users` de Laravel, que ya trae el índice, no se añade nada.
+- **`larapack:validate` avisa de `email_verified_at` y `remember_token` escribibles** en un `authenticatable`.
+- **El correo de la exportación sólo promete lo que pasa.** Decía que el archivo se borraba a las 24 horas y nadie
+  lo borra. Ahora dice que el enlace caduca, y sólo si el disco firma enlaces. Cambian dos textos de `lang/es.json`.
+- README: «Lo que el código generado cierra, y lo que deja al dueño».
+
+**El generador delante de un repositorio que no es de fiar.**
+
+- **Enlaces simbólicos.** `larapack:import` escribía a través de un directorio enlazado (`src/Models` → fuera) y de
+  un enlace roto, el manifiesto a través de un `.larapack` enlazado, `larapack:ci` el workflow, y
+  `larapack:remove-full-model` borraba la carpeta del modelo de un directorio enlazado. Toda escritura y todo
+  borrado del proyecto resuelven el camino real y fallan si acaba fuera de la raíz (`Files::guard()`).
+- **La caché del realineamiento no vacía un directorio ajeno.** Con `.larapack/realign/cache` enlazado a otro
+  sitio, regenerar borraba `<ese sitio>/root`.
+- **El namespace de composer.json tiene que ser un namespace.** Iba tal cual al `namespace` de cada archivo
+  generado: lo que siguiera a un `;` salía como código en cada clase.
+- **Un manifiesto editado no se interpreta.** Una ruta con `..` o absoluta hacía que `larapack:fix
+  relation-missing` escribiera en un trait de fuera del proyecto, y un `namespace` con código lo dejaba al
+  principio del trait.
+- **El plan del realineamiento no saca a `apply` de la raíz**, ni por una ruta con `..` ni por un enlace.
+- **`larapack:fix` no reescribe el código de otro proyecto.** Las fuentes que llegan por un repositorio `path` con
+  `../*` o una ruta absoluta, o por un `app/` enlazado, se leen pero salen como saltadas. **Al actualizar:** si tus
+  paquetes locales viven fuera de la raíz de la aplicación, corre `larapack:fix --root=<paquete>` en cada uno.
+- **`larapack:new`** no acepta un nombre ni un namespace con un salto de línea final.
+- **`release.yml`** (el de este repositorio y el de los paquetes nuevos) sólo publica tras el Tests en verde de un
+  push al propio repositorio: `branches` casa con la rama de cabeza, también la `master` de un fork.
+
+**Los límites que quedan**, dichos donde se leen: la CI corre el código del PR (su `composer.json`, su `artisan`);
+la guardia no protege su propia instalación y lee órdenes de shell, no intenciones; el `pre-push` sólo comprueba
+la rama del árbol; `plan.json` es estado y no prueba (`decide`, `--tested` y `untested_accepted` son la palabra de
+quien escribe); una corrida de aprobación dice quién, no qué; las acciones de los workflows van por etiqueta y el
+de aprobación corre código de la rama con `contents: write`; `verify` mira la forma, no si `authorize()` autoriza;
+y la Pint de `vendor/` del proyecto y la orden de pruebas de `.larapack/realign/config.json` se ejecutan.
+
 ### Lo que encontró la segunda revisión, sobre lo integrado
 
 - **Una terminal fabricada no es una persona.** `pty.spawn` de Python, `script -c`, `expect` o `unbuffer` crean

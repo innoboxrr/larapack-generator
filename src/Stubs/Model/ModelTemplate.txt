@@ -131,12 +131,17 @@ class PascalCaseModelName extends Model
      * before(), e innoboxrr/laravel-auth le deja entrar como otros usuarios.
      * Por omisión administra quien tiene su correo en `auth.admins`; cámbialo
      * por tu sistema de roles cuando lo tengas.
+     *
+     * El correo se compara tal cual está guardado, letra por letra. Antes se
+     * pasaba a minúsculas, y en una base que distingue mayúsculas (PostgreSQL,
+     * SQLite) el índice único deja convivir `Ana@x.com` con `ana@x.com`: quien
+     * pudiera cambiar su correo se hacía administrador. Escribe en
+     * `auth.admins` el correo exactamente como está en la tabla, y no dejes
+     * que nadie cambie el suyo sin verificarlo.
      */
     public function isAdmin(): bool
     {
-        $admins = array_map('strtolower', (array) config('auth.admins', []));
-
-        return in_array(strtolower((string) $this->email), $admins, true);
+        return in_array((string) $this->email, (array) config('auth.admins', []), true);
     }
 
     // @larapack:endif

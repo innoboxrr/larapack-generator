@@ -378,7 +378,7 @@ class Tool
 
     protected function replaceData(string $file): void
     {
-        file_put_contents($file, $this->replaceTokens(self::contents($file)));
+        Files::write($file, $this->replaceTokens(self::contents($file)));
 
         // Toda copia de un stub pasa por aquí, también las que no usan
         // generate(): así se formatea todo lo generado.
@@ -451,7 +451,7 @@ class Tool
             return;
         }
 
-        file_put_contents(root_path().'/composer.json', json_encode($edit(root_composer_json()), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+        Files::write(root_path().'/composer.json', json_encode($edit(root_composer_json()), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR));
     }
 
     /**
@@ -474,7 +474,7 @@ class Tool
      * El contenido de un archivo que se va a reescribir.
      *
      * file_get_contents() suelto devuelve false si no puede leer, y ese false
-     * acababa como '' en el file_put_contents() de después: el archivo se
+     * acababa como '' en el Files::write() de después: el archivo se
      * reescribía vacío. Aquí no se lee, se falla (`Files::read`).
      */
     protected static function contents(string $file): string
@@ -499,6 +499,10 @@ class Tool
         if (! is_file($stub)) {
             throw MakerException::stubNotFound($stub);
         }
+
+        // Antes de mirar si existe: un enlace roto «no existe», y copy()
+        // escribiría a través de él, fuera del proyecto.
+        Files::guard($destination);
 
         $exists = file_exists($destination);
 
@@ -529,7 +533,7 @@ class Tool
             throw MakerException::directoryNotCreated($directory);
         }
 
-        if (! copy($stub, $destination)) {
+        if (! Files::copy($stub, $destination)) {
             throw MakerException::copyFailed($stub, $destination);
         }
 
@@ -776,7 +780,7 @@ class Tool
             $content
         ) ?? throw MakerException::rewriteFailed($file);
 
-        file_put_contents($file, $content);
+        Files::write($file, $content);
     }
 
     /**
@@ -805,7 +809,7 @@ class Tool
             return;
         }
 
-        file_put_contents($file, StubBlocks::apply(
+        Files::write($file, StubBlocks::apply(
             $content,
             fn (string $condition): bool => Declaration::holds($this->ModelName, $condition)
         ));
@@ -815,6 +819,10 @@ class Tool
 
     protected function dropFile(string $file): bool
     {
+        // Un enlace se quita él; lo que no se hace es borrar a través de un
+        // directorio enlazado, que es de otro.
+        Files::guard(dirname($file));
+
         return unlink($file);
     }
 
@@ -843,8 +851,14 @@ class Tool
         // Si la carpeta misma es un enlace, se quita el enlace: recorrerlo
         // vaciaba el destino y luego rmdir() fallaba sobre el enlace.
         if (is_link($path)) {
+            Files::guard(dirname($path));
+
             return unlink($path);
         }
+
+        // `src/Http/Requests` enlazado a un directorio de fuera: la carpeta
+        // del modelo que se borraría es de ese otro directorio.
+        Files::guard($path);
 
         $files = glob($path.'/{,.}[!.,!..]*', GLOB_MARK | GLOB_BRACE) ?: [];
         foreach ($files as $file) {

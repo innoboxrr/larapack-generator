@@ -226,10 +226,20 @@ final class GitHooks
                 continue;
             }
 
-            // Los commits que todavía no tiene ningún remoto: lo que de
-            // verdad sale de esta máquina.
-            $files = [...$files, ...self::paths($top, ['log', '--format=', '--name-only', '-z', '--diff-filter=ACMR', $localSha, '--not', '--remotes'])];
-            $changed = [...$changed, ...self::paths($top, ['log', '--format=', '--name-only', '-z', $localSha, '--not', '--remotes'])];
+            // Lo que esta rama del remoto todavía no tiene: de su punta a
+            // lo que se empuja. Antes eran «los commits que no tiene ningún
+            // remoto», y bastaba empujarlos primero a otra rama —que por no
+            // ser HEAD no se comprueba— para que al empujar la de verdad ya
+            // los tuviera un remoto y no se mirara nada: ni el controlador
+            // ni el candado. Para una rama nueva, o si su punta no está en
+            // este clon, lo que no tiene ningún remoto.
+            $remoteSha = $fields[3];
+            $range = preg_match(self::ZERO, $remoteSha) !== 1 && self::git($top, ['cat-file', '-e', $remoteSha.'^{commit}']) !== null
+                ? [$localSha, '^'.$remoteSha]
+                : [$localSha, '--not', '--remotes'];
+
+            $files = [...$files, ...self::paths($top, ['log', '--format=', '--name-only', '-z', '--diff-filter=ACMR', ...$range])];
+            $changed = [...$changed, ...self::paths($top, ['log', '--format=', '--name-only', '-z', ...$range])];
         }
 
         if ($files === [] && $changed === []) {

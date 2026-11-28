@@ -48,6 +48,9 @@ final class GeneratedLiteralsFuzzTest extends TestCase
         foreach ($this->strings as $i => $value) {
             $props[] = ['name' => "d{$i}", 'type' => 'string', 'default' => $value];
             $props[] = ['name' => "c{$i}", 'type' => 'string', 'cast' => $value];
+            // La tabla de un `constraint` es texto libre en el esquema (no
+            // puede ir vacía): acaba en `->constrained('…')`.
+            $props[] = ['name' => "f{$i}", 'type' => 'foreignId', 'constraint' => 't'.$value, 'nullable' => true];
             // Etiqueta al revés de la clave, para que una no se confunda con
             // la otra al recuperarlas.
             $enum[$value] = $this->label($value);
@@ -70,7 +73,10 @@ final class GeneratedLiteralsFuzzTest extends TestCase
             ]],
             'pivots' => [[
                 'name' => 'product_tag',
-                'props' => array_map(fn (int $i): array => ['name' => "p{$i}", 'type' => 'string', 'default' => $this->strings[$i]], array_keys($this->strings)),
+                'props' => [
+                    ...array_map(fn (int $i): array => ['name' => "p{$i}", 'type' => 'string', 'default' => $this->strings[$i]], array_keys($this->strings)),
+                    ...array_map(fn (int $i): array => ['name' => "pf{$i}", 'type' => 'foreignId', 'constraint' => 't'.$this->strings[$i]], array_keys($this->strings)),
+                ],
             ]],
         ], JSON_THROW_ON_ERROR));
 
@@ -136,6 +142,21 @@ final class GeneratedLiteralsFuzzTest extends TestCase
         foreach ($this->strings as $i => $value) {
             $this->assertSame($value, $this->argumentAfter($model, "\$table->string('d{$i}')", '->default('), "default de d{$i}: ".json_encode($value));
             $this->assertSame($value, $this->argumentAfter($pivot, "\$table->string('p{$i}')", '->default('), "default de p{$i}: ".json_encode($value));
+        }
+    }
+
+    /**
+     * `constraint` no tiene patrón en el esquema: la tabla a la que apunta la
+     * clave llega tal cual a la migración del modelo y a la del pivote.
+     */
+    public function test_la_tabla_de_cada_clave_ajena_es_la_declarada(): void
+    {
+        $model = $this->project->read((string) $this->project->glob('database/migrations/*_create_products_table.php'));
+        $pivot = $this->project->read((string) $this->project->glob('database/migrations/*_create_product_tag_table.php'));
+
+        foreach ($this->strings as $i => $value) {
+            $this->assertSame('t'.$value, $this->argumentAfter($model, "\$table->foreignId('f{$i}')", '->constrained('), "constraint de f{$i}: ".json_encode($value));
+            $this->assertSame('t'.$value, $this->argumentAfter($pivot, "\$table->foreignId('pf{$i}')", '->constrained('), "constraint de pf{$i}: ".json_encode($value));
         }
     }
 

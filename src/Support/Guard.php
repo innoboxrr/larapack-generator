@@ -49,6 +49,11 @@ final class Guard
     private const SHELL_SEPARATORS = [';', '&', '|', "\n", '(', ')', '`', '<', '>'];
 
     /**
+     * Cómo nombran las herramientas el archivo que escriben.
+     */
+    private const PATH_KEYS = ['file_path', 'notebook_path', 'path', 'filePath', 'target_file'];
+
+    /**
      * Las órdenes que ejecutan como órdenes lo que reciben por la entrada.
      */
     private const SHELLS = ['bash', 'sh', 'zsh', 'dash', 'ksh'];
@@ -93,9 +98,11 @@ final class Guard
 
     /**
      * Lo que instala composer o npm: código de terceros, aunque tenga
-     * controladores y su propio composer.json.
+     * controladores y su propio composer.json. Sólo el `vendor/` y el
+     * `node_modules/` de la raíz del proyecto: un `Http/Controllers/vendor/`
+     * es un directorio más de PSR-4, y verify lo recorre (ProjectSources).
      */
-    private const THIRD_PARTY = '#(^|/)(vendor|node_modules)/#';
+    private const THIRD_PARTY = '#^(vendor|node_modules)/#';
 
     /**
      * Lo único que ControllerShape mira: es lo que se comprueba en un
@@ -131,7 +138,11 @@ final class Guard
     public static function touchedFiles(array $payload): array
     {
         $input = is_array($payload['tool_input'] ?? null) ? $payload['tool_input'] : [];
-        $candidates = [$input['file_path'] ?? null];
+        // `file_path` es el de Write y Edit; un cuaderno (`notebook_path`) y
+        // las herramientas de archivos de un servidor MCP (`path`,
+        // `filePath`, `target_file`) nombran el suyo de otra forma, y con
+        // sólo el primero el candado se escribía por cualquiera de ellas.
+        $candidates = array_map(fn (string $key): mixed => $input[$key] ?? null, self::PATH_KEYS);
 
         foreach (is_array($input['edits'] ?? null) ? $input['edits'] : [] as $edit) {
             $candidates[] = is_array($edit) ? ($edit['file_path'] ?? null) : null;
@@ -466,7 +477,15 @@ final class Guard
     private static function bashCommand(array $payload): ?string
     {
         $input = is_array($payload['tool_input'] ?? null) ? $payload['tool_input'] : [];
-        $command = $input['command'] ?? null;
+        $command = $input['command'] ?? $input['cmd'] ?? null;
+
+        // Algunas herramientas de shell (la `shell` de Codex, las de un
+        // servidor MCP) mandan la orden ya partida en palabras:
+        // `["bash", "-lc", "…"]`. Se lee como la misma orden, cada palabra
+        // entre comillas; antes no era una cadena y pasaba sin leerse.
+        if (is_array($command) && $command !== [] && array_filter($command, 'is_string') === $command) {
+            return implode(' ', array_map(fn (string $word): string => "'".str_replace("'", "'\\''", $word)."'", $command));
+        }
 
         return is_string($command) ? $command : null;
     }
@@ -951,8 +970,10 @@ final class Guard
      * así que relativo a su proyecto ya no hay ningún `vendor/` en la ruta.
      * Tampoco sobre el `cwd` de la sesión, que sigue los `cd` del agente y
      * puede estar dentro del paquete. Un `vendor` cuenta sólo si el
-     * directorio que lo contiene es un proyecto de composer: un proyecto que
-     * viva él mismo bajo una carpeta llamada `vendor` no se excluye entero.
+     * directorio que lo contiene es un proyecto de composer, y un
+     * `node_modules`, si es uno de composer o de npm: un proyecto que viva él
+     * mismo bajo una carpeta con ese nombre no se excluye entero, y un
+     * `Http/Controllers/node_modules/` no saca a un controlador de la guardia.
      */
     public static function isThirdParty(string $file): bool
     {
@@ -968,7 +989,9 @@ final class Guard
 
             $name = basename($directory);
 
-            if ($name === 'node_modules' || ($name === 'vendor' && is_file($parent.'/composer.json'))) {
+            if (($name === 'node_modules' && (is_file($parent.'/package.json') || is_file($parent.'/composer.json')))
+                || ($name === 'vendor' && is_file($parent.'/composer.json'))
+            ) {
                 return true;
             }
 

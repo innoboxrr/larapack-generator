@@ -54,6 +54,30 @@ final class RealignApplyTest extends TestCase
         $this->assertTrue($this->realign('check', ['targets' => ['regenerate@.']])['done']);
     }
 
+    /**
+     * La copia de la simulación enlaza la caché del proyecto, y es el único
+     * enlace hacia fuera de su raíz a través del que se regenera: la guarda
+     * que impide vaciar un directorio ajeno (Files::assertInside()) no puede
+     * tumbar el --dry-run cuando la caché no tiene lo de este contrato.
+     */
+    public function test_la_simulacion_regenera_en_la_cache_del_proyecto_si_no_esta(): void
+    {
+        $this->olderTemplate(self::SHOW, '        //', '        // la plantilla de antes');
+        $this->prepare();
+
+        $cache = $this->project->path.'/.larapack/realign/cache/root';
+        $this->assertDirectoryExists($cache);
+
+        foreach (glob($cache.'/*.done') ?: [] as $done) {
+            unlink($done);
+        }
+
+        $simulated = $this->realign('apply', ['targets' => ['regenerate@.'], '--dry-run' => true]);
+
+        $this->assertStringContainsString('-        // la plantilla de antes', $simulated['fixed'][0]['diff']);
+        $this->assertNotSame([], glob($cache.'/*.done'), 'La simulación no regeneró en la caché del proyecto.');
+    }
+
     public function test_no_regenera_lo_que_alguien_edito_despues_del_diagnostico(): void
     {
         $this->olderTemplate(self::SHOW, '        //', '        // la plantilla de antes');

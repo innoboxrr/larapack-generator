@@ -2,6 +2,7 @@
 
 namespace Innoboxrr\LarapackGenerator\Support;
 
+use Innoboxrr\LarapackGenerator\Support\Import\Actions;
 use Innoboxrr\LarapackGenerator\Support\Import\ImportDocument;
 use Innoboxrr\LarapackGenerator\Support\Import\Relations;
 
@@ -34,7 +35,9 @@ final class ContractDrift
 
     public const RELATION_MISSING = 'relation-missing';
 
-    public const CHECKS = [self::MODEL_LISTS, self::RELATION_MISSING];
+    public const DECLARATION = 'manifest-declaration';
+
+    public const CHECKS = [self::MODEL_LISTS, self::RELATION_MISSING, self::DECLARATION];
 
     /**
      * @var array<string, array<string, mixed>>|null por nombre; null si no se ha leído
@@ -70,7 +73,21 @@ final class ContractDrift
                 continue;
             }
 
-            $findings = [...$findings, ...$this->lists($model, $contract[$model])];
+            $findings = [...$findings, ...$this->lists($model, $contract[$model]), ...$this->declaration($model, $contract[$model])];
+        }
+
+        // Lo que el contrato declara y el manifiesto no tiene: sin su
+        // entrada, ninguna comprobación del manifiesto mira ese modelo.
+        foreach (array_diff(array_keys($contract), $models) as $model) {
+            $findings[] = [
+                'level' => Verifier::WARNING,
+                'check' => self::DECLARATION,
+                'model' => (string) $model,
+                'file' => '.larapack/manifest.json',
+                'message' => "laraimport.json declara «{$model}» y el manifiesto no lo tiene: o no se ha generado todavía, o se quitó de .larapack/manifest.json. "
+                    .'Mientras falte, verify no comprueba nada de lo que el contrato declara de él (rutas, `secret`, `immutable`, endpoints). '
+                    .'Genera con larapack:import; el manifiesto no se edita a mano.',
+            ];
         }
 
         foreach ($this->missingRelations($models) as $missing) {
@@ -87,6 +104,90 @@ final class ContractDrift
         }
 
         return $findings;
+    }
+
+    /**
+     * Lo que el manifiesto anota de la forma de un modelo —sus acciones,
+     * `immutable`, sus columnas `secret`, sus endpoints— tiene que ser lo que
+     * declara el contrato.
+     *
+     * `verify` no recibe el laraimport: `route-not-declared`,
+     * `endpoint-missing`, `immutable-write` y `secret-exposed` comprueban el
+     * código contra esa anotación. El manifiesto es un archivo más del
+     * repositorio, y bastaba borrarle `"secret": ["api_token"]` para que una
+     * columna secreta en el Resource dejara de ser un error, con el contrato
+     * intacto. Es error: mientras difieran, lo que verify da por bueno no es
+     * lo que el contrato dice. También lo es, de buena fe, un contrato que
+     * cambió y no se regeneró.
+     *
+     * @param  array<string, mixed>  $definition  el modelo del contrato, ya resuelto
+     * @return list<Finding>
+     */
+    private function declaration(string $model, array $definition): array
+    {
+        $annotated = $this->manifest->declarationOf($model);
+        $secret = [];
+
+        foreach ((array) ($definition['props'] ?? []) as $prop) {
+            if (is_array($prop) && ! empty($prop['secret'])) {
+                $secret[] = (string) $prop['name'];
+            }
+        }
+
+        $declared = [
+            'actions' => array_values(array_intersect(Actions::ALL, (array) ($definition['actions'] ?? Actions::resolve($definition)))),
+            'immutable' => ! empty($definition['immutable']),
+            'secret' => $secret,
+            'endpoints' => array_values((array) ($definition['endpoints'] ?? [])),
+        ];
+        $labels = ['actions' => 'las acciones', 'immutable' => '`immutable`', 'secret' => 'las columnas `secret`', 'endpoints' => 'los endpoints'];
+        $differs = [];
+
+        foreach ($labels as $key => $label) {
+            if (self::canonical($declared[$key]) !== self::canonical($annotated[$key])) {
+                $differs[] = $label;
+            }
+        }
+
+        if ($differs === []) {
+            return [];
+        }
+
+        return [[
+            'level' => Verifier::ERROR,
+            'check' => self::DECLARATION,
+            'model' => $model,
+            'file' => '.larapack/manifest.json',
+            'message' => "El manifiesto no anota de «{$model}» lo mismo que declara laraimport.json: difieren ".implode(', ', $differs)
+                .'. verify comprueba el código contra lo que anota el manifiesto, así que mientras difieran no comprueba lo que el contrato declara. '
+                .'Regenera con larapack:import, que lo vuelve a anotar; el manifiesto no se edita a mano.',
+        ]];
+    }
+
+    /**
+     * Un valor sin el orden de sus claves ni el de una lista de nombres: lo
+     * que el contrato declara y lo que el manifiesto guardó pasan por JSON
+     * por caminos distintos.
+     */
+    private static function canonical(mixed $value): string
+    {
+        $sort = function (mixed $value) use (&$sort): mixed {
+            if (! is_array($value)) {
+                return $value;
+            }
+
+            $value = array_map($sort, $value);
+
+            if (! array_is_list($value)) {
+                ksort($value, SORT_STRING);
+            } elseif (array_filter($value, 'is_string') === $value) {
+                sort($value, SORT_STRING);
+            }
+
+            return $value;
+        };
+
+        return (string) json_encode($sort($value), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     }
 
     /**

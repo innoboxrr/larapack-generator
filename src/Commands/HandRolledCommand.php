@@ -164,8 +164,16 @@ class HandRolledCommand extends Command
             $fingerprint = $realign->fingerprint($target);
 
             if ($fingerprint !== null) {
-                $exceptions[$target] = ['reason' => $request['reason'], 'fingerprint' => $fingerprint, 'file' => $request['file'], 'line' => $request['line'] ?? 0,
-                    'finding' => Exceptions::isStatement($target) ? $realign->statement($target) : $request['message']];
+                // El archivo sale del objetivo —que es lo que se aprueba—, no
+                // del de la solicitud: exceptions.json lo escribe quien pide,
+                // y podía decir que cubría otro archivo. Por lo mismo, el
+                // hallazgo de la solicitud se enseña como lo que es: el texto
+                // de quien pide, sin comprobar (`claimed`).
+                $statement = Exceptions::isStatement($target);
+                $exceptions[$target] = ['reason' => $request['reason'], 'fingerprint' => $fingerprint,
+                    'file' => ExceptionTargets::parse($target)['file'] ?? $request['file'], 'line' => $request['line'] ?? 0,
+                    'finding' => $statement ? $realign->statement($target) : null,
+                    'claimed' => $statement ? null : $request['message']];
             }
         }
 
@@ -265,7 +273,7 @@ class HandRolledCommand extends Command
      * en el workflow de aprobación (OwnerConfirmation, NamedApproval).
      *
      * @param  list<string>  $targets
-     * @param  array<string, array{reason: string, file?: string, line?: int, finding?: string|null}>  $entries
+     * @param  array<string, array{reason: string, file?: string, line?: int, finding?: string|null, claimed?: string|null}>  $entries
      * @return array{approver: string|null, run: string|null, error: string|null}
      */
     private function confirm(InputInterface $input, OutputInterface $output, string $action, array $targets, array $entries): array
@@ -318,7 +326,7 @@ class HandRolledCommand extends Command
      * en la terminal.
      *
      * @param  list<string>  $targets
-     * @param  array<string, array{reason: string, file?: string, line?: int, finding?: string|null}>  $entries
+     * @param  array<string, array{reason: string, file?: string, line?: int, finding?: string|null, claimed?: string|null}>  $entries
      * @return list<string>
      */
     private function summary(string $action, array $targets, array $entries): array
@@ -339,6 +347,10 @@ class HandRolledCommand extends Command
 
             if (is_string($entry['finding'] ?? null) && $entry['finding'] !== '') {
                 $lines[] = '      hallazgo: «'.Exceptions::sanitise($entry['finding']).'»';
+            }
+
+            if (is_string($entry['claimed'] ?? null) && $entry['claimed'] !== '') {
+                $lines[] = '      hallazgo, según quien la pidió (no se comprobó; lee el código): «'.Exceptions::sanitise($entry['claimed']).'»';
             }
         }
 

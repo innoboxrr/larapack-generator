@@ -336,6 +336,46 @@ final class GitHooksTest extends TestCase
         }
     }
 
+    /**
+     * Auditoría de seguridad de 9.4.0. El push miraba «los commits que no
+     * tiene ningún remoto»: empujados antes a otra rama —que por no ser HEAD
+     * no se comprueba—, al empujar la de verdad ya los tenía un remoto y
+     * salía sin mirar nada.
+     */
+    public function test_el_push_frena_lo_que_ya_se_empujo_a_otra_rama_del_remoto(): void
+    {
+        $remote = $this->project->path.'-remote.git';
+        mkdir($remote);
+        $this->project->run(['git', 'init', '--quiet', '--bare', $remote]);
+
+        try {
+            $this->install();
+            $this->project->git('remote', 'add', 'origin', $remote);
+            $this->commitWithoutHooks('limpio');
+            $this->project->git('branch', '-M', 'main');
+            $this->assertSame(0, $this->project->run(['git', 'push', '--quiet', 'origin', 'main'], '', [], true)['code']);
+            $this->project->git('fetch', '--quiet', 'origin');
+
+            // El commit malo, en otra rama; se empuja estando en main.
+            $this->project->git('checkout', '--quiet', '-b', 'aparte');
+            $this->project->controller(false);
+            $this->commitWithoutHooks('con lógica, sin hook');
+            $this->project->git('checkout', '--quiet', 'main');
+            $aside = $this->project->run(['git', 'push', '--quiet', 'origin', 'aparte'], '', [], true);
+            $this->assertSame(0, $aside['code'], $aside['stderr']);
+            $this->project->git('fetch', '--quiet', 'origin');
+
+            // Ahora un remoto ya lo tiene. main avanza hasta él y se empuja.
+            $this->project->git('merge', '--quiet', '--ff-only', 'aparte');
+            $push = $this->project->run(['git', 'push', '--quiet', 'origin', 'main'], '', [], true);
+
+            $this->assertNotSame(0, $push['code']);
+            $this->assertStringContainsString('lo que vas a empujar se sale del contrato', $push['stderr']);
+        } finally {
+            (new HookProjectRemover)($remote);
+        }
+    }
+
     public function test_el_push_de_una_rama_que_no_es_head_no_se_comprueba_aqui_y_lo_dice(): void
     {
         $this->commitWithoutHooks('limpio');

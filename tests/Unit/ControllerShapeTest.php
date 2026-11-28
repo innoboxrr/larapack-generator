@@ -218,7 +218,9 @@ final class ControllerShapeTest extends TestCase
         }
         PHP);
 
-        $this->assertSame(['PostController::__Invoke()', 'PostController::boot()'], array_map(
+        // callAction() no es una acción, pero redefinirlo es una puerta
+        // lateral (auditoría de seguridad de 9.4.0): corre delante de todas.
+        $this->assertSame(['PostController::__Invoke()', 'PostController::boot()', 'PostController::callAction()'], array_map(
             fn (string $message): string => explode(' ', $message)[0],
             $this->messages('controller-shape')
         ));
@@ -531,5 +533,146 @@ final class ControllerShapeTest extends TestCase
             '.larapack/hand-rolled.lock no es una lista JSON de {"target", "reason", "fingerprint"}. Mientras no se corrija, ninguna excepción #[HandRolled] cuenta como aprobada. Lo mantiene el dueño del proyecto con larapack:hand-rolled.',
         ], array_slice($this->messages('hand-rolled-unapproved'), 0, 1));
         $this->assertSame([], $this->messages('hand-rolled-stale'));
+    }
+
+    // ---- Auditoría de seguridad de 9.4.0: lo que verify no veía ----
+
+    private const LOGIC = "    public function report(Request \$request)\n    {\n        \$data = \$request->validate(['q' => 'required']);\n\n        return \\DB::select('select 1');\n    }\n";
+
+    private function support(string $name, string $declaration): void
+    {
+        $this->put("app/Support/{$name}.php", "<?php\n\nnamespace App\\Support;\n\nuse App\\Http\\Requests\\StoreRequest;\nuse Illuminate\\Http\\Request;\nuse Innoboxrr\\LarapackGenerator\\Attributes\\HandRolled;\n\n{$declaration}\n");
+    }
+
+    private function routes(string $code): void
+    {
+        $this->put('routes/web.php', "<?php\n\nuse Illuminate\\Support\\Facades\\Route;\n\n{$code}\n");
+    }
+
+    public function test_una_accion_heredada_de_un_trait_de_fuera_de_http_controllers_se_comprueba(): void
+    {
+        $this->support('DoesEverything', "trait DoesEverything\n{\n".self::LOGIC.'}');
+        $this->controller('ReportController', "class ReportController extends Controller\n{\n    use \\App\\Support\\DoesEverything;\n}");
+
+        $this->assertSame([[
+            'level' => 'error', 'check' => 'controller-shape', 'model' => null, 'file' => 'app/Http/Controllers/ReportController.php',
+            'message' => 'ReportController::report(), heredada de DoesEverything (app/Support/DoesEverything.php), (línea 11) no delega: recibe Illuminate\Http\Request, valida en el controlador con validate(). '.$this->remedy(),
+        ]], $this->findings());
+    }
+
+    public function test_una_accion_heredada_de_un_padre_de_fuera_de_http_controllers_se_comprueba(): void
+    {
+        $this->support('BaseStats', "abstract class BaseStats\n{\n    use Helpers;\n\n    public function __call(\$name, \$arguments) { return 1; }\n\n    protected function helper() { return 1; }\n}");
+        $this->support('Helpers', "trait Helpers\n{\n".self::LOGIC.'}');
+        $this->controller('StatsController', "class StatsController extends \\App\\Support\\BaseStats\n{\n}");
+
+        $messages = $this->messages('controller-shape');
+
+        $this->assertCount(2, $messages);
+        $this->assertStringStartsWith('StatsController::__call(), heredada de BaseStats (app/Support/BaseStats.php), (línea 13) es __call:', $messages[0]);
+        $this->assertStringStartsWith('StatsController::report(), heredada de Helpers (app/Support/Helpers.php), (línea 11) no delega:', $messages[1]);
+    }
+
+    public function test_una_accion_heredada_de_un_padre_abstracto_de_http_controllers_se_comprueba_en_el_concreto(): void
+    {
+        $this->controller('BaseReport', "abstract class BaseReport\n{\n".self::LOGIC.'}');
+        $this->controller('RealReport', "class RealReport extends BaseReport\n{\n}");
+        $this->controller('OtherReport', "class OtherReport extends BaseReport\n{\n    public function report(StoreRequest \$request)\n    {\n        return \$request->handle();\n    }\n}");
+        $this->request();
+
+        $this->assertSame([[
+            'level' => 'error', 'check' => 'controller-shape', 'model' => null, 'file' => 'app/Http/Controllers/RealReport.php',
+            'message' => 'RealReport::report(), heredada de BaseReport (app/Http/Controllers/BaseReport.php), (línea 11) no delega: recibe Illuminate\Http\Request, valida en el controlador con validate(). '.$this->remedy(),
+        ]], $this->findings());
+    }
+
+    public function test_lo_heredado_que_delega_o_no_es_una_accion_no_se_marca(): void
+    {
+        $this->request();
+        $this->support('Thin', "trait Thin\n{\n    public function store(StoreRequest \$request)\n    {\n        return \$request->handle();\n    }\n\n    protected function helper() { return \\DB::select('x'); }\n\n    abstract public function nothing();\n}");
+        $this->controller('ThinController', "class ThinController extends \\Illuminate\\Routing\\Controller\n{\n    use \\App\\Support\\Thin, \\Illuminate\\Foundation\\Auth\\Access\\AuthorizesRequests;\n\n    public function nothing(StoreRequest \$request)\n    {\n        return \$request->handle();\n    }\n}");
+
+        $this->assertSame([], $this->findings());
+    }
+
+    public function test_un_metodo_heredado_con_hand_rolled_es_una_excepcion_que_se_anota_una_vez(): void
+    {
+        $this->support('Signed', "trait Signed\n{\n    #[HandRolled('firma el cuerpo en bruto')]\n".self::LOGIC.'}');
+        $this->controller('AController', "class AController\n{\n    use \\App\\Support\\Signed;\n}");
+        $this->controller('BController', "class BController\n{\n    use \\App\\Support\\Signed;\n}");
+
+        $shape = new ControllerShape($this->root);
+
+        $this->assertSame([['warning', 'hand-rolled']], array_map(fn (array $f): array => [$f['level'], $f['check']], $shape->run()));
+        $this->assertSame(['App\Support\Signed::report'], array_keys($shape->exceptions()));
+        $this->assertSame('app/Support/Signed.php', $shape->exceptions()['App\Support\Signed::report']['file']);
+    }
+
+    public function test_una_clase_declarada_dentro_de_un_bloque_se_comprueba(): void
+    {
+        $this->put('app/Http/Controllers/OddController.php', "<?php\n\nnamespace App\\Http\\Controllers;\n\nuse Illuminate\\Http\\Request;\n\nif (! class_exists(OddController::class)) {\n    class OddController\n    {\n".self::LOGIC."    }\n}\n");
+
+        $this->assertSame([[
+            'level' => 'error', 'check' => 'controller-shape', 'model' => null, 'file' => 'app/Http/Controllers/OddController.php',
+            'message' => 'OddController::report() (línea 10) no delega: recibe Illuminate\Http\Request, valida en el controlador con validate(). '.$this->remedy(),
+        ]], $this->findings());
+    }
+
+    public function test_una_clase_de_fuera_de_http_controllers_puesta_como_accion_de_una_ruta_es_un_controlador(): void
+    {
+        $this->request();
+        $this->put('app/Actions/Export.php', "<?php\n\nnamespace App\\Actions;\n\nuse App\\Http\\Requests\\StoreRequest;\nuse Illuminate\\Http\\Request;\n\nclass Export\n{\n    public function __invoke(Request \$request)\n    {\n        return \\DB::select('select 1');\n    }\n\n    public function run(Request \$request)\n    {\n        return \\DB::select('select 2');\n    }\n\n    public function thin(StoreRequest \$request)\n    {\n        return \$request->handle();\n    }\n\n    public function unrouted()\n    {\n        return \\DB::select('select 3');\n    }\n}\n");
+        $this->routes("use App\\Actions\\Export;\n\nRoute::get('/a', Export::class);\nRoute::middleware('auth')->post('/b', [Export::class, 'run']);\nRoute::get('/c', 'App\\Actions\\Export@run');\nRoute::get('/d', [Export::class, 'thin']);");
+
+        $suffix = ' Es la acción de una ruta de routes/web.php: aunque su clase no esté en Http/Controllers, para el router es un controlador.';
+
+        $this->assertSame([
+            ['level' => 'error', 'check' => 'controller-shape', 'model' => null, 'file' => 'app/Actions/Export.php',
+                'message' => 'Export::__invoke() (línea 10) no delega: recibe Illuminate\Http\Request. '.$this->remedy().$suffix],
+            ['level' => 'error', 'check' => 'controller-shape', 'model' => null, 'file' => 'app/Actions/Export.php',
+                'message' => 'Export::run() (línea 15) no delega: recibe Illuminate\Http\Request. '.$this->remedy().$suffix],
+        ], $this->findings());
+    }
+
+    public function test_route_resource_sobre_una_clase_de_fuera_comprueba_todas_sus_acciones(): void
+    {
+        $this->put('app/Actions/Posts.php', "<?php\n\nnamespace App\\Actions;\n\nuse Illuminate\\Http\\Request;\n\nclass Posts\n{\n    public function index(Request \$request)\n    {\n        return \\DB::select('select 1');\n    }\n\n    public function store(Request \$request)\n    {\n        return \\DB::select('select 2');\n    }\n}\n");
+        $this->routes("Route::apiResource('posts', \\App\\Actions\\Posts::class);");
+
+        $this->assertCount(2, $this->messages('controller-shape'));
+    }
+
+    public function test_un_invocable_cuyo_metodo_viene_de_vendor_o_una_clase_que_no_es_del_proyecto_no_se_marcan(): void
+    {
+        $this->put('app/Livewire/Counter.php', "<?php\n\nnamespace App\\Livewire;\n\nclass Counter extends \\Livewire\\Component\n{\n    public function render()\n    {\n        return view('counter');\n    }\n}\n");
+        $this->routes("Route::get('/counter', \\App\\Livewire\\Counter::class);\nRoute::get('/vendor', [\\Vendor\\Package\\Controller::class, 'show']);\nRoute::view('/v', 'welcome');\nRoute::redirect('/a', '/b');\nRoute::get('/sin-accion');");
+
+        $this->assertSame([], $this->findings());
+    }
+
+    public function test_una_accion_de_ruta_que_no_se_puede_leer_es_un_closure_por_otro_camino(): void
+    {
+        $this->routes("\$handler = function () { return \\DB::select('select 1'); };\nfunction raw() { return 1; }\n\nRoute::get('/a', \$handler);\nRoute::get('/b', raw(...));\nRoute::get('/c', ['uses' => function () { return 1; }]);\nRoute::middleware('x')->prefix('y')->get('/d', \$handler);\nRoute::get('/e', [new \\App\\Actions\\Export, 'run']);\nRoute::fallback(\\Closure::fromCallable('raw'));\n\$router->post('/f', \$handler);\n\n// No son rutas: no las registra el router.\n\$value = config()->get('key', \$handler);\n\$cached = \\Cache::get('key', \$handler);");
+
+        $messages = $this->messages('route-closure');
+        $text = fn (int $line, string $call): string => "La ruta de la línea {$line} ({$call}()) lleva como acción algo que no se puede leer sin ejecutarlo —una variable, una función, un objeto o un closure dentro de un array—: es una acción sin controlador, como un closure, y nada de lo que verify comprueba en los controladores la alcanza. "
+            .'Llévala a un controlador cuya acción sea `return $request->handle();` con un FormRequest propio, y nómbralo en la ruta (`[Controlador::class, \'accion\']`).';
+
+        $this->assertSame([$text(8, 'get'), $text(9, 'get'), $text(10, 'get'), $text(11, 'get'), $text(12, 'get'), $text(13, 'fallback'), $text(14, 'post')], $messages);
+        $this->assertSame(['warning'], array_values(array_unique(array_column($this->findings(), 'level'))));
+    }
+
+    public function test_redefinir_call_action_un_destructor_con_cuerpo_y_un_closure_en_get_middleware_son_puertas_laterales(): void
+    {
+        $this->request();
+        $this->controller('SneakyController', "class SneakyController extends Controller\n{\n    public function callAction(\$method, \$parameters)\n    {\n        request()->validate(['q' => 'required']);\n\n        return parent::callAction(\$method, \$parameters);\n    }\n\n    public function getMiddleware()\n    {\n        return [['middleware' => fn (\$request, \$next) => \$next(\$request), 'options' => []]];\n    }\n\n    public function __destruct()\n    {\n        \\DB::select('select 1');\n    }\n\n    public function store(StoreRequest \$request)\n    {\n        return \$request->handle();\n    }\n}");
+        $this->controller('PlainController', "class PlainController extends Controller\n{\n    public function getMiddleware()\n    {\n        return [];\n    }\n\n    public function __destruct()\n    {\n    }\n}");
+
+        $messages = $this->messages('controller-shape');
+
+        $this->assertCount(3, $messages);
+        $this->assertStringStartsWith('SneakyController::callAction() (línea 11) redefine callAction(), por donde el router llama a todas las acciones:', $messages[0]);
+        $this->assertStringStartsWith('SneakyController::getMiddleware() (línea 18) devuelve un middleware en un closure desde getMiddleware():', $messages[1]);
+        $this->assertStringStartsWith('SneakyController::__destruct() (línea 23) es un destructor con cuerpo:', $messages[2]);
     }
 }

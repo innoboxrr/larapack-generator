@@ -7,6 +7,7 @@ use Innoboxrr\LarapackGenerator\Support\Formatter;
 use Innoboxrr\LarapackGenerator\Support\GeneratorVersion;
 use Innoboxrr\LarapackGenerator\Support\Manifest;
 use Innoboxrr\LarapackGenerator\Support\ProjectRoot;
+use Innoboxrr\LarapackGenerator\Support\Realign\Operations\Simulation;
 use RuntimeException;
 
 /**
@@ -250,6 +251,19 @@ final class Regeneration
     private function start(array $job): array
     {
         $directory = $job['directory'];
+
+        // La caché se vacía antes de regenerar. Con `.larapack/realign/cache`
+        // enlazado a otro directorio, lo que se vaciaba era `<ese otro>/root`:
+        // con el enlace hacia `/`, el directorio personal de root.
+        // El único enlace que vale es el que pone la simulación de --dry-run
+        // en su copia, hacia la caché del proyecto: ahí la raíz es la caché
+        // real.
+        $cache = $this->state->cacheDirectory();
+        $real = Simulation::linkedCache($cache) ? realpath($cache) : false;
+
+        $real === false
+            ? Files::assertInside($this->state->root(), $directory, true)
+            : Files::assertInside($real, $real.substr($directory, strlen($cache)), true);
 
         // Lo de una clave anterior de este ámbito ya no sirve: se borra para
         // que la caché no crezca con cada cambio del contrato.

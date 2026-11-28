@@ -32,6 +32,18 @@ class IndexRequest extends FormRequest
             'managed' => true,
         ]);
 
+        // `paginate=0` es «todo» para SearchSurge, que sólo acota los demás
+        // valores a `max_per_page`: una petición traía la tabla entera,
+        // hidratada y serializada. Aquí «todo» es, como mucho, ese tope. La
+        // exportación, que sí recorre la tabla, lo hace por lotes.
+        $max = config('search-surge.pagination.max_per_page', 1000);
+
+        if ($max !== null && in_array($this->input('paginate'), [0, '0', false, 'false'], true)) {
+            $this->merge([
+                'paginate' => (int) $max,
+            ]);
+        }
+
     }
 
     public function authorize(): bool

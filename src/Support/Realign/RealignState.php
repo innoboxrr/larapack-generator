@@ -123,12 +123,16 @@ final class RealignState
     {
         $directory = $this->directory();
 
+        // `.larapack` o `.larapack/realign` enlazados a otro directorio: el
+        // estado se escribiría, y la caché se vaciaría, fuera del proyecto.
+        Files::assertInside($this->root, $directory);
+
         if (! is_dir($directory) && ! @mkdir($directory, 0777, true) && ! is_dir($directory)) {
             throw new RuntimeException("No se pudo crear {$directory}.");
         }
 
         if (! is_file($directory.'/.gitignore')) {
-            file_put_contents($directory.'/.gitignore', self::GITIGNORE);
+            Files::write($directory.'/.gitignore', self::GITIGNORE);
         }
     }
 

@@ -143,6 +143,10 @@ final class HandRolledLock
         $file = self::path($root);
         $directory = dirname($file);
 
+        // Ni el candado ni su directorio a través de un enlace que saque del
+        // proyecto: se escribiría la aprobación en un archivo ajeno.
+        Files::guard($file, $root);
+
         // Otro proceso puede crearlo entre la pregunta y el mkdir(): lo que
         // importa es que exista después, lo haya creado quien lo haya creado.
         if (! is_dir($directory)) {

@@ -115,6 +115,41 @@ final class RealignExceptionsTest extends TestCase
         $this->assertStringNotContainsString('{{', $next['how']['instructions']);
     }
 
+    /**
+     * Auditoría de seguridad de 9.4.0. exceptions.json lo escribe quien pide,
+     * y de él salían el «cubre» y el «hallazgo» que el dueño lee al aprobar:
+     * un agente podía pedir la excepción de un closure y enseñarle al dueño
+     * otro archivo y un hallazgo tranquilizador. El archivo sale ahora del
+     * objetivo —lo que se aprueba—, y el texto de la solicitud se enseña
+     * como lo que es: de quien pide, sin comprobar.
+     */
+    public function test_al_aprobar_el_dueno_ve_el_archivo_del_objetivo_y_el_hallazgo_de_la_solicitud_como_sin_comprobar(): void
+    {
+        $this->routes();
+        $this->realign('diagnose');
+        $this->realign('plan');
+        $this->realign('decide', ['targets' => ['route-closure@.', 'except'], '--note' => 'x']);
+        $this->realign('except', ['targets' => ['route-closure@.'], '--option' => ['reason='.self::CSP_REASON]]);
+
+        $path = $this->project->path.'/.larapack/realign/exceptions.json';
+        $document = json_decode((string) file_get_contents($path), true);
+
+        foreach ($document['requests'] as $index => $request) {
+            $document['requests'][$index]['file'] = 'docs/LEEME.md';
+            $document['requests'][$index]['message'] = 'Falso positivo: verify ya lo da por bueno.';
+        }
+
+        file_put_contents($path, json_encode($document));
+
+        $terminal = $this->ownerAtTerminal();
+        $this->owner('approve', ['targets' => [self::CSP]]);
+
+        $this->assertStringContainsString('cubre: '.self::ROUTES, $terminal->shown);
+        $this->assertStringNotContainsString('docs/LEEME.md', $terminal->shown);
+        $this->assertStringContainsString('hallazgo, según quien la pidió (no se comprobó; lee el código): «Falso positivo: verify ya lo da por bueno.»', $terminal->shown);
+        $this->assertStringNotContainsString('      hallazgo: «', $terminal->shown);
+    }
+
     public function test_pedir_no_es_aprobar_y_el_dueno_aprueba_cada_closure_por_su_huella(): void
     {
         // Sin razón no se pide nada.

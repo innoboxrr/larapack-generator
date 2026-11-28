@@ -3,6 +3,7 @@
 namespace Innoboxrr\LarapackGenerator\Tools\PivotMigration;
 
 use Innoboxrr\LarapackGenerator\Exceptions\MakerException;
+use Innoboxrr\LarapackGenerator\Support\Files;
 use Innoboxrr\LarapackGenerator\Support\Generation;
 use Innoboxrr\LarapackGenerator\Support\MigrationTimestamp;
 use Innoboxrr\LarapackGenerator\Support\TablePrefix;
@@ -59,7 +60,7 @@ class PivotMigrationTool extends Tool
 
                 return true;
             }
-            if (copy($templateFile, $migrationFile)) {
+            if (Files::copy($templateFile, $migrationFile)) {
                 $this->replaceMigrationData($migrationFile);
                 if (self::isFromJsonImporter()) {
                     $this->processFileWithJson($migrationFile);
@@ -87,7 +88,7 @@ class PivotMigrationTool extends Tool
         // Solo proceder en caso de los archivos no existan
         if (! file_exists($migrationFile)) {
             $templateFile = $this->migrationTemplatePath.'/DropTemplate.txt';
-            if (copy($templateFile, $migrationFile)) {
+            if (Files::copy($templateFile, $migrationFile)) {
                 $this->replaceMigrationData($migrationFile);
             } else {
                 throw MakerException::copyFailed($templateFile, $migrationFile);
@@ -103,7 +104,7 @@ class PivotMigrationTool extends Tool
     {
         $content = self::contents($migrationFile);
         $content = str_replace('migration_name', TablePrefix::table($this->migrationName), $content);
-        file_put_contents($migrationFile, $content);
+        Files::write($migrationFile, $content);
     }
 
     protected function processFileWithJson(string $migrationFile): void
@@ -112,7 +113,7 @@ class PivotMigrationTool extends Tool
         $fileContent = self::contents($migrationFile);
         $columnsSchema = $this->generateMigrationColumns($pivot['props']);
         $updatedFileContent = str_replace('//EDIT//', $columnsSchema, $fileContent);
-        file_put_contents($migrationFile, $updatedFileContent);
+        Files::write($migrationFile, $updatedFileContent);
     }
 
     /**

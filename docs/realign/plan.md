@@ -346,10 +346,20 @@ El dueño acepta sin probar un paso `untested`: queda `done` con
 `untested_accepted` (la nota, la hora y cómo se confirmó) y una línea en su
 historia, y `larapack:realign done` lo sigue enseñando (`accepted_untested`).
 Lo confirma **una persona**, como una aprobación: en su terminal, viendo el
-paso y la nota y escribiendo «acepto sin probar»; o sin terminal, nombrándose
-(`LARAPACK_APPROVER` y `--approver` con el mismo nombre, que queda en `by`).
+paso y la nota y escribiendo «acepto sin probar». Nombrarse
+(`LARAPACK_APPROVER` y `--approver`) sólo vale dentro del workflow de
+aprobación, como al aprobar una excepción; fuera de él no acepta nada.
 Un agente no lo corre: lo deja en su informe y en `brief`. La nota es
 obligatoria y sólo se acepta lo que está `untested`.
+
+**Lo que esto no garantiza.** `plan.json` es estado, no una prueba: es un
+archivo del repositorio que quien puede escribir puede editar, y
+`untested_accepted`, una decisión o un `tested` escritos a mano se leen igual
+que los que dejó el comando. Tampoco `decide` pregunta quién decide, y
+`--tested` es la palabra de quien lo corre. Lo que `done` sí vuelve a medir
+—el diagnóstico, `verify --strict`, `validate --strict`, las excepciones del
+candado— no se engaña editando el plan; lo demás se ve en el diff de
+`plan.json`, que revisa quien fusiona.
 
 ## Argumentos
 

@@ -3,6 +3,7 @@
 namespace Innoboxrr\LarapackGenerator\Tools\Endpoint;
 
 use Innoboxrr\LarapackGenerator\Support\Declaration;
+use Innoboxrr\LarapackGenerator\Support\Files;
 use Innoboxrr\LarapackGenerator\Support\Import\Endpoints;
 use Innoboxrr\LarapackGenerator\Support\StubBlocks;
 use Innoboxrr\LarapackGenerator\Tools\ModelArtifact;
@@ -76,7 +77,7 @@ class EndpointTool extends Tool implements ModelArtifact
             return;
         }
 
-        file_put_contents($file, StubBlocks::apply(
+        Files::write($file, StubBlocks::apply(
             $content,
             fn (string $condition): bool => in_array($condition, Endpoints::FLAGS, true)
                 ? $this->holds($condition)
