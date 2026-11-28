@@ -209,7 +209,6 @@ final class ScopeClassifier
         return array_values($entries);
     }
 
-
     /**
      * La primera pasada: todo lo que se decide sin Pint. Devuelve también
      * el par a comparar con Pint, si hace falta.

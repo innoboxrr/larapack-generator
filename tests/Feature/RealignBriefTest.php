@@ -154,6 +154,12 @@ final class RealignBriefTest extends TestCase
     private function runAsOwner(string $command): void
     {
         [$name, $arguments] = $this->parse($command);
+
+        // Aprobar lo confirma una persona en su terminal: aquí, el dueño.
+        if ($name === 'larapack:hand-rolled') {
+            $this->ownerAtTerminal();
+        }
+
         $exit = $this->runCommand($name, ['--root' => $this->project->path, '--format' => 'json'] + $arguments);
         $this->assertSame(Command::SUCCESS, $exit, $command."\n".$this->lastOutput);
     }
@@ -233,8 +239,11 @@ final class RealignBriefTest extends TestCase
         $this->assertSame('larapack:hand-rolled approve "'.self::CSP.'"', $csp['approve']);
         $this->assertContains('larapack:realign check route-closure@.', $csp['blocks']);
 
-        // Lo que el agente puede seguir haciendo mientras.
-        $this->assertSame(['controller-shape@'.self::REPORT], array_column($brief['meanwhile'], 'id'));
+        // Lo que el agente puede seguir haciendo mientras. Aquí nada: el único
+        // paso guiado (el controlador que no delega) es de un controlador
+        // escrito a mano, y espera a la decisión unmanaged-http —declararlo
+        // en el contrato o dejarlo— antes de trabajarse (depends_on).
+        $this->assertSame([], array_column($brief['meanwhile'], 'id'));
         $this->assertNotContains('unmanaged-http@.', array_column($brief['meanwhile'], 'id'));
         $this->assertNotContains('route-closure@.', array_column($brief['meanwhile'], 'id'), 'Decidida y con sus excepciones por aprobar, espera al dueño.');
         $this->assertSame('larapack:realign status', $brief['resume']['command']);

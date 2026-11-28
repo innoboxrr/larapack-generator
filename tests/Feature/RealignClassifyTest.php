@@ -62,13 +62,16 @@ final class RealignClassifyTest extends TestCase
     public function test_lo_que_adopt_anota_check_y_diagnose_lo_siguen_clasificando_igual(): void
     {
         $this->generatedPackage();
-        $this->edit(self::CONTROLLER, 'class PostController', "// Comentario del proyecto.\nclass PostController");
+        // Sólo formato (un espacio de más): los comentarios del usuario no se
+        // adoptan nunca (se conservan como hole_edited), así que el caso de
+        // adopción es el formato.
+        $this->edit(self::CONTROLLER, 'class PostController', 'class  PostController');
         $this->staleHash(self::CONTROLLER);
         $this->prepare();
         $before = $this->manifestEntry(self::CONTROLLER);
 
         $entry = $this->entry(self::CONTROLLER);
-        $this->assertSame(['format_only', 'adopt', true], [$entry['class'] ?? null, $entry['type'] ?? null, $entry['comments'] ?? null]);
+        $this->assertSame(['format_only', 'adopt'], [$entry['class'] ?? null, $entry['type'] ?? null]);
 
         $this->realign('adopt', ['targets' => ['adopt@.']]);
 
