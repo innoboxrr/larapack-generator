@@ -26,6 +26,14 @@ final class Schema
      */
     private static ?array $decoded = null;
 
+    /**
+     * Lo ya validado en este proceso: sha1 del esquema + sha1 del documento
+     * => sus errores (validate()).
+     *
+     * @var array<string, array<int, array{path: string, message: string}>>
+     */
+    private static array $validated = [];
+
     public static function path(): string
     {
         $path = realpath(__DIR__.self::RELATIVE_PATH);
@@ -69,12 +77,7 @@ final class Schema
      */
     public static function validate(array $document): array
     {
-        // El resolvedor se crea aquí, y no se pide al Validator: resolver()
-        // puede devolver null y el registro del esquema se perdería.
-        $resolver = new SchemaResolver;
-        $resolver->registerRaw(Files::read(self::path()), self::id());
-
-        $validator = (new Validator)->setResolver($resolver);
+        $schema = Files::read(self::path());
 
         // Opis valida objetos, y no todo array de PHP se puede volver objeto:
         // una clave que empieza por NUL no es un nombre de propiedad válido, y
@@ -82,7 +85,8 @@ final class Schema
         // admite. Antes los dos daban `null` y un «The data (null) must match
         // the type: object» que no decía qué estaba mal.
         try {
-            $data = json_decode(json_encode($document, JSON_THROW_ON_ERROR), false, 512, JSON_THROW_ON_ERROR);
+            $json = json_encode($document, JSON_THROW_ON_ERROR);
+            $data = json_decode($json, false, 512, JSON_THROW_ON_ERROR);
         } catch (JsonException $e) {
             return [[
                 'path' => '/',
@@ -90,13 +94,27 @@ final class Schema
             ]];
         }
 
-        $error = $validator->validate($data, self::id())->error();
+        // Validar es función sólo del documento y del esquema, y es lo más
+        // caro de leer un laraimport: `realign done` validaba cuatro veces
+        // cada contrato (verify, validate, las llaves foráneas…). La clave
+        // lleva los dos, así que no hay nada que invalidar: otro documento u
+        // otro esquema es otra entrada.
+        $key = sha1($schema).sha1($json);
 
-        if ($error === null) {
-            return [];
+        if (isset(self::$validated[$key])) {
+            return self::$validated[$key];
         }
 
-        return self::flatten((new ErrorFormatter)->format($error, true));
+        // El resolvedor se crea aquí, y no se pide al Validator: resolver()
+        // puede devolver null y el registro del esquema se perdería.
+        $resolver = new SchemaResolver;
+        $resolver->registerRaw($schema, self::id());
+
+        $validator = (new Validator)->setResolver($resolver);
+
+        $error = $validator->validate($data, self::id())->error();
+
+        return self::$validated[$key] = $error === null ? [] : self::flatten((new ErrorFormatter)->format($error, true));
     }
 
     /**
