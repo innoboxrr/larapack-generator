@@ -172,8 +172,9 @@ final class RealignUntestedTest extends TestCase
         $this->assertStringContainsString('dueño', $refused['error']);
         $this->assertSame(Planner::UNTESTED, $this->step(self::STEP)['status']);
 
-        // --approver sin la variable con el mismo nombre, tampoco.
-        $this->assertStringContainsString(OwnerConfirmation::APPROVER_ENV,
+        // --approver fuera de la corrida de aprobación lanzada a mano en
+        // GitHub (NamedApproval), tampoco: nombrarse no basta.
+        $this->assertStringContainsString('GitHub Actions',
             $this->realign('accept-untested', ['targets' => [self::STEP], '--note' => 'x', '--approver' => 'Ana'], Command::FAILURE)['error']);
 
         // Y la guardia de los agentes bloquea la vía sin terminal: cualquier

@@ -4,6 +4,7 @@ namespace Innoboxrr\LarapackGenerator\Commands;
 
 use Innoboxrr\LarapackGenerator\Commands\Concerns\TargetsProject;
 use Innoboxrr\LarapackGenerator\Commands\Concerns\WritesJson;
+use Innoboxrr\LarapackGenerator\Support\NamedApproval;
 use Innoboxrr\LarapackGenerator\Support\OwnerConfirmation;
 use Innoboxrr\LarapackGenerator\Support\Realign\Category;
 use Innoboxrr\LarapackGenerator\Support\Realign\Completion;
@@ -816,7 +817,7 @@ class RealignCommand extends Command
             if ($terminal === null) {
                 return $this->reportFailure($input, $output, 'Aceptar un paso sin probar lo confirma el dueño del proyecto en su terminal, y este proceso no tiene ninguna (/dev/tty): no se cambió nada. '
                     .'Si eres un agente, no lo intentes por otra vía: déjalo en tu informe (larapack:realign brief lo junta para el dueño). '
-                    .'Una persona sin terminal se nombra: '.OwnerConfirmation::APPROVER_ENV.'="Su nombre" y --approver="Su nombre", y el nombre queda en el plan.', extra: $extra);
+                    .'Si eres una persona sin terminal, lee '.NamedApproval::DOCS.'.', extra: $extra);
             }
 
             $phrase = 'acepto sin probar';

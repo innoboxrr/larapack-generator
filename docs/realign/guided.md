@@ -237,11 +237,12 @@ larapack:realign accept-untested <id> --note="se prueba en staging antes de desp
 
 Es como aprobar una excepción ([exceptions.md](exceptions.md)): lo confirma
 **el dueño**, en su terminal, viendo el paso, por qué cambia comportamiento,
-sus archivos y la nota, y escribiendo «acepto sin probar». Sin terminal (una
-CI de aprobación) se nombra: `LARAPACK_APPROVER="Su nombre"` y
-`--approver="Su nombre"`, y el nombre queda en el plan. La guardia de los
-agentes bloquea cualquier orden con `--approver` o que dé valor a
-`LARAPACK_APPROVER`. Un agente no lo corre: lo deja en su informe. Lo aceptado
+sus archivos y la nota, y escribiendo «acepto sin probar». Sin terminal vale
+la misma vía que para aprobar una excepción, y sólo ésa: la corrida de
+aprobación lanzada a mano por una persona en GitHub
+([exceptions.md](exceptions.md#por-qué-un-agente-no-puede-aprobar)); nombrarse
+fuera de ella no basta, y la guardia de los agentes bloquea cualquier orden
+con `--approver` o que dé valor a `LARAPACK_APPROVER`. Un agente no lo corre: lo deja en su informe. Lo aceptado
 queda en `plan.json` (el diff que se revisa) y `done` lo sigue enseñando.
 
 ## Después de los pasos guiados: otra pasada
