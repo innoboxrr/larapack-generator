@@ -560,4 +560,96 @@ final class GuardInputsTest extends TestCase
 
         $this->assertSame([], Guard::touchedLocks(['cwd' => $cwd, 'tool_input' => ['path' => 'src/Models/Post.php']]));
     }
+
+    // ---- Lo que añadió la auditoría, regla por regla (mutación) ----
+
+    /**
+     * @return array<string, array{0: string, 1: bool}>
+     */
+    public static function otrosProgramas(): array
+    {
+        return [
+            'tal cual' => ["python3 -m tool '[\"larapack:hand-rolled\", \"approve\"]'", true],
+            'el programa en mayúsculas' => ["PYTHON3 -m tool '[\"larapack:hand-rolled\", \"approve\"]'", true],
+            'la acción en mayúsculas, tras una opción' => ["python3 -m tool '[\"larapack:hand-rolled\", \"--all\", \"APPROVE\"]'", true],
+            'la acción es la primera palabra que no es opción' => ["python3 -m tool '[\"larapack:hand-rolled\", \"list\", \"approve\"]'", false],
+        ];
+    }
+
+    #[DataProvider('otrosProgramas')]
+    public function test_aprobar_desde_otro_programa(string $command, bool $approves): void
+    {
+        $this->assertSame($approves, $this->approves($command));
+    }
+
+    public function test_aprobar_con_approver_es_la_opcion_no_algo_que_la_contenga(): void
+    {
+        $this->assertTrue($this->approves('php artisan x --approver=ana'));
+        $this->assertTrue($this->approves('LARAPACK_APPROVER=ana php artisan x'));
+        $this->assertFalse($this->approves('php artisan x not--approver=ana'));
+    }
+
+    /**
+     * @return array<string, array{0: string, 1: list<string>}>
+     */
+    public static function gitDesdeElEntorno(): array
+    {
+        return [
+            'GIT_CONFIG_KEY_n' => ['GIT_CONFIG_KEY_0=core.hooksPath git commit -m x', ['GIT_CONFIG_* core.hooksPath']],
+            'GIT_CONFIG_KEY_n entre comillas' => ["GIT_CONFIG_KEY_0='core.hooksPath' git commit -m x", ['GIT_CONFIG_* core.hooksPath']],
+            'otra variable que acaba igual' => ['MY_GIT_CONFIG_KEY_0=core.hooksPath git commit -m x', []],
+            'otra variable que empieza igual' => ['GIT_CONFIG_KEY_0X=core.hooksPath git commit -m x', []],
+            'GIT_CONFIG_KEY_n con otra clave' => ['GIT_CONFIG_KEY_0=user.name git commit -m x', []],
+            'GIT_CONFIG_PARAMETERS con varias' => ["GIT_CONFIG_PARAMETERS=\"'user.name=a' 'core.hooksPath=/dev/null'\" git commit -m x", ['GIT_CONFIG_* core.hooksPath']],
+            'GIT_CONFIG_PARAMETERS sin hooksPath' => ["GIT_CONFIG_PARAMETERS=\"'user.name=a'\" git commit -m x", []],
+            'un alias en la orden' => ['git -c alias.ci=commit ci', ['git -c alias.*']],
+            'un alias en mayúsculas' => ['git -c ALIAS.ci=commit ci', ['git -c alias.*']],
+            'una clave que contiene alias.' => ['git -c my.alias.x=1 status', []],
+            '--no-verify antes de las rutas' => ['git commit --no-verify -- a.txt', ['git commit --no-verify']],
+            '--no-verify como ruta' => ['git commit -m x -- --no-verify', []],
+            '-n detrás del valor de -m' => ['git commit -m x -n', ['git commit --no-verify']],
+            '-n detrás de una ruta' => ['git commit a.txt -n', ['git commit --no-verify']],
+            'GIT_CONFIG_KEY_n con comillas dentro de las comillas' => ["GIT_CONFIG_KEY_0=\"'core.hooksPath'\" git commit -m x", ['GIT_CONFIG_* core.hooksPath']],
+        ];
+    }
+
+    /**
+     * @param  list<string>  $expected
+     */
+    #[DataProvider('gitDesdeElEntorno')]
+    public function test_saltarse_los_hooks_de_git(string $command, array $expected): void
+    {
+        $this->assertSame($expected, Guard::bypassesGitHooks($this->bash($command)));
+    }
+
+    public function test_command_gana_a_cmd(): void
+    {
+        $this->assertSame([], Guard::bypassesGitHooks(['tool_input' => ['command' => 'git status', 'cmd' => 'git commit --no-verify -m x']]));
+        $this->assertSame(['git commit --no-verify'], Guard::bypassesGitHooks(['tool_input' => ['cmd' => 'git commit --no-verify -m x']]));
+    }
+
+    public function test_cada_palabra_de_una_lista_es_una_sola_palabra(): void
+    {
+        // Entre comillas: un `;` o una comilla dentro de una palabra no abren
+        // otra orden.
+        $words = fn (array $command): array => Guard::bypassesGitHooks(['tool_input' => ['command' => $command]]);
+
+        $this->assertSame([], $words(['echo', 'a; git commit --no-verify -m x']));
+        $this->assertSame([], $words(['echo', "it's; git commit --no-verify -m x; '"]));
+        $this->assertSame(['git commit --no-verify'], $words(['git', 'commit', '--no-verify', '-m', 'a b']));
+        // Una lista con algo que no es texto no es una orden que se pueda leer.
+        $this->assertSame([], $words(['git', 'commit', '--no-verify', 7]));
+    }
+
+    public function test_node_modules_es_de_terceros_bajo_un_proyecto_de_npm(): void
+    {
+        mkdir($this->root.'/node_modules/pkg', 0777, true);
+        file_put_contents($this->root.'/package.json', '{}');
+        file_put_contents($this->root.'/node_modules/pkg/Foo.php', '<?php');
+        mkdir($this->root.'/app/Http/Controllers/node_modules', 0777, true);
+        file_put_contents($this->root.'/app/Http/Controllers/node_modules/Bar.php', '<?php');
+
+        $this->assertTrue(Guard::isThirdParty($this->root.'/node_modules/pkg/Foo.php'));
+        $this->assertFalse(Guard::isThirdParty($this->root.'/app/Http/Controllers/node_modules/Bar.php'));
+    }
 }

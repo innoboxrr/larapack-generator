@@ -188,7 +188,7 @@ final class HandRolledLock
      */
     public static function lineOf(string $root, string $target): int
     {
-        $raw = is_file(self::path($root)) ? (string) file_get_contents(self::path($root)) : '';
+        $raw = is_file(self::path($root)) ? Files::read(self::path($root)) : '';
         $needle = '"target": '.json_encode($target, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
 
         foreach (preg_split('/\R/', $raw) ?: [] as $index => $line) {

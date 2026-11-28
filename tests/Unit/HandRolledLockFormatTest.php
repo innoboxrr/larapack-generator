@@ -2,6 +2,7 @@
 
 namespace Innoboxrr\LarapackGenerator\Tests\Unit;
 
+use Innoboxrr\LarapackGenerator\Exceptions\MakerException;
 use Innoboxrr\LarapackGenerator\Support\HandRolledLock;
 use Innoboxrr\LarapackGenerator\Support\PhpOutline;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -479,6 +480,28 @@ final class HandRolledLockFormatTest extends TestCase
             $this->assertNotSame($original, HandRolledLock::classFingerprint($orphan));
         } finally {
             restore_error_handler();
+        }
+    }
+
+    public function test_el_candado_no_se_escribe_a_traves_de_un_enlace_que_saca_del_proyecto(): void
+    {
+        // `.larapack` enlazado fuera: la aprobación acabaría en un archivo
+        // ajeno (auditoría de seguridad de 9.4.0).
+        $outside = $this->root.'-fuera';
+        mkdir($outside);
+        $project = $this->root.'/project';
+        mkdir($project);
+        symlink($outside, $project.'/.larapack');
+
+        try {
+            HandRolledLock::write($project, ['App\X' => ['reason' => 'r', 'fingerprint' => null]]);
+            $this->fail('Escribió a través del enlace.');
+        } catch (MakerException $e) {
+            $this->assertStringContainsString('lleva fuera del proyecto', $e->getMessage());
+            $this->assertFileDoesNotExist($outside.'/hand-rolled.lock');
+        } finally {
+            @unlink($outside.'/hand-rolled.lock');
+            rmdir($outside);
         }
     }
 }
