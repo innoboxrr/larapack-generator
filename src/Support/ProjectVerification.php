@@ -44,6 +44,13 @@ final class ProjectVerification
     private ProjectSources $sources;
 
     /**
+     * Raíz de un paquete => su nombre (nameOf()).
+     *
+     * @var array<string, string>
+     */
+    private array $names = [];
+
+    /**
      * @param  list<string>  $packages  raíces absolutas a las que acotar; vacío, todas
      * @param  Exceptions|null  $exceptions  las excepciones con las que se revisa; null, las de la raíz
      */
@@ -262,9 +269,16 @@ final class ProjectVerification
      */
     private function nameOf(string $root): string
     {
+        // Se pregunta por cada hallazgo y por cada paquete (rootOfPackage()):
+        // sin recordarlo, el composer.json de cada paquete se leía y se
+        // decodificaba hallazgos × paquetes veces.
+        if (isset($this->names[$root])) {
+            return $this->names[$root];
+        }
+
         $name = ProjectSources::composer($root)['name'] ?? null;
 
-        return is_string($name) && $name !== '' ? $name : $this->pathOf($root);
+        return $this->names[$root] = is_string($name) && $name !== '' ? $name : $this->pathOf($root);
     }
 
     private function inside(string $directory): bool
