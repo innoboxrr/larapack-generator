@@ -314,10 +314,20 @@ final class NavigationTest extends TestCase
         // Una opción sin orden (se hace a mano) no la ejecuta ninguna operación.
         $invalid = $this->decision('contract-invalid', [], ['decision' => ['option' => 'fix']]);
         $this->assertFalse(Navigation::decidedFor($invalid, 'except'));
+        // Dos opciones pueden ejecutar la misma operación: cuenta cualquiera de las dos.
+        $two = ['id' => 'x@.', 'category' => Category::DECISION, 'files' => [self::A, self::B], 'options' => [
+            ['key' => 'except', 'run' => 'larapack:realign except {id} --option reason="por qué"'],
+            ['key' => 'except-forever', 'run' => 'larapack:realign except {id} --option reason="por qué" --option forever=1'],
+        ], 'decisions' => [self::A => ['option' => 'except-forever'], self::B => ['option' => 'except']]];
+        $this->assertTrue(Navigation::decidedFor(['decision' => ['option' => 'except-forever']] + $two, 'except'));
+        $this->assertSame([self::A, self::B], Navigation::narrow($two, 'except')['files']);
+        $this->assertTrue(Navigation::stillRequested($two, ['file' => self::A]));
         // Sólo cuentan las órdenes de larapack:realign.
         $handRolled = $this->decision('hand-rolled', [self::A], ['decision' => ['option' => 'approve']]);
         $this->assertFalse(Navigation::decidedFor($handRolled, 'approve'));
         $this->assertFalse(Navigation::decidedFor(['options' => ['suelta', ['key' => 'x', 'run' => 7]], 'decision' => ['option' => 'x']], 'except'));
+        // Unas opciones que no son una lista (un plan tocado a mano) no ejecutan nada.
+        $this->assertFalse(Navigation::decidedFor(['options' => 'no es una lista', 'decision' => ['option' => 'x']], 'except'));
     }
 
     public function test_un_guiado_que_se_pasa_al_dueno_es_una_decision_con_dos_salidas(): void
