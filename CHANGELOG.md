@@ -1027,6 +1027,15 @@ mantenerlo; la interfaz —acciones, opciones, textos, documentos JSON— no cam
   entran pruebas que recorren lo mismo sin regenerar y `MutationFloorsTest` impide que vuelva a entrar una que
   regenere. Dos piezas nuevas con suelo: `NamedApproval` (98,3 %) y `Navigation` (90,4 %). Ningún suelo
   existente se mueve. Lo medido y lo que no entra todavía, en [docs/mutacion.md](docs/mutacion.md).
+- **Mutación, después de la auditoría de seguridad.** Lo que la auditoría añadió a `ControllerShape`,
+  `PhpOutline`, `Guard`, `HandRolledLock` y `Verifier` sólo lo probaban pruebas de punta a punta, que no pueden ir
+  en el filtro, y unas unitarias que se solapaban: la CI salió en rojo (`ControllerShape` en 88,57 %, 93 mutantes
+  por debajo de su suelo). Ahora cada forma de la acción de una ruta, cada regla de la herencia, cada entrada nueva
+  de la guardia, el candado a través de un enlace y el manifiesto ilegible o demasiado nuevo tienen su prueba
+  unitaria, y el código que sólo producía equivalentes se quitó sin cambiar lo que hace. Las diez piezas: de
+  93,76 % a 96,66 % (96,90 % de lo recorrido); suben los suelos de `CiGate` (97,3 %), `Guard` (97,1 %),
+  `Navigation` (93,1 %) y `NamedApproval` (98,4 %), y el umbral de lo recorrido (95,9 %); ninguno baja. Ningún
+  mutante destapó un fallo. La tabla y las familias de equivalentes, en [docs/mutacion.md](docs/mutacion.md).
 - **[ARCHITECTURE.md](ARCHITECTURE.md#realign)** describe las tres capas, cada acción con su clase, el estado
   archivo por archivo, el estado estático y cómo se añade cada pieza; `RealignCatalogTest` comprueba que nombre
   cada clase del módulo, que cada acción descrita tenga quien la haga y que cada propiedad estática esté contada.
