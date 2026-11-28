@@ -109,7 +109,7 @@ class RealignCommand extends Command
             ->addArgument('targets', InputArgument::OPTIONAL | InputArgument::IS_ARRAY, 'next (opcional), show, check, defer, undefer, escalate, accept-untested: el id del paso; decide: el id y la opción; playbook: su nombre; help: una acción; adopt/apply/infer/except: ids de paso (vacío, todos los que sepa hacer)')
             ->addOption('format', null, InputOption::VALUE_REQUIRED, 'Formato de salida: txt o json', 'txt')
             ->addOption('package', null, InputOption::VALUE_REQUIRED | InputOption::VALUE_IS_ARRAY, 'Sólo este paquete local (directorio, ruta o nombre de Composer), o `app` para el núcleo. Repetible')
-            ->addOption('jobs', null, InputOption::VALUE_REQUIRED, 'diagnose y done: cuántas regeneraciones a la vez', '4')
+            ->addOption('jobs', null, InputOption::VALUE_REQUIRED, 'diagnose y done: cuántas regeneraciones (y, después, cuántas Pint) a la vez', '4')
             ->addOption('no-cache', null, InputOption::VALUE_NONE, 'diagnose y done: regenera aunque nada haya cambiado')
             ->addOption('dry-run', null, InputOption::VALUE_NONE, 'Operaciones que escriben: dice qué haría sin escribir nada')
             ->addOption('allow-dirty', null, InputOption::VALUE_NONE, 'Operaciones que escriben: escribe aunque el árbol git tenga cambios sin comitear (no se podrá deshacer con git)')

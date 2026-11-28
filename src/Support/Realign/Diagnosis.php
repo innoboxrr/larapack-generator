@@ -94,10 +94,21 @@ final class Diagnosis
             'out_of_scope' => array_filter((array) ($previous['out_of_scope'] ?? []), fn (mixed $scope, string|int $path): bool => ! in_array((string) $path, $done, true), ARRAY_FILTER_USE_BOTH),
         ];
 
+        $classifiers = [];
+
         foreach ($selected as $scope) {
             $outcome = $outcomes[$scope['path']] ?? null;
-            $classifier = new ScopeClassifier($scope, $this->root, $outcome !== null && $outcome['ok'] ? $outcome['directory'] : null, $exceptions);
-            $entries = $classifier->hasReference() ? $classifier->classifyAll() : [];
+            $classifiers[$scope['path']] = new ScopeClassifier($scope, $this->root, $outcome !== null && $outcome['ok'] ? $outcome['directory'] : null, $exceptions);
+        }
+
+        // Todos los ámbitos de una vez: la pasada de Pint es una para todos
+        // y no una por ámbito (en school-management son 82).
+        $classified = ScopeClassifier::classifyScopes(array_filter($classifiers, fn (ScopeClassifier $classifier): bool => $classifier->hasReference()), $this->jobs);
+
+        foreach ($selected as $scope) {
+            $outcome = $outcomes[$scope['path']] ?? null;
+            $classifier = $classifiers[$scope['path']];
+            $entries = $classified[$scope['path']] ?? [];
             $counts = array_fill_keys(FileClass::ALL, 0);
 
             foreach ($entries as $entry) {

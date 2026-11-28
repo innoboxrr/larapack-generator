@@ -65,12 +65,14 @@ final class ScopeClassifier
     /**
      * @param  Scope  $scope
      * @param  string|null  $regeneratedDirectory  el directorio de lo regenerado, o null si no lo hay
+     * @param  int  $jobs  cuántas Pint a la vez en la pasada de formato (PintPass)
      */
     public function __construct(
         private readonly array $scope,
         private readonly string $projectRoot,
         private readonly ?string $regeneratedDirectory,
         private readonly ?Exceptions $exceptions = null,
+        private readonly int $jobs = 1,
     ) {
         $root = $scope['root'];
 
@@ -132,15 +134,37 @@ final class ScopeClassifier
      */
     public function classifyAll(): array
     {
-        $paths = array_keys($this->tracked);
+        return self::classifyScopes([$this], $this->jobs)[0];
+    }
 
-        foreach (array_keys($this->produced) as $relative) {
-            if (! isset($this->tracked[$relative]) && self::migrationKey($relative) === null) {
-                $paths[] = $relative;
-            }
+    /**
+     * classifyAll() de varios ámbitos, con una sola pasada de Pint para
+     * todos (PintPass::equivalentMany): ámbito a ámbito, Pint arrancaba una
+     * vez por cada uno.
+     *
+     * @template TKey of array-key
+     *
+     * @param  array<TKey, self>  $classifiers
+     * @return array<TKey, list<Entry>>
+     */
+    public static function classifyScopes(array $classifiers, int $jobs = 1): array
+    {
+        $started = [];
+        $batches = [];
+
+        foreach ($classifiers as $key => $classifier) {
+            $started[$key] = $classifier->start($classifier->allPaths());
+            $batches[$key] = $classifier->pintBatch($started[$key][1]);
         }
 
-        return $this->classifyMany(array_values(array_unique($paths)));
+        $equal = PintPass::equivalentMany($batches, $jobs);
+        $entries = [];
+
+        foreach ($classifiers as $key => $classifier) {
+            $entries[$key] = $classifier->finish($started[$key][0], $started[$key][1], $equal[$key]);
+        }
+
+        return $entries;
     }
 
     /**
@@ -150,14 +174,46 @@ final class ScopeClassifier
      */
     public function classify(string $file): array
     {
-        return $this->classifyMany([$this->scopeRelative($file)])[0];
+        return $this->classifyFiles([$file])[0];
     }
 
     /**
-     * @param  list<string>  $paths  relativas al ámbito
+     * Varias rutas relativas a la raíz del proyecto, en su orden y con una
+     * sola pasada de Pint: de una en una, Pint arrancaba por cada archivo.
+     *
+     * @param  list<string>  $files
      * @return list<Entry>
      */
-    private function classifyMany(array $paths): array
+    public function classifyFiles(array $files): array
+    {
+        [$entries, $pintPairs] = $this->start(array_map($this->scopeRelative(...), $files));
+
+        return $this->finish($entries, $pintPairs, PintPass::equivalentMany([$this->pintBatch($pintPairs)], $this->jobs)[0]);
+    }
+
+    /**
+     * @return list<string> relativas al ámbito
+     */
+    private function allPaths(): array
+    {
+        $paths = array_keys($this->tracked);
+
+        foreach (array_keys($this->produced) as $relative) {
+            if (! isset($this->tracked[$relative]) && self::migrationKey($relative) === null) {
+                $paths[] = $relative;
+            }
+        }
+
+        return array_values(array_unique($paths));
+    }
+
+    /**
+     * La primera pasada de cada ruta, y los pares que quedan para Pint.
+     *
+     * @param  list<string>  $paths  relativas al ámbito
+     * @return array{0: array<int, Entry>, 1: array<string, array{0: string, 1: string, 2: string}>}
+     */
+    private function start(array $paths): array
     {
         $entries = [];
         $pintPairs = [];
@@ -171,16 +227,35 @@ final class ScopeClassifier
             }
         }
 
-        // Lo que sigue distinto por tokens, por la misma Pint de una vez.
-        $equal = PintPass::equivalent(
-            array_map(
+        return [$entries, $pintPairs];
+    }
+
+    /**
+     * Lo que sigue distinto por tokens, para pasarlo por Pint: sólo PHP.
+     *
+     * @param  array<string, array{0: string, 1: string, 2: string}>  $pintPairs
+     * @return array{pairs: array<string, array{0: string, 1: string}>, root: string, config: string|null}
+     */
+    private function pintBatch(array $pintPairs): array
+    {
+        return [
+            'pairs' => array_map(
                 fn (array $pair): array => [$pair[0], $pair[1]],
                 array_filter($pintPairs, fn (array $pair): bool => FileComparison::kindOf($pair[0]) === 'php')
             ),
-            $this->scope['root'],
-            $this->pintConfig
-        );
+            'root' => $this->scope['root'],
+            'config' => $this->pintConfig,
+        ];
+    }
 
+    /**
+     * @param  array<int, Entry>  $entries
+     * @param  array<string, array{0: string, 1: string, 2: string}>  $pintPairs
+     * @param  array<string, string>  $equal  lo que quedó igual tras Pint (PintPass)
+     * @return list<Entry>
+     */
+    private function finish(array $entries, array $pintPairs, array $equal): array
+    {
         foreach ($entries as $index => $entry) {
             if (! isset($pintPairs['f'.$index])) {
                 continue;
