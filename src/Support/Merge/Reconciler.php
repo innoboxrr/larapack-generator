@@ -2,6 +2,7 @@
 
 namespace Innoboxrr\LarapackGenerator\Support\Merge;
 
+use Innoboxrr\LarapackGenerator\Support\ContractFingerprint;
 use Innoboxrr\LarapackGenerator\Support\Files;
 use Innoboxrr\LarapackGenerator\Support\Import\ImportDocument;
 use Innoboxrr\LarapackGenerator\Support\Manifest;
@@ -135,7 +136,13 @@ final class Reconciler
         }
 
         if ($contractOk && $manifestOk) {
-            $this->import($root, $report);
+            // Sólo si hace falta: algo se recompuso en este ámbito, o lo
+            // generado no corresponde al contrato que hay (la misma huella
+            // que mira `verify`). Una fusión que no tocó el ámbito no paga
+            // una importación.
+            if ($report['actions'] !== [] || $this->outdated($root)) {
+                $this->import($root, $report);
+            }
         } elseif (is_file($contract)) {
             $report['pending'][] = 'No se ha importado: antes hay que resolver lo de arriba y volver a correr `larapack:reconcile`.';
         }
@@ -468,6 +475,38 @@ final class Reconciler
                 $this->git?->remove($file);
             }
         }
+    }
+
+    /**
+     * Si lo generado en el ámbito no corresponde a su laraimport: alguna
+     * pieza sin generar, con otra huella o —en un manifiesto anterior a
+     * 9.4.0— sin huella que comparar.
+     */
+    private function outdated(string $root): bool
+    {
+        $declared = ContractFingerprint::ofFile($root.'/laraimport.json');
+
+        if ($declared === null) {
+            return false;
+        }
+
+        $manifest = (new Manifest($root))->snapshot();
+
+        foreach ($declared['models'] as $model => $fingerprint) {
+            if (! ContractFingerprint::matches($manifest->contractOf($model), $fingerprint)) {
+                return true;
+            }
+        }
+
+        $pivots = $manifest->pivotContracts();
+
+        foreach ($declared['pivots'] as $pivot => $fingerprint) {
+            if (! ContractFingerprint::matches($pivots[$pivot] ?? null, $fingerprint)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

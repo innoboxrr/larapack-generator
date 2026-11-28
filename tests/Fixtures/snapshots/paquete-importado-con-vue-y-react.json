@@ -1,5 +1,5 @@
 {
-    ".larapack/manifest.json": "c15e65a5932e03dd475ad2f397adb99a2d85b2a71151346315f17bf422ef8efa",
+    ".larapack/manifest.json": "303594053ed07d01438709454756c4f63a909ad3f96da85fee6446c065549cc1",
     "composer.json": "dded2aaddb25ff97b89a8b0e047bfd8284706098a414f9124356b235318c7edb",
     "database/factories/PostFactory.php": "529d50ee7d10748822c8bc4527847a60ad7640e4e836ecbbd320e65b92f58ac3",
     "database/migrations/TIMESTAMP_create_post_metas_table.php": "4fc21c51de1f59f0bd72b814d69aec13e45cef9ec46b601c5af02947cd6e9a19",

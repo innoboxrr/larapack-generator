@@ -36,6 +36,7 @@ class ReconcileCommand extends Command
         $this->setName('larapack:reconcile')
             ->setDescription('Tras un git merge: fusiona el laraimport por nombres, recompone el manifiesto de las dos ramas, retira las migraciones repetidas y vuelve a importar')
             ->addOption('dry-run', null, InputOption::VALUE_NONE, 'Dice lo que haría sin escribir nada')
+            ->addOption('check', null, InputOption::VALUE_NONE, 'Sólo comprueba: no escribe nada y sale con error si queda algo por reconciliar (para la CI y antes de empujar una fusión)')
             ->addOption('keep-migrations', null, InputOption::VALUE_NONE, 'No retira las migraciones repetidas: las deja para que decida una persona')
             ->addOption('format', null, InputOption::VALUE_REQUIRED, 'Formato de salida: txt o json', 'txt');
     }
@@ -44,8 +45,15 @@ class ReconcileCommand extends Command
     {
         $this->applyRootOption($input);
 
-        $dryRun = (bool) $input->getOption('dry-run');
+        $check = (bool) $input->getOption('check');
+        $dryRun = $check || (bool) $input->getOption('dry-run');
         $result = (new Reconciler(root_path(), $dryRun, (bool) $input->getOption('keep-migrations')))->run();
+
+        // Con --check, que haya algo que hacer ya es el fallo: la fusión se
+        // comiteó (o se va a comitear) sin reconciliar.
+        if ($check) {
+            $result['ok'] = $result['ok'] && array_filter($result['scopes'], fn (array $scope): bool => $scope['actions'] !== []) === [];
+        }
 
         if ($this->wantsJson($input)) {
             $this->writeJson($output, ['ok' => $result['ok'], 'dryRun' => $dryRun, 'merge' => $result['merge'], 'scopes' => $result['scopes']]);
@@ -62,7 +70,7 @@ class ReconcileCommand extends Command
             $output->writeln('  <fg=cyan>'.OutputFormatter::escape($scope['scope'] === '.' ? 'raíz' : $scope['scope']).'</>');
 
             foreach ($scope['actions'] as $action) {
-                $output->writeln('    <info>hecho</info>     '.OutputFormatter::escape($action));
+                $output->writeln('    '.($dryRun ? '<comment>haría</comment>    ' : '<info>hecho</info>     ').OutputFormatter::escape($action));
             }
 
             foreach ($scope['review'] as $review) {
@@ -79,6 +87,15 @@ class ReconcileCommand extends Command
         }
 
         $output->writeln('');
+
+        if ($check) {
+            $output->writeln($result['ok']
+                ? '  Nada que reconciliar.'
+                : '  <fg=red>La fusión no está reconciliada</>: corre `larapack:reconcile` (sin --check) y comitea lo que deje.');
+
+            return $result['ok'] ? Command::SUCCESS : Command::FAILURE;
+        }
+
         $output->writeln($result['ok']
             ? '  Reconciliado'.($dryRun ? ' (ensayo: no se ha escrito nada)' : '').'. Ahora: `larapack:verify --strict`, las pruebas del proyecto y comitear la fusión (`git add -A`).'
             : '  <fg=red>Queda trabajo pendiente</>: resuélvelo y vuelve a correr `larapack:reconcile`.');

@@ -133,7 +133,7 @@ final class ContractDrift
 
             if (! in_array($model, $models, true)) {
                 $findings[] = $finding($model, "El laraimport declara {$model} y no hay nada generado de él. {$fix}");
-            } elseif ($recorded !== null && $recorded !== $fingerprint) {
+            } elseif ($recorded !== null && ! ContractFingerprint::matches($recorded, $fingerprint)) {
                 $findings[] = $finding($model, "Lo generado de {$model} corresponde a otro contrato: su declaración en el laraimport (o algo de lo que depende: el prefijo de tablas, el modelo al que apunta una clave ajena) cambió desde la última importación. {$fix}");
             }
         }
@@ -147,7 +147,7 @@ final class ContractDrift
         $pivots = $this->manifest->pivotContracts();
 
         foreach ($declared['pivots'] as $pivot => $fingerprint) {
-            if (($pivots[$pivot] ?? null) !== $fingerprint) {
+            if (! ContractFingerprint::matches($pivots[$pivot] ?? null, $fingerprint)) {
                 $findings[] = $finding(null, isset($pivots[$pivot])
                     ? "El pivote {$pivot} cambió en el laraimport desde la última importación. {$fix}"
                     : "El laraimport declara el pivote {$pivot} y no se ha importado. {$fix}");
