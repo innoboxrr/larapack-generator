@@ -395,6 +395,27 @@ todo lo necesario vive en el paquete y se comprueba.
   guiado → decisión del dueño y except aprobado → `verify --strict` en verde
   (el proyecto sin contrato que se queda fuera, con sólo `empty-manifest`).
 
+Ensayo final con las cuatro piezas integradas, sobre copias de las tres
+aplicaciones (la raíz y todos sus paquetes; los originales sólo se leyeron, y
+las copias se borraron): `diagnose`, `plan`, `apply --deterministic` (que hace
+también `adopt`), `diagnose` y `plan` otra vez, una segunda pasada, y el
+tercer diagnóstico.
+
+| | school-management (82 ámbitos) | expediente (7.x) | brandai (sin contrato) |
+|---|---|---|---|
+| Tiempo | `diagnose` 304 s; `apply` 599 s + 47 s; los dos diagnósticos siguientes, 84 s y 81 s (caché) | `diagnose` 132 s; `apply` 54 s + 0 s; 128 s y 17 s | `diagnose` 2 s; `apply`: nada que hacer, y lo dice; `infer` 4 s |
+| Cumplen | 16 921 → 21 757 de 22 844 | 1 185 → 3 228 de 3 456 | — (no hay contrato con el que comparar) |
+| Clases, antes → después | `identical` 18 163 → 19 553, `version_delta` 983 → 0, `hole_edited` 2 239 → 2 002, `edited_outside` 404 → 207, `untracked` 84 → 68, `missing` 11 → 9 | `identical` 2 844 → 2 972, `version_delta` 38 → 0, `edited_outside` 247 → 178, `missing` 94 → 0, `migration_history` 65 → 43 | — |
+| Cambios de `apply` | 5 843 + 608, ninguno saltado: 4 089 adoptados, 1 141 regenerados, 691 tests, 447 `fix`, 19 traits movidos, 14 modelos, 2 olvidados | 2 272 + 140: 2 054 adoptados, 94 olvidados, 38 regenerados, 140 `fix`, 70 tests, 14 modelos, 56 llaves fijadas; 3 saltados (closures que no son el de la SPA: una decisión) | — |
+| `verify`, antes → después | 18 errores y 1 957 avisos → 16 y 4 (`endpoint-tests-outdated` 691, `resource-appends` 691, `index-managed` 524, `model-lists-outdated` 28 y `controller-concern` 19 → 0; quedan 9 `missing-file`, 4 `controller-shape`, 3 `route-not-declared`, 4 `route-closure`) | 471 y 228 → 377 y 3 (`missing-file` 94, `endpoint-tests-outdated`, `index-managed` y `resource-appends` 70, `model-lists-outdated` 14 → 0; quedan 377 `controller-shape` y 3 `route-closure`) | 592 errores y 64 avisos, sin cambios: es lo que hay que decidir |
+| Lo que queda | 24 `edited-outside`, 4 `controller-shape`, 1 `declared-routes`; 77 decisiones (70 `unmanaged-http`, 4 `untracked-edited`, 2 `route-closure`, 1 `missing`) | 77 `controller-shape`, 6 `edited-outside`; 4 decisiones | 197 `controller-shape`; 11 decisiones (`no-contract`, 8 `route-closure`, `unmanaged-http`, `unmanaged-models`); `infer`: 20 de 20 borradores válidos |
+| PHP escrito que no parsea | ninguno | ninguno | — |
+
+`next` da, en los dos proyectos con contrato, un `controller-shape` con su
+`controller-to-request` rellenado (8,8 y 11,9 kB de instrucciones con sus
+archivos, sus hallazgos y sus órdenes). La caché ocupó 176 MB en
+school-management y 24 MB en expediente.
+
 ### Al actualizar a 9.4.0
 
 - **Nada cambia si no se usa `larapack:realign`.** El esquema del contrato

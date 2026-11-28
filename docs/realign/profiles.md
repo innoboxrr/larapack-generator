@@ -95,7 +95,9 @@ larapack:realign check controller-shape@<archivo>
 - Cumplen: de 1 185 a 3 228 de 3 456. `verify`: de 699 a 380, y 377 de esos
   380 son `controller-shape`.
 - Queda: **77 pasos `controller-shape`** (377 hallazgos), 6 `edited-outside` y
-  5 decisiones.
+  4 decisiones: los closures que no son el fallback de la SPA, los
+  controladores y los modelos escritos a mano, y un archivo escrito en la
+  ruta de uno generado.
 
 **Dónde está el trabajo:** los controladores escritos a mano. Cada uno es un
 paso guiado con su playbook (`controller-to-request` y sus anexos), las
