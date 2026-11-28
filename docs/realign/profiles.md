@@ -170,19 +170,39 @@ controladores que delegan en requests, modelos con traits, rutas por archivo.
 No hay contrato con el que comparar: el diagnóstico lo dice (`no-contract`) y
 lista el código HTTP y de modelos.
 
+**Cada paquete es su propio ámbito.** Cuando la raíz no tiene contrato ni
+manifiesto, cada paquete local (`packages/*` y los repositorios `path`) es un
+ámbito aunque tampoco tenga nada de LaraPack, igual que la raíz. Así, de punta
+a punta:
+
+- `diagnose` lista y resume cada ámbito (`app (núcleo)` y cada paquete por su
+  nombre de Composer), y el código sin gestionar de un paquete es de su
+  ámbito, aunque la raíz cargue ese paquete en su `autoload`.
+- `plan` da a cada ámbito su `no-contract@<ruta>`, sus `unmanaged-http@<ruta>`
+  y `unmanaged-models@<ruta>`; cada `controller-shape` de un paquete lleva el
+  ámbito del paquete y espera sólo a las decisiones de ese paquete.
+- `status`, `brief` y `done` agrupan por ámbito, y `--package` acota a uno.
+- `infer no-contract@.` infiere **sólo la raíz**; cada paquete con su
+  `no-contract@packages/<x>` (varios ids en una orden).
+
+En un proyecto que sí usa LaraPack, un paquete sin contrato ni manifiesto no
+es ámbito (un paquete de soporte no es una decisión): su código lo mide la
+raíz, y sus `controller-shape` llevan igualmente la ruta del paquete.
+
 **Recorrido recomendado:**
 
 ```bash
 larapack:realign diagnose                        # segundos: no hay nada que regenerar
 larapack:realign plan
-larapack:realign infer no-contract@. --dry-run
-larapack:realign infer no-contract@.             # laraimport.inferred.json en la raíz y en cada paquete
+larapack:realign infer no-contract@. no-contract@packages/billing --dry-run   # el informe, en el resultado
+larapack:realign infer no-contract@. no-contract@packages/billing             # un laraimport.inferred.json por ámbito
 # leer .larapack/realign/infer/<ámbito>.json: decisiones, not_inferred, lost
 # decidir, con el dueño, ámbito por ámbito:
 larapack:realign decide no-contract@. infer --note="…"
 #   o dejarlo fuera:
 larapack:realign decide no-contract@. keep --note="…"
 larapack:realign except no-contract@. --option reason="Se queda fuera de LaraPack"
+# … y lo mismo con no-contract@packages/billing, etc.
 ```
 
 Si se adopta: completar el borrador (lo `not_inferred`: formularios,

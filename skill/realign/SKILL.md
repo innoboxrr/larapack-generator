@@ -68,8 +68,9 @@ larapack:realign status --format=json
    - **`guided`**: sigue `how.instructions` al pie de la letra. Corre las
      pruebas del proyecto **antes** de tocar nada y **después**. Si el
      playbook dice dejarlo o no se puede ahora: `larapack:realign defer <id>
-     --note="…"`; si lo tiene que decidir el dueño: `larapack:realign escalate
-     <id> --note="…"`.
+     --note="…"`; si lo tiene que decidir el dueño (lo que no cabe en un
+     hueco, por ejemplo): `larapack:realign escalate <id> --note="…"`. No
+     pidas `except` de algo que el dueño no ha decidido dejar así.
      En `edited-outside`, cada archivo trae en `regenerado:` la ruta exacta de lo
      que generaría el contrato (en `.larapack/realign/cache/`): compáralo con
      `git diff --no-index <regenerado> <archivo>` y, cuando lo tuyo esté en

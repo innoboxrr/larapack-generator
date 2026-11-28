@@ -234,6 +234,12 @@ Los principios, que valen para todas las acciones:
   `.larapack/realign/`— para que todo se deshaga con `git restore` o
   `git checkout`. Fuera de un repositorio git también se niegan.
   `--allow-dirty` lo salta, y es responsabilidad de quien lo pasa.
+- **Lo que escribe deja algo que comitear, y lo dice.** Si después de una
+  corrida quedan cambios, el resultado trae `commit` (`{required, files,
+  command}`, null si no queda nada) y una nota «Comitea antes de seguir» con
+  la orden sugerida (`git add -A && git commit -m 'realign: adopt adopt@.'`).
+  Corre antes las pruebas del proyecto: la siguiente operación que escribe se
+  niega con el árbol sucio.
 - **Lo que no se reconoce con certeza no se toca**: se salta, con su razón
   (`skipped`), y el comando termina con error para que nadie lo pase por alto.
   Lo saltado lo resuelve el playbook del paso.
@@ -303,8 +309,10 @@ Esta es toda la lógica que hace falta; no hay que inventar nada por proyecto.
      tipo y sus anexos), con las pruebas del proyecto antes y después. Si el
      playbook dice dejarlo (un controlador de un protocolo), o no se puede
      ahora, aplázalo con su razón (`larapack:realign defer <id> --note="…"`);
-     si hacerlo o no es cosa del dueño, pásaselo
-     (`larapack:realign escalate <id> --note="…"`).
+     si hacerlo o no es cosa del dueño —lo que no cabe en un hueco, por
+     ejemplo—, pásaselo (`larapack:realign escalate <id> --note="…"`); la
+     excepción (`except`) se pide sólo después de que él decida dejarlo así
+     ([escalate o except](guided.md#lo-que-no-cabe-escalate-o-except)).
      Si no puedes correr las pruebas, el paso no se da por hecho: ver
      [sin pruebas](guided.md#sin-pruebas-cuando-no-se-pueden-correr-las-del-proyecto).
    - `decision`: **no decidas tú**. Presenta `how.options` —y

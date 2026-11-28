@@ -153,12 +153,11 @@ final class RealignActions
         ],
         'infer' => [
             'summary' => 'Infiere un laraimport borrador desde el código (esquema de las migraciones, modelos, rutas), con su procedencia, lo que no infirió y las decisiones. No toca el código ni el contrato que exista.',
-            'usage' => ['larapack:realign infer <id>… [--dry-run] [--allow-dirty] [--option write=contract] [--option packages=0] [--option http=0]'],
+            'usage' => ['larapack:realign infer <id>… [--dry-run] [--allow-dirty] [--option write=contract] [--option http=0]'],
             'writes' => 'laraimport.inferred.json y .larapack/realign/infer/<ámbito>.json. laraimport.json sólo si no existe y se pide --option write=contract.',
             'options' => ['package', 'dry-run', 'allow-dirty', 'option'],
             'keys' => [
                 'write' => '`draft` (por omisión) o `contract`: escribe laraimport.json en vez de laraimport.inferred.json, sólo si no existe ninguno.',
-                'packages' => '`1` (por omisión) o `0`: en `no-contract@.`, inferir también los paquetes locales sin contrato.',
                 'http' => '`1` (por omisión) o `0`: inferir también los endpoints y controladores, no sólo modelos y columnas.',
             ],
             'guide' => 'docs/realign/infer.md',

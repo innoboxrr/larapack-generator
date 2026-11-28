@@ -104,7 +104,7 @@ final class RealignHelpTest extends TestCase
 
         $document = $this->realign('infer', ['--option' => ['escribir=contract'], '--dry-run' => true], Command::FAILURE);
         $this->assertStringContainsString('no usa --option escribir', $document['error']);
-        $this->assertStringContainsString('write, packages, http', $document['error']);
+        $this->assertStringContainsString('write, http', $document['error']);
 
         $document = $this->realign('adopt', ['--option' => ['reason=x'], '--dry-run' => true], Command::FAILURE);
         $this->assertStringContainsString('adopt no lee ninguna clave', $document['error']);

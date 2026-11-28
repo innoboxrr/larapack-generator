@@ -1192,7 +1192,7 @@ class RealignCommand extends Command
         $ok = $report['result']['skipped'] === [];
 
         if ($this->wantsJson($input)) {
-            $this->writeJson($output, ['format_version' => RealignState::FORMAT_VERSION, 'ok' => $ok, 'action' => $action, 'dry_run' => $report['dry_run'], 'steps' => $report['steps']] + $report['result']);
+            $this->writeJson($output, ['format_version' => RealignState::FORMAT_VERSION, 'ok' => $ok, 'action' => $action, 'dry_run' => $report['dry_run'], 'steps' => $report['steps']] + $report['result'] + ['commit' => $report['commit']]);
 
             return $ok ? Command::SUCCESS : Command::FAILURE;
         }

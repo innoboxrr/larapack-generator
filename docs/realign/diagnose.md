@@ -36,7 +36,9 @@ nada que simular, y pasarlo es un error.
 
 1. **Encuentra los ámbitos**: la raíz y cada paquete local (`packages/*`, y lo
    que declare el `composer.json` como repositorio `path`) con
-   `laraimport.json` o `.larapack/manifest.json` propios.
+   `laraimport.json` o `.larapack/manifest.json` propios. Si la raíz no tiene
+   ninguno de los dos, cada paquete local es un ámbito igualmente, sin
+   contrato ([perfil 3](profiles.md#3-sin-contrato)).
 2. **Regenera cada contrato aparte**, en `.larapack/realign/cache/`, con la
    versión **actual** del generador, la Pint del proyecto y su `pint.json`: un
    `larapack:import` en un directorio vacío con el `composer.json`, el

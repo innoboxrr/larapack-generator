@@ -121,6 +121,7 @@ final class RealignExceptionsTest extends TestCase
         $missing = $this->realign('except', ['targets' => ['route-closure@.']], Command::FAILURE);
         $this->assertStringContainsString('reason', $missing['error']);
 
+        $this->realign('decide', ['targets' => ['route-closure@.', 'except'], '--note' => 'CSP, CORS y la salud son legítimas.']);
         $dry = $this->realign('except', ['targets' => ['route-closure@.'], '--option' => ['reason='.self::CSP_REASON], '--dry-run' => true]);
         $this->assertSame([self::HEALTH, self::CORS, self::CSP], $this->sorted(array_column($dry['fixed'], 'target')));
         $this->assertFileDoesNotExist($this->project->path.'/.larapack/realign/exceptions.json');
@@ -140,7 +141,6 @@ final class RealignExceptionsTest extends TestCase
         $this->assertSame(Command::FAILURE, $exit);
         $this->assertSame(['warning', 'warning', 'warning'], array_column($this->closures($report), 'level'));
 
-        $this->realign('decide', ['targets' => ['route-closure@.', 'except'], '--note' => 'CSP, CORS y la salud son legítimas.']);
         $check = $this->realign('check', ['targets' => ['route-closure@.']], Command::FAILURE);
         $this->assertStringContainsString('excepción solicitada y sin aprobar', implode("\n", $check['remaining']));
 
@@ -178,6 +178,7 @@ final class RealignExceptionsTest extends TestCase
 
     public function test_si_el_closure_cambia_la_aprobacion_caduca_y_si_desaparece_sobra(): void
     {
+        $this->realign('decide', ['targets' => ['route-closure@.', 'except'], '--note' => 'CSP, CORS y la salud son legítimas.']);
         $this->realign('except', ['targets' => ['route-closure@.'], '--option' => ['reason='.self::CSP_REASON]]);
         $this->owner('approve', ['--all' => true]);
         $this->assertSame(Command::SUCCESS, $this->verify(['--strict' => true])[0]);
@@ -254,6 +255,25 @@ final class RealignExceptionsTest extends TestCase
         $this->assertTrue(Guard::approvesHandRolled($command('php artisan larapack:hand-rolled approve --all')));
         $this->assertNotSame([], Guard::touchedLocks(['tool_name' => 'Write', 'tool_input' => ['file_path' => $this->project->path.'/'.HandRolledLock::PATH]]));
         $this->assertSame([], Guard::touchedLocks(['tool_name' => 'Write', 'tool_input' => ['file_path' => $this->project->path.'/.larapack/realign/exceptions.json']]));
+    }
+
+    public function test_una_decision_sin_tomar_no_se_exceptua(): void
+    {
+        // Lo encontró una prueba de autonomía: except pedía excepciones de una
+        // decisión que nadie había tomado. Sigue a `decide`, no la sustituye.
+        $reason = ['reason='.self::CSP_REASON];
+        $refused = $this->realign('except', ['targets' => ['route-closure@.'], '--option' => $reason], Command::FAILURE);
+        $this->assertStringContainsString('route-closure@. es una decisión que nadie ha tomado', $refused['error']);
+        $this->assertStringContainsString('larapack:realign decide route-closure@. except', $refused['error']);
+        $this->assertFileDoesNotExist($this->project->path.'/.larapack/realign/exceptions.json');
+
+        // Decidida con una opción que no deja las cosas como están, tampoco.
+        $this->realign('decide', ['targets' => ['route-closure@.', 'refactor'], '--note' => 'Se llevan a controladores.']);
+        $other = $this->realign('except', ['targets' => ['route-closure@.'], '--option' => $reason, '--dry-run' => true], Command::FAILURE);
+        $this->assertStringContainsString('se decidió refactor, que no pide una excepción', $other['error']);
+
+        $this->realign('decide', ['targets' => ['route-closure@.', 'except'], '--note' => 'Se quedan así.']);
+        $this->assertCount(3, $this->realign('except', ['targets' => ['route-closure@.'], '--option' => $reason, '--dry-run' => true])['fixed']);
     }
 
     public function test_dejar_fuera_un_ambito_sin_contrato_vale_mientras_no_tenga_contrato(): void

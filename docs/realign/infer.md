@@ -30,7 +30,7 @@ riesgos tiene adoptar el borrador.
 
 | Paso | Qué pasa | Qué escribe `infer` |
 |---|---|---|
-| `no-contract` | El ámbito no tiene `laraimport.json`. | Un borrador entero. En la raíz, también uno por cada paquete local sin contrato (`--option packages=0` lo evita). |
+| `no-contract` | El ámbito no tiene `laraimport.json`. | Un borrador entero, sólo de ese ámbito: `no-contract@.` es la raíz y cada paquete tiene el suyo (`no-contract@packages/x`). Para todos a la vez, `infer` sin ids. |
 | `unmanaged-models` | Hay modelos que el contrato no declara. | El contrato que ya existe **más** esos modelos. |
 | `unmanaged-http` | Hay controladores y rutas escritos a mano. | El contrato que ya existe **más** los endpoints cuyas rutas se pueden conservar. |
 
@@ -69,12 +69,19 @@ Opciones (`--option clave=valor`, repetible):
 | Opción | Valores | Efecto |
 |---|---|---|
 | `write` | `draft` (por omisión), `contract` | `contract` escribe `laraimport.json` si no existe. |
-| `packages` | `1` (por omisión), `0` | En un `no-contract` de la raíz, inferir también los paquetes sin contrato. |
 | `http` | `1` (por omisión), `0` | Inferir también controladores y rutas. |
 
 Con `--format=json` cada ámbito sale en `fixed` con `file` (el borrador) y
 `report` (su informe). Un borrador que no pasa `larapack:validate` sale además
 en `skipped` y la orden termina con error.
+
+Con `--dry-run` no se escribe nada, tampoco el informe: `report` es `null` y
+el informe entero va en el resultado, en `infer` (el mismo documento que
+[El informe](#el-informe)). En texto, una nota por ámbito resume las
+decisiones por tipo, con cuántas son y hasta tres ejemplos de cada una
+(`route-not-preservable 913 (api.v1.posts.index, …)`). Es la forma de saber,
+sin tocar nada, si las rutas escritas a mano se conservarían al declararlas:
+lo que recomienda el [brief](owner.md) para decidir `unmanaged-http`.
 
 ## Qué se infiere y de dónde
 

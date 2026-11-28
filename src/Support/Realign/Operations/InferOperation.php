@@ -32,9 +32,11 @@ use Innoboxrr\LarapackGenerator\Support\Realign\RealignState;
  * (ContractComparison): lo que difiere puede ser el código o el contrato el
  * que se quedó atrás.
  *
- * Sin contrato en la raíz, infiere también cada paquete local que tampoco lo
- * tiene (`--option packages=0` lo evita): en un proyecto como brandai cada
- * paquete es una zona con su propio borrador.
+ * Cada ámbito, el suyo: `infer no-contract@.` infiere sólo la raíz, y cada
+ * paquete local tiene su propio paso (`no-contract@packages/x`; en un
+ * proyecto sin LaraPack cada paquete es un ámbito, Scopes). Antes la raíz
+ * inferia también todos los paquetes sin contrato, y el plan seguía
+ * pidiendo la decisión de cada uno como si no se hubiera hecho nada.
  *
  * El informe de cada ámbito queda en `.larapack/realign/infer/<ámbito>.json`
  * (formato en docs/realign/README.md): de dónde salió cada prop y con qué
@@ -78,26 +80,13 @@ final class InferOperation implements RealignOperation
         foreach ($context->steps as $step) {
             $path = (string) ($step['scope']['path'] ?? '.');
             $type = (string) $step['type'];
-            $targets = [$path => $path === '.' ? $base : $base.'/'.$path];
+            $scopes[$path] ??= ['directory' => $path === '.' ? $base : $base.'/'.$path, 'types' => [], 'steps' => [], 'models' => []];
+            $scopes[$path]['types'][] = $type;
+            $scopes[$path]['steps'][] = (string) ($step['id'] ?? '');
 
-            if ($type === 'no-contract' && $path === '.' && $context->option('packages', '1') !== '0') {
-                foreach ($sources->roots() as $root) {
-                    if ($root !== $base && str_starts_with($root, $base.'/') && ! is_file($root.'/laraimport.json') && ! is_file($root.'/.larapack/manifest.json')) {
-                        $targets[substr($root, strlen($base) + 1)] = $root;
-                    }
-                }
-            }
-
-            foreach ($targets as $scopePath => $directory) {
-                $scopes[$scopePath] ??= ['directory' => $directory, 'types' => [], 'steps' => [], 'models' => [], 'explicit' => $scopePath === $path];
-                $scopes[$scopePath]['types'][] = $type;
-                $scopes[$scopePath]['steps'][] = (string) ($step['id'] ?? '');
-                $scopes[$scopePath]['explicit'] = $scopes[$scopePath]['explicit'] || $scopePath === $path;
-
-                if ($type === 'unmanaged-models') {
-                    foreach ((array) ($step['files'] ?? []) as $file) {
-                        $scopes[$scopePath]['models'][] = $scopePath === '.' ? (string) $file : (string) preg_replace('#^'.preg_quote((string) $scopePath, '#').'/#', '', (string) $file);
-                    }
+            if ($type === 'unmanaged-models') {
+                foreach ((array) ($step['files'] ?? []) as $file) {
+                    $scopes[$path]['models'][] = $path === '.' ? (string) $file : (string) preg_replace('#^'.preg_quote($path, '#').'/#', '', (string) $file);
                 }
             }
         }
@@ -110,7 +99,7 @@ final class InferOperation implements RealignOperation
     }
 
     /**
-     * @param  array{directory: string, types: list<string>, steps: list<string>, models: list<string>, explicit: bool}  $scope
+     * @param  array{directory: string, types: list<string>, steps: list<string>, models: list<string>}  $scope
      * @param  list<string>  $shared
      */
     private function inferScope(OperationContext $context, OperationResult $result, string $path, array $scope, array $shared): void
@@ -124,14 +113,6 @@ final class InferOperation implements RealignOperation
         // con todo lo declarado; lo que entra al borrador lo deciden los pasos.
         $inferred = (new ContractInferrer($directory, $shared))->infer(null, $http);
         $contractFile = $directory.'/laraimport.json';
-
-        // Un paquete sin modelos, pivotes ni rutas que conservar (un paquete de
-        // sólo front) no recibe un borrador vacío: no hay nada que adoptar.
-        if (! $scope['explicit'] && $inferred['contract']['models'] === [] && empty($inferred['contract']['pivots']) && empty($inferred['contract']['controllers'])) {
-            $result->unchanged($path, 'no hay modelos, pivotes ni rutas que inferir', ['step' => $stepIds[0] ?? null]);
-
-            return;
-        }
 
         $existing = is_file($contractFile) ? json_decode((string) file_get_contents($contractFile), true) : null;
         $existing = is_array($existing) ? $existing : null;
@@ -181,19 +162,52 @@ final class InferOperation implements RealignOperation
 
         $verb = $context->dryRun() ? 'escribiría' : 'escrito';
         $summary = $existing === null ? $summary : count($added).' entradas añadidas al contrato que ya existe ('.$summary.')';
-        $result->fixed($relative, "borrador {$verb} desde el código: {$summary}.", ['step' => $step['id'], 'report' => $reportPath]);
+        // En una simulación no se escribe el informe: va entero en el
+        // resultado (`infer`), y `report` es null. Antes remitía a un archivo
+        // que el dry-run no escribe, y el brief recomienda justo el dry-run
+        // para saber si las rutas se conservan (route-not-preservable).
+        $result->fixed($relative, "borrador {$verb} desde el código: {$summary}.", $context->dryRun()
+            ? ['step' => $step['id'], 'report' => null, 'infer' => $report]
+            : ['step' => $step['id'], 'report' => $reportPath]);
+        $where = $context->dryRun() ? 'el resultado (--format=json, `infer`; sin --dry-run, en '.$reportPath.')' : $reportPath;
 
         if (! $validation['ok']) {
-            $result->skipped($relative, "el borrador no pasa larapack:validate ({$validation['errors']} errores): corrígelo antes de adoptarlo. Detalle en {$reportPath}.", ['step' => $step['id']]);
+            $result->skipped($relative, "el borrador no pasa larapack:validate ({$validation['errors']} errores): corrígelo antes de adoptarlo. Detalle en {$where}.", ['step' => $step['id']]);
         }
 
         if ($inferred['decisions'] !== []) {
-            $result->note("{$relative}: ".count($inferred['decisions']).' decisiones que no se tomaron por ti (nombres repetidos, ciclos, tablas sin modelo, rutas que no se pueden conservar): están en '.$reportPath.'.');
+            $result->note("{$relative}: ".count($inferred['decisions']).' decisiones que no se tomaron por ti, en '.$where.'. Por tipo: '.self::decisionSummary($inferred['decisions']).'.');
         }
 
         if ($existing === null && ! $writeContract) {
             $result->note("{$relative}: revísalo con el informe y, cuando lo des por bueno, renómbralo a laraimport.json. Nada del código se tocó.");
         }
+    }
+
+    /**
+     * Las decisiones por tipo, con cuántas son y hasta tres ejemplos de cada
+     * una: `route-not-preservable 913 (api.v1.posts.index, …)`. Es lo que se
+     * lee en texto; el detalle entero va en el informe.
+     *
+     * @param  list<array<string, mixed>>  $decisions
+     */
+    public static function decisionSummary(array $decisions): string
+    {
+        $by = [];
+
+        foreach ($decisions as $decision) {
+            $by[(string) ($decision['type'] ?? '?')][] = (string) ($decision['subject'] ?? '?');
+        }
+
+        ksort($by);
+        $parts = [];
+
+        foreach ($by as $type => $subjects) {
+            $examples = array_slice(array_values(array_unique($subjects)), 0, 3);
+            $parts[] = $type.' '.count($subjects).' ('.implode(', ', $examples).(count($subjects) > count($examples) ? ', …' : '').')';
+        }
+
+        return implode('; ', $parts);
     }
 
     /**

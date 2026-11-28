@@ -55,6 +55,31 @@ final class RealignAdoptTest extends TestCase
         $this->assertTrue($this->realign('check', ['targets' => ['adopt@.']])['done']);
     }
 
+    public function test_lo_que_deja_sin_comitear_lo_dice_con_la_orden_para_comitear(): void
+    {
+        // Lo encontró una prueba de autonomía: adopt dejaba el manifiesto sin
+        // comitear y la siguiente operación se negaba por el árbol sucio.
+        $this->reformat(self::CONTROLLER);
+        $this->prepare();
+
+        $this->assertNull($this->realign('adopt', ['targets' => ['adopt@.'], '--dry-run' => true])['commit'], 'Simular no deja nada que comitear.');
+
+        $done = $this->realign('adopt', ['targets' => ['adopt@.']]);
+        $this->assertTrue($done['commit']['required']);
+        $this->assertGreaterThan(0, $done['commit']['files']);
+        $this->assertSame("git add -A && git commit -m 'realign: adopt adopt@.'", $done['commit']['command']);
+        $this->assertStringStartsWith('Comitea antes de seguir', (string) end($done['notes']));
+
+        // Es verdad: la siguiente que escribe se niega hasta comitear.
+        $refused = $this->realign('adopt', ['targets' => ['adopt@.']], Command::FAILURE);
+        $this->assertStringContainsString('sin comitear', $refused['error']);
+
+        // Con la orden sugerida, el árbol queda limpio y no hay nada que avisar.
+        exec('cd '.escapeshellarg($this->project->path).' && export GIT_AUTHOR_NAME=realign GIT_AUTHOR_EMAIL=realign@test GIT_COMMITTER_NAME=realign GIT_COMMITTER_EMAIL=realign@test && '.$done['commit']['command'].' -q 2>&1', $output, $exit);
+        $this->assertSame(0, $exit, implode("\n", $output));
+        $this->assertSame('', $this->git('status', '--porcelain', '--', '.', ':(exclude).larapack/realign'));
+    }
+
     public function test_registra_lo_que_el_manifiesto_no_conoce_y_es_lo_regenerado(): void
     {
         $this->forget(self::POLICY);

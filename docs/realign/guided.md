@@ -17,6 +17,7 @@ next` las imprime **ya rellenadas** con los archivos, los hallazgos y las
 - [Sin pruebas: cuando no se pueden correr las del proyecto](#sin-pruebas-cuando-no-se-pueden-correr-las-del-proyecto)
 - [Después de los pasos guiados: otra pasada](#después-de-los-pasos-guiados-otra-pasada)
 - [Riesgos de los pasos guiados](#riesgos-de-los-pasos-guiados)
+- [Lo que no cabe: `escalate` o `except`](#lo-que-no-cabe-escalate-o-except)
 - [Para quien añade un playbook](#para-quien-añade-un-playbook)
 
 ## Cómo se usa
@@ -171,8 +172,12 @@ Si no puedes correrlas:
    hace falta para probarlos. Quien tenga el entorno corre las pruebas y,
    si pasan, `check`; si no, `git revert` del commit del paso.
 
-`next` vuelve a dar el mismo paso mientras siga pendiente: para seguir con
-otros, trabaja otro ámbito con `--package`, o para y entrega el informe. No
+`next` vuelve a dar el mismo paso mientras siga pendiente. Para seguir con
+otros, aplaza el paso sin probar con su motivo
+(`larapack:realign defer <id> --note="SIN PROBAR: no hay base de datos"`):
+sigue `pending`, `next` lo salta, `status` lo lista en «Aplazados» y
+`undefer <id>` lo devuelve cuando haya entorno para probarlo. También puedes
+trabajar otro ámbito con `--package`, o parar y entregar el informe. No
 marques el paso hecho editando `plan.json` a mano.
 
 ## Después de los pasos guiados: otra pasada
@@ -212,13 +217,28 @@ vuelve a `next`.
 - **Los nombres de ruta y las URIs** no se cambian en ningún paso guiado: el
   front y los clientes dependen de ellos. Lo que no se puede conservar se queda
   como está o es una decisión.
-- **Lo que no cabe** —una acción que de verdad no puede conservar su código de
-  estado o el formato de su respuesta con una request— no se fuerza: se pide
-  la excepción con su razón concreta (`#[HandRolled('…')]` en un controlador,
-  `larapack:realign except` en lo demás) y la aprueba el dueño
-  ([exceptions.md](exceptions.md)). Un protocolo (OAuth2, RFC 7591, un
-  webhook) no es por sí solo una razón: casi siempre se mueve conservando la
-  respuesta.
+- **Lo que no cabe** —una pieza que no tiene hueco ni se puede declarar en el
+  contrato, una acción que de verdad no puede conservar su código de estado o
+  el formato de su respuesta con una request— no se fuerza. Ver
+  [Lo que no cabe: escalate o except](#lo-que-no-cabe-escalate-o-except). Un
+  protocolo (OAuth2, RFC 7591, un webhook) no es por sí solo una razón: casi
+  siempre se mueve conservando la respuesta.
+
+## Lo que no cabe: `escalate` o `except`
+
+Dejar algo fuera de su hueco (o fuera del contrato) lo decide el dueño, nunca
+quien sigue el plan. Las dos órdenes no son alternativas, son dos momentos:
+
+| Cuándo | Qué | Orden |
+|---|---|---|
+| El dueño **no ha dicho** si se queda así (lo normal en un paso guiado). | Se le pasa: el paso guiado se convierte en una decisión con sus opciones (`refactor` y dejarlo como está). | `larapack:realign escalate <id> --note="qué no cabe y por qué"` |
+| El dueño **ya lo decidió** (`decide <id> except`, o la opción «dejarlo como está» de cualquier decisión). | Se pide la excepción de cada elemento, con su razón y su huella; cuenta cuando el dueño la aprueba. | `larapack:realign except <id> --option reason="…"` |
+| Es un **controlador** que no puede delegar. | No es una excepción del realineamiento: `#[HandRolled('…')]` en la clase y la aprobación del dueño (la opción `hand-rolled` de `escalate`). | `larapack:hand-rolled approve` (el dueño) |
+
+En una decisión, `except` se niega mientras el dueño no la haya tomado con la
+opción que la pide ([exceptions.md](exceptions.md#el-ciclo)). Y aplazar
+(`defer`) no es ninguna de las dos: deja el paso pendiente para más tarde,
+con su razón, sin que nadie decida nada.
 
 ## Para quien añade un playbook
 

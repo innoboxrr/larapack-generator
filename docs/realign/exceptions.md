@@ -85,6 +85,13 @@ git diff .larapack/hand-rolled.lock && git commit .larapack/hand-rolled.lock   #
 vendor/bin/builder larapack:realign check route-closure@.
 ```
 
+- **En una decisión, `except` exige la decisión tomada** con la opción que la
+  pide (el paso 1). Sobre una decisión que nadie tomó, o que se decidió con
+  otra opción (`refactor`, `declare`), se niega y dice la orden `decide` que
+  falta: la solicitud no puede llegar al dueño como si él ya hubiera elegido.
+  Decidida por elemento (`decide --target`), sólo pide por los elementos cuya
+  opción es la de `except`. Lo que no es una decisión (un hallazgo de `fix`,
+  `declared-routes`, un paso guiado que se acepta) se pide sin `decide`.
 - `except` **no escribe código ni el candado**: sólo la solicitud. Como toda
   operación del realineamiento, sin `--dry-run` exige el árbol git limpio (o
   `--allow-dirty`). Informa `fixed` (solicitada), `unchanged` (ya estaba

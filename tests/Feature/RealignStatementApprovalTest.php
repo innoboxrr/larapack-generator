@@ -69,6 +69,7 @@ final class RealignStatementApprovalTest extends TestCase
 
     public function test_la_solicitud_guarda_el_hallazgo_y_el_dueno_lo_ve_al_aprobar(): void
     {
+        $this->realign('decide', ['targets' => ['inconsistent-entity@.', 'except'], '--note' => 'El dueño: se acepta.']);
         $this->realign('except', ['targets' => ['inconsistent-entity@.'], '--option' => ['reason='.self::REASON]]);
 
         $requests = Exceptions::forRoot($this->project->path)->requests();
@@ -124,6 +125,7 @@ final class RealignStatementApprovalTest extends TestCase
      */
     public function test_el_estado_de_una_entidad_es_el_de_su_hallazgo_de_hoy(): void
     {
+        $this->realign('decide', ['targets' => ['inconsistent-entity@.', 'except'], '--note' => 'El dueño: se acepta.']);
         $this->realign('except', ['targets' => ['inconsistent-entity@.'], '--option' => ['reason='.self::REASON]]);
         $this->ownerAtTerminal();
         $this->owner('approve', ['targets' => [$this->factoryTarget()]]);
@@ -142,6 +144,7 @@ final class RealignStatementApprovalTest extends TestCase
 
     public function test_sin_confirmar_en_la_terminal_no_se_aprueba(): void
     {
+        $this->realign('decide', ['targets' => ['inconsistent-entity@.', 'except'], '--note' => 'El dueño: se acepta.']);
         $this->realign('except', ['targets' => ['inconsistent-entity@.'], '--option' => ['reason='.self::REASON]]);
 
         $this->ownerAtTerminal('apruebo');

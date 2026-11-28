@@ -70,6 +70,9 @@ final class Diagnosis
         $report = [
             'generator' => GeneratorVersion::current(),
             'generated_at' => $now,
+            // Único por diagnóstico (la hora es de segundos): el plan lo
+            // guarda para saber si se vuelve a planificar sobre el mismo.
+            'id' => bin2hex(random_bytes(8)),
             'scopes' => array_filter((array) ($previous['scopes'] ?? []), fn (mixed $scope, string|int $path): bool => ! in_array((string) $path, $done, true), ARRAY_FILTER_USE_BOTH),
             'files' => array_values(array_filter((array) ($previous['files'] ?? []), $keep)),
             'unmanaged' => array_values(array_filter((array) ($previous['unmanaged'] ?? []), $keep)),

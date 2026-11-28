@@ -528,7 +528,7 @@ final class OwnerBrief
             'inconsistent-entity' => $items !== [] && array_diff($basenames, ['User']) === []
                 ? $firm('except', 'Es el User de Laravel: le falta lo que no necesita.')
                 : $none('Depende de si a ese modelo le falta algo a propósito; el mensaje de cada hallazgo dice qué.'),
-            'unmanaged-http' => $none('Depende de si sus rutas se pueden conservar al declararlas: el agente lo averigua sin tocar nada con larapack:realign infer '.self::argument($id).' --dry-run (route-not-preservable es que no). Dejarlos como código propio es legítimo si delegan en su request.'),
+            'unmanaged-http' => $none('Depende de si sus rutas se pueden conservar al declararlas: el agente lo averigua sin tocar nada con larapack:realign infer '.self::argument($id).' --dry-run, que da el informe en su resultado (una decisión route-not-preservable es que no). Dejarlos como código propio es legítimo si delegan en su request.'),
             'hand-rolled' => $none('Cada atributo trae su razón y sólo quien conoce el dominio juzga si la acción de verdad no puede delegar (firma sobre el cuerpo en bruto, formato de un protocolo, streaming).'),
             default => $none('No hay una regla del paquete para esta decisión: las opciones dicen sus consecuencias.'),
         };
