@@ -4,6 +4,7 @@ namespace Innoboxrr\LarapackGenerator\Tests\Feature;
 
 use Acme\Vault\Http\Resources\Models\DocumentResource;
 use Acme\Vault\Models\Document;
+use Illuminate\Config\Repository;
 use Illuminate\Container\Container;
 use Illuminate\Http\Request;
 use Illuminate\Translation\ArrayLoader;
@@ -27,6 +28,8 @@ final class GeneratedSecurityTest extends TestCase
     private $autoloader = null;
 
     private bool $boundTranslator = false;
+
+    private bool $boundConfig = false;
 
     protected function setUp(): void
     {
@@ -73,6 +76,10 @@ final class GeneratedSecurityTest extends TestCase
             Container::getInstance()->forgetInstance('translator');
         }
 
+        if ($this->boundConfig) {
+            Container::getInstance()->forgetInstance('config');
+        }
+
         Cell::setValueBinder(new DefaultValueBinder);
 
         parent::tearDown();
@@ -100,6 +107,25 @@ final class GeneratedSecurityTest extends TestCase
                 'El index deja al cliente saltarse ManagedFilter con '.json_encode($query)
             );
         }
+    }
+
+    /**
+     * `paginate=0` es «todo» para SearchSurge: una petición traía la tabla
+     * entera. El index lo deja en el tope de filas por página.
+     */
+    public function test_el_index_no_deja_pedir_la_tabla_entera(): void
+    {
+        foreach ([0, '0', false, 'false'] as $all) {
+            $request = $this->prepared('Acme\\Vault\\Http\\Requests\\Document\\IndexRequest', ['paginate' => $all]);
+
+            $this->assertSame(1000, $request->input('paginate'), 'El index deja pedir todas las filas con paginate='.json_encode($all));
+        }
+
+        Container::getInstance()->make('config')->set('search-surge.pagination.max_per_page', 50);
+
+        $this->assertSame(50, $this->prepared('Acme\\Vault\\Http\\Requests\\Document\\IndexRequest', ['paginate' => '0'])->input('paginate'));
+        $this->assertSame('25', $this->prepared('Acme\\Vault\\Http\\Requests\\Document\\IndexRequest', ['paginate' => '25'])->input('paginate'));
+        $this->assertNull($this->prepared('Acme\\Vault\\Http\\Requests\\Document\\IndexRequest', [])->input('paginate'));
     }
 
     public function test_el_index_deja_al_cliente_el_resto_de_filtros(): void
@@ -185,6 +211,14 @@ final class GeneratedSecurityTest extends TestCase
      */
     private function prepared(string $class, array $query): Request
     {
+        $container = Container::getInstance();
+
+        // El index lee de la configuración el tope de filas por página.
+        if (! $container->bound('config')) {
+            $container->instance('config', new Repository);
+            $this->boundConfig = true;
+        }
+
         $request = $class::create('/', 'GET', $query);
 
         $method = new \ReflectionMethod($request, 'prepareForValidation');
