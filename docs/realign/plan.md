@@ -346,9 +346,11 @@ El dueño acepta sin probar un paso `untested`: queda `done` con
 `untested_accepted` (la nota, la hora y cómo se confirmó) y una línea en su
 historia, y `larapack:realign done` lo sigue enseñando (`accepted_untested`).
 Lo confirma **una persona**, como una aprobación: en su terminal, viendo el
-paso y la nota y escribiendo «acepto sin probar». Nombrarse
-(`LARAPACK_APPROVER` y `--approver`) sólo vale dentro del workflow de
-aprobación, como al aprobar una excepción; fuera de él no acepta nada.
+paso y la nota y escribiendo «acepto sin probar»; o sin terminal, sólo dentro
+de la corrida de aprobación lanzada a mano en GitHub
+([exceptions.md](exceptions.md#por-qué-un-agente-no-puede-aprobar)), donde
+`LARAPACK_APPROVER`, `--approver` y quien la lanzó son la misma cuenta, que
+queda en `by`. Nombrarse fuera de ella no acepta nada.
 Un agente no lo corre: lo deja en su informe y en `brief`. La nota es
 obligatoria y sólo se acepta lo que está `untested`.
 
@@ -383,8 +385,11 @@ Antes, `next <id>` ignoraba el id y daba el siguiente.
 
 Todos los JSON —los archivos y toda salida `--format=json`— llevan
 `format_version` (hoy `1`). Se sube cuando cambia algo que un consumidor lee;
-añadir una clave no la sube. Un archivo de una versión posterior no se lee: se
-pide actualizar el paquete.
+añadir una clave no la sube. Un archivo del estado (`report.json`, `plan.json`,
+`config.json`, `exceptions.json`) de una versión posterior no se lee: el error
+dice en cuál está, hasta cuál se entiende y que hay que actualizar el paquete.
+Uno sin `format_version` tampoco, con otro mensaje: no lo escribió
+`larapack:realign`. `brief.json` y los informes de `infer` sólo se escriben.
 
 - `diagnose --format=json` y `report.json`: [diagnose.md](diagnose.md#el-informe-reportjson).
 - `plan --format=json` y `status --format=json`: `{format_version, ok, action,
@@ -434,4 +439,5 @@ pide actualizar el paquete.
 del generador lo escribió (`generator`) y, si se adoptó en vez de generarse,
 `state: adopted`. Un manifiesto v1 se sigue leyendo y la siguiente escritura lo
 pasa a la 2. El diagnóstico usa `generator` para separar un salto de plantilla
-de una edición.
+de una edición. Uno de una versión posterior a la 2 no se reescribe nunca, y
+`diagnose` se niega a clasificar con él: pide actualizar el paquete.

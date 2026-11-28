@@ -2110,7 +2110,9 @@ y el proyecto sin `vendor/` también se formatea—. Siempre con el `pint.json` 
 proyecto si lo tiene; sin él, el preset `laravel`. El informe dice cuál se usó: en
 texto, una línea; con `--format=json`, `formatter: {source, pint, config,
 message}` junto a `formatted`. Si no hay ninguna, `formatted` es `null` y
-`formatter.source` es `none`, nunca un silencio.
+`formatter.source` es `none`, nunca un silencio. Pint formatea en un solo núcleo;
+con `LARAPACK_PINT_JOBS=<n>` se reparte en hasta `n` procesos a la vez (por
+defecto uno; el resultado es el mismo).
 
 **La compilación del front** va sobre Vite 8, la de Laravel 13: el `package.json`
 del módulo pide `vite ^8`, y `@vitejs/plugin-vue ^6` o `@vitejs/plugin-react ^6`.

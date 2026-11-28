@@ -2,11 +2,14 @@
 
 namespace Innoboxrr\LarapackGenerator\Tests\Unit;
 
+use Innoboxrr\LarapackGenerator\Commands\Realign\Action;
+use Innoboxrr\LarapackGenerator\Commands\RealignCommand;
 use Innoboxrr\LarapackGenerator\Support\Realign\Category;
 use Innoboxrr\LarapackGenerator\Support\Realign\DoneWhen;
 use Innoboxrr\LarapackGenerator\Support\Realign\FileClass;
 use Innoboxrr\LarapackGenerator\Support\Realign\Operations\Operations;
 use Innoboxrr\LarapackGenerator\Support\Realign\Playbooks;
+use Innoboxrr\LarapackGenerator\Support\Realign\RealignActions;
 use Innoboxrr\LarapackGenerator\Support\Realign\StepTypes;
 use Innoboxrr\LarapackGenerator\Support\Verifier;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -204,5 +207,108 @@ final class RealignCatalogTest extends TestCase
         sort($values, SORT_STRING);
 
         return $values;
+    }
+
+    /**
+     * Una acción descrita y sin clase respondería «acción desconocida»; una
+     * clase sin descripción no saldría en la ayuda ni tendría sus opciones.
+     */
+    public function test_cada_accion_descrita_tiene_quien_la_haga(): void
+    {
+        $described = array_keys(RealignActions::ALL);
+        $handled = [...array_keys(RealignCommand::HANDLERS), ...Operations::ACTIONS];
+
+        sort($described);
+        sort($handled);
+
+        $this->assertSame($described, $handled, 'RealignActions::ALL y RealignCommand::HANDLERS + Operations::ACTIONS no nombran las mismas acciones.');
+
+        $counted = array_keys(RealignActions::ARGUMENTS);
+        sort($counted);
+
+        $this->assertSame($described, $counted, 'RealignActions::ARGUMENTS no dice cuántos argumentos admite cada acción.');
+
+        foreach (RealignCommand::HANDLERS as $action => $class) {
+            $this->assertTrue(is_subclass_of($class, Action::class), "{$action}: {$class} no es una Action.");
+        }
+
+        foreach (RealignActions::WITHOUT_PROJECT as $action) {
+            $this->assertArrayHasKey($action, RealignActions::ALL);
+        }
+    }
+
+    /**
+     * ARCHITECTURE.md es el mapa de quien mantiene esto: una pieza del
+     * realineamiento que no aparece en su sección es una pieza que nadie
+     * sabrá que existe. Cada clase se cita con su nombre.
+     */
+    public function test_la_arquitectura_nombra_cada_pieza_del_realineamiento(): void
+    {
+        $document = (string) file_get_contents(dirname(__DIR__, 2).'/ARCHITECTURE.md');
+        $start = strpos($document, "\n## `realign`");
+        $end = strpos($document, "\n## ", (int) $start + 1);
+
+        $this->assertNotFalse($start, 'ARCHITECTURE.md ya no tiene la sección `realign`.');
+        $this->assertNotFalse($end);
+
+        $section = substr($document, $start, $end - $start);
+        $missing = [];
+
+        foreach (['src/Support/Realign', 'src/Commands/Realign'] as $directory) {
+            $files = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator(dirname(__DIR__, 2).'/'.$directory, \FilesystemIterator::SKIP_DOTS));
+
+            foreach ($files as $file) {
+                /** @var \SplFileInfo $file */
+                $class = $file->getBasename('.php');
+
+                if ($file->getExtension() === 'php' && preg_match('/\b'.preg_quote($class, '/').'\b/', $section) !== 1) {
+                    $missing[] = $directory.'/…/'.$class;
+                }
+            }
+        }
+
+        sort($missing);
+
+        $this->assertSame([], $missing, 'La sección `realign` de ARCHITECTURE.md no nombra estas clases.');
+    }
+
+    /**
+     * El estado estático del realineamiento sobrevive de una prueba a la
+     * siguiente si nadie lo limpia. Una propiedad estática nueva tiene que
+     * entrar aquí a sabiendas, con su limpieza en tests/TestCase.php (o con
+     * la razón por la que no la necesita).
+     */
+    public function test_el_estado_estatico_del_realineamiento_esta_contado(): void
+    {
+        $known = [
+            'Operations::$registered' => 'Operations::reset',
+            'ScopeReference::$cache' => 'ScopeReference::forget',
+            'ConcernMove::$files' => 'ConcernMove::reset',
+            // El hash de las plantillas del paquete: no cambia en un proceso.
+            'Regeneration::$stubsHash' => null,
+        ];
+        $found = [];
+        $files = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator(dirname(__DIR__, 2).'/src/Support/Realign', \FilesystemIterator::SKIP_DOTS));
+
+        foreach ($files as $file) {
+            /** @var \SplFileInfo $file */
+            preg_match_all('/^\s*(?:private|protected|public) static [^(=;]*?(\$\w+)\s*[=;]/m', (string) file_get_contents($file->getPathname()), $matches);
+
+            foreach ($matches[1] as $property) {
+                $found[] = $file->getBasename('.php').'::'.$property;
+            }
+        }
+
+        sort($found);
+        $expected = array_keys($known);
+        sort($expected);
+
+        $this->assertSame($expected, $found);
+
+        $teardown = (string) file_get_contents(dirname(__DIR__).'/TestCase.php');
+
+        foreach (array_filter($known) as $reset) {
+            $this->assertStringContainsString($reset.'()', $teardown, "tests/TestCase.php no llama a {$reset}().");
+        }
     }
 }

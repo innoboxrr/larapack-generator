@@ -151,6 +151,169 @@ final class FileComparisonTest extends TestCase
         $this->assertSame(['method:a'], FileComparison::members($changed, $code));
     }
 
+    public function test_los_comentarios_cuentan_y_la_coma_final_no(): void
+    {
+        $code = "<?php\n\nreturn [\n    'a' => 1, // el primero\n    'b' => [2, 3],\n];\n";
+
+        // Sin la coma final de una lista, de una llamada o de unos parámetros: formato.
+        $this->assertSame(FileComparison::FORMAT, FileComparison::compare("<?php\n\nreturn [\n    'a' => 1, // el primero\n    'b' => [2, 3,]\n];\n", $code, 'php'));
+        $this->assertSame(FileComparison::FORMAT, FileComparison::compare("<?php\nfoo(\n    \$a,\n    \$b,\n);\n", "<?php\nfoo(\$a, \$b);\n", 'php'));
+        // Una coma que no es la final separa dos cosas: quitarla no es formato.
+        $this->assertSame(FileComparison::DIFFERENT, FileComparison::compare("<?php\nreturn [1, 2];\n", "<?php\nreturn [1 2];\n", 'php'));
+        $this->assertSame(FileComparison::DIFFERENT, FileComparison::compare("<?php\nreturn [1, [2]];\n", "<?php\nreturn [1, 2];\n", 'php'));
+
+        // Otro comentario, uno menos o un docblock distinto: el mismo código, dicho aparte.
+        $this->assertSame(FileComparison::COMMENTS, FileComparison::compare(str_replace('// el primero', '// el único', $code), $code, 'php'));
+        $this->assertSame(FileComparison::COMMENTS, FileComparison::compare(str_replace(' // el primero', '', $code), $code, 'php'));
+        $this->assertSame(FileComparison::COMMENTS, FileComparison::compare("<?php\n/** Uno. */\nfunction f() {}\n", "<?php\n/** Otro. */\nfunction f() {}\n", 'php'));
+        $this->assertSame(FileComparison::COMMENTS, FileComparison::compare("<?php\n# nota\nfunction f() {}\n", "<?php\nfunction f() {}\n", 'php'));
+        // El mismo docblock con otra sangría es formato.
+        $this->assertSame(FileComparison::FORMAT, FileComparison::compare("<?php\n    /**\n     * Uno.\n     */\nfunction f() {}\n", "<?php\n/**\n * Uno.\n */\nfunction f() {}\n", 'php'));
+        // «Sólo comentarios» es de PHP: en un texto, otra línea es otra cosa.
+        $this->assertSame(FileComparison::DIFFERENT, FileComparison::compare("a: 1 // x\n", "a: 1\n", 'text'));
+        $this->assertSame(FileComparison::DIFFERENT, FileComparison::compare('{"a": 1, "//": "x"}', '{"a": 1}', 'json'));
+        // Y el texto de una cadena no es un comentario ni un espacio.
+        $this->assertSame(FileComparison::DIFFERENT, FileComparison::compare("<?php\nreturn 'a  b';\n", "<?php\nreturn 'a b';\n", 'php'));
+        $this->assertSame(FileComparison::DIFFERENT, FileComparison::compare("<?php\nreturn '// x';\n", "<?php\nreturn '';\n", 'php'));
+    }
+
+    public function test_la_cabecera_de_un_php_se_compara_sin_el_orden_de_sus_imports(): void
+    {
+        $a = "<?php\n\ndeclare(strict_types=1);\n\nnamespace Acme;\n\nuse B\\Two;\nuse A\\One;\nuse function C\\three;\n\nfinal class X {}\n";
+        $b = "<?php\n\ndeclare(strict_types=1);\n\nnamespace Acme;\n\nuse A\\One;\nuse function C\\three;\nuse B\\Two;\n\nfinal class X {}\n";
+
+        $this->assertSame(FileComparison::FORMAT, FileComparison::compare($a, $b, 'php'));
+        // Un import de más no es formato, ni otro namespace.
+        $this->assertSame(FileComparison::DIFFERENT, FileComparison::compare($a, str_replace("use B\\Two;\n", '', $b), 'php'));
+        $this->assertSame(FileComparison::DIFFERENT, FileComparison::compare($a, str_replace('namespace Acme;', 'namespace Otro;', $b), 'php'));
+        // Un import agrupado termina en su `;`, no en la llave.
+        $grouped = "<?php\nuse A\\{One, Two};\nuse B\\Three;\nclass X {}\n";
+        $this->assertSame(FileComparison::FORMAT, FileComparison::compare($grouped, "<?php\nuse B\\Three;\nuse A\\{One, Two};\nclass X {}\n", 'php'));
+        // Lo que va después de la cabecera no se reordena: ni dos sentencias ni dos imports tardíos.
+        $this->assertSame(FileComparison::DIFFERENT, FileComparison::compare("<?php\nuse A;\na();\nb();\n", "<?php\nuse A;\nb();\na();\n", 'php'));
+        $this->assertSame(FileComparison::DIFFERENT, FileComparison::compare("<?php\na();\nuse B;\nuse A;\n", "<?php\na();\nuse A;\nuse B;\n", 'php'));
+        // `USE` en mayúsculas es el mismo import.
+        $this->assertSame(FileComparison::FORMAT, FileComparison::compare("<?php\nUSE B;\nuse A;\nclass X {}\n", "<?php\nuse A;\nUSE B;\nclass X {}\n", 'php'));
+    }
+
+    public function test_un_json_se_compara_por_su_valor_hasta_el_fondo(): void
+    {
+        // El orden de las claves no cambia el valor, tampoco dentro de un objeto anidado o de una lista.
+        $this->assertSame(FileComparison::FORMAT, FileComparison::compare('{"a": {"y": 1, "x": [{"q": 1, "p": 2}]}}', '{"a": {"x": [{"p": 2, "q": 1}], "y": 1}}', 'json'));
+        $this->assertSame(FileComparison::DIFFERENT, FileComparison::compare('{"a": {"y": 1, "x": 2}}', '{"a": {"y": 2, "x": 1}}', 'json'));
+        // Un número no es su texto, ni una lista la misma con otro orden.
+        $this->assertSame(FileComparison::DIFFERENT, FileComparison::compare('{"a": 1}', '{"a": "1"}', 'json'));
+        $this->assertSame(FileComparison::DIFFERENT, FileComparison::compare('{"a": [{"p": 1}, {"p": 2}]}', '{"a": [{"p": 2}, {"p": 1}]}', 'json'));
+        // Un escalar es un valor: `null` con espacios alrededor es `null`.
+        $this->assertSame(FileComparison::FORMAT, FileComparison::compare("\nnull\n", 'null', 'json'));
+        $this->assertSame(FileComparison::FORMAT, FileComparison::compare(' 7 ', '7', 'json'));
+        $this->assertSame(FileComparison::DIFFERENT, FileComparison::compare('null', '0', 'json'));
+        $this->assertSame(FileComparison::DIFFERENT, FileComparison::compare('null', 'nul', 'json'));
+    }
+
+    public function test_el_tipo_de_comparacion_lo_da_la_extension(): void
+    {
+        $this->assertSame('php', FileComparison::kindOf('src/Models/Post.php'));
+        $this->assertSame('php', FileComparison::kindOf('LEGACY.PHP'));
+        $this->assertSame('json', FileComparison::kindOf('composer.JSON'));
+        $this->assertSame('text', FileComparison::kindOf('resources/views/post.blade.php.bak'));
+        $this->assertSame('text', FileComparison::kindOf('Makefile'));
+        $this->assertSame('text', FileComparison::kindOf('php'));
+
+        $directory = sys_get_temp_dir().'/larapack-compare-'.bin2hex(random_bytes(4));
+        mkdir($directory);
+
+        try {
+            file_put_contents($directory.'/a.php', "<?php\nreturn [1,];\n");
+            file_put_contents($directory.'/b.php', "<?php\r\nreturn [1];\r\n");
+            file_put_contents($directory.'/a.json', '{"a": 1, "b": 2}');
+            file_put_contents($directory.'/b.json', '{"b": 2, "a": 1}');
+            file_put_contents($directory.'/a.txt', '{"a": 1, "b": 2}');
+            file_put_contents($directory.'/b.txt', '{"b": 2, "a": 1}');
+
+            $this->assertSame(FileComparison::FORMAT, FileComparison::compareFiles($directory.'/a.php', $directory.'/b.php'));
+            $this->assertSame(FileComparison::IDENTICAL, FileComparison::compareFiles($directory.'/a.php', $directory.'/a.php'));
+            $this->assertSame(FileComparison::FORMAT, FileComparison::compareFiles($directory.'/a.json', $directory.'/b.json'));
+            // El tipo es el del archivo del proyecto: como texto, otro orden es otra línea.
+            $this->assertSame(FileComparison::DIFFERENT, FileComparison::compareFiles($directory.'/a.txt', $directory.'/b.json'));
+            $this->assertSame(FileComparison::FORMAT, FileComparison::compareFiles($directory.'/a.json', $directory.'/b.txt'));
+        } finally {
+            exec('rm -rf '.escapeshellarg($directory));
+        }
+    }
+
+    public function test_las_piezas_de_una_clase_con_metodos_abstractos_por_referencia_y_con_llaves_en_cadenas(): void
+    {
+        $code = <<<'PHP'
+            <?php
+
+            abstract class X
+            {
+                public const A = [1, 2,];
+
+                abstract protected function contract(array $rules = [],);
+
+                public function &reference(): array
+                {
+                    return $this->items;
+                }
+
+                public function Interpolated(string $name): string
+                {
+                    return "{$name} y ${name}: }";
+                }
+
+                public function last(): int
+                {
+                    return 1;
+                }
+            }
+
+            function outside()
+            {
+                return 0;
+            }
+            PHP;
+
+        $pieces = FileComparison::pieces($code);
+
+        // Un método por nombre, en minúsculas; el abstracto acaba en su `;`.
+        $this->assertSame(['imports', 'outside', 'method:contract', 'method:reference', 'method:interpolated', 'method:last'], array_keys($pieces));
+        $this->assertSame('function contract ( array $rules = [ ] ) ;', $pieces['method:contract']);
+        $this->assertSame('function & reference ( ) : array { return $this -> items ; }', $pieces['method:reference']);
+        $this->assertSame('function last ( ) : int { return 1 ; }', $pieces['method:last']);
+        $this->assertSame('', $pieces['imports']);
+        // Lo de fuera de los métodos, con sus modificadores y sin la coma final.
+        $this->assertSame('abstract class X { public const A = [ 1 , 2 ] ; abstract protected public public public } function outside ( ) { return 0 ; }', $pieces['outside']);
+
+        // Una llave dentro de una cadena no cierra el método: lo que cambia
+        // después sigue siendo del suyo.
+        $this->assertSame(['method:last'], FileComparison::members(str_replace('return 1;', 'return 2;', $code), $code));
+        $this->assertSame(['method:interpolated'], FileComparison::members(str_replace(' y ', ' o ', $code), $code));
+        $this->assertSame(['method:contract'], FileComparison::members(str_replace('array $rules', 'iterable $rules', $code), $code));
+        // Una función de fuera de la clase no es un método: es `outside`.
+        $this->assertSame(['outside'], FileComparison::members(str_replace('return 0;', 'return 9;', $code), $code));
+        // Quitar un método también lo nombra (y su modificador, fuera).
+        $this->assertSame(['method:last', 'outside'], FileComparison::members((string) preg_replace('/\s+public function last.*?\n    }\n/s', "\n", $code), $code));
+        // Los comentarios y el formato no son una diferencia de ninguna pieza.
+        $this->assertSame([], FileComparison::members(str_replace('return 1;', "// nota\n        return   1;", $code), $code));
+    }
+
+    public function test_las_piezas_de_un_trait_un_enum_y_una_interfaz(): void
+    {
+        foreach (['trait T', 'enum E', 'interface I', 'final class C'] as $declaration) {
+            $code = "<?php\n{$declaration}\n{\n    public function a() { return X::class; }\n\n    public function b() { return new class {}; }\n}\n";
+
+            $this->assertSame(['imports', 'outside', 'method:a', 'method:b'], array_keys(FileComparison::pieces($code)), $declaration);
+            $this->assertSame(['method:b'], FileComparison::members(str_replace('new class {}', 'new class { public $x; }', $code), $code), $declaration);
+        }
+
+        // Sin clase no hay métodos: todo es `outside`.
+        $this->assertSame(['imports', 'outside'], array_keys(FileComparison::pieces("<?php\nuse A;\nfunction f() {}\n")));
+        $this->assertSame('use A ;', FileComparison::pieces("<?php\nuse A;\nfunction f() {}\n")['imports']);
+        $this->assertSame(['imports', 'outside'], array_keys(FileComparison::pieces('')));
+    }
+
     public function test_los_huecos_de_cada_stub(): void
     {
         $this->assertTrue(Holes::onlyHoles('Requests/CreateRequest.txt', ['method:rules']));

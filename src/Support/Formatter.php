@@ -26,6 +26,13 @@ final class Formatter
     private const CHUNK = 40;
 
     /**
+     * La variable de entorno que dice cuántas Pint a la vez (jobs()).
+     */
+    public const JOBS_ENV = 'LARAPACK_PINT_JOBS';
+
+    private const MAX_JOBS = 16;
+
+    /**
      * La Pint con la que se formatea: su ruta, o null si no hay ninguna.
      */
     public static function pint(): ?string
@@ -133,15 +140,71 @@ final class Formatter
             fn (string $file): bool => $manifest->knows($file) && ! $manifest->wasCustomised($file)
         ));
 
-        foreach (array_chunk($files, self::CHUNK) as $chunk) {
-            // La configuración, explícita: la Pint del generador no está en el
-            // proyecto y no tiene por qué buscarla en él.
-            self::run([PHP_BINARY, $pint, ...($config === null ? [] : ['--config='.root_path().'/'.$config]), ...$chunk]);
-        }
+        // La configuración, explícita: la Pint del generador no está en el
+        // proyecto y no tiene por qué buscarla en él.
+        self::runAll(array_map(
+            fn (array $chunk): array => [PHP_BINARY, $pint, ...($config === null ? [] : ['--config='.root_path().'/'.$config]), ...$chunk],
+            array_chunk($files, self::CHUNK)
+        ), self::jobs());
 
         $manifest->rehash($tracked);
 
         return count($files);
+    }
+
+    /**
+     * Cuántas Pint a la vez: LARAPACK_PINT_JOBS, o una. Pint formatea cada
+     * archivo por separado y en un solo núcleo (unos 25 ms por archivo), así
+     * que repartir los trozos en varios procesos da el mismo resultado en
+     * menos tiempo. Por defecto sigue siendo una detrás de otra; quien lanza
+     * la generación sabiendo cuántos núcleos le tocan lo sube
+     * (Realign\Regeneration, para el contrato grande de un diagnóstico).
+     */
+    public static function jobs(): int
+    {
+        $jobs = getenv(self::JOBS_ENV);
+
+        return is_string($jobs) && ctype_digit($jobs) ? max(1, min(self::MAX_JOBS, (int) $jobs)) : 1;
+    }
+
+    /**
+     * @param  list<list<string>>  $commands
+     */
+    private static function runAll(array $commands, int $jobs): void
+    {
+        if ($jobs <= 1) {
+            foreach ($commands as $command) {
+                self::run($command);
+            }
+
+            return;
+        }
+
+        // La salida de Pint no se usa. Con varios procesos a la vez no puede
+        // ir a una tubería que nadie lee todavía: se llena y el hijo espera.
+        $null = PHP_OS_FAMILY === 'Windows' ? 'NUL' : '/dev/null';
+        $running = [];
+
+        while ($commands !== [] || $running !== []) {
+            while ($commands !== [] && count($running) < $jobs) {
+                $process = proc_open(array_shift($commands), [1 => ['file', $null, 'w'], 2 => ['file', $null, 'w']], $pipes, root_path());
+
+                if (is_resource($process)) {
+                    $running[] = $process;
+                }
+            }
+
+            foreach ($running as $index => $process) {
+                if (! proc_get_status($process)['running']) {
+                    proc_close($process);
+                    unset($running[$index]);
+                }
+            }
+
+            if ($running !== []) {
+                usleep(5_000);
+            }
+        }
     }
 
     /**

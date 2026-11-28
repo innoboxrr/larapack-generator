@@ -376,6 +376,9 @@ el manifiesto conoce se vuelve a anotar con el hash ya formateado
 (`Manifest::rehash`); si no, todo lo generado parecería editado. Sin ninguna
 Pint, se dice (`formatter.source: none`) y se sigue. La propia suite corre con
 `LARAPACK_PINT=off` para comparar la salida de las plantillas.
+`LARAPACK_PINT_JOBS` (`Formatter::jobs`; por omisión, 1) reparte los trozos en
+varios procesos: Pint formatea cada archivo por separado, así que el resultado
+es el mismo. Lo sube `Regeneration` para el contrato grande de un diagnóstico.
 
 ---
 
@@ -651,14 +654,48 @@ archivo generado igual al que el contrato fusionado genera de cero.
 [`RealignCommand`](src/Commands/RealignCommand.php) (`larapack:realign`) lleva
 de vuelta al contrato un proyecto que se desvió, sin reconstruirlo. La guía para
 quien lo ejecuta está en [docs/realign/README.md](docs/realign/README.md); aquí,
-cómo está hecho y dónde se extiende. Todo vive en `src/Support/Realign/`.
+cómo está hecho y dónde se extiende.
+
+Tiene tres capas, y conviene saber en cuál se está antes de tocar nada:
+
+| Capa | Dónde | Qué hace | Qué no hace |
+|---|---|---|---|
+| El comando | [`RealignCommand`](src/Commands/RealignCommand.php) | Valida lo común y entrega a la acción (`RealignCommand::HANDLERS`). | No conoce ninguna acción por dentro. |
+| Las acciones | `src/Commands/Realign/` | Leen la línea de órdenes, llaman al núcleo y lo cuentan en texto o en JSON. | No deciden nada del realineamiento. |
+| El núcleo | `src/Support/Realign/` | Diagnostica, planifica, comprueba y escribe. | No sabe de consola: se prueba sin ella. |
 
 Es **un comando con la acción como argumento** (`diagnose`, `plan`, `status`,
 `next`, `check`, `decide` y las operaciones), como `larapack:hand-rolled`: todas
 comparten la raíz, el estado, `--package` y `--format`, y así una operación
 nueva se enchufa sin registrar un comando. Cada acción declara qué opciones usa
 (`RealignActions::options`, que es también lo que dicen `--help` y
-`larapack:realign help <acción>`); una que no usa es un error, no un silencio.
+`larapack:realign help <acción>`) y cuántos argumentos admite
+(`RealignActions::ARGUMENTS`); lo que no usa es un error, no un silencio, y lo
+rechaza el comando antes de entregar.
+
+Cada acción es una clase sobre [`Action`](src/Commands/Realign/Action.php),
+que le da la entrada, la salida, la raíz, `--package` como rutas de ámbito y
+un error que en JSON lleva siempre `format_version` y `action`:
+
+| Acción | Clase | Se apoya en |
+|---|---|---|
+| `help` | [`HelpAction`](src/Commands/Realign/HelpAction.php) | `RealignActions::ALL` |
+| `diagnose` | [`DiagnoseAction`](src/Commands/Realign/DiagnoseAction.php) | `Diagnosis::run` |
+| `plan` | [`PlanAction`](src/Commands/Realign/PlanAction.php) | `Planner::build`, y lo que enseña `status` |
+| `status` | [`StatusAction`](src/Commands/Realign/StatusAction.php) | `Planner::effectiveStatus`, `Navigation::next`, `Navigation::awaitingOwner`, `Diagnosis::stale` |
+| `next`, `show` | [`NextAction`](src/Commands/Realign/NextAction.php), [`ShowAction`](src/Commands/Realign/ShowAction.php), sobre [`StepAction`](src/Commands/Realign/StepAction.php) | `Navigation::next`, `Navigation::meanwhile`, `Playbooks::render` |
+| `check` | [`CheckAction`](src/Commands/Realign/CheckAction.php) | `DoneWhen::check`, `ProjectTests::run`, `StepCheck::check` |
+| `decide` | [`DecideAction`](src/Commands/Realign/DecideAction.php) | `Planner::option`, `Navigation::undecided` |
+| `defer`, `undefer` | [`DeferAction`](src/Commands/Realign/DeferAction.php) | el campo `deferred` del paso |
+| `escalate` | [`EscalateAction`](src/Commands/Realign/EscalateAction.php) | `Navigation::escalate` |
+| `accept-untested` | [`AcceptUntestedAction`](src/Commands/Realign/AcceptUntestedAction.php) | `OwnerConfirmation::namedApprover`, `StepCheck::acceptUntested` |
+| `done` | [`DoneAction`](src/Commands/Realign/DoneAction.php) | `Completion::run` |
+| `brief` | [`BriefAction`](src/Commands/Realign/BriefAction.php) | `OwnerBrief::build` |
+| `playbook` | [`PlaybookAction`](src/Commands/Realign/PlaybookAction.php) | `Playbooks::describe` |
+| `adopt`, `apply`, `infer`, `except` | [`OperationAction`](src/Commands/Realign/OperationAction.php) | `OperationRunner::run` |
+
+`RealignCatalogTest` comprueba que cada acción de `RealignActions::ALL` tenga
+quien la haga y que esta sección nombre cada clase de las dos carpetas.
 
 **El diagnóstico** ([`Diagnosis`](src/Support/Realign/Diagnosis.php)):
 
@@ -702,6 +739,17 @@ nueva se enchufa sin registrar un comando. Cada acción declara qué opciones us
    `ControllerShape`, que nombra cada closure. La guía:
    [docs/realign/exceptions.md](docs/realign/exceptions.md).
 
+**Lo que cuesta** es Pint (unos 25 ms por archivo) y `verify`, y el módulo
+está hecho para no pagarlos dos veces. `--jobs` cuenta procesos, no sólo
+regeneraciones: `Regeneration` arranca primero el contrato más grande y le da
+a su Pint los huecos libres; `ScopeClassifier::classifyScopes` junta los
+archivos de todos los ámbitos que comparten Pint y configuración
+(`PintPass::equivalentMany`) en vez de lanzar una por ámbito;
+`ScopeClassifier::classifyFiles` hace lo mismo para los archivos de un paso
+(`check`), y `Diagnosis::verification` guarda el `verify` del diagnóstico para
+que `done` no lo repita. Quien añada un recorrido por archivo o por ámbito
+tiene que mirar si ya existe la versión por lotes.
+
 **El plan** ([`Planner`](src/Support/Realign/Planner.php)) agrupa por tipo de
 paso y ámbito —por archivo en `controller-shape`, por familia de plantilla en
 `edited-outside`—, ordena (lo que desbloquea, lo guiado del ámbito que más
@@ -710,7 +758,11 @@ planificar, conserva el estado de cada id (`Planner::build`). El catálogo de
 tipos, con su categoría, riesgo, forma de ejecutarse y orden, es
 [`StepTypes`](src/Support/Realign/StepTypes.php). El estado visible de un paso
 (`blocked`, `awaiting_decision`, `decided`) se calcula al leer
-(`Planner::effectiveStatus`): no se guarda nada que pueda desincronizarse.
+(`Planner::effectiveStatus`, con `Planner::blockedBy`): no se guarda nada que
+pueda desincronizarse. El plan es un array, y se lee siempre con las mismas
+funciones —`Planner::byId`, `Planner::stepsIn`, `Planner::indexOf`,
+`Planner::option`, `RealignState::requirePlan`—: nadie recorre `steps` por su
+cuenta.
 
 **Moverse por el plan** sin rehacer trabajo es
 [`Navigation`](src/Support/Realign/Navigation.php): qué decisiones condicionan
@@ -721,12 +773,18 @@ opción con la que lo guiado sigue valiendo), lo decidido por elemento
 elementos, `Navigation::narrow`), cuándo una decisión ya sólo espera al dueño
 (`Navigation::handedOver`) y el guiado que se le pasa como decisión
 (`Navigation::escalate`). Lo aplazado (`defer`) es un campo del paso, no un
-estado: `next` lo salta y `status` lo lista.
+estado: `next` lo salta y `status` lo lista. De ahí sale qué paso toca
+(`Navigation::next`), con qué seguir mientras el dueño decide
+(`Navigation::meanwhile`), qué decisiones detienen lo guiado
+(`Navigation::awaitingOwner`) y qué excepciones siguen sin aprobar
+(`Navigation::pendingExceptions`: una sola lista para `done` y para `brief`).
 
 **`check`** corre el `done_when` del paso con
 [`DoneWhen`](src/Support/Realign/DoneWhen.php): `verify` acotado, la misma
 clasificación, el código sin gestionar o la validación del contrato. Hacer un
-paso no lo marca hecho; sólo esto. Un paso que cambia comportamiento
+paso no lo marca hecho; sólo esto, y lo que el resultado hace con el estado
+del paso —hecho, `untested`, reabierto— lo decide
+[`StepCheck`](src/Support/Realign/StepCheck.php), sin escribir nada. Un paso que cambia comportamiento
 (`StepTypes::changesBehaviour`: `StepTypes::BEHAVIOUR` y
 `StepTypes::BEHAVIOUR_OPTIONS`) necesita además su prueba: la que declara
 quien la corrió (`--tested`) o la orden de `.larapack/realign/config.json`, que
@@ -745,6 +803,12 @@ un paso `untested` que el dueño no aceptó, una excepción sin aprobar, o un er
 local) o de `verify --strict` (`ProjectVerification`) en cualquier ámbito.
 Lo declarado fuera (un `no-contract` decidido) va en `declared`. La guía:
 [docs/realign/verify.md](docs/realign/verify.md#cuándo-se-termina).
+
+**`brief`** ([`OwnerBrief`](src/Support/Realign/OwnerBrief.php)) junta lo que
+espera al dueño —cada decisión con su evidencia, sus opciones y una
+recomendación, y cada excepción de `Navigation::pendingExceptions` con su
+orden de aprobación— y lo escribe en `brief.md` y `brief.json`. No decide
+ni aprueba.
 
 **`next`** rellena el playbook de un paso guiado con
 [`Playbooks`](src/Support/Realign/Playbooks.php)
@@ -766,7 +830,11 @@ fuera de `.larapack/realign/` salvo `--allow-dirty`, pasa `--dry-run` y las
 `--option`, y anota en la historia del paso lo que hizo. La operación recibe un
 [`OperationContext`](src/Support/Realign/Operations/OperationContext.php) y
 devuelve un [`OperationResult`](src/Support/Realign/Operations/OperationResult.php)
-con `fixed`, `skipped` y `unchanged`, como `fix`.
+con `fixed`, `skipped` y `unchanged`, como `fix`. El `--dry-run` de `apply` no
+es una rama aparte de cada corrección:
+[`Simulation`](src/Support/Realign/Operations/Simulation.php) corre la
+operación de verdad sobre una copia del proyecto y devuelve lo que hizo, para
+que la simulación y la corrida no puedan contar cosas distintas.
 
 Las dos que escriben código o manifiesto no se fían del informe:
 [`ScopeReference`](src/Support/Realign/Operations/ScopeReference.php) les da lo
@@ -796,6 +864,10 @@ a clasificar cada archivo justo antes de tocarlo.
   [`Changes`](src/Support/Realign/Apply/Changes.php): los archivos de un
   cambio se escriben juntos, se pasan por Pint si se pide y, si uno no
   parsea, se devuelven todos a como estaban.
+- [`ExceptOperation`](src/Support/Realign/Operations/ExceptOperation.php)
+  (`except`) no toca código: pide en `exceptions.json` una excepción por
+  elemento del paso, con su razón y su huella (`Exceptions`,
+  `ExceptionTargets`). Aprobarla es del dueño.
 
 **Para añadir una corrección determinista**: el tipo en `StepTypes` (categoría
 `deterministic`, `run` = `larapack:realign apply {id}`, su riesgo y, si salta
@@ -812,17 +884,46 @@ toma el esquema de `SchemaHistory` —el mismo lector que decide qué alterar,
 sobre las migraciones de TODOS los ámbitos, porque comparten base—, los
 modelos de [`ModelSource`](src/Support/Realign/Infer/ModelSource.php) (con las
 relaciones de sus traits) y las rutas conservables de
-[`RouteSource`](src/Support/Realign/Infer/RouteSource.php), y devuelve el
+[`RouteSource`](src/Support/Realign/Infer/RouteSource.php) (los dos leen
+tokens con [`SourceTokens`](src/Support/Realign/Infer/SourceTokens.php), sin
+cargar código), y devuelve el
 borrador con su procedencia, lo no inferido, lo perdido y las decisiones.
 [`ContractComparison`](src/Support/Realign/Infer/ContractComparison.php) lo
 mide contra el contrato que exista. Escribe `laraimport.inferred.json` y
 `.larapack/realign/infer/<ámbito>.json`; nunca `laraimport.json` si ya existe
 (guía: [docs/realign/infer.md](docs/realign/infer.md)).
 
-**El estado** ([`RealignState`](src/Support/Realign/RealignState.php)) es
-`report.json` y `plan.json`, con `RealignState::FORMAT_VERSION`, escritos de
-forma atómica; la caché queda fuera de git por el `.gitignore` del directorio.
-Lo mismo lleva toda salida `--format=json`.
+**El estado** ([`RealignState`](src/Support/Realign/RealignState.php)) vive en
+`.larapack/realign/` y se versiona con el proyecto, salvo la caché (el
+`.gitignore` del directorio):
+
+| Archivo | Lo escribe | Lo lee |
+|---|---|---|
+| `report.json` | `Diagnosis::run` | `plan`, `status`, `brief` |
+| `plan.json` | `Planner::build` y cada acción que cambia un paso | todas |
+| `exceptions.json` | `ExceptOperation` | `Exceptions` |
+| `config.json` | una persona | `ProjectTests` |
+| `brief.md`, `brief.json` | `OwnerBrief::save` | el dueño; no se releen |
+| `infer/<ámbito>.json` | `InferOperation` | quien revisa el borrador; no se releen |
+| `cache/` | `Regeneration` | `ScopeClassifier`, `ScopeReference` |
+
+Todos los JSON llevan `format_version` (`RealignState::FORMAT_VERSION`; el de
+`infer`, `InferOperation::FORMAT_VERSION`), y lo mismo toda salida
+`--format=json`. Se sube cuando cambia algo que un consumidor lee; añadir una
+clave no la sube. Lo que se lee pasa por `RealignState::assertReadable`: uno
+de una versión posterior, o sin versión, es un error que dice cuál y qué
+hacer, no datos a medio entender. El manifiesto tiene su propia versión
+(`Manifest::VERSION`): uno posterior no se reescribe, y `Diagnosis::run` no
+clasifica con él. `RealignFormatVersionTest` lo prueba archivo por archivo.
+Report y plan se escriben de forma atómica.
+
+**El estado estático**, que es lo que hace frágil una prueba, es poco y está
+contado: `ScopeReference` guarda la referencia de cada ámbito durante una
+corrida (`ScopeReference::forget`), `ConcernMove` la lista de PHP del proyecto
+(`ConcernMove::reset`), `Operations` las implementaciones registradas por
+encima de la convención (`Operations::reset`) y `OwnerConfirmation` la
+terminal (`OwnerConfirmation::useTerminal`). `tests/TestCase.php` los limpia
+todos al terminar cada prueba; uno nuevo va también ahí.
 
 ---
 
@@ -868,6 +969,7 @@ Las piezas comunes van en traits de `src/Commands/Concerns/`:
 | [`TargetsProject`](src/Commands/Concerns/TargetsProject.php) | `--root`, que fija `ProjectRoot`. |
 | [`ReportsGeneration`](src/Commands/Concerns/ReportsGeneration.php) | Lo de un generador: `--root`, `--force`, `--dry-run`, `--format`, el informe y el formateo con Pint. |
 | [`WritesJson`](src/Commands/Concerns/WritesJson.php) | `--format=json` como un único documento, también cuando algo lanza: `{"ok": false, "error": "..."}`. |
+| [`FormatsJson`](src/Commands/Concerns/FormatsJson.php) | Lo de `WritesJson` que no necesita ser un comando: lo usan también las acciones de `larapack:realign`. |
 
 `CommandRegistrationTest`, `ArtisanRegistrationTest` y `JsonOutputTest`
 cubren que cada clase se registre, viva en `larapack:`, no pise un `make:*` de
@@ -981,7 +1083,7 @@ que rompe está en [CONTRIBUTING](CONTRIBUTING.md#qué-cuenta-como-cambio-que-ro
 |---|---|
 | [`builder`](builder) | El binario: descubre los comandos y añade los alias históricos. |
 | [`schema/`](schema/) | El esquema del laraimport. |
-| [`src/Commands/`](src/Commands/) | Un archivo por comando; `Concerns/` con lo común. |
+| [`src/Commands/`](src/Commands/) | Un archivo por comando; `Concerns/` con lo común; `Realign/` con una clase por acción de `larapack:realign`. |
 | [`src/Support/Import/`](src/Support/Import/) | Esquema, valores por omisión, validación semántica, documento resuelto, acciones y endpoints. |
 | [`src/Support/`](src/Support/) | El resto del núcleo: estado de ejecución, manifiesto, formateo, `verify`, guardia, `fix`, `audit`. |
 | [`src/Support/Realign/`](src/Support/Realign/) | `larapack:realign`: ámbitos, regeneración de referencia, clasificación, plan, comprobaciones, playbooks y, en `Operations/`, el contrato de las operaciones que escriben. |
@@ -1094,7 +1196,7 @@ cambia algo que ve quien usa el generador.
    arquitectura» del README.
 8. Si vive en una de las piezas de `infection.json5`, corre su mutación
    ([CONTRIBUTING](CONTRIBUTING.md#las-pruebas-de-mutación)): el trabajo
-   «Mutación» de la CI no deja bajar el MSI de las ocho juntas ni el de cada
+   «Mutación» de la CI no deja bajar el MSI del conjunto ni el de cada
    una por debajo de su suelo (`.github/mutation-floors.json`), y lista los
    mutantes que escapan y no están en `.github/mutation-survivors.json`.
 
@@ -1124,16 +1226,30 @@ cambia algo que ve quien usa el generador.
   marcador que no existe, o que se nombre y no exista, falla la prueba.
 - **Una operación que escribe** (`adopt`, `apply`, `infer`, `except`): la
   clase `src/Support/Realign/Operations/<Acción>Operation.php` que implemente
-  [`RealignOperation`](src/Support/Realign/Operations/RealignOperation.php).
-  Nada más: `Operations::for` la descubre por el nombre y
-  `OperationRunner::run` hace lo común. Su prueba, como
+  [`RealignOperation`](src/Support/Realign/Operations/RealignOperation.php),
+  su nombre en `Operations::ACTIONS` y su descripción en
+  `RealignActions::ALL` y `RealignActions::ARGUMENTS`. No lleva clase en
+  `src/Commands/Realign/`: `Operations::for` la descubre por el nombre,
+  `OperationAction` la atiende y `OperationRunner::run` hace lo común. Si su
+  `--dry-run` tiene que contar lo mismo que la corrida, en
+  `Simulation::ACTIONS`. Su prueba, como
   `RealignOperationsTest`, sobre un proyecto con git.
 - **Un hueco nuevo** del README va también a
   [`Holes`](src/Support/Realign/Holes.php), o el diagnóstico verá su
   edición como «fuera de los huecos».
 - **Un `kind` de comprobación**: en `DoneWhen::check` y `DoneWhen::KINDS`, y
   en la guía.
-- **Una acción, una opción o una clave de `--option`**: en
+- **Una acción**: su clase en `src/Commands/Realign/` sobre
+  [`Action`](src/Commands/Realign/Action.php), su entrada en
+  `RealignCommand::HANDLERS`, su descripción en `RealignActions::ALL` y
+  cuántos argumentos admite en `RealignActions::ARGUMENTS`. Lo que decida —no
+  lo que imprima— va al núcleo (`src/Support/Realign/`), donde se prueba sin
+  consola, como `StepCheck`. Si cambia un paso, lo lee con `Planner::indexOf`
+  y guarda el plan entero con `RealignState::savePlan`.
+- **Un archivo de estado nuevo**: con `format_version`, leído a través de
+  `RealignState::assertReadable`, y su fila en la tabla de
+  [El estado](#realign) y en `RealignFormatVersionTest`.
+- **Una opción o una clave de `--option`**: en
   [`RealignActions`](src/Support/Realign/RealignActions.php) (`RealignActions::ALL`: su resumen,
   su uso, lo que escribe, las opciones que acepta, las claves que lee y su
   guía). De ahí salen `--help`, `larapack:realign help <acción>`, las

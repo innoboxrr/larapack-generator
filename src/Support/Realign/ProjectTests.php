@@ -57,7 +57,13 @@ final class ProjectTests
      */
     public function run(string $command): array
     {
-        $process = proc_open($command.' 2>&1', [0 => ['pipe', 'r'], 1 => ['pipe', 'w']], $pipes, $this->root);
+        // La salida de errores, junto a la estándar, de toda la orden: la shell
+        // se la redirige a sí misma antes de correrla. Con un ` 2>&1` añadido
+        // al final, en `a && b` sólo se juntaba la de `b`, y los errores de
+        // `a` se iban a la terminal de quien corría `check` en vez de a lo que
+        // se guarda y se enseña. En Windows (cmd no tiene `exec`) sigue así.
+        $whole = PHP_OS_FAMILY === 'Windows' ? $command.' 2>&1' : 'exec 2>&1; '.$command;
+        $process = proc_open($whole, [0 => ['pipe', 'r'], 1 => ['pipe', 'w']], $pipes, $this->root);
 
         if (! is_resource($process)) {
             throw new RuntimeException("No se pudo ejecutar la orden de pruebas del proyecto: {$command}");

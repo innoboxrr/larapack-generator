@@ -57,6 +57,13 @@ final class ProjectSources
     private array $autoload = [];
 
     /**
+     * Los prefijos de $autoload, del más largo al más corto (locate()).
+     *
+     * @var list<string>|null
+     */
+    private ?array $prefixes = null;
+
+    /**
      * @var list<string>
      */
     private array $sources = [];
@@ -256,13 +263,17 @@ final class ProjectSources
     public function locate(string $class): ?string
     {
         $autoload = $this->autoload();
-        $prefixes = array_keys($autoload);
 
-        // El prefijo más largo primero: `App\Models\` gana a `App\`.
-        usort($prefixes, fn (string $a, string $b): int => strlen($b) <=> strlen($a));
+        // Ordenados una vez, no en cada búsqueda: verify busca la clase de
+        // cada request de cada controlador.
+        if ($this->prefixes === null) {
+            $this->prefixes = array_map('strval', array_keys($autoload));
 
-        foreach ($prefixes as $prefix) {
-            $prefix = (string) $prefix;
+            // El prefijo más largo primero: `App\Models\` gana a `App\`.
+            usort($this->prefixes, fn (string $a, string $b): int => strlen($b) <=> strlen($a));
+        }
+
+        foreach ($this->prefixes as $prefix) {
 
             if (! self::hasPrefix($class, $prefix)) {
                 continue;

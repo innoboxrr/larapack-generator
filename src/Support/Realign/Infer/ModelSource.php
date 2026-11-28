@@ -38,8 +38,6 @@ final class ModelSource
      */
     public const LISTS = ['fillable', 'guarded', 'hidden', 'creatable', 'updatable', 'export_cols', 'loadable_relations'];
 
-    private const IGNORED = [T_WHITESPACE, T_COMMENT, T_DOC_COMMENT, T_OPEN_TAG, T_CLOSE_TAG, T_INLINE_HTML];
-
     /**
      * Lee los modelos de un archivo: normalmente uno, o ninguno si el archivo
      * no declara una clase concreta (un trait, una interfaz, un enum).
@@ -56,7 +54,7 @@ final class ModelSource
                 continue;
             }
 
-            $tokens = self::tokens(Files::read($file), $class['line']);
+            $tokens = SourceTokens::of(Files::read($file), $class['line']);
             $info = [
                 'file' => $file,
                 'fqcn' => $class['fqcn'],
@@ -197,35 +195,6 @@ final class ModelSource
     }
 
     /**
-     * Los tokens del archivo desde la clase, sin espacios ni comentarios.
-     *
-     * @return list<Token>
-     */
-    private static function tokens(string $code, int $fromLine): array
-    {
-        $tokens = [];
-        $line = 1;
-
-        foreach (token_get_all($code) as $token) {
-            if (is_array($token)) {
-                $line = $token[2] + substr_count($token[1], "\n");
-
-                if (! in_array($token[0], self::IGNORED, true) && $token[2] >= $fromLine) {
-                    $tokens[] = [$token[0], $token[1], $token[2]];
-                }
-
-                continue;
-            }
-
-            if ($line >= $fromLine) {
-                $tokens[] = [$token, $token, $line];
-            }
-        }
-
-        return $tokens;
-    }
-
-    /**
      * `protected $table = 'x';`, `protected $fillable = [...]`, `protected
      * $casts = [...]`: las propiedades de la clase que se leen.
      *
@@ -311,7 +280,7 @@ final class ModelSource
             return null;
         }
 
-        return self::unquote($token[1]);
+        return SourceTokens::unquote($token[1]);
     }
 
     /**
@@ -386,7 +355,7 @@ final class ModelSource
     private static function scalar(array $tokens, ?PhpOutline $outline): ?string
     {
         if (count($tokens) === 1 && PhpOutline::is($tokens[0], T_CONSTANT_ENCAPSED_STRING)) {
-            return self::unquote((string) $tokens[0][1]);
+            return SourceTokens::unquote((string) $tokens[0][1]);
         }
 
         if (count($tokens) === 3 && PhpOutline::is($tokens[1], T_DOUBLE_COLON) && strtolower((string) $tokens[2][1]) === 'class'
@@ -474,12 +443,5 @@ final class ModelSource
         }
 
         return $related === null ? null : [$type, $related];
-    }
-
-    private static function unquote(string $literal): string
-    {
-        $inner = substr($literal, 1, -1);
-
-        return $literal[0] === "'" ? str_replace(["\\'", '\\\\'], ["'", '\\'], $inner) : stripcslashes($inner);
     }
 }

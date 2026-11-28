@@ -70,21 +70,13 @@ final class Completion
     public function run(array $packages = [], array $roots = [], array $paths = []): array
     {
         $state = new RealignState($this->root);
-        $report = (new Diagnosis($this->root, $this->jobs, $this->useCache))->run($packages);
+        $diagnosis = new Diagnosis($this->root, $this->jobs, $this->useCache);
+        $report = $diagnosis->run($packages);
         $plan = Planner::build($report, $state->plan());
         $state->savePlan($plan);
 
-        $steps = array_values(array_filter(
-            (array) $plan['steps'],
-            fn (mixed $step): bool => is_array($step) && ($paths === [] || in_array($step['scope']['path'] ?? null, $paths, true))
-        ));
-        $byId = [];
-
-        foreach ((array) $plan['steps'] as $step) {
-            if (is_array($step) && is_string($step['id'] ?? null)) {
-                $byId[$step['id']] = $step;
-            }
-        }
+        $steps = Planner::stepsIn($plan, $paths);
+        $byId = Planner::byId($plan);
 
         $missing = array_fill_keys(self::KEYS, []);
         $declaredOut = [];
@@ -137,7 +129,7 @@ final class Completion
             $missing['validate'][] = $finding;
         }
 
-        foreach ($this->verify($roots) as $finding) {
+        foreach ($this->verify($roots, $diagnosis) as $finding) {
             $scope = (string) $finding['scope'];
 
             if ($finding['check'] === 'empty-manifest' && isset($declaredOut[$scope])) {
@@ -201,38 +193,10 @@ final class Completion
      */
     private function exceptions(array $paths, array $byId = []): array
     {
-        $exceptions = Exceptions::forRoot($this->root);
-        $rows = [];
-
-        foreach ($exceptions->requests() as $target => $request) {
-            if ($paths !== [] && ! in_array($request['scope'], $paths, true)) {
-                continue;
-            }
-
-            // Pedida bajo una decisión que después cambió para ese elemento:
-            // ya no se pide (Navigation::stillRequested()).
-            $step = $byId[$request['step']] ?? null;
-
-            if (is_array($step) && ! Navigation::stillRequested($step, $request)) {
-                continue;
-            }
-
-            $status = $exceptions->status((string) $target);
-
-            if ($status !== Exceptions::APPROVED) {
-                $rows[(string) $target] = ['target' => (string) $target, 'step' => $request['step'], 'scope' => $request['scope'], 'status' => $status];
-            }
-        }
-
-        // Las aprobadas sin solicitud (las de antes, o de otra rama) también
-        // caducan. Con --package no se sabe de qué ámbito son: no se miran.
-        foreach ($paths === [] ? $exceptions->all() : [] as $approval) {
-            if ($approval['status'] !== Exceptions::APPROVED && ! isset($rows[$approval['target']])) {
-                $rows[$approval['target']] = ['target' => $approval['target'], 'step' => null, 'scope' => null, 'status' => $approval['status']];
-            }
-        }
-
-        return array_values($rows);
+        return array_map(
+            fn (array $pending): array => ['target' => $pending['target'], 'step' => $pending['request']['step'] ?? null, 'scope' => $pending['request']['scope'] ?? null, 'status' => $pending['status']],
+            Navigation::pendingExceptions(Exceptions::forRoot($this->root), $paths, $byId)
+        );
     }
 
     /**
@@ -253,11 +217,15 @@ final class Completion
      * ámbito (`scope`).
      *
      * @param  list<string>  $roots
+     * @param  Diagnosis  $diagnosis  el que se acaba de correr
      * @return list<array<string, mixed>>
      */
-    private function verify(array $roots): array
+    private function verify(array $roots, Diagnosis $diagnosis): array
     {
-        ['findings' => $findings, 'summary' => $summary] = (new ProjectVerification($this->root, $roots))->run();
+        // El diagnóstico acaba de correr este mismo verify sobre el mismo
+        // disco (entre medias sólo se escribió el plan, que verify no lee):
+        // se usa el suyo en vez de correrlo otra vez.
+        ['findings' => $findings, 'summary' => $summary] = $diagnosis->verification($roots) ?? (new ProjectVerification($this->root, $roots))->run();
         $pathOf = [];
 
         foreach ($summary as $row) {

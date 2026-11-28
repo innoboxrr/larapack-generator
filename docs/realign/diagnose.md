@@ -43,7 +43,9 @@ nada que simular, y pasarlo es un error.
    versión **actual** del generador, la Pint del proyecto y su `pint.json`: un
    `larapack:import` en un directorio vacío con el `composer.json`, el
    `laraimport.json` y el `pint.json` del ámbito. Nunca regenera encima del
-   proyecto. Los ámbitos se regeneran en procesos hijos, `--jobs` a la vez.
+   proyecto. Los ámbitos se regeneran en procesos hijos, `--jobs` a la vez, el
+   contrato más grande primero; los huecos que no ocupa otra regeneración los
+   usa la Pint de cada hijo (`LARAPACK_PINT_JOBS`).
 3. **Compara cada archivo** con lo regenerado y lo clasifica (abajo), mirando
    también el manifiesto: si su hash es el registrado (nadie lo editó), qué
    versión lo escribió, si está registrado con otra ruta.
@@ -270,8 +272,11 @@ herramientas (una migración nueva, un cambio en un servicio).
   caché; un proyecto de 3 550 archivos, 128 s; un proyecto sin contrato, 3 s.
 - **La caché ocupa lo que lo generado** (el tamaño de los archivos de LaraPack
   de cada ámbito). Se puede borrar sin perder nada: sólo cuesta tiempo.
-- `--jobs` más alto ayuda en un monorepo hasta el número de núcleos; cada
-  proceso hijo es un `larapack:import` completo.
+- `--jobs` más alto ayuda hasta el número de núcleos; cada proceso hijo es un
+  `larapack:import` completo, y casi todo lo que tarda es Pint (unos 25 ms por
+  archivo PHP, en un núcleo por proceso). Los mismos `--jobs` procesos se usan
+  después para pasar por Pint, de una vez para todos los ámbitos, los archivos
+  que siguen distintos por tokens.
 
 ## Limitaciones
 

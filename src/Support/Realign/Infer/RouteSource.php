@@ -40,8 +40,6 @@ final class RouteSource
 {
     private const VERBS = ['get', 'post', 'put', 'patch', 'delete'];
 
-    private const IGNORED = [T_WHITESPACE, T_COMMENT, T_DOC_COMMENT, T_OPEN_TAG, T_CLOSE_TAG, T_INLINE_HTML];
-
     /**
      * Los middleware que ya pone LaraPack o que deciden `public`: no se
      * copian a `middleware`.
@@ -72,7 +70,7 @@ final class RouteSource
 
             [$prefix, $as] = $prefixes[$relative];
             $this->outline = PhpOutline::ofFile($this->directory.'/'.$relative);
-            $tokens = self::tokens(Files::read($this->directory.'/'.$relative));
+            $tokens = SourceTokens::of(Files::read($this->directory.'/'.$relative));
             $this->walk($tokens, 0, count($tokens), ['prefix' => $prefix, 'as' => $as, 'middleware' => [], 'controller' => null], $relative, $routes);
         }
 
@@ -346,7 +344,7 @@ final class RouteSource
         ];
 
         foreach ($providers as $provider) {
-            $tokens = self::tokens(Files::read($provider));
+            $tokens = SourceTokens::of(Files::read($provider));
             $count = count($tokens);
             $variables = self::assignments($tokens);
 
@@ -434,7 +432,7 @@ final class RouteSource
 
         foreach ($tokens as $token) {
             if (PhpOutline::is($token, T_CONSTANT_ENCAPSED_STRING)) {
-                $value .= self::unquote((string) $token[1]);
+                $value .= SourceTokens::unquote((string) $token[1]);
                 $any = true;
             } elseif (PhpOutline::is($token, T_VARIABLE) && isset($variables[$token[1]])) {
                 $value .= $variables[$token[1]];
@@ -676,7 +674,7 @@ final class RouteSource
         $first = PhpOutline::splitTopLevel($tokens)[0] ?? [];
 
         if (count($first) === 1 && PhpOutline::is($first[0], T_CONSTANT_ENCAPSED_STRING)) {
-            return self::unquote((string) $first[0][1]);
+            return SourceTokens::unquote((string) $first[0][1]);
         }
 
         return null;
@@ -694,7 +692,7 @@ final class RouteSource
 
         foreach ($tokens as $token) {
             if (PhpOutline::is($token, T_CONSTANT_ENCAPSED_STRING)) {
-                $strings[] = self::unquote((string) $token[1]);
+                $strings[] = SourceTokens::unquote((string) $token[1]);
             } elseif (PhpOutline::is($token, T_STRING, T_NAME_QUALIFIED, T_NAME_FULLY_QUALIFIED) && strtolower((string) $token[1]) !== 'class') {
                 $strings[] = '\\'.$token[1];
             }
@@ -729,37 +727,5 @@ final class RouteSource
         $position = strrpos($class, '\\');
 
         return $position === false ? $class : substr($class, $position + 1);
-    }
-
-    /**
-     * @return list<Token>
-     */
-    private static function tokens(string $code): array
-    {
-        $tokens = [];
-        $line = 1;
-
-        foreach (token_get_all($code) as $token) {
-            if (is_array($token)) {
-                $line = $token[2] + substr_count($token[1], "\n");
-
-                if (! in_array($token[0], self::IGNORED, true)) {
-                    $tokens[] = [$token[0], $token[1], $token[2]];
-                }
-
-                continue;
-            }
-
-            $tokens[] = [$token, $token, $line];
-        }
-
-        return $tokens;
-    }
-
-    private static function unquote(string $literal): string
-    {
-        $inner = substr($literal, 1, -1);
-
-        return $literal[0] === "'" ? str_replace(["\\'", '\\\\'], ["'", '\\'], $inner) : stripcslashes($inner);
     }
 }

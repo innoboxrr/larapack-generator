@@ -9,6 +9,7 @@ use Innoboxrr\LarapackGenerator\Support\ProjectSources;
 use Innoboxrr\LarapackGenerator\Support\ProjectVerification;
 use Innoboxrr\LarapackGenerator\Support\Realign\Apply\ForeignKeyPins;
 use Innoboxrr\LarapackGenerator\Support\Verifier;
+use RuntimeException;
 
 /**
  * `larapack:realign diagnose`: dónde está el proyecto respecto del contrato.
@@ -34,10 +35,22 @@ use Innoboxrr\LarapackGenerator\Support\Verifier;
  * @phpstan-import-type Scope from Scopes
  * @phpstan-import-type Entry from ScopeClassifier
  * @phpstan-import-type Unmanaged from ScopeClassifier
+ * @phpstan-import-type ScopedFinding from ProjectVerification
+ * @phpstan-import-type Scope from ProjectVerification as VerifiedScope
+ *
+ * @phpstan-type VerificationResult array{findings: list<ScopedFinding>, summary: list<VerifiedScope>, exceptions: list<array{target: string, reason: string, fingerprint: string|null, status: string}>}
  */
 final class Diagnosis
 {
     private RealignState $state;
+
+    /**
+     * El `verify` del último run(), tal cual lo dio ProjectVerification, y
+     * las raíces a las que se acotó.
+     *
+     * @var array{roots: list<string>, result: VerificationResult}|null
+     */
+    private ?array $verification = null;
 
     public function __construct(private readonly string $root, private readonly int $jobs = 1, private readonly bool $useCache = true)
     {
@@ -53,6 +66,18 @@ final class Diagnosis
         $scopes = new Scopes($this->root);
         $selected = $scopes->all($packages);
         $exceptions = new Exceptions($this->state);
+
+        // Un manifiesto de un formato posterior se lee sin error (Manifest
+        // sólo se niega a reescribirlo), pero clasificar con él sería
+        // adivinar qué significan sus entradas: se dice antes de regenerar.
+        foreach ($selected as $scope) {
+            $version = $scope['manifest'] ? (new Manifest($scope['root']))->formatVersion() : Manifest::VERSION;
+
+            if ($version > Manifest::VERSION) {
+                throw new RuntimeException(($scope['path'] === '.' ? '' : $scope['path'].'/').".larapack/manifest.json está en la versión {$version} del formato, y este LaraPack entiende hasta la ".Manifest::VERSION.': lo escribió una versión posterior. Actualiza innoboxrr/larapack-generator antes de diagnosticar.');
+            }
+        }
+
         $outcomes = (new Regeneration($this->state, $this->jobs, $this->useCache))->run($selected);
         $now = gmdate('c');
 
@@ -81,10 +106,21 @@ final class Diagnosis
             'out_of_scope' => array_filter((array) ($previous['out_of_scope'] ?? []), fn (mixed $scope, string|int $path): bool => ! in_array((string) $path, $done, true), ARRAY_FILTER_USE_BOTH),
         ];
 
+        $classifiers = [];
+
         foreach ($selected as $scope) {
             $outcome = $outcomes[$scope['path']] ?? null;
-            $classifier = new ScopeClassifier($scope, $this->root, $outcome !== null && $outcome['ok'] ? $outcome['directory'] : null, $exceptions);
-            $entries = $classifier->hasReference() ? $classifier->classifyAll() : [];
+            $classifiers[$scope['path']] = new ScopeClassifier($scope, $this->root, $outcome !== null && $outcome['ok'] ? $outcome['directory'] : null, $exceptions);
+        }
+
+        // Todos los ámbitos de una vez: la pasada de Pint es una para todos
+        // y no una por ámbito (en school-management son 82).
+        $classified = ScopeClassifier::classifyScopes(array_filter($classifiers, fn (ScopeClassifier $classifier): bool => $classifier->hasReference()), $this->jobs);
+
+        foreach ($selected as $scope) {
+            $outcome = $outcomes[$scope['path']] ?? null;
+            $classifier = $classifiers[$scope['path']];
+            $entries = $classified[$scope['path']] ?? [];
             $counts = array_fill_keys(FileClass::ALL, 0);
 
             foreach ($entries as $entry) {
@@ -157,6 +193,19 @@ final class Diagnosis
     }
 
     /**
+     * El `verify` que corrió el último run(), si se acotó a esas mismas
+     * raíces: `done` lo necesita entero justo después de diagnosticar, y
+     * correrlo otra vez sobre el mismo disco da lo mismo y tarda lo mismo.
+     *
+     * @param  list<string>  $roots  las de --package ya resueltas; vacío, todo el proyecto
+     * @return VerificationResult|null
+     */
+    public function verification(array $roots = []): ?array
+    {
+        return $this->verification !== null && $this->verification['roots'] === $roots ? $this->verification['result'] : null;
+    }
+
+    /**
      * Cómo se reparte `total`: lo que cumple (`conforming`: sin paso
      * pendiente —idéntico o igual salvo formato y ya registrado con su hash,
      * editado sólo en sus huecos, o con excepción aprobada—), lo que es
@@ -208,6 +257,28 @@ final class Diagnosis
     }
 
     /**
+     * Los ámbitos de un informe cuyo contrato o manifiesto cambió después
+     * de diagnosticarlos (fingerprint()): para ellos el informe está viejo.
+     *
+     * @param  array<string, mixed>|null  $report
+     * @return list<string> sus rutas de ámbito
+     */
+    public static function stale(?array $report, string $root): array
+    {
+        $stale = [];
+
+        foreach ((array) ($report['scopes'] ?? []) as $path => $scope) {
+            $directory = $path === '.' ? $root : $root.'/'.$path;
+
+            if (is_array($scope) && is_dir($directory) && ($scope['fingerprint'] ?? null) !== self::fingerprint($directory)) {
+                $stale[] = (string) $path;
+            }
+        }
+
+        return $stale;
+    }
+
+    /**
      * Los recuentos del informe: por clase de archivo y por categoría de
      * todo lo encontrado.
      *
@@ -254,9 +325,8 @@ final class Diagnosis
      */
     private function findings(Scopes $scopes, array $selected, array $packages, Exceptions $exceptions): array
     {
-        $verification = $packages === []
-            ? new ProjectVerification($this->root)
-            : new ProjectVerification($this->root, $scopes->resolve($packages));
+        $roots = $packages === [] ? [] : $scopes->resolve($packages);
+        $this->verification = ['roots' => $roots, 'result' => (new ProjectVerification($this->root, $roots))->run()];
 
         // El nombre de un paquete local => la ruta de su ámbito; un paquete
         // que no es ámbito (sin contrato ni manifiesto) se cuenta con la suya.
@@ -270,7 +340,7 @@ final class Diagnosis
 
         $findings = [];
 
-        foreach ($verification->run()['findings'] as $finding) {
+        foreach ($this->verification['result']['findings'] as $finding) {
             // Lo que verify sólo informa no pide nada: una excepción aprobada
             // (#[HandRolled] o del realineamiento), una request de vendor que
             // no se pudo comprobar.

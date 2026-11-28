@@ -100,6 +100,22 @@ final class RealignState
     }
 
     /**
+     * El plan, para las acciones que no tienen nada que hacer sin él.
+     *
+     * @return array<string, mixed>
+     */
+    public function requirePlan(): array
+    {
+        $plan = $this->plan();
+
+        if ($plan === null || ! is_array($plan['steps'] ?? null)) {
+            throw new RuntimeException('No hay plan: corre `larapack:realign diagnose` y después `larapack:realign plan`.');
+        }
+
+        return $plan;
+    }
+
+    /**
      * @param  array<string, mixed>  $report
      */
     public function saveReport(array $report): void
@@ -151,14 +167,32 @@ final class RealignState
             throw new RuntimeException("{$path} no es JSON válido. Bórralo y vuelve a correr `larapack:realign diagnose`.");
         }
 
-        $version = $decoded['format_version'] ?? null;
-
-        if (! is_int($version) || $version > self::FORMAT_VERSION) {
-            throw new RuntimeException("{$path} está en un formato que esta versión de LaraPack no entiende (format_version ".json_encode($version).'). Actualiza innoboxrr/larapack-generator.');
-        }
+        self::assertReadable($path, $decoded);
 
         /** @var array<string, mixed> $decoded */
         return $decoded;
+    }
+
+    /**
+     * Falla si un archivo del estado no dice su `format_version` o dice una
+     * posterior a la que entiende esta versión. Leerlo igual sería decidir
+     * con datos que no se sabe qué significan: un plan de un LaraPack más
+     * nuevo puede llamar de otra forma a «hecho». Vale para todo lo que se
+     * lee de `.larapack/realign/` (report, plan, config y exceptions).
+     *
+     * @param  array<mixed>  $decoded
+     */
+    public static function assertReadable(string $path, array $decoded): void
+    {
+        $version = $decoded['format_version'] ?? null;
+
+        if (! is_int($version)) {
+            throw new RuntimeException("{$path} no dice su `format_version` (un entero; hoy, ".self::FORMAT_VERSION.'): no es un archivo que haya escrito `larapack:realign`. Corrígelo, o bórralo y vuelve a generarlo.');
+        }
+
+        if ($version > self::FORMAT_VERSION) {
+            throw new RuntimeException("{$path} está en la versión {$version} del formato, y este LaraPack entiende hasta la ".self::FORMAT_VERSION.': lo escribió una versión posterior. Actualiza innoboxrr/larapack-generator.');
+        }
     }
 
     /**

@@ -108,7 +108,7 @@ class NewPackageCommand extends Command
         } finally {
             if ($dryRun) {
                 ProjectRoot::set(null);
-                self::remove($target);
+                Files::remove($target);
             }
         }
 
@@ -190,24 +190,5 @@ class NewPackageCommand extends Command
             fn (string $part): string => str_replace(' ', '', ucwords(str_replace(['-', '_', '.'], ' ', $part))),
             explode('/', $name)
         ));
-    }
-
-    private static function remove(string $directory): void
-    {
-        if (! is_dir($directory)) {
-            return;
-        }
-
-        foreach (scandir($directory) ?: [] as $entry) {
-            if ($entry === '.' || $entry === '..') {
-                continue;
-            }
-
-            $path = $directory.'/'.$entry;
-
-            is_dir($path) && ! is_link($path) ? self::remove($path) : @unlink($path);
-        }
-
-        @rmdir($directory);
     }
 }

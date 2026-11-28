@@ -618,71 +618,29 @@ final class OwnerBrief
      */
     private function exceptions(array $byId, array $scopes): array
     {
-        $exceptions = Exceptions::forRoot($this->root);
         $rows = [];
 
-        foreach ($exceptions->requests() as $target => $request) {
-            if ($scopes !== [] && ! in_array($request['scope'], $scopes, true)) {
-                continue;
-            }
-
-            $status = $exceptions->status($target);
-
-            if ($status === Exceptions::APPROVED) {
-                continue;
-            }
-
-            $step = $request['step'] === null ? null : ($byId[$request['step']] ?? null);
-
-            // Pedida bajo una decisión que cambió para ese elemento: ya no se
-            // pide, y aprobarla sería dar una excepción que se decidió no dar.
-            if (is_array($step) && ! Navigation::stillRequested($step, $request)) {
-                continue;
-            }
-
+        // La misma lista que hace fallar a `done` (Navigation::pendingExceptions()).
+        foreach (Navigation::pendingExceptions(Exceptions::forRoot($this->root), $scopes, $byId) as $pending) {
+            $target = $pending['target'];
+            $request = $pending['request'];
+            $stale = $pending['status'] === Exceptions::STALE;
             $approve = 'larapack:hand-rolled approve '.self::quote($target);
+            $step = $request === null || $request['step'] === null ? null : ($byId[$request['step']] ?? null);
 
             $rows[] = [
                 'target' => $target,
-                'type' => $request['type'],
-                'step' => $request['step'],
-                'file' => $request['file'],
-                'line' => $request['line'],
-                'subject' => $request['subject'],
-                'reason' => $request['reason'],
-                'status' => $status,
+                'type' => $request['type'] ?? null,
+                'step' => $request['step'] ?? null,
+                'file' => $request['file'] ?? null,
+                'line' => $request['line'] ?? null,
+                'subject' => $request['subject'] ?? null,
+                'reason' => $pending['reason'],
+                'status' => $pending['status'],
                 'finding' => $step === null ? null : $this->findingOf($step, $request),
-                'approve' => $status === Exceptions::STALE ? null : $approve,
-                'command' => $status === Exceptions::STALE ? 'larapack:hand-rolled revoke '.self::quote($target) : $approve,
-                'blocks' => [...($request['step'] === null ? [] : ['larapack:realign check '.self::argument($request['step'])]), 'larapack:verify --strict'],
-            ];
-        }
-
-        // Las aprobadas sin solicitud (las de antes, o de otra rama) también
-        // caducan, y `done` las cuenta: aquí también. Con --package no se sabe
-        // de qué ámbito son.
-        $listed = array_column($rows, 'target');
-
-        foreach ($scopes === [] ? $exceptions->all() : [] as $approval) {
-            if ($approval['status'] === Exceptions::APPROVED || in_array($approval['target'], $listed, true)) {
-                continue;
-            }
-
-            $stale = $approval['status'] === Exceptions::STALE;
-            $approve = 'larapack:hand-rolled approve '.self::quote($approval['target']);
-            $rows[] = [
-                'target' => $approval['target'],
-                'type' => null,
-                'step' => null,
-                'file' => null,
-                'line' => null,
-                'subject' => null,
-                'reason' => $approval['reason'],
-                'status' => $approval['status'],
-                'finding' => null,
                 'approve' => $stale ? null : $approve,
-                'command' => $stale ? 'larapack:hand-rolled revoke '.self::quote($approval['target']) : $approve,
-                'blocks' => ['larapack:verify --strict'],
+                'command' => $stale ? 'larapack:hand-rolled revoke '.self::quote($target) : $approve,
+                'blocks' => [...(($request['step'] ?? null) === null ? [] : ['larapack:realign check '.self::argument($request['step'])]), 'larapack:verify --strict'],
             ];
         }
 

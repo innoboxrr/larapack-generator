@@ -10,8 +10,8 @@ proyecto. Todo está en el paquete: el diagnóstico, el plan reanudable, las
 correcciones deterministas, los playbooks de los pasos guiados, las
 decisiones y las excepciones con la aprobación del dueño, la inferencia del
 contrato y la documentación para personas y agentes
-([docs/realign/README.md](docs/realign/README.md)). Las secciones de abajo,
-una por pieza; lo que hay que hacer al actualizar, al final de la versión.
+([docs/realign/README.md](docs/realign/README.md)). Lo que hay que hacer al
+actualizar, al final de la versión.
 
 ### Auditoría de seguridad
 
@@ -200,129 +200,658 @@ a la vez, que no se fusiona.
 
 ### Lo que encontró la segunda revisión, sobre lo integrado
 
-- **Una terminal fabricada no es una persona.** `pty.spawn` de Python, `script -c`, `expect` o `unbuffer` crean
-  una terminal desde la que un proceso escribe él mismo la frase de aprobación. La guardia de los agentes trata
-  ahora como aprobación cualquier orden que pase `hand-rolled approve|revoke` por uno de esos programas, y la
-  documentación lo dice sin rodeos: la pregunta en `/dev/tty` frena el error y la tubería, no a un agente
-  decidido; la capa que no se salta es CODEOWNERS sobre `.larapack/hand-rolled.lock` y la revisión de su diff.
-- **`brief` y lo decidido por elemento.** Una decisión tomada archivo por archivo seguía saliendo como
-  pendiente, con órdenes sin `--target` que habrían sustituido lo ya decidido. Ahora sólo sale lo que falta
-  (`undecided`) y cada orden va acotada con `--target`.
-- **Una excepción que el dueño decidió no dar.** Pedida bajo «dejarlo como está» y después decidido declarar
-  ese elemento, la solicitud seguía exigiéndose en `check`, `done` y `brief`. Ahora deja de contar
-  (`Navigation::stillRequested()`).
-- **`brief` ve las aprobaciones caducadas sin solicitud**, igual que `done`, y `done` y `brief` rechazan
-  argumentos que no usan.
+### Qué es
 
-### Una excepción aprobada cierra su paso de clasificación
+Un solo comando con la acción como argumento, como `larapack:hand-rolled`, para quien tiene que realinear un
+proyecto que empezó (o no) con LaraPack: una persona o un agente que llega sin contexto. La guía para quien lo
+ejecuta está en [docs/realign/README.md](docs/realign/README.md); cómo está hecho y dónde se extiende, en
+[ARCHITECTURE.md](ARCHITECTURE.md#realign).
 
-- **Encontrado en una prueba de autonomía** sobre una copia de un proyecto 7.x: el paso
-  `edited-outside:Export@.` agrupaba 60 Exports con un `bindValue` propio fuera de los huecos. Se pidieron las 60
-  excepciones (`larapack:realign except`) y el dueño las aprobó, pero `check` seguía fallando en las 60 con
-  «(excepción aprobada); se espera identical o format_only o hole_edited»: el `done_when` de clasificación miraba
-  la clase del archivo, que aprobada o no sigue siendo `edited_outside`. Ni el paso ni `realign done` terminaban.
-- **Ahora** el clasificador marca con `excepted` (el objetivo) lo que cubre una excepción aprobada sobre el
-  código de hoy, y el `done_when` de clasificación lo da por cumplido sea cual sea su clase. Vale para los tres
-  pasos de clasificación exceptuables (`edited-outside`, `missing`, `untracked-edited`); `diagnose` y `plan` no
-  lo reabren y `realign done` lo cuenta igual. Si el archivo cambia, la huella caduca, deja de cubrirlo y el
-  paso se reabre.
-- **El `bindValue` de los Exports viejos no se exceptúa: se regenera.** La plantilla de Export trae la protección
-  contra la inyección de fórmulas desde 9.0.0 (`WithCustomValueBinder`, hereda `DefaultValueBinder` y guarda como
-  texto lo que empieza por `=`, lo único que PhpSpreadsheet convierte en fórmula en el xlsx exportado). El
-  playbook `edited-outside` y docs/realign/exceptions.md dicen ahora que, cuando lo editado ya viene en la
-  plantilla de hoy, lo correcto es copiar lo regenerado.
-- **Al actualizar.** Nada que hacer: un paso de clasificación con todas sus excepciones aprobadas pasa en el
-  próximo `larapack:realign check`. Si se exceptuaron Exports por su `bindValue`, mejor copiar lo regenerado y
-  que el dueño retire esas aprobaciones (`larapack:hand-rolled revoke`).
+El ciclo es siempre el mismo: `diagnose` → `plan` → `next` → hacer el paso y sus pruebas → `check` → `next` … →
+otra vez `diagnose`, hasta que `done` sale en verde. Todo lo que el diagnóstico encuentra cae en una de cuatro
+categorías, y cada una tiene su camino:
 
-### Pruebas de autonomía sobre un monorepo sin contrato y un 7.x: cada paquete, su ámbito
-
-Una prueba sobre un monorepo sin contrato con 20 paquetes en `packages/`, y otra sobre un proyecto 7.x.
-
-- **Cada paquete local es su propio ámbito, de punta a punta, cuando la raíz no usa LaraPack.** Los pasos
-  `controller-shape` de los paquetes salían con el ámbito de la raíz, `no-contract` sólo en la raíz,
-  `status` atribuía a cada paquete la decisión `unmanaged-http@.` de la raíz y la salida de texto de
-  `diagnose` resumía sólo «app (núcleo)». Ahora, con la raíz sin contrato ni manifiesto, cada paquete es un
-  ámbito (`Scopes`): su `no-contract@packages/x`, sus `unmanaged-http`/`unmanaged-models`, sus
-  `controller-shape` (que llevan el ámbito del hallazgo también en un proyecto con contrato) y su línea en
-  `diagnose`, `status`, `brief` y `done`. El código de un paquete que la raíz carga en su `autoload` es del
-  paquete, no se cuenta dos veces. En un proyecto que sí usa LaraPack, un paquete sin nada sigue sin ser
-  ámbito.
-- **`infer no-contract@.` infiere sólo la raíz.** Escribía también los borradores de todos los paquetes sin
-  contrato, y el plan seguía pidiendo la decisión de cada uno. Cada paquete, con su `no-contract@packages/x`;
-  `--option packages=0` desaparece.
-- **`infer --dry-run` da el detalle.** Remitía a `.larapack/realign/infer/<ámbito>.json`, que una simulación
-  no escribe, y el brief recomienda justo el dry-run para saber si las rutas se conservan. Ahora el informe
-  entero va en el resultado (`infer`, con `report: null`), y en texto una nota resume las decisiones por tipo,
-  con cuántas son y ejemplos (`route-not-preservable 913 (api.v1.posts.index, …)`).
-- **`except` exige la decisión tomada.** Sobre una decisión que nadie había tomado, o tomada con una opción que
-  no pide excepción, la pedía igual. Ahora se niega y dice la orden `decide` que falta.
-- **Lo que una operación deja sin comitear, lo dice.** `adopt` y `apply` dejaban cambios y la siguiente se
-  negaba por el árbol sucio. El resultado trae `commit` (`{required, files, command}`) y la nota «Comitea
-  antes de seguir» con la orden sugerida.
-- **`plan` sin volver a diagnosticar ya no reabre lo comprobado.** Sobre el mismo informe, reabría lo que
-  `check` acababa de dar por hecho: `status` contaba un hecho menos (de 11 a 10) y las decisiones tomadas que
-  esperaban a ese paso como bloqueadas («blocked: 4, 0 decididos»). El informe lleva un `id` y el plan lo
-  guarda (`report_id`); sobre el mismo, lo hecho sigue hecho.
-- **Lo que no cabe en un hueco: `escalate` antes que `except`.** El playbook `edited-outside`, el README y
-  guided.md decían cosas distintas. Ahora lo mismo: si el dueño no ha dicho que se quede así, `escalate`; si
-  ya lo decidió, `except`; un controlador, `#[HandRolled]`. La salida «sin pruebas» de guided.md dice cómo
-  aplazar el paso (`defer`) para seguir con otros.
-
-### `larapack:realign`: el núcleo del realineamiento
-
-Llevar de vuelta al contrato un proyecto que empezó (o no) con LaraPack y se
-desvió, sin reconstruirlo y sin escribir un prompt por proyecto. La guía para
-quien lo ejecuta, persona o agente, está en
-[docs/realign/README.md](docs/realign/README.md); cómo está hecho y dónde se
-extiende, en [ARCHITECTURE.md](ARCHITECTURE.md#realign).
-
-Un solo comando con la acción como argumento, como `larapack:hand-rolled`:
+- `deterministic`: lo que se corrige solo, con `adopt` y `apply`.
+- `guided`: lo mecánico, que hace un agente con el playbook del paquete y una comprobación como criterio de
+  terminado.
+- `decision`: lo que decide el dueño del proyecto, presentado con sus opciones.
+- `out_of_scope`: lo que no es de LaraPack, que se declara fuera y no se toca.
 
 ```bash
 larapack:realign diagnose [--package=…] [--jobs=4] [--no-cache]
 larapack:realign plan
 larapack:realign status
-larapack:realign next
-larapack:realign check <id>
-larapack:realign decide <id> <opción> --note="…"
+larapack:realign next [<id>]
+larapack:realign show <id>
+larapack:realign check <id> [--tested="<orden>"]
+larapack:realign decide <id> <opción> [--target=<archivo>…] --note="…"
+larapack:realign defer|escalate <id> --note="…"
+larapack:realign undefer <id>
+larapack:realign accept-untested <id> --note="…"
+larapack:realign brief
+larapack:realign done
 larapack:realign adopt|apply|infer|except [<id>…] [--dry-run] [--allow-dirty] [--option clave=valor]
+larapack:realign playbook [<nombre>]
+larapack:realign help [<acción>]
 ```
 
-- **`diagnose`** regenera el contrato de cada ámbito —la raíz y cada paquete
-  local con contrato o manifiesto— con la versión actual en
-  `.larapack/realign/cache/`, en procesos hijos (`--jobs`), con la Pint y el
-  `pint.json` del proyecto y caché por hash. Compara archivo por archivo y
-  clasifica: `identical`, `format_only` (espacios, coma final, orden de
-  imports, lo que cambia Pint; el mismo código con otros comentarios, marcado),
-  `version_delta`, `hole_edited`, `edited_outside` (con las piezas que
-  difieren), `missing`, `renamed`, `not_regenerated`, `migration_history` y
-  `untracked`. Lista los controladores, rutas y modelos escritos a mano,
-  cuenta el resto del código que no es de LaraPack y corre `verify` sobre todo
-  el proyecto. Todo, en cuatro categorías: `deterministic`, `guided`,
-  `decision` y `out_of_scope`. No escribe código.
-- **`plan`** lo convierte en pasos con id estable, riesgo con su razón, si se
-  deshacen, la orden, el playbook o las opciones, y un `done_when` concreto.
-  Primero lo que desbloquea (manifiesto, formato, saltos de versión, `fix`),
-  luego lo guiado del paquete que más cumple al que menos, al final las
-  decisiones agrupadas. Volver a planificar conserva lo hecho y lo decidido.
-- **`next`** da el siguiente paso con todo para hacerlo sin contexto: los
-  pasos guiados traen su playbook del paquete
-  (`resources/realign/playbooks/`) rellenado con sus archivos, hallazgos y
-  órdenes. **`check`** corre su `done_when` (verify acotado, la misma
-  clasificación, el código sin gestionar, el contrato) y es lo único que da un
-  paso por hecho. **`decide`** registra una decisión con su nota.
-- **Las operaciones que escriben** tienen su contrato
-  (`RealignOperation`) y se enchufan por convención; mientras no tengan
-  implementación lo dicen. Lo común lo hace el núcleo: árbol git limpio (salvo
-  `--allow-dirty`), `--dry-run`, pasos que la operación sabe hacer y no
-  bloqueados, informe `fixed`/`skipped`/`unchanged` e historia del paso.
-- **Las excepciones aprobadas** dejan de proponerse (ver «Excepciones del
-  realineamiento», abajo).
-- Toda salida `--format=json` y los archivos de estado llevan
-  `format_version` (1).
+El trabajo se reparte por **ámbitos**: la raíz y cada paquete local con contrato o manifiesto. Cuando la raíz no
+usa LaraPack (ni contrato ni manifiesto), cada paquete local es su propio ámbito de punta a punta (`Scopes`): su
+`no-contract@packages/x`, sus `unmanaged-http`/`unmanaged-models`, sus `controller-shape` (que llevan el ámbito
+del hallazgo también en un proyecto con contrato) y su línea en `diagnose`, `status`, `brief` y `done`. El código
+de un paquete que la raíz carga en su `autoload` es del paquete y no se cuenta dos veces. En un proyecto que sí
+usa LaraPack, un paquete sin nada sigue sin ser ámbito.
 
-Ensayado sobre copias, sin tocar los originales:
+### Los comandos
+
+#### Diagnóstico y plan: `diagnose` y `plan`
+
+- **`diagnose`** regenera el contrato de cada ámbito con la versión actual en `.larapack/realign/cache/`, en
+  procesos hijos (`--jobs`), con la Pint y el `pint.json` del proyecto y caché por hash (la clave usa la ruta
+  real de la Pint). Compara archivo por archivo y clasifica: `identical`, `format_only`, `version_delta`,
+  `hole_edited`, `edited_outside` (con las piezas que difieren), `missing`, `renamed`, `not_regenerated`,
+  `migration_history` y `untracked`. Lista los controladores, rutas y modelos escritos a mano, cuenta el resto
+  del código que no es de LaraPack y corre `verify` sobre todo el proyecto. No escribe código: sólo
+  `.larapack/realign/report.json` y la caché.
+- **Qué es formato y qué no.** Lo que `diagnose` da por `format_only` se adopta sin preguntar
+  (`apply --deterministic`) y lo adoptado lo vuelve a escribir el siguiente `import --force`, así que la
+  comparación se queda en el lado seguro. En PHP son formato los espacios, la coma final, el orden de imports y
+  lo que cambia Pint. En jsx, tsx, vue, js, ts y md, sólo los finales de línea, la indentación y el espacio al
+  final de cada línea: antes se quitaba todo el espacio, también el de dentro de una línea, y `t('Changes saved')`
+  frente a `t('Changessaved')`, `join(' ')` frente a `join('')` o `a - -b` frente a `a--b` pasaban por formato.
+  Lo que reformatea Prettier más allá de la indentación sale como editado. Un JSON que no se puede leer se
+  compara por líneas, como el texto.
+- **El mismo código PHP con otros comentarios no es formato.** Adoptarlo (`comments: true`) dejaba que `--force`
+  borrase después los comentarios y docblocks del usuario. En un archivo registrado y editado es `hole_edited`
+  —cumple, no da paso y `--force` no lo toca—; en lo que el manifiesto no conoce, `untracked` (una decisión); en
+  lo que nadie editó, escrito por una versión anterior, `version_delta`; en un hueco entero, el hueco; y en una
+  migración, `migration_history` desde el diagnóstico (nunca `adopt`). La clasificación es una sola: `diagnose`,
+  `check` y la comprobación de `adopt` dan lo mismo antes y después de adoptar (una `create_locations_table` con
+  otros comentarios salía `format_only`, `apply` la adoptaba y `check adopt@.` decía «es migration_history … se
+  espera identical o format_only»)
+  ([diagnose.md](docs/realign/diagnose.md#las-clases-de-archivo), [adopt.md](docs/realign/adopt.md#riesgos)).
+- **Los huecos son los de las plantillas.** Además de `rules()`, son hueco todos los ganchos de validación que
+  la plantilla de una request deja vacíos para el usuario —`prepareForValidation()`, `passedValidation()`,
+  `messages()` y `attributes()`— (en `IndexRequest`, menos `prepareForValidation()`, que fuerza `managed`); en la
+  request de un endpoint, `prepareForValidation()` y `rules()`, y en uno sin modelo además `authorize()` y
+  `handle()`, que nacen cerrado y con `abort(501)` (Holes::PLACEHOLDERS: lo dice lo regenerado); y
+  `defineGates()` del AuthServiceProvider. Antes, normalizar el payload en `prepareForValidation()` salía
+  `edited_outside` y la única salida era pedir una excepción.
+- **El resumen se explica solo.** «3 550 archivos, 1 185 cumplen» junto a «identical 2 844» no decía por qué:
+  un `identical` que el manifiesto no registra con su hash todavía no cumple. Cada ámbito dice cuántos cumplen,
+  cuántos son **por adoptar**, cuántos tienen otro paso y cuántos están fuera de alcance (suman el total; en
+  JSON, `breakdown`), con una línea que define «cumplen».
+- **Lo que no vuelve a proponer.** Lo que cubre una excepción aprobada (tampoco un ámbito sin contrato aprobado
+  fuera de LaraPack), y el SpaController que escribe `fix route-closure` (el de laravel-setup 7.2.1): salía en
+  el diagnóstico siguiente como `unmanaged-http` (83 → 84) y, mientras siga siendo ese, salvo formato, ya no se
+  lista.
+- **`plan`** convierte el diagnóstico en pasos con id estable, riesgo con su razón, si se deshacen, la orden, el
+  playbook o las opciones, y un `done_when` concreto. Primero lo que desbloquea (manifiesto, formato, saltos de
+  versión, `fix`), luego lo guiado del paquete que más cumple al que menos, y las decisiones agrupadas al
+  final, salvo las que condicionan lo guiado: `unmanaged-http`, `unmanaged-models`, `hand-rolled` y
+  `route-closure`, cuando tocan los archivos de un paso guiado, van antes que él y están en su `depends_on` (si
+  el dueño elegía declarar en el contrato los controladores escritos a mano, el trabajo de llevarlos a su
+  request se tiraba). La dependencia se cumple al decidir cada archivo con una opción con la que lo guiado
+  sigue valiendo (`keep`, `refactor`) o al terminar la decisión. Una decisión de este tipo ya tomada se cumple
+  después de lo guiado: la excepción de «dejarlos como código propio» se pide sobre el código ya trabajado
+  (pedirla antes la caducaba).
+- **Volver a planificar conserva** lo hecho, lo decidido, lo aplazado y lo escalado; no conserva `last_check`
+  (`status` arrastraba «Última comprobación: … (falta)» de antes de un diagnóstico nuevo). El informe lleva un
+  `id` y el plan lo guarda (`report_id`): sobre el mismo informe, lo hecho sigue hecho. Antes, `plan` sin volver
+  a diagnosticar reabría lo que `check` acababa de dar por hecho (`status` pasaba de 11 hechos a 10, y las
+  decisiones que esperaban a ese paso, a «blocked: 4, 0 decididos»).
+
+#### Moverse por el plan: `status`, `next`, `show`, `defer`, `undefer` y `escalate`
+
+- **`status`** es el punto de entrada de quien llega sin contexto: pasos hechos, pendientes y bloqueados, el
+  siguiente, lo aplazado (`deferred`), lo que está sin probar (`untested`, «Sin probar (N)», con su orden) y lo
+  que espera al dueño: «Falta 1 decisión del dueño antes de seguir con lo guiado de app» (`awaiting_owner`).
+- **`next`** da el siguiente paso con todo para hacerlo sin contexto: la orden de un determinista, las opciones
+  de una decisión o, en un guiado, su playbook del paquete (`resources/realign/playbooks/`) rellenado con sus
+  archivos, hallazgos y órdenes. Salta lo aplazado. Ofrece primero las decisiones que condicionan lo guiado y
+  dice en `meanwhile` con qué seguir mientras el dueño decide —lo que no depende de ellas no espera—; una
+  decisión cuya orden ya se ejecutó no vuelve a salir: lo que falta es del dueño.
+- **`next <id>` y `show <id>`** dan ese paso, esté como esté (`show`, con el id obligatorio): el playbook
+  rellenado de un guiado bloqueado, las opciones de una decisión o la orden de un determinista, con lo que lo
+  bloquea (`blocked_by`). Antes `next <id>` ignoraba el id y daba el siguiente en orden, sin error.
+- **`defer <id> --note=…`** aplaza un paso guiado (el callback de OAuth2 que el playbook dice dejar): sigue
+  pendiente, `next` pasa al siguiente y `status` lo lista. **`undefer`** lo devuelve.
+- **`escalate <id> --note=…`** convierte un guiado en decisión del dueño: hacerlo como dice el playbook o
+  dejarlo como está (`#[HandRolled]` en un controlador, una excepción en lo demás).
+- **Un argumento que la acción no usa es un error en todas** (`RealignActions::ARGUMENTS`), como ya lo era una
+  opción: `status <id>` o `check <id> <otro>` dicen qué sobra, y `done` y `brief` rechazan los que no usan.
+
+La guía: [plan.md](docs/realign/plan.md#next) (`next`, `show`, `decide`, `defer`, `escalate`, el orden),
+[guided.md](docs/realign/guided.md#cómo-se-usa) y la receta del
+[README](docs/realign/README.md#para-un-agente-la-receta).
+
+#### Las operaciones que escriben: `adopt`, `apply`, `infer` y `except`
+
+Tienen su contrato (`RealignOperation`) y se enchufan por convención; una sin implementación lo dice. Lo común
+lo hace el núcleo:
+
+- **Árbol git limpio** (salvo `--allow-dirty`), pasos que la operación sabe hacer y no bloqueados, informe
+  `fixed`/`skipped`/`unchanged` e historia del paso. Cada elemento del informe es `{file, reason, step, steps}`:
+  `step` está siempre (el paso, el primero si es de varios, o `null`) y `steps` los lista todos; antes el
+  `unchanged` de una comprobación de `fix` traía sólo `steps: […]` y la línea de la versión anotada no traía
+  ninguno ([plan.md](docs/realign/plan.md#el-estado-en-disco-y-los-formatos-json)).
+- **Lo que una operación deja sin comitear, lo dice**: el resultado trae `commit` (`{required, files, command}`)
+  y la nota «Comitea antes de seguir» con la orden sugerida. Antes `adopt` y `apply` dejaban cambios y la
+  siguiente se negaba por el árbol sucio.
+- **`--dry-run` de `apply` y de `adopt` es la corrida**, sobre una copia temporal del proyecto que se borra
+  (Simulation): mismas decisiones, mismo orden, mismos saltos. La copia lleva todo menos `.git`; `vendor/`,
+  `node_modules/` y la caché de lo regenerado son enlaces. Cada elemento de `fixed` trae el diff de lo que
+  cambió ese paso sobre lo que dejaron los anteriores, ya con la Pint del proyecto
+  ([apply.md](docs/realign/apply.md#cómo-simula)).
+- **Una clave de `--option` que la operación no lee es un error**, como una opción
+  (`infer --option escribir=…` ya no se ignora en silencio).
+
+**`adopt`** ([docs/realign/adopt.md](docs/realign/adopt.md): qué hace, qué nunca hace, cuándo salta y su
+riesgo) sólo escribe el manifiesto, nunca el contenido de un archivo, y vuelve a clasificar cada archivo antes
+de anotarlo:
+
+```bash
+larapack:realign adopt [<id>…] [--dry-run]
+```
+
+- `adopt`: lo que ya es lo regenerado se vuelve a anotar con su hash y la versión (conservando que lo generó el
+  generador) o se registra como `adopted`. Volver a anotar un archivo registrado conserva el orden de la
+  entrada, el stub, el modelo y el namespace: sólo cambian `hash` y `generator` (antes los ponía delante y el
+  `stub` al final, y en el diff del manifiesto la entrada parecía perder el stub).
+- `relink`: lo renombrado, también una migración con otra fecha.
+- `prune`: lo que ya no existe; lo que le quede en disco a un modelo retirado pasa a quien lo genera hoy (o a lo
+  que no es de ninguna entidad) y el modelo se olvida.
+- `untracked-edited`, si se decidió: lo escrito a mano en la ruta de uno generado se adopta con el hash de lo
+  regenerado, así `--force` no lo sobrescribe jamás.
+- Y en cada ámbito, la versión en lo heredado de un manifiesto v1 que sigue siendo, sin editar, lo que
+  generaría hoy el contrato.
+
+**`apply`** ([docs/realign/apply.md](docs/realign/apply.md)) hace los pasos deterministas que reescriben, uno a
+uno o todos con `--deterministic` (sin ids hay que pedirlo así; hace también `adopt`):
+
+```bash
+larapack:realign apply <id>… [--dry-run]
+larapack:realign apply --deterministic [--dry-run]
+```
+
+- `regenerate` copia de lo regenerado lo que nadie editó o nunca se generó —un `import --force` acotado a lo
+  seguro: nunca un archivo editado, nunca una migración, nunca un modelo sin importar—.
+- `missing` restaura si se decidió.
+- `fix` reusa `larapack:fix`, una corrida por comprobación para todos sus paquetes. Los closures que no son el
+  fallback de la SPA, que `fix` salta, no dejan el paso con `fixed` y `skipped` a la vez: son de la decisión
+  `route-closure@<ámbito>` y salen en `unchanged` con `deferred_to` y la razón. Sin ese paso en el plan quedan
+  `skipped` y el paso, a medias.
+- `endpoint-tests` añade a cada `<Modelo>EndpointsTest` las pruebas de la plantilla actual con sus auxiliares y
+  sus `use`, sin tocar lo escrito a mano (en vez de borrar, importar y volver a pegar).
+- `controller-concern` mueve a `Http/Requests/Concerns` los traits de `Http/Controllers/Concerns` que sólo usan
+  requests y reescribe sus nombres por tokens en todo el proyecto (ver «Lo que encontraron las revisiones»).
+- `model-lists` completa las listas del modelo (`ModelRegions`, sólo añade) y pone lo que falta **en la
+  posición del contrato**, no al final: detrás de la entrada del contrato que la precede y ya está (o delante
+  de la primera que está), con la forma que tiene la lista —en una línea, una por línea, con sus comentarios—;
+  lo que sobra se queda donde estaba.
+- `pin-foreign-keys` escribe en el contrato el `on_delete`/`on_update` que hacen las migraciones donde el
+  contrato calla (la cascada de 7.x), editando el JSON en su sitio, para que un salto de versión no cambie lo
+  que se borra en producción. Lee la tabla que declara `table`, tal cual y sin prefijo (con
+  `table: legacy_people` buscaba `people`: no fijaba la cascada real o fijaba las acciones de otra tabla). Lo
+  detecta el diagnóstico (sección `contract` del informe) y su `done_when` es `foreign-keys`.
+
+Cada cambio se escribe entero o se deshace si un PHP no parsea; un paso que revienta se salta y los demás
+siguen. `endpoint-tests`, `controller-concern` (el aviso: sólo lo usan requests) y `model-lists` son
+deterministas, con su playbook para lo que la orden salte (`next` lo da en `how.fallback`); un
+`controller-concern` que usa un controlador es `controller-shape`. Las guías «Al actualizar» de 7.x a 9.x
+están convertidas en pasos (la tabla, en la guía); lo único que no se automatiza es borrar las alteraciones
+vacías de 9.x, porque saber si se migraron pide la base de producción.
+
+**`infer`** ([docs/realign/infer.md](docs/realign/infer.md)) escribe un laraimport borrador desde el código,
+para los pasos `no-contract`, `unmanaged-models` y `unmanaged-http`:
+
+```bash
+larapack:realign infer no-contract@. [--dry-run] [--option write=contract] [--option http=0]
+```
+
+- **Lee y no toca nada.** Escribe `laraimport.inferred.json` junto al contrato y **nunca** `laraimport.json` si
+  ya existe (`--option write=contract` lo escribe sólo si no existe). Con contrato, el borrador es el contrato
+  que hay **más** lo que le falta; varios pasos del mismo ámbito van a un borrador.
+- **Cada ámbito, el suyo**: `infer no-contract@.` infiere sólo la raíz y cada paquete tiene su
+  `no-contract@packages/x`. Antes escribía también los borradores de todos los paquetes sin contrato y el plan
+  seguía pidiendo la decisión de cada uno; `--option packages=0` desaparece.
+- **El esquema**, de `SchemaHistory` sobre las migraciones de TODOS los ámbitos (comparten base) y las que
+  carga cada proveedor con `loadMigrationsFrom`. **Los modelos**, de su clase y de sus traits: `$table`,
+  `$fillable`/`$guarded`, `$hidden`, las listas de LaraPack, `casts()`/`$casts` y las relaciones. **Las rutas**
+  escritas a mano, con el prefijo de su archivo leído del proveedor que las carga: sólo se declaran las que
+  conservan su nombre y su URI.
+- **Una ruta sin `auth` a la vista se declara con sesión** y se pregunta: cerrar por error es un 401 que se ve;
+  abrir por error, un agujero.
+- **El informe** `.larapack/realign/infer/<ámbito>.json` (formato 1) dice de dónde salió cada prop y con qué
+  confianza (`provenance`), lo que no se infirió (`not_inferred`: formularios, `display`, `routes`, reglas,
+  habilidades), lo que el laraimport no expresa (`lost`: un `comment()`, un default que es una expresión, un
+  índice FULLTEXT, una columna que pone un bucle), las decisiones (`duplicate-model-name`,
+  `foreign-key-cycle`, `table-without-model`, `model-without-table`, `model-without-columns`, `primary-key`,
+  `route-not-preservable`, `route-file-prefix`, `route-auth-unknown`), si el borrador pasa `larapack:validate`
+  y, con contrato, la comparación con lo declarado.
+- **`infer --dry-run` da el detalle**: una simulación no escribe ese informe, y el brief recomienda justo el
+  dry-run para saber si las rutas se conservan. El informe entero va en el resultado (`infer`, con
+  `report: null`), y en texto una nota resume las decisiones por tipo, con cuántas son y ejemplos
+  (`route-not-preservable 913 (api.v1.posts.index, …)`).
+
+**`except`** pide las excepciones; va con lo del dueño, abajo.
+
+#### El dueño: `decide`, `brief`, las excepciones y `accept-untested`
+
+- **`decide <id> <opción> --note="…"`** registra una decisión con su nota. Decidir no es hacer: el paso sigue
+  pendiente hasta que `check` pasa. **`decide <id> <opción> --target=<archivo>`** (repetible) decide por
+  elemento, porque una decisión valía para el paso entero (84 controladores a la vez): el plan guarda lo mixto
+  (`decisions`), `next` lo muestra (`decided_by_target`, `undecided`), `check` dice qué falta por decidir y la
+  orden de cada opción sólo toca sus elementos (`except` pide excepciones sólo de los que se dejan).
+
+**`brief`: el camino del dueño ausente.** Una prueba de autonomía en un proyecto real llegó a 77 decisiones
+(controladores a mano, closures, modelos que adoptar, llaves foráneas) y a excepciones que sólo el dueño
+aprueba, y el agente preguntaba de una en una o se paraba. `brief` lo junta todo en **un** documento y lo hace
+el camino normal: el agente hace lo que no depende del dueño, genera el documento, avisa, sigue con lo demás y
+retoma con `status`. La guía: [docs/realign/owner.md](docs/realign/owner.md).
+```bash
+larapack:realign brief                  # .larapack/realign/brief.md, y por stdout
+larapack:realign brief --format=json    # .larapack/realign/brief.json, con format_version
+```
+
+- **Cada decisión pendiente**: qué es, por qué importa, la evidencia (archivos, líneas, hallazgos) **agrupada
+  por tipo y directorio** —setenta controladores de `Admin/` son un grupo, no setenta bloques—, las opciones
+  con sus consecuencias y la orden exacta de cada una (`larapack:realign decide <id> <opción> --note="…"`), lo
+  que bloquea y, si una regla del playbook la sostiene, **la recomendación del paquete**, firme o tentativa
+  (`infer` sin contrato, `adopt` en lo escrito a mano en la ruta de lo generado, `except` o `refactor` en los
+  closures según sean de los legítimos conocidos…). Sin regla (`unmanaged-http`, `hand-rolled`) lo dice y dice
+  cómo averiguarlo. De una decisión tomada archivo por archivo sólo sale lo que falta (`undecided`), y cada
+  orden va acotada con `--target` para no sustituir lo ya decidido.
+- **Cada excepción pedida sin aprobar**: objetivo, paso, motivo, el mensaje del hallazgo que cubre, su estado y
+  la orden exacta (`larapack:hand-rolled approve "<objetivo>"`; `revoke` si ya no existe). Ve también las
+  aprobaciones caducadas sin solicitud, igual que `done`.
+- **Lo que quedó sin probar** (`summary.untested`, sección «Sin probar»), con la orden de cada paso.
+- **Arriba, el resumen**: cuántas, el tiempo estimado de revisión, qué pasa si no se decide nada (nada se
+  rompe; el realineamiento no termina) y cuántos pasos puede seguir haciendo el agente mientras (`meanwhile`).
+- No decide, no aprueba y no escribe código, ni el plan ni el candado: sólo `brief.md` y `brief.json`, que se
+  rehacen cada vez. Acepta `--package`.
+
+**Las excepciones: pedir, aprobar, caducar.** Lo que no puede llevar `#[HandRolled]` —los closures de rutas
+legítimos (la raíz de la SPA según el Host, `/csp-report`, `/ci/test-health`, el `OPTIONS` del CORS de xAPI),
+un controlador o un modelo que se deja fuera del contrato, un archivo generado borrado adrede, un hallazgo que
+se acepta— tiene el mismo mecanismo que los atributos: **quien pide no aprueba**. La guía:
+[docs/realign/exceptions.md](docs/realign/exceptions.md).
+
+```bash
+larapack:realign except <paso> --option reason="…"     # pide (también un agente)
+larapack:hand-rolled list                              # el dueño las lee
+larapack:hand-rolled approve "routes/web.php#post('/csp-report')"   # y las aprueba
+```
+
+- **`except`** pide una excepción por cada elemento del paso, con un objetivo exacto
+  (`realign:<tipo>[/<comprobación>]:<archivo>[#<sujeto>]`; un closure se nombra por su llamada y su URI), la
+  huella de lo que cubre y, desde esta versión, el mensaje del hallazgo (`message`). Escribe
+  `.larapack/realign/exceptions.json` y nada más: pedir no cubre nada. `--dry-run`, árbol limpio e informe como
+  toda operación.
+- **Exige la decisión tomada**: sobre una decisión que nadie tomó, o tomada con una opción que no pide
+  excepción, se niega y dice la orden `decide` que falta.
+- **Pide por lo de hoy**, no por los archivos del plan: reclasifica cada elemento antes de pedir —un hallazgo
+  con la misma comprobación de verify sobre el código de ahora, un archivo con la misma clasificación, uno a
+  mano si sigue existiendo— y lo que ya no está sale en `unchanged` diciéndolo. Antes de volver a diagnosticar
+  pedía excepción también para un archivo ya arreglado, y el dueño la habría aprobado para algo que ya cumplía.
+- **`--target`** (repetible) acota a elementos concretos, por su objetivo o por su archivo; uno que no es de
+  esos pasos es un error que dice cuáles hay ([exceptions.md](docs/realign/exceptions.md#el-ciclo)).
+- **La aprueba el dueño con `larapack:hand-rolled approve`, en el mismo candado** (`.larapack/hand-rolled.lock`,
+  mismo formato). `list` dice el estado de cada una (`unapproved`, `approved`, `reason-changed`, `code-changed`,
+  `stale`); `approve` acepta el final del objetivo; `revoke` la retira.
+- **Caduca cuando cambia lo que cubre**: el cuerpo, los parámetros o la URI de un closure (moverlo,
+  reformatearlo o comentarlo, no); los tokens de un archivo; la ausencia de lo que se aprobó que no estuviera
+  (un ámbito que vuelve a tener `laraimport.json`); la frase de verify de una entidad.
+- **Una aprobada cierra su paso de clasificación.** El clasificador marca con `excepted` (el objetivo) lo que
+  cubre una excepción aprobada sobre el código de hoy, y el `done_when` de clasificación lo da por cumplido sea
+  cual sea su clase. Vale para los tres pasos de clasificación exceptuables (`edited-outside`, `missing`,
+  `untracked-edited`); `diagnose` y `plan` no lo reabren y `done` lo cuenta igual. Si el archivo cambia, la
+  huella caduca, deja de cubrirlo y el paso se reabre.
+- **`check` de una decisión que eligió dejarlo así** no pasa hasta que el dueño aprueba cada excepción pedida,
+  y dice cuál falta y a quién le toca. Una solicitud que el dueño decidió no dar —pedida bajo «dejarlo como
+  está» y después decidido declarar ese elemento— deja de contar en `check`, `done` y `brief`
+  (`Navigation::stillRequested()`).
+- **Qué pedir cuando algo no cabe en un hueco**: si el dueño no ha dicho que se quede así, `escalate`; si ya lo
+  decidió, `except`; un controlador, `#[HandRolled]`. El playbook `edited-outside`, el README y guided.md decían
+  cosas distintas.
+
+**`accept-untested <id> --note="…"`**: sólo el dueño acepta un paso sin probar, como aprueba una excepción
+(`OwnerConfirmation`): en su terminal, viendo el paso y escribiendo «acepto sin probar», o sin terminal con
+`LARAPACK_APPROVER` y `--approver` iguales, por la misma vía endurecida que una aprobación (ver «Seguridad»).
+Queda `done` con `untested_accepted: {note, at, via, by}` en el plan, y `done` lo sigue enseñando
+(`accepted_untested`). La nota es obligatoria.
+
+#### Terminar: `check`, lo no probado y `done`
+
+- **`check <id>`** corre el `done_when` del paso (verify acotado, la misma clasificación, el código sin
+  gestionar, el contrato) y es lo único que lo da por hecho; si falta algo lo dice, elemento por elemento, y
+  sale con error. El de un paso `verify` sólo cuenta los hallazgos de su tipo (el `fix` del fallback de la SPA
+  está hecho aunque en `routes/web.php` quede otro closure, que es una decisión). Una migración renombrada no
+  sale como `missing` al comprobar su `relink`. Un controlador está hecho cuando delega y su request tiene
+  `handle()`: el `done_when` de `controller-shape` mira también `request-handle`, aunque el hallazgo esté en la
+  request.
+- **Lo que cambia comportamiento sólo queda hecho con su prueba.** En una prueba de autonomía, sin poder correr
+  las pruebas del proyecto, un agente no corrió `check` en un controlador —como pedía la guía— y el siguiente
+  `diagnose`/`plan` lo marcó `done` solo («resolved: el diagnóstico ya no lo encuentra»); otro corrió `check`
+  sin pruebas y la herramienta no avisó. `done` podía llegar a verde con cambios que nadie vio pasar (un 422 que
+  pasa a 403, un 404 que pasa a 403). Qué cambia comportamiento está escrito una vez en `StepTypes`
+  (`BEHAVIOUR`, `BEHAVIOUR_OPTIONS`, `changesBehaviour()`): `controller-shape`, `declared-routes`, `security`,
+  `edited-outside` de `Requests`, `Controller` y `Policy`, y las decisiones decididas con una opción que mueve
+  código (`route-closure`/`hand-rolled` → `refactor`, `unmanaged-http` → `declare`, un guiado escalado →
+  `refactor`). `next`/`show` lo dicen en `tests.required`, y el playbook da la orden de `check` ya con
+  `--tested`.
+- **El estado `untested`** (`Planner::UNTESTED`, guardado en `plan.json`): hecho a falta de su prueba. `check`
+  sin prueba lo deja así, sale con 0 y avisa (`warning`; en JSON `ok: true, done: false, status: untested`).
+  Para moverse por el plan cuenta como hecho (`Planner::finished()`: no bloquea ni lo vuelve a dar `next`);
+  para terminar, no.
+- **`check <id> --tested="<orden>"`** registra la prueba que se corrió y pasó
+  (`tested: {via: declared, command, at}`) y lo deja `done`. Con **la orden del proyecto en
+  `.larapack/realign/config.json`** (`{"format_version": 1, "tests": "php artisan test"}`, nuevo, lo escribe
+  una persona), `check` la corre él (`ProjectTests`) y sólo da el paso por hecho si sale con 0; si falla, no
+  está hecho y da el final de la salida (`tests.output`).
+- **`plan` no da por hecho lo que cambia comportamiento** cuando el diagnóstico deja de encontrarlo: queda
+  `untested` (`resolved`, con la orden para probarlo). Uno `untested` que vuelve a salir se reabre y pierde la
+  prueba registrada, igual que uno `done`.
+- **Un solo criterio de terminado: `done`.** Ni «el plan sin pendientes» ni «`verify --strict`» bastan: `verify`
+  no ve lo editado fuera de los huecos —en una prueba, un agente dio por terminado con `verify --strict` en
+  verde y pasos `edited-outside` pendientes— y el plan no ve lo que se desvió después del último diagnóstico.
+  `done` diagnostica y planifica otra vez (sólo escribe el estado, como `diagnose` y `plan`, y acepta sus
+  opciones), recorre todos los ámbitos y sale con 1 mientras quede un paso sin hacer, una decisión sin tomar,
+  un paso `untested` que el dueño no aceptó (`missing.untested`, `counts.untested`), una excepción sin aprobar
+  o un error o aviso de `validate --strict` o `verify --strict`; el JSON lo dice en `missing`, elemento por
+  elemento, con la orden de cada uno. Lo declarado fuera (un ámbito con `no-contract` decidido: su
+  `empty-manifest` y el contrato que no tiene) va en `declared` y no falta (`Completion`;
+  [docs/realign/verify.md](docs/realign/verify.md#cuándo-se-termina)).
+
+#### Playbooks y pasos guiados: `playbook`
+
+Cada trabajo mecánico tiene sus instrucciones en el paquete, y `next` las da rellenadas con lo de ese paso. La
+guía: [docs/realign/guided.md](docs/realign/guided.md).
+
+- **`larapack:realign playbook [<nombre>]`** los lista o imprime uno sin rellenar, con cada marcador explicado.
+  La lista nombra por su tipo los que se titulan con el del paso.
+- **`controller-to-request`** (el playbook de `controller-shape`): objetivo, precondiciones, pasos exactos, qué
+  no hacer, el **403 antes que 422** que pasó en school-management y la prueba antes y después. Una
+  comprobación que va después de un `findOrFail` no se lleva a `authorize()` si eso cambia el 404 de un id
+  inexistente por un 403 (salvo con route model binding, que da el 404 antes): se queda en `handle()`. Dice
+  explícitamente que verify **no** comprueba ese orden, y la prueba con un id inexistente es obligatoria.
+- **Anexos** que el plan añade por lo que dice verify: `validate-to-rules` (valida con `validate()`) y
+  `raw-request-to-formrequest` (recibe `Illuminate\Http\Request`; los parámetros escalares de la ruta pasan a
+  `$this->route()`).
+- **De una opción**, una vez decidida: `closure-to-controller` (el `refactor` de un closure) y
+  `declare-handwritten-controller` (declarar en `endpoints`/`controllers[]` lo que conserva su nombre de ruta y
+  su URI).
+- **De una decisión**, para pensarla antes: `decide-hand-rolled`, `decide-route-closure`,
+  `decide-unmanaged-http`, `decide-adopt-model`, `decide-package-without-models` y `decide-foreign-keys`
+  (`cascade` frente a `restrict`).
+- `declared-routes` y `security`, para los tipos guiados que caían en el genérico.
+- **`edited-outside` da la ruta exacta de lo regenerado.** Cada archivo del paso trae en el plan `regenerated`
+  (`.larapack/realign/cache/<ámbito>/<clave>/<archivo>`, relativo a la raíz del proyecto), y el playbook la
+  imprime como `regenerado:` con la orden para ver la diferencia (`git diff --no-index`). Antes decía «está en
+  la caché» y el agente tenía que buscar la clave.
+- **`edited-outside` ya no manda borrar y correr `import --force`**, que contradecía a `controller-to-request`
+  (no correrlo) y regeneraba el ámbito entero: se devuelve **un** archivo copiando lo regenerado encima, y se
+  vuelve a pegar lo de sus huecos. Dice además qué hacer con los `use`, los métodos auxiliares y las
+  propiedades al mover código a un hueco, y **cuándo copiar lo regenerado es la salida correcta** (lo que falta
+  está declarado en el contrato, como una columna en una vista generada: se copia y se dice; o lo editado ya
+  viene en la plantilla de hoy) y cuándo no (señales de que se quitó a propósito, una columna secreta: lo
+  decide el dueño).
+- **Un solo criterio para los protocolos** (OAuth2, RFC 7591, webhooks firmados, xAPI): se mueve si se
+  conservan exactamente el código de estado y el formato de la respuesta —con
+  `failedValidation()`/`failedAuthorization()` y la convención de request base del propio proyecto, si la
+  tiene—; si no, `#[HandRolled]` con la razón concreta y lo aprueba el dueño. Antes decía «déjala como está y
+  pasa», y en un proyecto real un controlador RFC 7591 se movió conservando la respuesta. `decide-hand-rolled`
+  usa el mismo criterio.
+- **Sin pruebas.** Si no se pueden correr las del proyecto (sin `vendor/`, sin base de datos), un paso guiado
+  que cambia comportamiento no se da por hecho: se escribe la prueba igual, se comita con `SIN PROBAR` y se
+  corre `check` sin `--tested`, que lo deja `untested` (antes la guía decía «no corras `check`»). La salida
+  «sin pruebas» de guided.md dice además cómo aplazar el paso (`defer`) para seguir con otros
+  ([guided.md](docs/realign/guided.md#sin-pruebas-cuando-no-se-pueden-correr-las-del-proyecto),
+  [plan.md](docs/realign/plan.md#check)).
+- **La otra pasada, dicha en el ciclo.** Tras copiar lo regenerado, cambiar el contrato o completar los guiados
+  de un ámbito, otra vez `diagnose` → `plan` → `apply --deterministic`.
+  [profiles.md](docs/realign/profiles.md) y la guía para agentes traen el orden exacto de punta a punta.
+
+#### La ayuda: `help`
+
+La ayuda sale de un solo sitio (`RealignActions`): `larapack:realign --help` explica cada acción con su uso, lo
+que escribe y su guía; `help` da la lista y `larapack:realign help <acción>` (texto o JSON) la detalla, con las
+claves de `--option` que lee. Cada acción sale una sola vez en cada uno (`RealignHelpTest`); la salida doble
+que vio una de las pruebas de autonomía no se reproduce en esta versión, ni con `builder` ni con Artisan, y la
+prueba lo fija. `help` y `playbook` responden sin un proyecto.
+
+#### Lo que cambia en otros comandos
+
+- **`larapack:hand-rolled approve` y `revoke`** los confirma una persona (ver «Seguridad»), y todo rechazo sale
+  con un código distinto de cero, también por Artisan, en JSON y desde una terminal. `list` da el estado de las
+  excepciones del realineamiento.
+- **`larapack:verify` respeta las excepciones y las lista**: lo cubierto baja a `info` («Excepción aprobada por
+  el dueño del proyecto…»), lo caducado vuelve con su nivel y lo dice, y una aprobada que ya no cubre nada es
+  `hand-rolled-stale` (con `--strict` falla). La salida JSON trae `exceptions`. Lista también las aprobaciones
+  sin terminal («Aprobadas sin terminal», y `named_approvals` en JSON). `larapack:guard` y el `check` de los
+  pasos respetan las excepciones igual.
+- **`larapack:verify --path`** (repetible) acota a archivos o directorios. El verify de cada playbook va
+  acotado al paso (`--check=… --path=…`).
+- **`larapack:validate` recorre los paquetes locales, como `verify`.** Sin ruta, valida el `laraimport.json` de
+  la raíz y el de cada paquete local (los mismos ámbitos que `verify` desde 9.3.1, `ProjectValidation`), con
+  `--package` repetible (directorio, ruta, nombre de Composer o `app`), `--no-packages` y el resumen por
+  paquete (`summary`; cada hallazgo, con su `package` y su `file`). Antes, un contrato roto en un paquete salía
+  en verde desde la raíz. Con una ruta valida ese archivo, como siempre.
+- **`import --force` y `larapack:fix`** ponen lo que falta en las listas del modelo en la posición del
+  contrato, como `model-lists`.
+- **`larapack:skill` instala la guía del realineamiento para agentes**
+  (`.claude/skills/larapack-realign/SKILL.md`, junto al skill; `--no-realign` la salta), y el bloque de
+  `AGENTS.md` —el mismo de las reglas de Cursor, Codex, Gemini, Copilot y Windsurf— manda a
+  `larapack:realign status` y a la guía del paquete. El skill de LaraPack tiene su sección corta.
+
+### El contrato
+
+**El contrato aprende lo que hace falta para adoptar un proyecto real.** Sin esto, describir brandai con
+laraimport perdía 1 633 longitudes, 104 precisiones, 816 índices y todos sus `morphTo`, y expediente no podía
+declarar un endpoint sin cambiar el nombre de ruta que llaman 339 llamadas de su front. Todo es opcional: **lo
+que no se declara se genera exactamente como en 9.3.1** (las instantáneas no cambiaron). Las claves nuevas y lo
+que el contrato todavía no puede decir, en [docs/realign/contract.md](docs/realign/contract.md).
+
+- `props[].length` (`string`, `char`), `precision` y `scale` (`decimal`) y `use_current` (`timestamp`,
+  `timestampTz`, `dateTime`, `dateTimeTz`) van a la migración: `$table->string('code', 20)`,
+  `decimal('amount', 16, 4)`, `->useCurrent()`. La validación rechaza la medida en un tipo que no la admite,
+  una `scale` sin `precision` o mayor que ella y `use_current` junto a un `default`. Declarar `use_current` en
+  una columna que ya existe la altera (`->useCurrent()->change()`, y `down()` lo quita), igual que la longitud
+  y la precisión, que ya se comparaban; antes no escribía nada ni avisaba.
+- **`indexes[]`** en el modelo: `{"columns": [...], "unique": true, "name": "…"}`, simples o compuestos. Van en
+  la migración de creación y, en una tabla que ya existe, en una alteración con **los que falten**: nunca se
+  quita un índice que no esté declarado. El lector de migraciones guarda ahora los índices de cada tabla
+  (`$table->index()`, `->unique()` en columna, `dropIndex`, `renameIndex`, columnas quitadas o renombradas),
+  así que un índice escrito a mano no se vuelve a añadir.
+- **`table`** en el modelo: la tabla tal cual, sin `table_prefix`, para un modelo que ya tiene la suya. Va al
+  `$table`, a `Schema::create` y al nombre de la migración; dos modelos con la misma tabla son un error.
+- **`morphTo` sin `related`**: `return $this->morphTo();` sin `use`. Las demás relaciones siguen exigiéndolo.
+- **El nombre de una relación puede ir en camelCase** (`practitionerLocations`), como el método que ya existe,
+  y lo mismo en `load_counts`.
+- **`route_name`** en un endpoint de modelo o de `controllers[]`: el nombre de la ruta, relativo al grupo de su
+  archivo. Y **la `uri` admite** segmentos con `_`, mayúsculas o `.` y parámetros en camelCase, para conservar
+  la URI que ya usa el front. Un `route_name` repetido, igual al de una acción CRUD que exista o igual al
+  nombre derivado de otro endpoint es un error, en cualquier orden: se juntan primero los nombres finales,
+  declarados y derivados, de los endpoints de un modelo y de `controllers[]`. (Declarado primero
+  `route_name: import.roster` y seguido de un endpoint `importRoster`, pasaba: dos rutas con el mismo nombre,
+  `route()` resolvía a la última y el nombre que conserva el front se desviaba sin aviso. Al revés sí se
+  rechazaba.)
+- **Una URI CRUD sólo choca con la acción que existe**: un `controllers[]` no tiene ninguna, y un modelo sólo
+  las de sus `routes`. Antes `…/create` de un controlador sin modelo se rechazaba siempre.
+- **Un pivote o unas metas cuya tabla ya crea otra migración no se vuelven a crear**, como ya pasaba con la de
+  un modelo: al adoptar un proyecto, `import` las salta con «no la generó LaraPack».
+
+**El manifiesto pasa a la versión 2.** Cada archivo dice qué versión del generador lo escribió (`generator`) y,
+si se adoptó en vez de generarse, `state: adopted`. Un manifiesto de la versión 1 se sigue leyendo igual y la
+siguiente escritura lo deja en la 2, anotando `generator` en los archivos que escribe; los demás siguen sin
+versión, y el diagnóstico los trata como de una versión anterior. Uno de una versión posterior no se reescribe.
+Nuevas primitivas: `Manifest::adopt`, `relink`, `drop`, `entryOf` y `formatVersion`.
+
+**El estado del realineamiento.** Toda salida `--format=json` y los archivos de estado
+(`.larapack/realign/report.json`, `plan.json`, `brief.json`, `exceptions.json`, `config.json` y el informe de
+`infer`) llevan `format_version` (1). La forma de `exceptions.json` es `requests`, cada una con su objetivo (en
+el núcleo era `exceptions`, que ninguna versión publicada escribía). El candado `.larapack/hand-rolled.lock`
+conserva su formato y gana dos claves por entrada: `approved_by` y `approved_run`.
+
+### Seguridad
+
+- **Las operaciones no pisan trabajo**: árbol git limpio, un `--dry-run` que es la corrida sobre una copia,
+  cada cambio entero o deshecho, y nunca un archivo editado, una migración ni un modelo sin importar.
+- **Quien pide no aprueba.** Un agente puede pedir una excepción, no aprobarla. La aprobación vive en el
+  candado de `#[HandRolled]`, así que la protegen, sin una línea más, la guardia de los agentes (no pueden
+  correr `approve` ni escribir el candado), el hook de git que pregunta en la terminal y CODEOWNERS.
+- **`approve` y `revoke` los confirma una persona, también sin la guardia** (`OwnerConfirmation`). Antes no
+  preguntaban nada y confiaban en las capas de fuera: en un proyecto sin la guardia ni el hook instalados,
+  `larapack:hand-rolled approve --all </dev/null` desde un proceso sin terminal aprobaba todo, y un agente
+  aprobaba sus propias excepciones. Ahora, en su terminal, se le enseña lo que se va a aprobar o retirar —cada
+  objetivo, su razón, lo que cubre (archivo y línea, o la entidad) y el mensaje del hallazgo— y escribe
+  `apruebo <n>` (`retiro <n>`), con el número de excepciones, para que no se confirme a ciegas un `--all`. La
+  pregunta va a `/dev/tty`, no a la entrada estándar: una tubería (`yes | …`, `echo apruebo 1 | …`) no la
+  contesta. Sin terminal falla sin tocar nada, y dice por qué. Lo que no cambia el candado (`approve` de lo ya
+  aprobado igual, `--all` sin nada que aprobar) no pregunta.
+- **Windows.** Se usa la consola si la entrada lo es (PowerShell, cmd, Windows Terminal). Desde Git Bash
+  (mintty) la entrada es una tubería y no se puede saber si hay alguien delante —lo mismo que ya resolvía el
+  hook de git con `/dev/tty`—: el comando lo dice, y la persona lo corre desde PowerShell, con `winpty` o por
+  el workflow de aprobación.
+- **La aprobación sin terminal, sólo en el workflow de aprobación.** Nombrarse —la variable `LARAPACK_APPROVER`
+  **y** `--approver` con el mismo nombre; la variable sola, heredada de un perfil de la shell por el agente que
+  se lanza desde ella, no vale, y la opción hay que escribirla en la orden— ya no basta: en una prueba de
+  autonomía, un agente sin la guardia instalada se aprobó sus propias excepciones con
+  `LARAPACK_APPROVER="…" … approve --all --approver="…"`, y la orden se la había enseñado el propio mensaje de
+  rechazo. La vía sin terminal sólo vale dentro del workflow de aprobación de GitHub Actions
+  (`.github/workflows/larapack-approve.yml`, que escribe `larapack:ci --approval`), lanzado a mano
+  (`workflow_dispatch`): `LARAPACK_APPROVER`, `--approver` y la cuenta que lanzó la corrida tienen que ser la
+  misma, no un bot, y la corrida no la puede haber relanzado otra persona (NamedApproval). Un `CI=true`, un
+  `push` o un `pull_request` no valen. La entrada aprobada lleva `approved_by` (la cuenta, a la vista en el
+  diff del candado que revisa CODEOWNERS) y `approved_run` (la corrida); la corrida empuja el candado a una
+  rama `larapack/approve-<corrida>` para revisarlo en un PR. Se eligió la identidad que da GitHub frente a un
+  secreto o una firma: el secreto viviría donde vive el agente, o habría que repartir y rotar claves.
+- **El rechazo no enseña cómo saltárselo.** A quien no tiene terminal le dice que un agente no lo intenta por
+  ninguna otra vía, que pida al dueño (con `larapack:realign brief`) y, si es una persona, que lea
+  `docs/realign/exceptions.md#aprobar-sin-terminal-el-workflow-de-aprobación`; ya no da la orden lista para
+  copiar. La ayuda de `--approver` tampoco. Lo que se vio en la prueba de autonomía con código 0 era la orden
+  nombrada que sí aprobaba; un envoltorio como `script -qc` sin `-e`, o una tubería (`… | tail`), sigue tapando
+  el código del comando.
+- **Cada aprobación sin terminal, a la vista del revisor.** Además de listarlas `larapack:verify`, el job que
+  genera `larapack:ci` tiene un paso nuevo, `larapack:hand-rolled list --format=github`, que las anota sobre su
+  línea del candado —en el diff del PR— y pregunta a GitHub si su corrida existe, es del workflow de
+  aprobación, se lanzó a mano y la lanzó quien dice `approved_by`; si no, falla el check. El job pide ahora
+  `actions: read`. CODEOWNERS cubre también `/.github/workflows/larapack-approve.yml`, aunque el proyecto no lo
+  tenga, para que nadie añada uno a su gusto.
+- **La guardia de los agentes** bloquea `--approver` en cualquier orden y dar valor a `LARAPACK_APPROVER` (con
+  `export`, `env` o delante de una orden), y la prueba de humo de la guardia lo comprueba también en Windows.
+  **Una terminal fabricada no es una persona**: `pty.spawn` de Python, `script -c`, `expect` o `unbuffer` crean
+  una terminal desde la que un proceso escribe él mismo la frase de aprobación, y la guardia trata como
+  aprobación cualquier orden que pase `hand-rolled approve|revoke` por uno de esos programas.
+- **Las excepciones de una entidad no se aprueban a ciegas.** El objetivo de un hallazgo sin archivo
+  (`realign:inconsistent-entity:model:Tag#…`) se aprobaba con la huella que traía la solicitud —que escribe
+  quien pide, también un agente— sin comprobar que verify dijera hoy esa frase, y `list` la daba siempre por
+  `approved`. Ahora `approve` corre verify con su comprobación y sólo aprueba si hay un hallazgo **de hoy** con
+  esa huella, que es el que se le enseña al dueño; una frase que verify no dice no se aprueba (tampoco con
+  `--all`). Su estado es real, como el de las demás: `approved` mientras verify la diga, `code-changed` si la
+  huella aprobada no es la de hoy y `stale` cuando verify ya no la dice (el `check` del paso lo dice igual).
+- **Lo no probado no acaba hecho** (`untested`, `check --tested` y `accept-untested`): `done` falla mientras
+  quede un paso sin probar, y aceptarlo es del dueño, igual que aprobar.
+- **Lo que no se puede garantizar** está dicho sin rodeos en
+  [docs/realign/exceptions.md](docs/realign/exceptions.md#aprobar-sin-terminal-el-workflow-de-aprobación): la
+  pregunta en `/dev/tty` frena el error y la tubería, no a un agente decidido; las variables `GITHUB_*` se
+  escriben a mano (por eso la CI comprueba la corrida); una cuenta con permiso para lanzar workflows lanza la
+  corrida a su nombre; y la capa que no se salta es CODEOWNERS sobre `.larapack/hand-rolled.lock` y la revisión
+  de su diff.
+
+### Lo que encontraron las revisiones y las pruebas de autonomía
+
+Casi todo lo anterior está ya contado con su porqué. Aquí, los errores concretos que se corrigieron antes de
+publicar y no tienen otro sitio. Las pruebas de autonomía son agentes sin contexto realineando copias de
+proyectos reales de principio a fin, sin nadie al lado y sólo con lo que trae el paquete: donde se pararon o
+tuvieron que adivinar, ahora el paquete lo dice.
+
+- **Un monorepo sin contrato con 20 paquetes en `packages/`.** Los pasos `controller-shape` de los paquetes
+  salían con el ámbito de la raíz, `no-contract` sólo en la raíz, `status` atribuía a cada paquete la decisión
+  `unmanaged-http@.` de la raíz y la salida de texto de `diagnose` resumía sólo «app (núcleo)». De ahí que
+  cada paquete sea su ámbito.
+- **Los 60 Exports de un 7.x.** El paso `edited-outside:Export@.` agrupaba 60 Exports con un `bindValue` propio
+  fuera de los huecos. Se pidieron las 60 excepciones y el dueño las aprobó, pero `check` seguía fallando en
+  las 60 con «(excepción aprobada); se espera identical o format_only o hole_edited»: el `done_when` de
+  clasificación miraba la clase del archivo, que aprobada o no sigue siendo `edited_outside`, y ni el paso ni
+  `realign done` terminaban. Además, ese `bindValue` no se exceptúa: se regenera. La plantilla de Export trae
+  la protección contra la inyección de fórmulas desde 9.0.0 (`WithCustomValueBinder`, hereda
+  `DefaultValueBinder` y guarda como texto lo que empieza por `=`, lo único que PhpSpreadsheet convierte en
+  fórmula en el xlsx exportado). El playbook `edited-outside` y docs/realign/exceptions.md dicen que, cuando lo
+  editado ya viene en la plantilla de hoy, lo correcto es copiar lo regenerado.
+- **El orden de las listas del modelo.** El diagnóstico compara el modelo con el regenerado, y una lista con lo
+  mismo en otro orden era `edited_outside`: en el proyecto de la prueba, 9 de 11 pasos guiados
+  `edited-outside:Model` diferían sólo en eso. Se eligió insertar en su sitio y no tratar el orden como formato
+  porque el orden de `$export_cols` es el de las columnas de la exportación: no da igual.
+- **`apply --deterministic --dry-run` contaba otra cosa que la corrida real.** En un proyecto, 2 276 cambios, 3
+  saltados y 1 sin cambios simulados contra 2 272, 3 y 3 reales (`index-managed`, 70 simulados y 69 reales;
+  `resource-appends`, 70 y 68); en otro, 1 215 de `fix` y 28 de `model-lists` simulados contra 447 y 14. Cada
+  paso simulaba contra el disco de hoy, y en la corrida real lo que escribe un paso lo lee el siguiente: un
+  IndexRequest que `regenerate` deja como la plantilla actual ya no lo arregla `fix`, `model-lists` ve lo que
+  `fix` añadió al modelo, lo que fija `pin-foreign-keys` cambia el contrato de los pasos siguientes. De ahí la
+  simulación sobre una copia.
+- **`controller-concern`: el trait movido ya no queda roto aunque parsee.** `apply` movía el trait cambiando
+  sólo su línea `namespace`, y el rollback sólo comprobaba que lo escrito parseara; lo que parseaba pero
+  resolvía a otra clase pasaba.
+  - El trait movido nombraba a sus hermanos por su nombre corto (`Helper::x()` de `Controllers\Concerns`): con
+    el namespace nuevo resolvía a `Requests\Concerns\Helper`. Ahora se importan
+    (`use …\Controllers\Concerns\Helper;`) y un nombre cualificado relativo (`Sub\Thing`, `namespace\X`) se
+    escribe completo. Si llama a una función o usa una constante de su namespace viejo sin importarla, no se
+    mueve y dice cuál.
+  - Las referencias que no se reescribían: por el alias de un namespace
+    (`use App\Http\Controllers\Concerns as Cs;` y `use Cs\X;` en la clase), por una importación parcial
+    (`use App\Http\Controllers;` y `Controllers\Concerns\X`), la segunda de una lista (`use A, B;`) y un
+    `use X;` dentro de una clase, que se trataba como absoluto y es relativo al namespace del archivo (y al
+    revés: uno escrito absoluto dentro de la clase ya no se toma por el trait). Un `use` agrupado sólo se salta
+    si de verdad importa el trait.
+  - La red de seguridad: después de escribir, se recorre **todo** el proyecto otra vez —no la lista con que se
+    planeó— buscando un nombre que siga resolviendo al trait viejo, o un hermano que el trait movido ya no ve.
+    Si queda uno, se devuelve el cambio entero y el paso se salta con el archivo. La lista de archivos se
+    rehace tras cada movimiento: el segundo de dos hermanos movidos en la misma corrida reescribe la
+    importación que el primero acaba de escribir.
+
+### Documentación y pruebas
+
+Para que cualquiera —persona o agente, sin contexto— realine un proyecto solo, todo lo necesario vive en el
+paquete y se comprueba.
+
+- **`docs/realign/`**, una página por operación: la entrada ([README.md](docs/realign/README.md): cuándo
+  usarlo, modelo mental, las cuatro categorías, el ciclo, el estado, la seguridad y la receta para un agente),
+  [diagnose.md](docs/realign/diagnose.md) (leer el informe y cada clasificación; qué es un ámbito),
+  [plan.md](docs/realign/plan.md) (pasos, `status`, `next`, `check`, `decide` y los formatos JSON),
+  [adopt.md](docs/realign/adopt.md), [apply.md](docs/realign/apply.md) (también el salto de versión mayor),
+  [guided.md](docs/realign/guided.md), [exceptions.md](docs/realign/exceptions.md),
+  [owner.md](docs/realign/owner.md), [infer.md](docs/realign/infer.md),
+  [contract.md](docs/realign/contract.md), [verify.md](docs/realign/verify.md) (cuándo se termina, qué
+  garantiza `verify --strict` y qué no, `ci` y `guard` para que no se vuelva a desviar),
+  [risks.md](docs/realign/risks.md) (por operación y por tema: migraciones y datos, el front, 403/422,
+  dependencias, monorepos, Windows, rendimiento) y [profiles.md](docs/realign/profiles.md) (el recorrido según
+  el proyecto tenga contrato al día, una versión vieja con deuda o ninguno).
+- **Sin el paquete en `vendor/`.** [docs/realign/README.md](docs/realign/README.md) explica una vez las tres
+  formas de invocar (Artisan, `vendor/bin/builder`, `php <clon>/builder … --root=<proyecto>`) y la notación
+  `<paquete>` / `<proyecto>` que usan las demás páginas y la guía para agentes; para copiar un proyecto,
+  `git worktree` o `tar`, no `rsync`.
+- **`brief` y `done` están en el camino**: la receta del README, la guía para agentes de `larapack:skill`
+  (`skill/realign/SKILL.md`), [plan.md](docs/realign/plan.md#decide) y
+  [exceptions.md](docs/realign/exceptions.md#el-ciclo) citan `brief` como el paso que sigue cuando lo que queda
+  es del dueño, y la guía, el skill y el bloque de `AGENTS.md` dan `done` como el criterio final.
+- **`RealignDocTest`**: cada orden `larapack:…` que citan `docs/realign`, el skill y el bloque de los agentes
+  existe con esas opciones; en `larapack:realign`, la acción, cada opción de esa acción y cada clave de
+  `--option`; cada enlace y cada ancla resuelven, y ninguna página queda sin enlazar desde la entrada.
+- **`RealignProfilesTest`** (EndToEnd): los tres perfiles de punta a punta, sobre proyectos sintéticos con
+  formas recortadas de las aplicaciones: diagnose → plan → apply determinista → adopt → next y check de un
+  paso guiado → decisión del dueño y except aprobado → `verify --strict` en verde (el proyecto sin contrato
+  que se queda fuera, con sólo `empty-manifest`), y termina con `done` en 0 (antes ninguno corría
+  `validate --strict`, y el contrato de las pruebas tenía cuatro avisos).
+- **`RealignFormatTest`** hace el ciclo entero —diagnose, plan, `apply --deterministic`, `import --force`— con
+  un `ShowView.jsx` y una `IndexRequest` editados, y la edición sobrevive.
+- **`tests/Unit/HolesTest`** cruza Holes con lo que cada plantilla de `src/Stubs` deja vacío y con la tabla
+  «Dónde va tu código» del README: una plantilla nueva con un hueco sin declarar falla ahí.
+- **La simulación**: el mismo proyecto con un paso que se encadena, simulado y luego escrito, da las mismas
+  tres listas. Y las pruebas de `approve` y `revoke` comprueban el código de salida en cada camino.
+
+**Ensayado sobre copias**, sin tocar los originales (sólo se leyeron, y las copias se borraron). El
+diagnóstico, con el núcleo:
 
 | | school-management (82 ámbitos) | expediente (7.x) | brandai (sin contrato) |
 |---|---|---|---|
@@ -338,298 +867,37 @@ Ensayado sobre copias, sin tocar los originales:
 | Código sin gestionar | 354 controladores, 280 archivos de rutas | 77 controladores, 67 modelos, 6 de rutas | 250 controladores, 205 modelos, 41 de rutas |
 | Pasos del plan | 566 | 96 (77 controladores) | 208 (196 controladores) |
 
-Cuadra con los informes de viabilidad: los 983 saltos de versión y los 596 de
-proveedores y configuración de school-management salen exactos, y los 1 914
-de expediente que sólo eran formato, también.
+Cuadra con los informes de viabilidad: los 983 saltos de versión y los 596 de proveedores y configuración de
+school-management salen exactos, y los 1 914 de expediente que sólo eran formato, también.
 
-### `larapack:realign adopt` y `apply`: adoptar y corregir sin reconstruir
-
-Las dos operaciones que escriben lo determinista. La guía de cada una —qué
-hace, qué nunca hace, cuándo salta y su riesgo— está en
-[docs/realign/adopt.md](docs/realign/adopt.md) y [docs/realign/apply.md](docs/realign/apply.md).
-
-```bash
-larapack:realign adopt [<id>…] [--dry-run]
-larapack:realign apply <id>… [--dry-run]
-larapack:realign apply --deterministic [--dry-run]
-```
-
-- **`adopt` sólo escribe el manifiesto**, nunca el contenido de un archivo, y
-  vuelve a clasificar cada archivo antes de anotarlo. `adopt`: lo que ya es lo
-  regenerado se vuelve a anotar con su hash y la versión (conservando que lo
-  generó el generador) o se registra como `adopted`. `relink`: lo renombrado,
-  también una migración con otra fecha. `prune`: lo que ya no existe; lo que
-  le quede en disco a un modelo retirado pasa a quien lo genera hoy (o a lo que
-  no es de ninguna entidad) y el modelo se olvida. `untracked-edited`, si se
-  decidió: lo escrito a mano en la ruta de uno generado se adopta con el hash
-  de lo regenerado, así `--force` no lo sobrescribe jamás. Y en cada ámbito,
-  la versión en lo heredado de un manifiesto v1 que sigue siendo, sin editar,
-  lo que generaría hoy el contrato.
-- **`apply`** hace los pasos deterministas que reescriben, uno a uno o todos
-  con `--deterministic` (sin ids hay que pedirlo así): `regenerate` copia de lo
-  regenerado lo que nadie editó o nunca se generó —un `import --force` acotado
-  a lo seguro: nunca un archivo editado, nunca una migración, nunca un modelo
-  sin importar—; `missing` restaura si se decidió; `fix` reusa
-  `larapack:fix`, una corrida por comprobación para todos sus paquetes;
-  `endpoint-tests` añade a cada `<Modelo>EndpointsTest` las pruebas de la
-  plantilla actual con sus auxiliares y sus `use`, sin tocar lo escrito a mano
-  (en vez de borrar, importar y volver a pegar); `controller-concern` mueve a
-  `Http/Requests/Concerns` los traits de `Http/Controllers/Concerns` que sólo
-  usan requests y reescribe sus nombres por tokens en todo el proyecto;
-  `model-lists` completa las listas del modelo (ModelRegions, sólo añade);
-  `pin-foreign-keys` escribe en el contrato el `on_delete`/`on_update` que
-  hacen las migraciones donde el contrato calla (la cascada de 7.x), editando
-  el JSON en su sitio, para que un salto de versión no cambie lo que se borra
-  en producción. Cada cambio se escribe entero o se deshace si un PHP no
-  parsea; un paso que revienta se salta y los demás siguen.
-- `endpoint-tests`, `controller-concern` (el aviso: sólo lo usan requests) y
-  `model-lists` pasan de guiados a deterministas, con su playbook para lo que
-  la orden salte (`next` lo da en `how.fallback`). Un `controller-concern` que
-  usa un controlador es `controller-shape`. Nuevo paso `pin-foreign-keys`,
-  detectado por el diagnóstico (sección `contract` del informe), con su
-  `done_when` `foreign-keys`.
-- **Las guías «Al actualizar» de 7.x a 9.x**, convertidas en pasos: la tabla
-  está en la guía. Lo único que no se automatiza es borrar las alteraciones
-  vacías de 9.x: saber si se migraron pide la base de producción.
-- `check` de un paso `verify` sólo cuenta los hallazgos de su tipo (el `fix`
-  del fallback de la SPA está hecho aunque en `routes/web.php` quede otro
-  closure, que es una decisión). Una migración renombrada ya no sale como
-  `missing` al comprobar su `relink`.
-
-Ensayado sobre copias, con `apply --deterministic` dos veces (después de la
-primera, lo que `fix` deja igual a lo regenerado sale como `adopt`):
+`apply --deterministic` dos veces (después de la primera, lo que `fix` deja igual a lo regenerado sale como
+`adopt`):
 
 | | school-management (82 ámbitos) | expediente (7.x) |
 |---|---|---|
 | Primera pasada | 5 843 cambios en 578 s (3 640 adoptados, 983 regenerados, 691 tests completados, 447 `fix`, 19 traits movidos, 14 modelos, 47 ámbitos con la versión anotada), 0 saltados | 2 272 cambios en 47 s (1 914 adoptados, 94 olvidados, 38 regenerados, 140 `fix`, 70 tests, 14 modelos, 56 llaves fijadas), 3 saltados (closures que no son el de la SPA: una decisión) |
 | Segunda pasada | 608 (449 adoptados, 158 regenerados) | 140 adoptados |
 | `customised` en `verify` | 6 571 → 2 978 | 2 520 → 396 |
-| `edited_outside` | 404 → 207 | 247 → 178 |
-| Cumplen (de los clasificados) | 16 921 → 21 757 de 22 844 | 1 185 → 3 228 de 3 456 |
 | Avisos y errores de `verify` | 1 975 → 20 (9 `missing-file`, 4 `controller-shape`, 4 `route-closure`, 3 `route-not-declared`) | 699 → 380 (377 `controller-shape`, 3 `route-closure`) |
 | Lo que queda | 24 pasos `edited-outside`, 4 `controller-shape`, 1 `declared-routes` y 77 decisiones | 6 `edited-outside`, 77 `controller-shape` y 5 decisiones |
 
-Ningún PHP escrito dejó de parsear. brandai no tiene contrato: no hay nada que
-adoptar ni regenerar hasta inferirlo (`infer`).
+Ningún PHP escrito dejó de parsear. brandai no tiene contrato: no hay nada que adoptar ni regenerar hasta
+inferirlo (`infer`).
 
-### El manifiesto pasa a la versión 2
-
-Cada archivo dice qué versión del generador lo escribió (`generator`) y, si se
-adoptó en vez de generarse, `state: adopted`. Un manifiesto de la versión 1 se
-sigue leyendo igual y la siguiente escritura lo deja en la 2; uno de una
-versión posterior no se reescribe. Nuevas primitivas: `Manifest::adopt`,
-`relink`, `drop`, `entryOf` y `formatVersion`.
-
-- **Al actualizar.** La primera vez que algo escribe el manifiesto lo pasa a
-  la versión 2 y anota `generator` en los archivos que escribe; los demás
-  siguen sin versión, y el diagnóstico los trata como de una versión
-  anterior.
-
-### El contrato aprende lo que hace falta para adoptar un proyecto real
-
-Sin esto, describir brandai con laraimport perdía 1 633 longitudes, 104
-precisiones, 816 índices y todos sus `morphTo`, y expediente no podía declarar
-un endpoint sin cambiar el nombre de ruta que llaman 339 llamadas de su front.
-Todo es opcional: **lo que no se declara se genera exactamente como en 9.3.1**
-(las instantáneas no cambiaron).
-
-- `props[].length` (`string`, `char`), `precision` y `scale` (`decimal`) y
-  `use_current` (`timestamp`, `timestampTz`, `dateTime`, `dateTimeTz`) van a
-  la migración: `$table->string('code', 20)`, `decimal('amount', 16, 4)`,
-  `->useCurrent()`. La validación rechaza la medida en un tipo que no la
-  admite, una `scale` sin `precision` o mayor que ella y `use_current` junto a
-  un `default`.
-- **`indexes[]`** en el modelo: `{"columns": [...], "unique": true, "name":
-  "…"}`, simples o compuestos. Van en la migración de creación y, en una tabla
-  que ya existe, en una alteración con **los que falten**: nunca se quita un
-  índice que no esté declarado. El lector de migraciones guarda ahora los
-  índices de cada tabla (`$table->index()`, `->unique()` en columna,
-  `dropIndex`, `renameIndex`, columnas quitadas o renombradas), así que un
-  índice escrito a mano no se vuelve a añadir.
-- **`table`** en el modelo: la tabla tal cual, sin `table_prefix`, para un
-  modelo que ya tiene la suya. Va al `$table`, a `Schema::create` y al nombre
-  de la migración; dos modelos con la misma tabla son un error.
-- **`morphTo` sin `related`**: `return $this->morphTo();` sin `use`. Las
-  demás relaciones siguen exigiéndolo.
-- **El nombre de una relación puede ir en camelCase** (`practitionerLocations`),
-  como el método que ya existe, y lo mismo en `load_counts`.
-- **`route_name`** en un endpoint de modelo o de `controllers[]`: el nombre de
-  la ruta, relativo al grupo de su archivo. Y **la `uri` admite** segmentos con
-  `_`, mayúsculas o `.` y parámetros en camelCase, para conservar la URI que ya
-  usa el front. Un `route_name` repetido o igual al de una acción CRUD que
-  exista es un error.
-- **Una URI CRUD sólo choca con la acción que existe**: un `controllers[]` no
-  tiene ninguna, y un modelo sólo las de sus `routes`. Antes `…/create` de un
-  controlador sin modelo se rechazaba siempre.
-- **Un pivote o unas metas cuya tabla ya crea otra migración no se vuelven a
-  crear**, como ya pasaba con la de un modelo: al adoptar un proyecto,
-  `import` las salta con «no la generó LaraPack».
-
-### `larapack:realign infer`: un laraimport borrador desde el código
-
-Para los pasos `no-contract`, `unmanaged-models` y `unmanaged-http`. Guía
-completa en [docs/realign/infer.md](docs/realign/infer.md).
-
-```bash
-larapack:realign infer no-contract@. [--dry-run] [--option write=contract] [--option http=0]
-```
-
-- **Lee y no toca nada.** Escribe `laraimport.inferred.json` junto al
-  contrato y **nunca** `laraimport.json` si ya existe (`--option
-  write=contract` lo escribe sólo si no existe). Con contrato, el borrador es
-  el contrato que hay **más** lo que le falta; varios pasos del mismo ámbito
-  van a un borrador. Cada ámbito, el suyo: `no-contract@.` es sólo la raíz.
-- **El esquema**, de `SchemaHistory` sobre las migraciones de TODOS los
-  ámbitos (comparten base) y las que carga cada proveedor con
-  `loadMigrationsFrom`. **Los modelos**, de su clase y de sus traits:
-  `$table`, `$fillable`/`$guarded`, `$hidden`, las listas de LaraPack,
-  `casts()`/`$casts` y las relaciones. **Las rutas** escritas a mano, con el
-  prefijo de su archivo leído del proveedor que las carga: sólo se declaran
-  las que conservan su nombre y su URI.
-- **El informe** `.larapack/realign/infer/<ámbito>.json` (formato 1) dice de
-  dónde salió cada prop y con qué confianza (`provenance`), lo que no se
-  infirió (`not_inferred`: formularios, `display`, `routes`, reglas,
-  habilidades), lo que el laraimport no expresa (`lost`: un `comment()`, un
-  default que es una expresión, un índice FULLTEXT, una columna que pone un
-  bucle), las decisiones (`duplicate-model-name`, `foreign-key-cycle`,
-  `table-without-model`, `model-without-table`, `model-without-columns`,
-  `primary-key`, `route-not-preservable`, `route-file-prefix`,
-  `route-auth-unknown`), si el borrador pasa `larapack:validate` y, con
-  contrato, la comparación con lo declarado.
-- **Una ruta sin `auth` a la vista se declara con sesión** y se pregunta:
-  cerrar por error es un 401 que se ve; abrir por error, un agujero.
-
-**Medido** sobre copias de solo lectura, contra el laraimport que escribieron
-sus autores (props encontradas; y de ésas, tipo / nullable / FK / default):
+`infer`, contra el laraimport que escribieron sus autores (props encontradas; y de ésas, tipo / nullable / FK /
+default):
 
 | Proyecto | Props | Encontradas | Tipo | Nullable | FK | Default |
 |---|---:|---:|---:|---:|---:|---:|
 | school-management (raíz + 81 paquetes) | 7 753 | 7 726 (99,7 %) | 7 725 | 7 719 | 7 726 | 7 726 |
 | expediente | 813 | 788 (96,9 %) | 788 | 787 | 788 | 788 |
 
-En expediente, además, 190 de 190 relaciones; las 25 props que no aparecen las
-añade una migración en un bucle con `hasColumn()`, y el informe lo dice. En
-brandai, sin contrato, **las 20 zonas** dan un borrador que pasa
-`larapack:validate` (426 modelos, 5 201 props, 1 330 índices); ninguna de sus
-rutas se puede conservar (913 decisiones), porque se sirven bajo `api/v1` con
-nombres que no siguen el prefijo de LaraPack.
+En expediente, además, 190 de 190 relaciones; las 25 props que no aparecen las añade una migración en un bucle
+con `hasColumn()`, y el informe lo dice. En brandai, sin contrato, **las 20 zonas** dan un borrador que pasa
+`larapack:validate` (426 modelos, 5 201 props, 1 330 índices); ninguna de sus rutas se puede conservar (913
+decisiones), porque se sirven bajo `api/v1` con nombres que no siguen el prefijo de LaraPack.
 
-- **Al actualizar.** Nada cambia si no se usa: el esquema sólo añade claves
-  opcionales, la validación sólo relaja dos reglas (la URI CRUD en un
-  controlador sin esa acción y el nombre de relación en camelCase) y añade las
-  de las claves nuevas. Lo único que cambia en un proyecto existente es que
-  un `import` ya no vuelve a crear un pivote o unas metas que crea otra
-  migración (antes habría fallado en `migrate`).
-
-### Excepciones del realineamiento: pedir, aprobar, caducar
-
-Lo que no puede llevar `#[HandRolled]` —los closures de rutas legítimos (la
-raíz de la SPA según el Host, `/csp-report`, `/ci/test-health`, el `OPTIONS`
-del CORS de xAPI), un controlador o un modelo que se deja fuera del contrato,
-un archivo generado borrado adrede, un hallazgo que se acepta— tiene ahora el
-mismo mecanismo que los atributos: **quien pide no aprueba**. La guía:
-[docs/realign/exceptions.md](docs/realign/exceptions.md).
-
-```bash
-larapack:realign except <paso> --option reason="…"     # pide (también un agente)
-larapack:hand-rolled list                              # el dueño las lee
-larapack:hand-rolled approve "routes/web.php#post('/csp-report')"   # y las aprueba
-```
-
-- **`except`** pide una excepción por cada elemento del paso, con un
-  objetivo exacto (`realign:<tipo>[/<comprobación>]:<archivo>[#<sujeto>]`;
-  un closure se nombra por su llamada y su URI) y la huella de lo que cubre.
-  Escribe `.larapack/realign/exceptions.json` y nada más: pedir no cubre
-  nada. `--dry-run`, árbol limpio e informe como toda operación.
-- **La aprueba el dueño con `larapack:hand-rolled approve`, en el mismo
-  candado** (`.larapack/hand-rolled.lock`, mismo formato). Así la protegen,
-  sin una línea más, la guardia de los agentes (no pueden correr `approve`
-  ni escribir el candado), el hook de git que pregunta en la terminal y
-  CODEOWNERS. `list` dice el estado de cada una (`unapproved`, `approved`,
-  `reason-changed`, `code-changed`, `stale`); `approve` acepta el final del
-  objetivo; `revoke` la retira.
-- **Caduca cuando cambia lo que cubre**: el cuerpo, los parámetros o la URI
-  de un closure (moverlo, reformatearlo o comentarlo, no); los tokens de un
-  archivo; la ausencia de lo que se aprobó que no estuviera (un ámbito que
-  vuelve a tener `laraimport.json`); la frase de verify de una entidad.
-- **verify la respeta y la lista**: lo cubierto baja a `info` («Excepción
-  aprobada por el dueño del proyecto…»), lo caducado vuelve con su nivel y lo
-  dice, y una aprobada que ya no cubre nada es `hand-rolled-stale` (con
-  `--strict` falla). La salida JSON trae `exceptions`. `larapack:guard` y el
-  `check` de los pasos la respetan igual; el diagnóstico no vuelve a proponer
-  lo cubierto (tampoco un ámbito sin contrato aprobado fuera de LaraPack).
-- **`check` de una decisión que eligió dejarlo así** no pasa hasta que el
-  dueño aprueba cada excepción pedida, y dice cuál falta y a quién le toca.
-
-### `larapack:realign brief`: el camino del dueño ausente
-
-Una prueba de autonomía en un proyecto real llegó a 77 decisiones
-(controladores a mano, closures, modelos que adoptar, llaves foráneas) y a
-excepciones que sólo el dueño aprueba, y no había forma documentada de
-preparárselas de una vez: el agente preguntaba de una en una o se paraba.
-`larapack:realign brief` lo junta todo en **un** documento y lo hace el camino
-normal: el agente hace lo que no depende del dueño, genera el documento,
-avisa, sigue con lo demás y retoma con `status`. La guía:
-[docs/realign/owner.md](docs/realign/owner.md).
-
-```bash
-larapack:realign brief                  # .larapack/realign/brief.md, y por stdout
-larapack:realign brief --format=json    # .larapack/realign/brief.json, con format_version
-```
-
-- **Cada decisión pendiente**: qué es, por qué importa, la evidencia
-  (archivos, líneas, hallazgos) **agrupada por tipo y directorio** —setenta
-  controladores de `Admin/` son un grupo, no setenta bloques—, las opciones
-  con sus consecuencias y la orden exacta de cada una
-  (`larapack:realign decide <id> <opción> --note="…"`), lo que bloquea y, si
-  una regla del playbook la sostiene, **la recomendación del paquete**, firme
-  o tentativa (`infer` sin contrato, `adopt` en lo escrito a mano en la ruta
-  de lo generado, `except` o `refactor` en los closures según sean de los
-  legítimos conocidos…). Sin regla (`unmanaged-http`, `hand-rolled`) lo dice
-  y dice cómo averiguarlo.
-- **Cada excepción pedida sin aprobar**: objetivo, paso, motivo, el mensaje
-  del hallazgo que cubre, su estado y la orden exacta
-  (`larapack:hand-rolled approve "<objetivo>"`; `revoke` si ya no existe).
-- **Arriba, el resumen**: cuántas, el tiempo estimado de revisión, qué pasa
-  si no se decide nada (nada se rompe; el realineamiento no termina) y
-  cuántos pasos puede seguir haciendo el agente mientras (`meanwhile`).
-- No decide, no aprueba y no escribe código, ni el plan ni el candado: sólo
-  `brief.md` y `brief.json`, que se rehacen cada vez. Acepta `--package`.
-- La receta del README, la guía para agentes de `larapack:skill`,
-  [plan.md](docs/realign/plan.md#decide) y
-  [exceptions.md](docs/realign/exceptions.md#el-ciclo) lo citan como el paso
-  que sigue cuando lo que queda es del dueño.
-
-### Pasos guiados: los playbooks del paquete
-
-Cada trabajo mecánico tiene sus instrucciones en el paquete, y `next` las da
-rellenadas con lo de ese paso. La guía: [docs/realign/guided.md](docs/realign/guided.md).
-
-- **`controller-to-request`** (antes `controller-shape`): objetivo,
-  precondiciones, pasos exactos, qué no hacer, el **403 antes que 422** que
-  pasó en school-management y la prueba antes y después.
-- **Anexos** que el plan añade por lo que dice verify: `validate-to-rules`
-  (valida con `validate()`) y `raw-request-to-formrequest` (recibe
-  `Illuminate\Http\Request`; los parámetros escalares de la ruta pasan a
-  `$this->route()`).
-- **De una opción**, una vez decidida: `closure-to-controller` (el
-  `refactor` de un closure) y `declare-handwritten-controller` (declarar en
-  `endpoints`/`controllers[]` lo que conserva su nombre de ruta y su URI).
-- **De una decisión**, para pensarla antes: `decide-hand-rolled`,
-  `decide-route-closure`, `decide-unmanaged-http`, `decide-adopt-model`,
-  `decide-package-without-models` y `decide-foreign-keys` (`cascade` frente a
-  `restrict`).
-- `declared-routes` y `security`, para los tipos guiados que caían en el
-  genérico.
-- **`larapack:realign playbook [<nombre>]`** los lista o imprime uno con cada
-  marcador explicado.
-- **`larapack:verify --path`** (repetible) acota a archivos o directorios. El
-  verify de cada playbook va acotado al paso (`--check=… --path=…`).
-- **Un controlador está hecho cuando delega y su request tiene `handle()`**:
-  el `done_when` de `controller-shape` mira también `request-handle`, aunque
-  el hallazgo esté en la request.
-
-Ensayado sobre copias, sin tocar los originales:
+Las excepciones y los playbooks:
 
 | | expediente | brandai | school-management |
 |---|---|---|---|
@@ -637,522 +905,72 @@ Ensayado sobre copias, sin tocar los originales:
 | Pedidas, aprobadas y `verify --strict --check=route-closure` | 3 → 0 errores, 1 aviso: el `fallback()` | `--dry-run` | — |
 | Pasos `controller-shape` con anexos | 77: 64 `validate-to-rules`, 71 `raw-request-to-formrequest` | 196: 60 y 158 | — |
 
-- **Al actualizar.** La primera aprobación crea `.larapack/hand-rolled.lock`
-  si no existía, y desde entonces un `#[HandRolled]` sin aprobar es error. Un
-  verify anterior a 9.4.0 ve las aprobaciones `realign:` como sobrantes
-  (`hand-rolled-stale`): todo el equipo y CI, en 9.4.0 antes de aprobar la
-  primera. La forma de `.larapack/realign/exceptions.json` cambió respecto a
-  la del núcleo (era `exceptions`, ahora `requests` con su objetivo), que
-  ninguna versión publicada escribía.
-
-### La documentación, la ayuda del comando y la guía para agentes
-
-Para que cualquiera —persona o agente, sin contexto— realine un proyecto solo,
-todo lo necesario vive en el paquete y se comprueba.
-
-- **`docs/realign/`**, una página por operación: la entrada
-  ([README.md](docs/realign/README.md): cuándo usarlo, modelo mental, las
-  cuatro categorías, el ciclo, el estado, la seguridad y la receta para un
-  agente), [diagnose.md](docs/realign/diagnose.md) (leer el informe y cada
-  clasificación), [plan.md](docs/realign/plan.md) (pasos, `status`, `next`,
-  `check`, `decide` y los formatos JSON), [adopt.md](docs/realign/adopt.md),
-  [apply.md](docs/realign/apply.md) (también el salto de versión mayor),
-  [guided.md](docs/realign/guided.md), [exceptions.md](docs/realign/exceptions.md),
-  [infer.md](docs/realign/infer.md), [contract.md](docs/realign/contract.md)
-  (las claves nuevas y lo que el contrato todavía no puede decir),
-  [verify.md](docs/realign/verify.md) (cuándo se termina, qué garantiza
-  `verify --strict` y qué no, `ci` y `guard` para que no se vuelva a
-  desviar), [risks.md](docs/realign/risks.md) (por operación y por tema:
-  migraciones y datos, el front, 403/422, dependencias, monorepos, Windows,
-  rendimiento) y [profiles.md](docs/realign/profiles.md) (el recorrido según
-  el proyecto tenga contrato al día, una versión vieja con deuda o ninguno).
-- **La ayuda sale de un solo sitio** (`RealignActions`): `larapack:realign
-  --help` explica cada acción con su uso, lo que escribe y su guía;
-  `larapack:realign help <acción>` (texto o JSON) la detalla, con las claves
-  de `--option` que lee. `help` y `playbook` responden sin un proyecto. Una
-  clave de `--option` que la operación no lee es un error, como una opción
-  (`infer --option escribir=…` ya no se ignora en silencio). La lista de
-  playbooks nombra por su tipo los que se titulan con el del paso.
-- **`larapack:skill` instala la guía del realineamiento para agentes**
-  (`.claude/skills/larapack-realign/SKILL.md`, junto al skill; `--no-realign`
-  la salta), y el bloque de `AGENTS.md` —el mismo de las reglas de Cursor,
-  Codex, Gemini, Copilot y Windsurf— manda a `larapack:realign status` y a
-  la guía del paquete. El skill de LaraPack tiene su sección corta.
-- **`RealignDocTest`**: cada orden `larapack:…` que citan `docs/realign`, el
-  skill y el bloque de los agentes existe con esas opciones; en
-  `larapack:realign`, la acción, cada opción de esa acción y cada clave de
-  `--option`; cada enlace y cada ancla resuelven, y ninguna página queda sin
-  enlazar desde la entrada.
-- **`RealignProfilesTest`** (EndToEnd): los tres perfiles de punta a punta,
-  sobre proyectos sintéticos con formas recortadas de las aplicaciones:
-  diagnose → plan → apply determinista → adopt → next y check de un paso
-  guiado → decisión del dueño y except aprobado → `verify --strict` en verde
-  (el proyecto sin contrato que se queda fuera, con sólo `empty-manifest`).
-
-Ensayo final con las cuatro piezas integradas, sobre copias de las tres
-aplicaciones (la raíz y todos sus paquetes; los originales sólo se leyeron, y
-las copias se borraron): `diagnose`, `plan`, `apply --deterministic` (que hace
-también `adopt`), `diagnose` y `plan` otra vez, una segunda pasada, y el
+Y el ensayo final con las cuatro piezas integradas, sobre copias de las tres aplicaciones (la raíz y todos sus
+paquetes): `diagnose`, `plan`, `apply --deterministic`, `diagnose` y `plan` otra vez, una segunda pasada, y el
 tercer diagnóstico.
 
 | | school-management (82 ámbitos) | expediente (7.x) | brandai (sin contrato) |
 |---|---|---|---|
 | Tiempo | `diagnose` 304 s; `apply` 599 s + 47 s; los dos diagnósticos siguientes, 84 s y 81 s (caché) | `diagnose` 132 s; `apply` 54 s + 0 s; 128 s y 17 s | `diagnose` 2 s; `apply`: nada que hacer, y lo dice; `infer` 4 s |
-| Cumplen | 16 921 → 21 757 de 22 844 | 1 185 → 3 228 de 3 456 | — (no hay contrato con el que comparar) |
+| Cumplen (de los clasificados) | 16 921 → 21 757 de 22 844 | 1 185 → 3 228 de 3 456 | — (no hay contrato con el que comparar) |
 | Clases, antes → después | `identical` 18 163 → 19 553, `version_delta` 983 → 0, `hole_edited` 2 239 → 2 002, `edited_outside` 404 → 207, `untracked` 84 → 68, `missing` 11 → 9 | `identical` 2 844 → 2 972, `version_delta` 38 → 0, `edited_outside` 247 → 178, `missing` 94 → 0, `migration_history` 65 → 43 | — |
 | Cambios de `apply` | 5 843 + 608, ninguno saltado: 4 089 adoptados, 1 141 regenerados, 691 tests, 447 `fix`, 19 traits movidos, 14 modelos, 2 olvidados | 2 272 + 140: 2 054 adoptados, 94 olvidados, 38 regenerados, 140 `fix`, 70 tests, 14 modelos, 56 llaves fijadas; 3 saltados (closures que no son el de la SPA: una decisión) | — |
 | `verify`, antes → después | 18 errores y 1 957 avisos → 16 y 4 (`endpoint-tests-outdated` 691, `resource-appends` 691, `index-managed` 524, `model-lists-outdated` 28 y `controller-concern` 19 → 0; quedan 9 `missing-file`, 4 `controller-shape`, 3 `route-not-declared`, 4 `route-closure`) | 471 y 228 → 377 y 3 (`missing-file` 94, `endpoint-tests-outdated`, `index-managed` y `resource-appends` 70, `model-lists-outdated` 14 → 0; quedan 377 `controller-shape` y 3 `route-closure`) | 592 errores y 64 avisos, sin cambios: es lo que hay que decidir |
 | Lo que queda | 24 `edited-outside`, 4 `controller-shape`, 1 `declared-routes`; 77 decisiones (70 `unmanaged-http`, 4 `untracked-edited`, 2 `route-closure`, 1 `missing`) | 77 `controller-shape`, 6 `edited-outside`; 4 decisiones | 197 `controller-shape`; 11 decisiones (`no-contract`, 8 `route-closure`, `unmanaged-http`, `unmanaged-models`); `infer`: 20 de 20 borradores válidos |
 | PHP escrito que no parsea | ninguno | ninguno | — |
 
-`next` da, en los dos proyectos con contrato, un `controller-shape` con su
-`controller-to-request` rellenado (8,8 y 11,9 kB de instrucciones con sus
-archivos, sus hallazgos y sus órdenes). La caché ocupó 176 MB en
+`next` da, en los dos proyectos con contrato, un `controller-shape` con su `controller-to-request` rellenado
+(8,8 y 11,9 kB de instrucciones con sus archivos, sus hallazgos y sus órdenes). La caché ocupó 176 MB en
 school-management y 24 MB en expediente.
 
-### El realineamiento ya no da por formato lo que es una edición
+### La auditoría de mantenibilidad, antes de publicar
 
-Lo que el diagnóstico da por `format_only` se adopta sin preguntar
-(`apply --deterministic`), y lo adoptado lo vuelve a escribir el siguiente
-`import --force`. Dos ediciones pasaban por formato y se perdían así:
+El módulo se construyó en pocas horas, en ramas paralelas. Antes de publicarlo se revisó para quien tenga que
+mantenerlo; la interfaz —acciones, opciones, textos, documentos JSON— no cambia salvo donde se dice.
 
-- **En jsx, tsx, vue, js, ts y md** la comparación quitaba todo el espacio,
-  también el de dentro de una línea: `t('Changes saved')` frente a
-  `t('Changessaved')`, `join(' ')` frente a `join('')`, `a - -b` frente a
-  `a--b`. Ahora sólo son formato los finales de línea, la indentación y el
-  espacio al final de cada línea; lo demás es una edición. Lo que reformatea
-  Prettier más allá de la indentación sale como editado, no como formato: es el
-  lado seguro.
-- **En PHP, el mismo código con otros comentarios** se adoptaba como formato
-  (`comments: true`), y `--force` borraba después los comentarios y docblocks
-  del usuario. Ya no se adopta: en un archivo registrado y editado es
-  `hole_edited` —cumple, no da paso, y `--force` no lo toca—; en lo que el
-  manifiesto no conoce, `untracked` (una decisión). Un JSON que no se puede
-  leer se compara por líneas, como el texto.
-
-Las pruebas (`RealignFormatTest`) hacen el ciclo entero —diagnose, plan,
-`apply --deterministic`, `import --force`— con un `ShowView.jsx` y una
-`IndexRequest` editados, y la edición sobrevive.
-([diagnose.md](docs/realign/diagnose.md#las-clases-de-archivo),
-[adopt.md](docs/realign/adopt.md#riesgos)).
-
-### `controller-concern`: el trait movido ya no queda roto aunque parsee
-
-`apply` movía el trait a `Http/Requests/Concerns` cambiando sólo su línea
-`namespace`, y el rollback sólo comprobaba que lo escrito parseara. Lo que
-parseaba pero resolvía a otra clase pasaba:
-
-- **El trait movido nombraba a sus hermanos por su nombre corto**
-  (`Helper::x()` de `Controllers\Concerns`): con el namespace nuevo resolvía
-  a `Requests\Concerns\Helper`. Ahora se importan (`use …\Controllers\Concerns\Helper;`)
-  y un nombre cualificado relativo (`Sub\Thing`, `namespace\X`) se escribe
-  completo. Si llama a una función o usa una constante de su namespace viejo
-  sin importarla, no se mueve y dice cuál.
-- **Las referencias que no se reescribían**: por el alias de un namespace
-  (`use App\Http\Controllers\Concerns as Cs;` y `use Cs\X;` en la clase), por
-  una importación parcial (`use App\Http\Controllers;` y
-  `Controllers\Concerns\X`), la segunda de una lista (`use A, B;`) y un
-  `use X;` dentro de una clase, que se trataba como absoluto y es relativo al
-  namespace del archivo (y al revés: uno escrito absoluto dentro de la clase
-  ya no se toma por el trait). Un `use` agrupado sólo se salta si de verdad
-  importa el trait.
-- **La red de seguridad**: después de escribir, se recorre **todo** el
-  proyecto otra vez —no la lista con que se planeó— buscando un nombre que
-  siga resolviendo al trait viejo, o un hermano que el trait movido ya no ve.
-  Si queda uno, se devuelve el cambio entero y el paso se salta con el
-  archivo. La lista de archivos se rehace tras cada movimiento: el segundo de
-  dos hermanos movidos en la misma corrida reescribe la importación que el
-  primero acaba de escribir.
-
-### El contrato ampliado: tres huecos que encontró la revisión
-
-- **Un `route_name` que coincide con el nombre derivado de otro endpoint es
-  un error en cualquier orden.** Declarado primero (`route_name:
-  import.roster`) y seguido de un endpoint `importRoster`, pasaba: dos rutas
-  con el mismo nombre, `route()` resolvía a la última y el nombre que conserva
-  el front se desviaba sin aviso. Al revés sí se rechazaba. Ahora se juntan
-  primero los nombres finales, declarados y derivados, de los endpoints de un
-  modelo y de `controllers[]`.
-- **`pin-foreign-keys` lee la tabla que declara `table`.** Con `table:
-  legacy_people` buscaba `people`: no fijaba la cascada real o fijaba las
-  acciones de otra tabla. La tabla declarada va tal cual, sin prefijo.
-- **Declarar `use_current` en una columna que ya existe la altera**
-  (`->useCurrent()->change()`, y `down()` lo quita). Antes no escribía nada ni
-  avisaba; la longitud y la precisión sí se comparaban.
-
-### `larapack:hand-rolled approve` lo confirma una persona, también sin la guardia
-
-Hasta ahora `approve` y `revoke` no preguntaban nada y confiaban en las capas
-de fuera —la guardia de los agentes, el hook de git, CODEOWNERS—. En un
-proyecto sin la guardia ni el hook instalados, `larapack:hand-rolled approve
---all </dev/null` desde un proceso sin terminal aprobaba todo: un agente
-aprobaba sus propias excepciones. Ahora el propio comando exige a una
-persona (OwnerConfirmation):
-
-- **En su terminal.** Se le enseña lo que se va a aprobar o retirar —cada
-  objetivo, su razón, lo que cubre (archivo y línea, o la entidad) y el
-  mensaje del hallazgo— y escribe `apruebo <n>` (`retiro <n>`), con el número
-  de excepciones, para que no se confirme a ciegas un `--all`. La pregunta va
-  a `/dev/tty`, no a la entrada estándar: una tubería (`yes | …`,
-  `echo apruebo 1 | …`) no la contesta. Sin terminal falla sin tocar nada, y
-  dice por qué.
-- **Sin terminal, nombrándose** (una CI de aprobación, una persona en un
-  entorno sin tty) —desde la tercera revisión, sólo dentro del workflow de
-  aprobación lanzado a mano; ver «La aprobación sin terminal, sólo en el
-  workflow de aprobación»—: la variable `LARAPACK_APPROVER` con su nombre **y**
-  `--approver` con el mismo. Su nombre queda en cada entrada que aprueba
-  (`approved_by` en `.larapack/hand-rolled.lock`), a la vista en el diff que
-  revisa CODEOWNERS. Hacen falta las dos: la variable sola —heredada de un
-  perfil de la shell por el agente que se lanza desde ella— no vale, y la
-  opción hay que escribirla en la orden. La guardia de los agentes bloquea
-  `--approver` y dar valor a `LARAPACK_APPROVER` (con `export`, `env` o
-  delante de una orden), y la prueba de humo de la guardia lo comprueba
-  también en Windows.
-- **Windows.** Se usa la consola si la entrada lo es (PowerShell, cmd,
-  Windows Terminal). Desde Git Bash (mintty) la entrada es una tubería y no
-  se puede saber si hay alguien delante —lo mismo que ya resolvía el hook de
-  git con `/dev/tty`—: el comando lo dice, y la persona lo corre desde
-  PowerShell, con `winpty` o nombrándose.
-- Lo que no cambia el candado (`approve` de lo ya aprobado igual, `--all`
-  sin nada que aprobar) no pregunta.
-
-**Las excepciones de una entidad ya no se aprueban a ciegas.** El objetivo de
-un hallazgo sin archivo (`realign:inconsistent-entity:model:Tag#…`) se
-aprobaba con la huella que traía la solicitud —que escribe quien pide,
-también un agente— sin comprobar que verify dijera hoy esa frase, y `list` la
-daba siempre por `approved`. Ahora la solicitud guarda el mensaje del
-hallazgo (`message` en `.larapack/realign/exceptions.json`), `approve` corre
-verify con su comprobación y sólo aprueba si hay un hallazgo **de hoy** con
-esa huella, que es el que se le enseña al dueño; una frase que verify no dice
-no se aprueba (tampoco con `--all`). Su estado es real, como el de las demás:
-`approved` mientras verify la diga, `code-changed` si la huella aprobada no es
-la de hoy y `stale` cuando verify ya no la dice (el `check` del paso lo dice
-igual).
-
-**Al actualizar:** quien aprobaba desde un script o una CI sin terminal usa
-el workflow de aprobación (`larapack:ci --approval`). Un candado con
-`approved_by` lo lee una versión anterior (lo ignora y lo quita si lo
-reescribe). Las solicitudes pedidas antes, sin `message`, se aprueban igual:
-el hallazgo que se enseña es el de hoy.
-
-### La aprobación sin terminal, sólo en el workflow de aprobación
-
-De una prueba de autonomía real: un agente sin la guardia instalada se aprobó
-sus propias excepciones con `LARAPACK_APPROVER="…" … approve --all
---approver="…"`, y la orden se la había enseñado el propio mensaje de rechazo.
-
-- **Nombrarse ya no basta.** La vía sin terminal sólo vale dentro del
-  workflow de aprobación de GitHub Actions (`.github/workflows/larapack-approve.yml`,
-  que escribe `larapack:ci --approval`), lanzado a mano (`workflow_dispatch`):
-  `LARAPACK_APPROVER`, `--approver` y la cuenta que lanzó la corrida tienen
-  que ser la misma, no un bot, y la corrida no la puede haber relanzado otra
-  persona (NamedApproval). Un `CI=true`, un `push` o un `pull_request` no
-  valen. La entrada aprobada lleva `approved_by` (la cuenta) y, nuevo,
-  `approved_run` (la corrida); la corrida empuja el candado a una rama
-  `larapack/approve-<corrida>` para revisarlo en un PR. Se eligió la identidad
-  que da GitHub frente a un secreto o una firma: el secreto viviría donde vive
-  el agente, o habría que repartir y rotar claves.
-- **El rechazo no enseña cómo saltárselo.** A quien no tiene terminal le dice
-  que un agente no lo intenta por ninguna otra vía, que pida al dueño (con
-  `larapack:realign brief`) y, si es una persona, que lea
-  `docs/realign/exceptions.md#aprobar-sin-terminal-el-workflow-de-aprobación`;
-  ya no da la orden lista para copiar. La ayuda de `--approver` tampoco.
-- **Todo rechazo de `approve` y `revoke` sale con un código distinto de
-  cero**, también por Artisan, en JSON y desde una terminal (las pruebas lo
-  comprueban en cada camino). Lo que se vio en la prueba de autonomía con
-  código 0 era la orden nombrada que sí aprobaba; un envoltorio como
-  `script -qc` sin `-e`, o una tubería (`… | tail`), sigue tapando el código
-  del comando.
-- **Cada aprobación sin terminal, a la vista del revisor.** `larapack:verify`
-  las lista («Aprobadas sin terminal», y `named_approvals` en JSON), y el job
-  que genera `larapack:ci` tiene un paso nuevo, `larapack:hand-rolled list
-  --format=github`, que las anota sobre su línea del candado —en el diff del
-  PR— y pregunta a GitHub si su corrida existe, es del workflow de aprobación,
-  se lanzó a mano y la lanzó quien dice `approved_by`; si no, falla el check.
-  El job pide ahora `actions: read`.
-- **CODEOWNERS cubre también `/.github/workflows/larapack-approve.yml`**,
-  aunque el proyecto no lo tenga, para que nadie añada uno a su gusto.
-- Lo que no se puede garantizar está dicho en
-  [docs/realign/exceptions.md](docs/realign/exceptions.md#aprobar-sin-terminal-el-workflow-de-aprobación):
-  las variables `GITHUB_*` se escriben a mano (por eso la CI comprueba la
-  corrida), una cuenta con permiso para lanzar workflows lanza la corrida a su
-  nombre, y la capa que no se salta sigue siendo CODEOWNERS sobre el candado y
-  la revisión de su diff.
-
-**Al actualizar:** vuelve a correr `larapack:ci` (con `--force` si el
-workflow difiere) para el paso nuevo y `actions: read`, y `--approval` si
-alguien aprueba sin terminal. Una aprobación sin terminal hecha antes, sin
-`approved_run`, hace fallar ese paso: apruébala de nuevo en la terminal o en
-el workflow.
-
-### Realineamiento: los huecos de las plantillas, una sola clasificación y lo que crea `fix`
-
-De una prueba de autonomía sobre la copia de un proyecto 7.x.
-
-- **Los huecos son los de las plantillas.** Las requests nacen con
-  `prepareForValidation()`, `passedValidation()`, `messages()` y
-  `attributes()` vacíos para el usuario, pero sólo `rules()` contaba como
-  hueco: normalizar el payload en `prepareForValidation()` salía
-  `edited_outside` y la única salida era pedir una excepción. Ahora son hueco
-  todos los ganchos de validación que la plantilla deja vacíos (en
-  `IndexRequest`, menos `prepareForValidation()`, que fuerza `managed`); en la
-  request de un endpoint, `prepareForValidation()` y `rules()`, y en uno sin
-  modelo además `authorize()` y `handle()`, que nacen cerrado y con
-  `abort(501)` (Holes::PLACEHOLDERS: lo dice lo regenerado); y
-  `defineGates()` del AuthServiceProvider. `tests/Unit/HolesTest` cruza
-  Holes con lo que cada plantilla de `src/Stubs` deja vacío y con la tabla
-  «Dónde va tu código» del README: una plantilla nueva con un hueco sin
-  declarar falla ahí.
-- **Una sola clasificación, que no cambia con lo que escribe `adopt`.** Una
-  migración `create_locations_table` con otros comentarios salía
-  `format_only` en `diagnose`, `apply` la adoptaba y `check adopt@.` decía
-  «es migration_history … se espera identical o format_only»: «sin editar»
-  era «el hash es el del manifiesto», y tras adoptarla lo era. Lo mismo le
-  pasaba a cualquier archivo con otros comentarios, que pasaba a
-  `version_delta`. Ahora el mismo código con otros comentarios es formato
-  salvo en una migración (`migration_history` desde el diagnóstico: nunca
-  `adopt`), en un hueco entero y en lo que nadie editó escrito por una
-  versión anterior; `diagnose`, `check` y la comprobación de `adopt` dan lo
-  mismo antes y después de adoptar.
-- **`adopt` conserva la entrada.** Volver a anotar un archivo registrado
-  ponía `hash` y `generator` delante y el `stub` al final: en el diff del
-  manifiesto la entrada parecía perder el stub. Ahora conserva el orden, el
-  stub, el modelo y el namespace, y sólo cambian `hash` y `generator`.
-- **Lo que crea `fix route-closure` es del paquete.** El SpaController que
-  escribe (el de laravel-setup 7.2.1) salía en el diagnóstico siguiente como
-  `unmanaged-http` (83 → 84); mientras siga siendo ese, salvo formato, ya no
-  se lista. Y los closures que no son el fallback de la SPA, que `fix` salta,
-  no dejan el paso con `fixed` y `skipped` a la vez: son de la decisión
-  `route-closure@<ámbito>`, y salen en `unchanged` con `deferred_to` y la
-  razón. Sin ese paso en el plan quedan `skipped` y el paso, a medias.
-- **El resumen se explica solo.** «3 550 archivos, 1 185 cumplen» junto a
-  «identical 2 844» no decía por qué: un `identical` que el manifiesto no
-  registra con su hash todavía no cumple. Cada ámbito dice ahora cuántos
-  cumplen, cuántos son **por adoptar**, cuántos tienen otro paso y cuántos
-  están fuera de alcance (suman el total; en JSON, `breakdown`), con una
-  línea que define «cumplen».
-
-### El `--dry-run` de `apply` cuenta lo mismo que la corrida, y `except` pide por lo de hoy
-
-De dos pruebas de autonomía sobre proyectos reales.
-
-- **`apply --deterministic --dry-run` contaba otra cosa que la corrida real.**
-  En un proyecto, 2 276 cambios, 3 saltados y 1 sin cambios simulados contra
-  2 272, 3 y 3 reales (`index-managed`, 70 simulados y 69 reales; `resource-appends`, 70 y 68);
-  en otro, 1 215 de `fix` y 28 de `model-lists` simulados contra 447 y 14. Cada
-  paso simulaba contra el disco de hoy, y en la corrida real lo que escribe un
-  paso lo lee el siguiente: un IndexRequest que `regenerate` deja como la
-  plantilla actual ya no lo arregla `fix`, `model-lists` ve lo que `fix` añadió
-  al modelo, lo que fija `pin-foreign-keys` cambia el contrato de los pasos
-  siguientes. Ahora `--dry-run` de `apply` y de `adopt` **es la corrida**, sobre
-  una copia temporal del proyecto que se borra (Simulation): mismas decisiones,
-  mismo orden, mismos saltos. La copia lleva todo menos `.git`; `vendor/`,
-  `node_modules/` y la caché de lo regenerado son enlaces. Cada elemento de
-  `fixed` trae el diff de lo que cambió ese paso sobre lo que dejaron los
-  anteriores, ya con la Pint del proyecto. La clave de la caché de lo
-  regenerado usa la ruta real de la Pint, para que la copia dé con la misma
-  (se regenera una vez al actualizar). Prueba: el mismo proyecto con un paso
-  que se encadena, simulado y luego escrito, da las mismas tres listas
-  ([apply.md](docs/realign/apply.md#cómo-simula)).
-- **El JSON de las operaciones dice el paso siempre igual.** Cada elemento de
-  `fixed`/`skipped`/`unchanged` es `{file, reason, step, steps}`: `step` está
-  siempre (el paso, el primero si es de varios, o `null`) y `steps` los lista
-  todos. Antes el `unchanged` de una comprobación de `fix` traía sólo
-  `steps: […]` y la línea de la versión anotada no traía ninguno
-  ([plan.md](docs/realign/plan.md#el-estado-en-disco-y-los-formatos-json)).
-- **`except` pedía por los archivos del plan, no por los de hoy**: antes de
-  volver a diagnosticar, pedía excepción también para un archivo ya
-  arreglado, y el dueño la habría aprobado para algo que ya cumplía. Ahora
-  reclasifica cada elemento antes de pedir —un hallazgo con la misma
-  comprobación de verify sobre el código de ahora, un archivo con la misma
-  clasificación, uno a mano si sigue existiendo— y lo que ya no está sale en
-  `unchanged` diciéndolo. Y **`--target`** (repetible) acota a elementos
-  concretos, por su objetivo o por su archivo; uno que no es de esos pasos es
-  un error que dice cuáles hay
-  ([exceptions.md](docs/realign/exceptions.md#el-ciclo)).
-
-### Pruebas de autonomía: las listas en su sitio, `validate` por paquete y un criterio de terminado
-
-Lo que encontraron las pruebas de autonomía —un agente realineando un
-proyecto real de principio a fin sin nadie al lado—.
-
-- **`model-lists` (y `import --force`, `larapack:fix`) pone lo que falta en
-  la posición del contrato**, no al final de la lista. El diagnóstico compara
-  el modelo con el regenerado, y una lista con lo mismo en otro orden era
-  `edited_outside`: en el proyecto de la prueba, 9 de 11 pasos guiados
-  `edited-outside:Model` diferían sólo en eso. Se eligió insertar en su sitio
-  y no tratar el orden como formato porque el orden de `$export_cols` es el
-  de las columnas de la exportación: no da igual. `ModelRegions` inserta
-  detrás de la entrada del contrato que la precede y ya está (o delante de la
-  primera que está), con la forma que tiene la lista —en una línea, una por
-  línea, con sus comentarios—; lo que sobra se queda donde estaba.
-- **`larapack:validate` recorre los paquetes locales, como `verify`.** Sin
-  ruta, valida el `laraimport.json` de la raíz y el de cada paquete local
-  (los mismos ámbitos que `verify` desde 9.3.1, `ProjectValidation`), con
-  `--package` repetible (directorio, ruta, nombre de Composer o `app`),
-  `--no-packages` y el resumen por paquete (`summary`; cada hallazgo, con su
-  `package` y su `file`). Antes, un contrato roto en un paquete salía en
-  verde desde la raíz. Con una ruta valida ese archivo, como siempre.
-- **Un solo criterio de terminado: `larapack:realign done`.** La guía decía
-  a la vez «el plan sin pendientes» y «`verify --strict`», y ninguno basta:
-  `verify` no ve lo editado fuera de los huecos —en la prueba, un agente dio
-  por terminado con `verify --strict` en verde y pasos `edited-outside`
-  pendientes— y el plan no ve lo que se desvió después del último
-  diagnóstico. `done` diagnostica y planifica otra vez (sólo escribe el
-  estado, como `diagnose` y `plan`), recorre todos los ámbitos y sale con 1
-  mientras quede un paso sin hacer, una decisión sin tomar, una excepción sin
-  aprobar o un error o aviso de `validate --strict` o `verify --strict`; el
-  JSON lo dice en `missing`, elemento por elemento, con la orden de cada uno.
-  Lo declarado fuera (un ámbito con `no-contract` decidido: su
-  `empty-manifest` y el contrato que no tiene) va en `declared` y no falta.
-  `Completion`; la guía, el skill y el bloque de `AGENTS.md` lo dan como el
-  criterio final ([docs/realign/verify.md](docs/realign/verify.md#cuándo-se-termina)).
-  La prueba de punta a punta de los tres perfiles termina con `done` en 0
-  (antes ninguno corría `validate --strict`, y el contrato de las pruebas
-  tenía cuatro avisos).
-
-### Moverse por el plan: un paso cualquiera, las decisiones antes, por elemento, aplazar y escalar
-
-Lo encontraron dos pruebas de autonomía —agentes sin contexto sobre copias de
-proyectos— al recorrer el plan:
-
-- **`next <id>` ignoraba el id** y daba el siguiente en orden, sin error. Ahora
-  da ese paso, esté como esté, y `show <id>` hace lo mismo con el id
-  obligatorio: el playbook rellenado de un guiado bloqueado, las opciones de
-  una decisión o la orden de un determinista, con lo que lo bloquea
-  (`blocked_by`). Y **un argumento que la acción no usa es un error en todas**
-  (`RealignActions::ARGUMENTS`), como ya lo era una opción: `status <id>` o
-  `check <id> <otro>` dicen qué sobra.
-- **Las decisiones que condicionan lo guiado salían al final**, y si el dueño
-  elegía declarar en el contrato los controladores escritos a mano, el trabajo
-  de llevarlos a su request se tiraba. Ahora `unmanaged-http`,
-  `unmanaged-models`, `hand-rolled` y `route-closure`, cuando tocan los
-  archivos de un paso guiado, van antes que él y están en su `depends_on`; la
-  dependencia se cumple al decidir cada archivo con una opción con la que lo
-  guiado sigue valiendo (`keep`, `refactor`) o al terminar la decisión. `next`
-  las ofrece primero y dice en `meanwhile` con qué seguir mientras el dueño
-  decide —lo que no depende de ellas no espera—, y `status` dice «Falta 1
-  decisión del dueño antes de seguir con lo guiado de app» (`awaiting_owner`).
-  Una decisión de este tipo ya tomada se cumple después de lo guiado: la
-  excepción de «dejarlos como código propio» se pide sobre el código ya
-  trabajado (pedirla antes la caducaba). Y una decisión cuya orden ya se
-  ejecutó no vuelve a salir en `next`: lo que falta es del dueño.
-- **Una decisión valía para el paso entero** (84 controladores a la vez).
-  `decide <id> <opción> --target=<archivo>` (repetible) decide por elemento;
-  el plan guarda lo mixto (`decisions`), `next` lo muestra
-  (`decided_by_target`, `undecided`), `check` dice qué falta por decidir y la
-  orden de cada opción sólo toca sus elementos (`except` pide excepciones sólo
-  de los que se dejan).
-- **No había cómo aplazar un paso guiado** (el callback de OAuth2 que el
-  playbook dice dejar). `defer <id> --note=…` lo aplaza —sigue pendiente,
-  `next` pasa al siguiente, `status` lo lista en `deferred`— y `undefer` lo
-  devuelve. `escalate <id> --note=…` convierte un guiado en decisión del
-  dueño: hacerlo como dice el playbook o dejarlo como está (`#[HandRolled]`
-  en un controlador, una excepción en lo demás). Volver a planificar no
-  pierde ninguno de los dos.
-- **`status` arrastraba «Última comprobación: … (falta)»** de antes de un
-  diagnóstico nuevo: volver a planificar ya no conserva `last_check`.
-- La ayuda: `help` da la lista y `--help` el texto completo, cada acción una
-  sola vez en cada uno (`RealignHelpTest`). La salida doble que vio una de las
-  pruebas no se reproduce en esta versión, ni con `builder` ni con Artisan; la
-  prueba lo fija.
-
-La guía: [plan.md](docs/realign/plan.md#next) (`next`, `show`, `decide`,
-`defer`, `escalate`, el orden), [guided.md](docs/realign/guided.md#cómo-se-usa)
-y la receta del [README](docs/realign/README.md#para-un-agente-la-receta).
-
-### Playbooks y guía tras dos pruebas de autonomía: la caché, el 404 y los protocolos
-
-Dos agentes sin contexto realinearon proyectos reales sólo con lo que trae el
-paquete. Donde se pararon o tuvieron que adivinar, ahora el paquete lo dice.
-
-- **`edited-outside` da la ruta exacta de lo regenerado.** Cada archivo del
-  paso trae en el plan `regenerated` (`.larapack/realign/cache/<ámbito>/<clave>/<archivo>`,
-  relativo a la raíz del proyecto), y el playbook la imprime como
-  `regenerado:` con la orden para ver la diferencia (`git diff --no-index`).
-  Antes decía «está en la caché» y el agente tenía que buscar la clave.
-- **`edited-outside` ya no manda borrar y correr `import --force`**, que
-  contradecía a `controller-to-request` (no correrlo) y regeneraba el ámbito
-  entero: se devuelve **un** archivo copiando lo regenerado encima, y se
-  vuelve a pegar lo de sus huecos. Dice además qué hacer con los `use`, los
-  métodos auxiliares y las propiedades al mover código a un hueco, y **cuándo
-  copiar lo regenerado es la salida correcta** (lo que falta está declarado en
-  el contrato, como una columna en una vista generada: se copia y se dice) y
-  cuándo no (señales de que se quitó a propósito, una columna secreta: lo
-  decide el dueño).
-- **`controller-to-request`: la autorización que se queda en `handle()`.** Una
-  comprobación que va después de un `findOrFail` no se lleva a `authorize()`
-  si eso cambia el 404 de un id inexistente por un 403 (salvo con route model
-  binding, que da el 404 antes). Dice explícitamente que verify **no**
-  comprueba ese orden, y la prueba con un id inexistente es obligatoria.
-- **Un solo criterio para los protocolos** (OAuth2, RFC 7591, webhooks
-  firmados, xAPI): se mueve si se conservan exactamente el código de estado y
-  el formato de la respuesta —con `failedValidation()`/`failedAuthorization()`
-  y la convención de request base del propio proyecto, si la tiene—; si no,
-  `#[HandRolled]` con la razón concreta y lo aprueba el dueño. Antes decía
-  «déjala como está y pasa», y en un proyecto real un controlador RFC 7591 se
-  movió conservando la respuesta. `decide-hand-rolled` usa el mismo criterio.
-- **Sin el paquete en `vendor/`.** [docs/realign/README.md](docs/realign/README.md)
-  explica una vez las tres formas de invocar (Artisan, `vendor/bin/builder`,
-  `php <clon>/builder … --root=<proyecto>`) y la notación `<paquete>` /
-  `<proyecto>` que usan las demás páginas y la guía para agentes; para copiar
-  un proyecto, `git worktree` o `tar`, no `rsync`.
-- **Sin pruebas.** Si no se pueden correr las del proyecto (sin `vendor/`, sin
-  base de datos), un paso guiado que cambia comportamiento no se da por
-  hecho: se escribe la prueba igual y se comita con `SIN PROBAR`
-  ([guided.md](docs/realign/guided.md)). Que no se corriera `check` en él lo
-  sustituye el estado `untested` (la sección siguiente).
-- **La otra pasada, dicha en el ciclo.** Tras copiar lo regenerado, cambiar
-  el contrato o completar los guiados de un ámbito, otra vez `diagnose` →
-  `plan` → `apply --deterministic`. [profiles.md](docs/realign/profiles.md)
-  y la guía para agentes traen el orden exacto de punta a punta.
-
-### Lo no probado ya no acaba hecho: `untested`, `check --tested` y `accept-untested`
-
-En una prueba de autonomía real, sin poder correr las pruebas del proyecto, un
-agente no corrió `check` en un controlador —como pedía la guía— y el siguiente
-`diagnose`/`plan` lo marcó `done` solo («resolved: el diagnóstico ya no lo
-encuentra»); otro corrió `check` sin pruebas y la herramienta no avisó. Lo no
-probado acababa hecho, y `realign done` podía llegar a verde con cambios de
-comportamiento que nadie vio pasar (un 422 que pasa a 403, un 404 que pasa a
-403).
-
-- **Qué cambia comportamiento**, escrito una vez en `StepTypes`
-  (`BEHAVIOUR`, `BEHAVIOUR_OPTIONS`, `changesBehaviour()`): `controller-shape`,
-  `declared-routes`, `security`, `edited-outside` de `Requests`, `Controller`
-  y `Policy`, y las decisiones decididas con una opción que mueve código
-  (`route-closure`/`hand-rolled` → `refactor`, `unmanaged-http` → `declare`,
-  un guiado escalado → `refactor`). `next`/`show` lo dicen en
-  `tests.required`, y el playbook ya da la orden de `check` con `--tested`.
-- **El estado `untested`** (`Planner::UNTESTED`, guardado en `plan.json`):
-  hecho a falta de su prueba. `check` sin prueba lo deja así, sale con 0 y
-  avisa (`warning`; en JSON `ok: true, done: false, status: untested`). Para
-  moverse por el plan cuenta como hecho (`Planner::finished()`: no bloquea ni
-  lo vuelve a dar `next`); para terminar, no.
-- **`check <id> --tested="<orden>"`** registra la prueba que se corrió y pasó
-  (`tested: {via: declared, command, at}`) y lo deja `done`. **La orden del
-  proyecto en `.larapack/realign/config.json`** (`{"format_version": 1,
-  "tests": "php artisan test"}`, nuevo, lo escribe una persona): `check` la
-  corre él (`ProjectTests`) y sólo da el paso por hecho si sale con 0; si
-  falla, no está hecho y da el final de la salida (`tests.output`).
-- **`plan` ya no da por hecho lo que cambia comportamiento** cuando el
-  diagnóstico deja de encontrarlo: queda `untested` (`resolved`, con la orden
-  para probarlo). Uno `untested` que vuelve a salir se reabre y pierde la
-  prueba registrada, igual que uno `done`.
-- **`status`** (`untested`, «Sin probar (N)»), **`brief`** (`summary.untested`,
-  sección «Sin probar») y **`done`** (`missing.untested`, `counts.untested`) los
-  listan con la orden de cada uno. **`done` falla mientras quede uno.**
-- **`larapack:realign accept-untested <id> --note="…"`**: sólo el dueño acepta
-  un paso sin probar, como aprueba una excepción (`OwnerConfirmation`): en su
-  terminal, viendo el paso y escribiendo «acepto sin probar», o sin terminal
-  con `LARAPACK_APPROVER` y `--approver` iguales (la guardia de los agentes ya
-  bloquea cualquier orden con `--approver`). Queda `done` con
-  `untested_accepted: {note, at, via, by}` en el plan, y `done` lo sigue
-  enseñando (`accepted_untested`). La nota es obligatoria.
-- La guía ([guided.md](docs/realign/guided.md#sin-pruebas-cuando-no-se-pueden-correr-las-del-proyecto),
-  [plan.md](docs/realign/plan.md#check)), la de los agentes
-  (`skill/realign/SKILL.md`) y el playbook `edited-outside` dicen ahora
-  «corre `check` sin `--tested`» en vez de «no corras `check`».
+- **Dos errores, cada uno con la prueba que fallaba sin el arreglo.** Volver a correr `plan` sobre el mismo
+  diagnóstico ponía `done` un paso que `check` había dejado `untested` (y `larapack:realign done` salía en verde
+  sin prueba registrada), perdía `tested` y `untested_accepted` y devolvía a pendiente una decisión cumplida
+  (`Planner::merge`). Y la orden de pruebas de `config.json` sólo capturaba los errores de su último tramo:
+  en `a && b`, los de `a` se iban a la terminal (`ProjectTests::run`).
+- **`RealignCommand` reparte en una clase por acción** (`src/Commands/Realign/`, sobre `Action`); el comando
+  valida lo común y entrega (`RealignCommand::HANDLERS`). Lo que decide salió a donde se prueba sin consola:
+  `StepCheck` (lo que `check` y `accept-untested` hacen con un paso), `Navigation::next`, `meanwhile`,
+  `awaitingOwner`, `untested` y `pendingExceptions`, y los lectores del plan (`Planner::byId`, `stepsIn`,
+  `indexOf`, `option`, `blockedBy`; `RealignState::requirePlan`; `Diagnosis::stale`).
+- **Lo duplicado entre ramas, en un sitio.** `done` y `brief` calculaban cada uno qué excepciones faltan por
+  aprobar; el plan por id se armaba a mano en cuatro clases; había cuatro copias de «borra este directorio»
+  (`Files::remove`; la de `PintPass` seguía un enlace simbólico en vez de borrarlo) y dos del lector de tokens
+  de `infer` (`Infer\SourceTokens`). Una operación con el paso bloqueado dice ahora sólo los pasos que
+  todavía lo detienen, no todas sus dependencias.
+- **Un error en JSON lleva siempre `format_version` y `action`**, como ya decía
+  [plan.md](docs/realign/plan.md); antes dependía de qué línea fallaba.
+- **Un estado de un formato posterior no se lee, y dice cuál.** `report.json`, `plan.json`, `config.json` y
+  `exceptions.json` pasan por la misma comprobación (`RealignState::assertReadable`): el error dice en qué
+  versión está el archivo, hasta cuál se entiende y que hay que actualizar; uno sin `format_version` tiene su
+  propio mensaje. `diagnose` no clasifica con un manifiesto de una versión posterior a la 2.
+- **Tarda menos, con el mismo informe y el mismo plan.** La pasada de Pint del diagnóstico es una para todos
+  los ámbitos que comparten Pint y configuración, en hasta `--jobs` procesos (`PintPass::equivalentMany`); la
+  regeneración arranca primero el contrato más grande y reparte su Pint en los huecos libres
+  (`LARAPACK_PINT_JOBS`, que también vale para `larapack:import`; por omisión, 1); `done` no repite el `verify`
+  del diagnóstico; `check` clasifica los archivos de un paso por ámbito y no de uno en uno. En un proyecto
+  sintético de 27 000 archivos y 17 ámbitos: `diagnose` con caché, de 7,5 s a unos 4; `done`, de 9,5 s a 4;
+  `check` de un paso de 30 archivos, de 6 s a 1; sin caché, de 63 s a unos 42 (medido con la máquina
+  compartida: es el dato menos firme). `report.json`, `plan.json` y las salidas JSON son idénticos.
+- **Pruebas unitarias directas** de lo que antes sólo se cubría de punta a punta: `Planner`, `Navigation`,
+  `DoneWhen`, `Completion`, `ScopeClassifier`, `Exceptions`, `RealignState`, `ProjectTests`, las operaciones
+  (`OperationRunner`, `OperationResult`, `Simulation`), `NamedApproval`, `OwnerConfirmation`, `StepTypes`,
+  `Playbooks`, `Scopes` y `StepCheck`.
+- **Mutación.** `RealignExceptionsTest` estaba en el `--filter` de `infection.json5` y bajo Infection falla
+  siempre al regenerar, así que daba por muerto todo mutante que recorría: sale del filtro (sigue en la suite),
+  entran pruebas que recorren lo mismo sin regenerar y `MutationFloorsTest` impide que vuelva a entrar una que
+  regenere. Dos piezas nuevas con suelo: `NamedApproval` (98,3 %) y `Navigation` (90,4 %). Ningún suelo
+  existente se mueve. Lo medido y lo que no entra todavía, en [docs/mutacion.md](docs/mutacion.md).
+- **[ARCHITECTURE.md](ARCHITECTURE.md#realign)** describe las tres capas, cada acción con su clase, el estado
+  archivo por archivo, el estado estático y cómo se añade cada pieza; `RealignCatalogTest` comprueba que nombre
+  cada clase del módulo, que cada acción descrita tenga quien la haga y que cada propiedad estática esté contada.
+- La ayuda de `accept-untested`, la de `--approver` y [plan.md](docs/realign/plan.md) decían todavía que sin
+  terminal bastaba nombrarse; dicen lo que hace el código: sólo dentro del workflow de aprobación.
 
 ### Al actualizar a 9.4.0
 
@@ -1170,7 +988,7 @@ comportamiento que nadie vio pasar (un 422 que pasa a 403, un 404 que pasa a
 - **Excepciones**: la primera aprobación crea `.larapack/hand-rolled.lock` y
   desde ahí un `#[HandRolled]` sin aprobar es error; todo el equipo y la CI en
   9.4.0 antes de aprobar la primera (un verify anterior ve las aprobaciones
-  `realign:` como sobrantes).
+  `realign:` como sobrantes, `hand-rolled-stale`).
 - **Versiona** `.larapack/realign/plan.json`, `exceptions.json` y, si la usas, `config.json` (la orden de pruebas que corre `check`); la caché
   (`.larapack/realign/cache/`) ya viene ignorada.
 - **Varias ramas a la vez**: un `larapack:import --force` anota en el manifiesto la huella del contrato de cada
@@ -1182,6 +1000,27 @@ comportamiento que nadie vio pasar (un 422 que pasa a 403, un 404 que pasa a
 - **Un `import` después de adoptar** puede escribir alteraciones (columnas,
   índices o un `->change()` si lo declarado difiere): `--dry-run` y revísalas
   antes de migrar.
+- **El contrato y la validación**: la validación sólo relaja dos reglas (la
+  URI CRUD en un controlador sin esa acción y el nombre de relación en
+  camelCase) y añade las de las claves nuevas. Lo único que cambia en un
+  proyecto existente es que un `import` ya no vuelve a crear un pivote o unas
+  metas que crea otra migración (antes habría fallado en `migrate`).
+- **Quien aprobaba desde un script o una CI sin terminal** usa el workflow de
+  aprobación (`larapack:ci --approval`). Un candado con `approved_by` lo lee
+  una versión anterior (lo ignora y lo quita si lo reescribe). Las solicitudes
+  pedidas antes, sin `message`, se aprueban igual: el hallazgo que se enseña
+  es el de hoy.
+- **La CI**: vuelve a correr `larapack:ci` (con `--force` si el workflow
+  difiere) para el paso nuevo y `actions: read`, y `--approval` si alguien
+  aprueba sin terminal. Una aprobación sin terminal hecha antes, sin
+  `approved_run`, hace fallar ese paso: apruébala de nuevo en la terminal o en
+  el workflow.
+- **Pasos de clasificación con excepciones**: nada que hacer; uno con todas
+  sus excepciones aprobadas pasa en el próximo `larapack:realign check`. Si se
+  exceptuaron Exports por su `bindValue`, mejor copiar lo regenerado y que el
+  dueño retire esas aprobaciones (`larapack:hand-rolled revoke`).
+- **La caché de lo regenerado** se regenera una vez al actualizar: su clave
+  usa ahora la ruta real de la Pint.
 
 ## 9.3.1
 

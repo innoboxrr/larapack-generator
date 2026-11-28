@@ -3,6 +3,7 @@
 namespace Innoboxrr\LarapackGenerator\Support\Realign\Operations;
 
 use FilesystemIterator;
+use Innoboxrr\LarapackGenerator\Support\Files;
 use Innoboxrr\LarapackGenerator\Support\ProjectRoot;
 use Innoboxrr\LarapackGenerator\Support\Realign\RealignState;
 use RuntimeException;
@@ -95,7 +96,7 @@ final class Simulation
             // Lo que se cacheó de la copia no vale para el proyecto.
             ScopeReference::forget();
             unset(self::$caches[str_replace('\\', '/', realpath($copy) ?: $copy).'/'.RealignState::DIRECTORY.'/cache']);
-            self::remove($copy);
+            Files::remove($copy);
         }
     }
 
@@ -156,25 +157,5 @@ final class Simulation
         }
 
         return $value;
-    }
-
-    private static function remove(string $directory): void
-    {
-        if (is_link($directory) || is_file($directory)) {
-            unlink($directory);
-
-            return;
-        }
-
-        if (! is_dir($directory)) {
-            return;
-        }
-
-        foreach (new FilesystemIterator($directory, FilesystemIterator::SKIP_DOTS) as $entry) {
-            /** @var \SplFileInfo $entry */
-            self::remove($directory.'/'.$entry->getFilename());
-        }
-
-        rmdir($directory);
     }
 }

@@ -109,7 +109,7 @@ final class RealignActions
             'guide' => 'docs/realign/plan.md',
         ],
         'accept-untested' => [
-            'summary' => 'El dueño acepta sin probar un paso que quedó untested (cambia comportamiento y nadie registró su prueba), con su nota. Lo confirma él en su terminal, o sin ella nombrándose (LARAPACK_APPROVER y --approver); queda en el plan y lo lista done.',
+            'summary' => 'El dueño acepta sin probar un paso que quedó untested (cambia comportamiento y nadie registró su prueba), con su nota. Lo confirma él en su terminal o, sin ella, dentro de la corrida de aprobación lanzada a mano en GitHub (LARAPACK_APPROVER y --approver con la cuenta que la lanzó); nombrarse fuera de ella no acepta nada. Queda en el plan y lo lista done.',
             'usage' => ['larapack:realign accept-untested <id> --note="por qué y cuándo se probará"'],
             'writes' => 'Sólo el paso en .larapack/realign/plan.json (untested_accepted y su historia).',
             'options' => ['note', 'approver'],

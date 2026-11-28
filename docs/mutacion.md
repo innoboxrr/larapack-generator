@@ -7,7 +7,8 @@ corre, en [CONTRIBUTING](../CONTRIBUTING.md#las-pruebas-de-mutación).
 
 ## Lo que se mide
 
-Las ocho piezas de las que depende lo que LaraPack promete, cada una con los
+Las piezas de las que depende lo que LaraPack promete —ocho hasta la 9.3, diez
+desde la 9.4.0—, cada una con los
 tests que la ejercitan (el `--filter` de `infection.json5`). El MSI es la parte
 de los mutantes que algún test detecta (los muertos, los que agotan el tiempo y
 los que dan error).
@@ -45,7 +46,7 @@ comparación que estaba repetida en sesenta sitios ahora está en uno, y las
 conversiones y las guardas que no hacían nada ya no están (ver
 [Lo que se cambió en vez de anotarlo](#lo-que-se-cambió-en-vez-de-anotarlo)).
 
-La CI exige `--min-msi=95.6 --min-covered-msi=95.8` de las ocho juntas y, a
+La CI exige `--min-msi=95.6 --min-covered-msi=95.8` de todas juntas y, a
 cada pieza, su suelo de
 [`.github/mutation-floors.json`](../.github/mutation-floors.json). El umbral
 conjunto solo dejaba que una pieza bajara mientras las demás la compensaban.
@@ -58,6 +59,75 @@ sobre esas dos piezas: `Verifier` 480 mutantes, 97,92 %; `LegacyFix` 866,
 91,57 %, sin ningún superviviente nuevo frente a la 9.3.0 medida igual. Los
 suelos no cambian. `ModelRegions`, `ModelLists`, `ContractDrift`,
 `RelationFix` y `Manifest` todavía no están en el conjunto que se mide.
+
+**9.4.0 (sin publicar).** `larapack:realign` trae código nuevo a
+`ControllerShape` y a `HandRolledLock` (el closure de una ruta aprobado como
+excepción, la corrida apuntada en el candado) y dos piezas que entran en lo que
+se mide: [`NamedApproval`](../src/Support/NamedApproval.php) —quién aprueba sin
+terminal— y [`Navigation`](../src/Support/Realign/Navigation.php) —qué ve cada
+operación de lo que se decidió, y qué solicitud de excepción sigue contando—.
+Todo se midió otra vez, y **sin la prueba que lo daba todo por muerto**
+(ver [abajo](#una-prueba-que-falla-siempre-mata-todo)):
+
+| Pieza | Mutantes | Sin recorrer | MSI | MSI recorrido | Suelo | Holgura |
+|---|---:|---:|---:|---:|---:|---:|
+| `HandRolledLock` | 190 | 0 | 99,47 % | 99,47 % | 99,0 % | 0 |
+| `NamedApproval` | 163 | 0 | 99,39 % | 99,39 % | 98,3 % | 1 |
+| `Verifier` | 536 | 0 | 98,13 % | 98,13 % | 97,1 % | 5 |
+| `CiGate` | 443 | 1 | 97,97 % | 98,19 % | 97,1 % | 3 |
+| `ControllerShape` | 735 | 0 | 97,55 % | 97,55 % | 97,3 % | 1 |
+| `PhpOutline` | 604 | 0 | 97,02 % | 97,02 % | 96,0 % | 6 |
+| `Guard` | 990 | 2 | 96,77 % | 96,96 % | 96,6 % | 1 |
+| `LegacySecurity` | 364 | 0 | 96,43 % | 96,43 % | 95,4 % | 3 |
+| `LegacyFix` | 866 | 11 | 91,57 % | 92,75 % | 90,6 % | 8 |
+| `Navigation` | 302 | 0 | 92,05 % | 92,05 % | 90,4 % | 5 |
+| **Las diez** | **5193** | **14** | **96,17 %** | **96,43 %** | **95,6 % / 95,8 %** | |
+
+Una corrida, con cuatro núcleos y la máquina ocupada: 48 mutantes agotaron el
+tiempo (16 de `Guard`, 28 de `PhpOutline`) y cuentan como detectados. Los
+suelos de las ocho de antes no se mueven: ninguna sube lo bastante para subir
+el suyo con la regla, y tres quedan más justas de lo que la regla daría hoy
+—`HandRolledLock` sin holgura, `ControllerShape` y `Guard` con un mutante—
+porque su código nuevo trae conversiones `(string)` equivalentes que aún no
+están en el catálogo (la comprobación las lista en cada corrida). Los umbrales
+conjuntos tampoco: con las dos piezas nuevas el conjunto queda 0,6 puntos por
+encima.
+
+Los suelos nuevos, con la regla de siempre: `NamedApproval`, 99,39 % → 98,3 %;
+`Navigation`, 91,41 % → 90,4 %. `Navigation` se midió con 198 mutantes y
+después ganó código —`next`, `meanwhile`, `awaitingOwner`, `untested` y
+`pendingExceptions`, que salieron de `RealignCommand`—: medida otra vez sola,
+con `RealignPlanReadingTest` en el `--filter`, son 302 mutantes y 92,05 %, y
+su suelo se queda donde estaba (la fila de la tabla y el conjunto llevan ese
+dato; las otras nueve no cambiaron de código desde la corrida). De los 17
+mutantes de `Navigation` que escapaban ninguno es un test que falte, y los 7
+que añade el código nuevo son conversiones `(string)`/`(array)` de un paso,
+que es un array sin tipos (ver
+[Los de `Navigation` y `NamedApproval`](#los-de-navigation-y-namedapproval)):
+su techo, sin tocar el código, es ése.
+
+**Lo que se midió y no entra todavía.** Las demás piezas del realineamiento que
+deciden si algo se adopta, se da por hecho o se aprueba tienen desde la 9.4.0
+sus pruebas unitarias, y se midieron con ellas (las mismas del `--filter`).
+Ninguna llega al nivel del conjunto, y añadirlas hoy lo bajaría del umbral:
+
+| Pieza | Mutantes | Sin recorrer | MSI | Por qué no entra |
+|---|---:|---:|---:|---|
+| `Planner` | 459 | 0 | 88,24 % | Los 54 que escapan son equivalentes —36 conversiones `(string)`, `(int)` o `(array)` que sólo piden el tipo; las fases del orden, que coinciden con el orden de `StepTypes::ORDER`; `isset()` sobre `true`—. Con ella el conjunto quedaría en 95,57 %, por debajo de 95,6 %. |
+| `ScopeClassifier` | 522 | 3 | 90,04 % | Lo que compara con la Pint del proyecto no se recorre (la suite corre con `LARAPACK_PINT=off`), y el resto son conversiones de claves de array. |
+| `FileComparison` | 270 | 0 | 88,15 % | La profundidad de llaves sólo se compara consigo misma: contar hacia arriba o hacia abajo da lo mismo. Una treintena de equivalentes de ese tipo. |
+| `Exceptions` | 270 | 9 | 85,93 % | `statement()` corre verify entero cuando su comprobación no se ha visto: sin un proyecto generado no se recorre. |
+| `ExceptionTargets` | 309 | 0 | 81,23 % | Sus pruebas son las de antes de la 9.4.0; faltan las de `routeClosures()` con las formas raras de una ruta. Es la siguiente en la que merece la pena trabajar. |
+| `Completion` | 142 | 0 | 77,46 % | Lo que mira de un ámbito **con** contrato (el laraimport que aparece en lo declarado fuera, los avisos de validate) sólo se prueba regenerando, y eso no puede ir en el filtro. |
+| `DoneWhen` | 303 | 45 | 70,96 % | Lo mismo: el `kind: classification` entero necesita la referencia. Sus pruebas existen (`DoneWhenClassificationTest`) y pasan; no pueden medirse. |
+| `OwnerConfirmation` | 27 | 14 | 48,15 % | Abrir `/dev/tty` o la consola de Windows no se puede probar sin una terminal de verdad. |
+
+`Completion` y `DoneWhen` podrán medirse el día que `Regeneration` no lance a
+su hijo con descriptores `file` (con tuberías, por ejemplo): entonces sus
+pruebas correrán bajo Infection como cualquier otra. `Planner`,
+`ScopeClassifier` y `FileComparison`, cuando sus conversiones equivalentes se
+quiten como se quitaron las de `PhpOutline` en la 9.3.0
+([Lo que se cambió en vez de anotarlo](#lo-que-se-cambió-en-vez-de-anotarlo)).
 
 ## Los suelos y su margen
 
@@ -128,6 +198,55 @@ y sólo después de decidir, de cada mutante nuevo, que es equivalente y de qué
 familia. Si un test mata uno del catálogo, la comprobación avisa de que el
 catálogo se quedó viejo, sin fallar. El informe entero de Infection, con el
 diff de cada superviviente, queda como artefacto `mutacion` de la corrida.
+
+## Una prueba que falla siempre mata todo
+
+Infection da un mutante por muerto cuando alguna prueba que recorre su línea
+falla. No mira por qué falla. Una prueba que **bajo Infection falla siempre**
+—con el mutante que sea— mata todo lo que recorre, y el MSI que sale no dice
+nada de lo que la suite comprueba.
+
+Eso pasó en la 9.4.0 con `RealignExceptionsTest`, que estaba en el `--filter`.
+Su `setUp` corre `larapack:realign diagnose` sobre un paquete generado, y el
+diagnóstico regenera el contrato en un proceso hijo
+([`Regeneration`](../src/Support/Realign/Regeneration.php)) con
+`proc_open()` y dos descriptores `['file', …]`. Infection carga el archivo
+mutado sustituyendo el envoltorio `file://` de PHP por el suyo
+(`IncludeInterceptor`) durante toda la prueba; `proc_open()` abre esos
+descriptores a través de él, los convierte a descriptor del sistema, el
+envoltorio cierra el suyo, y al hijo le llega un descriptor cerrado:
+
+```
+proc_open(): posix_spawn() failed: Bad file descriptor
+RuntimeException: No se pudo arrancar la regeneración de ..
+```
+
+Con el filtro reducido a esa prueba, 87 de los 88 mutantes de `HandRolledLock`
+que recorre morían así. Y lo que la 9.4.0 añadió a `HandRolledLock` y a
+`ControllerShape` sólo lo recorría ella: sin ella en el filtro, `HandRolledLock`
+medía 82,63 % (suelo, 99,0 %) y `ControllerShape` 91,97 % (suelo, 97,3 %). Los
+dos suelos se cumplían con mutantes que ninguna prueba mataba de verdad.
+
+Lo que se hizo:
+
+- `RealignExceptionsTest` salió del `--filter`. Sigue en la suite: lo que
+  comprueba de punta a punta no ha cambiado.
+- Lo que sólo recorría ella tiene ahora pruebas que no regeneran nada: el
+  candado se escribe a mano y se llama a verify (`RouteClosureExceptionsTest`),
+  y `approved_run` y `lineOf()` del candado, en `HandRolledLockFormatTest`.
+  Con ellas, `HandRolledLock` mide 99,47 % y `ControllerShape` 97,55 %: los
+  suelos de antes, ahora con pruebas que corren.
+- Las pruebas nuevas del realineamiento que necesitan la referencia van en su
+  propia clase (`DoneWhenClassificationTest`, `CompletionWithContractTest`),
+  fuera del filtro; las demás usan un proyecto sin contrato, que no regenera.
+- `MutationFloorsTest` comprueba que ninguna prueba del `--filter` monte un
+  paquete generado para realinearlo (el trait `RealignProject`, o `generated()`
+  de `SmallRealignProject`).
+
+Para saber si una corrida tiene de éstas: en `.infection/infection.json`, el
+`processOutput` de cada mutante muerto es la salida de la prueba que lo mató.
+Si muchos dicen lo mismo y no es una aserción, es la prueba la que está rota,
+no el mutante el que está muerto.
 
 ## Lo que se cambió en vez de anotarlo
 
@@ -262,6 +381,27 @@ Las otras comprobaciones de después —que lo arreglado parsea, que sigue
 parseando después de Pint y que se puede leer— sí se pueden ver fallar, y
 tienen su prueba en `LegacyFixTest`: un archivo que ya no parseaba antes, y
 un Pint de mentira (`LARAPACK_PINT`) que rompe lo que toca o se lo lleva.
+
+### Los de `Navigation` y `NamedApproval`
+
+Las dos piezas de la 9.4.0, con todo lo que les escapa (18 mutantes):
+
+- **Conversiones que sólo piden el tipo** (9): el `(string)` del `type`, el
+  `id`, la `key` de una opción o el `file` de una solicitud, que en un plan
+  siempre son texto; y, en `NamedApproval::clean()`, el de un `preg_replace()`
+  con `/u` sobre lo que `mb_scrub()` ya dejó válido, que nunca da `null`.
+- **Lo que se apunta y no se lee** (4): `handedOver()` guarda la hora del
+  último `decided` y la del `applied` que lo sigue, y sólo mira si las hay.
+  Cambiar de dónde sale la hora no cambia nada. Es código que sobra, no un
+  test que falte.
+- **Una guarda que lo de después repite** (2): `waitsForGuided()` devuelve
+  `false` de entrada si la decisión no condiciona lo guiado o no está tomada.
+  Sin esa guarda daría lo mismo: `allows()` no deja seguir a nada con una
+  decisión de un tipo que no condiciona, ni con un archivo sin decidir.
+- **Claves que ya son texto y listas de un elemento** (2): `chosen()` pasa por
+  `strval` las claves de un array que ya son nombres de opción; y las opciones
+  de un guiado que se le pasa al dueño (`ESCALATED`) son, hoy, una por tipo.
+- **Un `array_values()` que sólo se recorre** (1), en `allows()`.
 
 ## Los que no son equivalentes y siguen vivos
 

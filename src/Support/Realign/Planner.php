@@ -2,6 +2,8 @@
 
 namespace Innoboxrr\LarapackGenerator\Support\Realign;
 
+use RuntimeException;
+
 /**
  * `larapack:realign plan`: del diagnóstico a una lista de pasos ordenados,
  * con id estable, que se pueden hacer de uno en uno y retomar.
@@ -198,11 +200,8 @@ final class Planner
             return (string) $step['status'];
         }
 
-        foreach ((array) ($step['depends_on'] ?? []) as $dependency) {
-            if (isset($byId[$dependency]) && ! self::finished($byId[$dependency])
-                && ! (Navigation::conditions((string) ($byId[$dependency]['type'] ?? '')) && Navigation::allows($step, $byId[$dependency]))) {
-                return self::BLOCKED;
-            }
+        if (self::blockedBy($step, $byId) !== []) {
+            return self::BLOCKED;
         }
 
         if ($step['category'] === Category::DECISION) {
@@ -222,6 +221,99 @@ final class Planner
     public static function finished(array $step): bool
     {
         return in_array($step['status'] ?? self::PENDING, [self::DONE, self::UNTESTED], true);
+    }
+
+    /**
+     * Los pasos de `depends_on` que todavía lo detienen: los que no están
+     * hechos, salvo una decisión que condiciona lo guiado y ya se tomó, para
+     * los archivos que comparten, con una opción con la que sigue valiendo
+     * (Navigation::allows()). Es lo que hace `blocked` a un paso.
+     *
+     * @param  Step  $step
+     * @param  array<string, Step>  $byId
+     * @return list<string>
+     */
+    public static function blockedBy(array $step, array $byId): array
+    {
+        if (self::finished($step)) {
+            return [];
+        }
+
+        return array_values(array_filter(
+            array_map('strval', (array) ($step['depends_on'] ?? [])),
+            fn (string $id): bool => isset($byId[$id])
+                && ! self::finished($byId[$id])
+                && ! (Navigation::conditions((string) ($byId[$id]['type'] ?? '')) && Navigation::allows($step, $byId[$id]))
+        ));
+    }
+
+    /**
+     * Los pasos de un plan por su id: lo que piden effectiveStatus(),
+     * blockedBy() y Navigation para mirar de qué depende cada uno.
+     *
+     * @param  array<string, mixed>|null  $plan
+     * @return array<string, Step>
+     */
+    public static function byId(?array $plan): array
+    {
+        $byId = [];
+
+        foreach ((array) ($plan['steps'] ?? []) as $step) {
+            if (is_array($step) && is_string($step['id'] ?? null)) {
+                $byId[$step['id']] = $step;
+            }
+        }
+
+        return $byId;
+    }
+
+    /**
+     * Los pasos de esos ámbitos (`--package`, como rutas de ámbito: `.` es
+     * el núcleo), en el orden del plan; sin rutas, todos.
+     *
+     * @param  array<string, mixed>|null  $plan
+     * @param  list<string>  $paths
+     * @return list<Step>
+     */
+    public static function stepsIn(?array $plan, array $paths = []): array
+    {
+        return array_values(array_filter(
+            (array) ($plan['steps'] ?? []),
+            fn (mixed $step): bool => is_array($step) && ($paths === [] || in_array($step['scope']['path'] ?? null, $paths, true))
+        ));
+    }
+
+    /**
+     * La posición de un paso en `steps`, para escribir en él.
+     *
+     * @param  array<string, mixed>  $plan
+     */
+    public static function indexOf(array $plan, string $id): int
+    {
+        foreach ((array) ($plan['steps'] ?? []) as $index => $step) {
+            if (is_array($step) && ($step['id'] ?? null) === $id) {
+                return (int) $index;
+            }
+        }
+
+        throw new RuntimeException("No hay un paso {$id} en el plan. `larapack:realign status --format=json` y plan.json los listan.");
+    }
+
+    /**
+     * La opción de una decisión por su clave, o null si el paso no la tiene.
+     *
+     * @param  Step  $step
+     * @return array<string, mixed>|null
+     */
+    public static function option(array $step, string $key): ?array
+    {
+        foreach ((array) ($step['options'] ?? []) as $option) {
+            if (is_array($option) && ($option['key'] ?? null) === $key) {
+                return $option;
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -384,6 +476,11 @@ final class Planner
             $byScope[(string) $step['scope']['path']][(string) $step['type']][] = (string) $step['id'];
         }
 
+        // Los pasos que condicionan a otros (unas pocas decisiones), una vez:
+        // buscarlos entre todos por cada paso era pasos × pasos, y un plan
+        // tiene un paso por cada controlador escrito a mano.
+        $conditioning = array_filter($steps, fn (array $step): bool => Navigation::conditions((string) $step['type']));
+
         foreach ($steps as $index => $step) {
             if ($step['category'] === Category::DETERMINISTIC) {
                 $steps[$index]['depends_on'] = [];
@@ -400,8 +497,8 @@ final class Planner
 
             // Lo guiado espera a las decisiones que tocan sus archivos: si el
             // dueño los declara en el contrato, el trabajo no se hace dos veces.
-            foreach ($steps as $other) {
-                if (Navigation::conditions((string) $other['type']) && Navigation::dependents($other, [$step]) !== []) {
+            foreach ($conditioning as $other) {
+                if (Navigation::dependents($other, [$step]) !== []) {
                     $depends[] = (string) $other['id'];
                 }
             }
@@ -453,24 +550,31 @@ final class Planner
             }
 
             if (self::finished($before)) {
-                // Una decisión tomada sigue tomada; un paso hecho cuyo
-                // problema vuelve a salir se reabre.
-                if ($steps[$index]['category'] === Category::DECISION && (isset($before['decision']) || isset($before['decisions']))) {
-                    continue;
-                }
-
                 // El mismo informe no lo vuelve a encontrar: es el que lo
                 // pedía. Volver a planificar sin volver a diagnosticar reabría
                 // lo que `check` acababa de cerrar, y status contaba un hecho
                 // menos y las decisiones que esperaban a ese paso como
                 // bloqueadas.
+                //
+                // Queda como estaba, no `done`: uno hecho a falta de su prueba
+                // (`untested`) pasaba a hecho con sólo planificar otra vez, y
+                // `done` lo daba por terminado. Y con lo que dice cómo se
+                // cerró: la prueba registrada y lo que aceptó el dueño.
                 if ($sameReport) {
-                    $steps[$index]['status'] = self::DONE;
+                    $steps[$index]['status'] = $before['status'];
 
-                    if (isset($before['last_check'])) {
-                        $steps[$index]['last_check'] = $before['last_check'];
+                    foreach (['last_check', 'tested', 'untested_accepted'] as $key) {
+                        if (isset($before[$key])) {
+                            $steps[$index][$key] = $before[$key];
+                        }
                     }
 
+                    continue;
+                }
+
+                // Una decisión tomada sigue tomada; un paso hecho cuyo
+                // problema vuelve a salir se reabre.
+                if ($steps[$index]['category'] === Category::DECISION && (isset($before['decision']) || isset($before['decisions']))) {
                     continue;
                 }
 
