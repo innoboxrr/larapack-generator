@@ -50,6 +50,20 @@ final class DoneWhen
      */
     private array $classifiers = [];
 
+    /**
+     * Los ámbitos del proyecto, una vez por comprobación y no por archivo.
+     *
+     * @var list<array{package: string|null, path: string, root: string, contract: bool, manifest: bool}>|null
+     */
+    private ?array $scopes = null;
+
+    /**
+     * Ruta del ámbito => el directorio de lo regenerado, o null si no lo hay.
+     *
+     * @var array<string, string|null>
+     */
+    private array $references = [];
+
     public function __construct(private readonly string $root)
     {
         $this->state = new RealignState($root);
@@ -227,16 +241,34 @@ final class DoneWhen
         $reject = array_values(array_filter((array) ($condition['reject'] ?? []), 'is_string'));
         $remaining = [];
 
+        // Los archivos de cada ámbito se clasifican de una vez: de uno en
+        // uno, Pint arrancaba por cada archivo que seguía distinto.
+        $classifiers = [];
+        $grouped = [];
+
         foreach ($files as $file) {
             $classifier = $this->classifierFor($file);
 
-            if ($classifier === null) {
+            if ($classifier !== null) {
+                $classifiers[spl_object_id($classifier)] = $classifier;
+                $grouped[spl_object_id($classifier)][] = $file;
+            }
+        }
+
+        $entries = [];
+
+        foreach ($grouped as $id => $group) {
+            $entries += array_combine($group, $classifiers[$id]->classifyFiles($group));
+        }
+
+        foreach ($files as $file) {
+            $entry = $entries[$file] ?? null;
+
+            if ($entry === null) {
                 $remaining[] = "{$file}: no se pudo regenerar el contrato de su ámbito para compararlo.";
 
                 continue;
             }
-
-            $entry = $classifier->classify($file);
 
             // Una excepción aprobada sobre el código de hoy lo cierra: la
             // clase sigue siendo la que se exceptuó (edited_outside, untracked)
@@ -273,13 +305,19 @@ final class DoneWhen
     {
         $still = [];
 
+        // Una vez por ámbito, no por archivo: unmanaged() recorre todos los
+        // controladores, modelos y rutas del ámbito.
+        $classifiers = [];
+
         foreach ($files as $file) {
             $classifier = $this->classifierFor($file, false);
 
-            if ($classifier === null) {
-                continue;
+            if ($classifier !== null) {
+                $classifiers[spl_object_id($classifier)] = $classifier;
             }
+        }
 
+        foreach ($classifiers as $classifier) {
             foreach ($classifier->unmanaged() as $item) {
                 $still[$item['file']] = true;
             }
@@ -363,7 +401,7 @@ final class DoneWhen
     {
         $best = null;
 
-        foreach ((new Scopes($this->root))->all() as $scope) {
+        foreach ($this->scopes ??= (new Scopes($this->root))->all() as $scope) {
             if (($scope['path'] === '.' || str_starts_with($file, $scope['path'].'/')) && ($best === null || strlen($scope['path']) > strlen($best['path']))) {
                 $best = $scope;
             }
@@ -377,12 +415,14 @@ final class DoneWhen
             return $this->classifiers[$best['path']];
         }
 
-        $directory = null;
-
-        if ($best['contract']) {
-            $outcome = (new Regeneration($this->state))->run([$best])[$best['path']] ?? null;
-            $directory = $outcome !== null && $outcome['ok'] ? $outcome['directory'] : null;
+        // Una regeneración que falla no deja caché: sin recordarla aquí se
+        // repetía (un `larapack:import` entero) por cada archivo del paso.
+        if (! array_key_exists($best['path'], $this->references)) {
+            $outcome = $best['contract'] ? ((new Regeneration($this->state))->run([$best])[$best['path']] ?? null) : null;
+            $this->references[$best['path']] = $outcome !== null && $outcome['ok'] ? $outcome['directory'] : null;
         }
+
+        $directory = $this->references[$best['path']];
 
         if ($needsReference && $directory === null) {
             return null;
