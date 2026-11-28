@@ -243,6 +243,92 @@ final class PhpOutline
     }
 
     /**
+     * Cada llamada `X::nombre(...)` o `->nombre(...)` con `nombre` uno de
+     * éstos (en minúsculas): quién empieza la cadena (`Route` en
+     * `Route::middleware('x')->get(...)`, `$router`, `app`), sus argumentos
+     * por posición y los que van con nombre.
+     *
+     * @param  list<string>  $names
+     * @return list<array{call: string, root: string, line: int, arguments: list<list<Token>>, named: array<string, list<Token>>}>
+     */
+    public function callsTo(array $names): array
+    {
+        $calls = [];
+        $count = count($this->tokens);
+
+        for ($index = 1; $index < $count - 1; $index++) {
+            $token = $this->tokens[$index];
+
+            if (! self::is($this->tokens[$index + 1], '(')
+                || ! self::is($this->tokens[$index - 1], T_DOUBLE_COLON, T_OBJECT_OPERATOR, T_NULLSAFE_OBJECT_OPERATOR)
+                || ! in_array(strtolower($token[1]), $names, true)
+            ) {
+                continue;
+            }
+
+            $arguments = [];
+            $named = [];
+
+            foreach (self::splitTopLevel(self::enclosed($this->tokens, $index + 1)) as $argument) {
+                if (count($argument) > 2 && $argument[0][0] === T_STRING && self::is($argument[1], ':')) {
+                    $named[$argument[0][1]] = array_slice($argument, 2);
+                } else {
+                    $arguments[] = $argument;
+                }
+            }
+
+            $calls[] = ['call' => $token[1], 'root' => $this->chainRoot($index - 1), 'line' => $token[2], 'arguments' => $arguments, 'named' => $named];
+        }
+
+        return $calls;
+    }
+
+    /**
+     * Lo que empieza la cadena de llamadas cuyo operador (`::`, `->`) está en
+     * `$operator`: se retrocede por cada `nombre(...)` anterior hasta lo que
+     * ya no cuelga de otro operador.
+     */
+    private function chainRoot(int $operator): string
+    {
+        $index = $operator - 1;
+
+        while ($index >= 0) {
+            if (self::is($this->tokens[$index], ')', ']')) {
+                $depth = 0;
+
+                for (; $index >= 0; $index--) {
+                    if (self::is($this->tokens[$index], ')', ']', '}')) {
+                        $depth++;
+                    } elseif (self::opens($this->tokens[$index]) && --$depth === 0) {
+                        break;
+                    }
+                }
+
+                $index--;
+
+                if ($index < 0) {
+                    return '';
+                }
+
+                // `(expresión)->get()`: lo de dentro no se sigue.
+                if (! self::isName($this->tokens[$index]) && ! self::is($this->tokens[$index], T_VARIABLE, T_STATIC)) {
+                    return '';
+                }
+            }
+
+            if (self::is($this->tokens[$index - 1] ?? null, T_DOUBLE_COLON, T_OBJECT_OPERATOR, T_NULLSAFE_OBJECT_OPERATOR)) {
+                $index -= 2;
+
+                continue;
+            }
+
+            return $this->tokens[$index][1];
+        }
+
+        return '';
+    }
+
+    /**
      * Lo que hay dentro del paréntesis, corchete o llave que abre en $start,
      * sin los delimitadores. Si el archivo se corta antes del cierre, hasta
      * el final.
@@ -374,28 +460,40 @@ final class PhpOutline
         return self::is($token, T_STRING, T_NAME_QUALIFIED, T_NAME_FULLY_QUALIFIED, T_NAME_RELATIVE);
     }
 
+    /**
+     * Recorre el archivo entero, también por dentro de los bloques: una clase
+     * declarada dentro de un `if (! class_exists(…)) { … }`, de una función o
+     * de un closure es una clase igual, y PHP la carga. Antes cada bloque se
+     * saltaba entero, y bastaba envolver un controlador en un `if (true)`
+     * para que `verify` no viera ninguna de sus acciones.
+     *
+     * `$depth` cuenta las llaves abiertas que no son las de un espacio de
+     * nombres: un `use` dentro de un bloque no importa nada —es el de un
+     * closure o el de una clase anónima—.
+     */
     private function parseFile(): void
     {
         $attributes = [];
+        $depth = 0;
         $count = count($this->tokens);
 
         while ($this->i < $count) {
             $token = $this->tokens[$this->i];
 
             switch (true) {
-                case $token[0] === T_NAMESPACE && ($this->isNameAt($this->i + 1) || self::is($this->tokens[$this->i + 1] ?? null, '{')):
+                case $depth === 0 && $token[0] === T_NAMESPACE && ($this->isNameAt($this->i + 1) || self::is($this->tokens[$this->i + 1] ?? null, '{')):
                     $this->namespace = $this->isNameAt($this->i + 1) ? ltrim($this->tokens[++$this->i][1], '\\') : '';
                     $this->uses = [];
                     $this->i++;
 
                     // `namespace Foo { ... }`: la llave abre el espacio de
-                    // nombres, no un bloque que haya que saltarse.
+                    // nombres, no un bloque.
                     if (self::is($this->tokens[$this->i] ?? null, '{')) {
                         $this->i++;
                     }
                     break;
 
-                case $token[0] === T_USE:
+                case $depth === 0 && $token[0] === T_USE:
                     $this->parseImport();
                     break;
 
@@ -411,12 +509,20 @@ final class PhpOutline
                     $attributes = [];
                     break;
 
-                case self::opens($token):
-                    $this->balanced();
+                case self::is($token, '{', T_CURLY_OPEN, T_DOLLAR_OPEN_CURLY_BRACES):
+                    $depth++;
                     $attributes = [];
+                    $this->i++;
                     break;
 
-                case self::is($token, ';'):
+                case self::is($token, '}'):
+                    // La que cierra un `namespace Foo { }` no abrió ninguna.
+                    $depth = max(0, $depth - 1);
+                    $attributes = [];
+                    $this->i++;
+                    break;
+
+                case self::is($token, ';', '(', '['):
                     $attributes = [];
                     $this->i++;
                     break;

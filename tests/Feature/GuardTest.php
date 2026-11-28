@@ -408,6 +408,26 @@ final class GuardTest extends TestCase
     }
 
     /**
+     * Auditoría de seguridad de 9.4.0: un directorio llamado `vendor` o
+     * `node_modules` dentro del código no es de terceros —PSR-4 lo carga
+     * como cualquier otro—, y guardar ahí un controlador lo sacaba de la
+     * guardia y de verify.
+     */
+    public function test_un_controlador_en_un_directorio_llamado_vendor_dentro_del_codigo_si_es_del_proyecto(): void
+    {
+        foreach (['vendor', 'node_modules'] as $name) {
+            $controller = $this->file("src/Http/Controllers/{$name}/EvilController.php");
+            mkdir(dirname($controller), 0777, true);
+            file_put_contents($controller, "<?php\n\nnamespace Acme\\Notes\\Http\\Controllers\\{$name};\n\nclass EvilController\n{\n    public function index(\\Illuminate\\Http\\Request \$request)\n    {\n        return response()->json(\$request->all());\n    }\n}\n");
+
+            $this->assertSame(GuardCommand::BLOCK, $this->edit(['file_path' => $controller]), $name);
+            $this->assertStringContainsString('EvilController::index()', $this->stderr, $name);
+
+            unlink($controller);
+        }
+    }
+
+    /**
      * Sin manifiesto, sólo lo que `verify` comprueba igual sin él: la forma
      * de los controladores. Lo demás no es de LaraPack todavía.
      */

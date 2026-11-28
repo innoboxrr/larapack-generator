@@ -93,9 +93,11 @@ final class Guard
 
     /**
      * Lo que instala composer o npm: código de terceros, aunque tenga
-     * controladores y su propio composer.json.
+     * controladores y su propio composer.json. Sólo el `vendor/` y el
+     * `node_modules/` de la raíz del proyecto: un `Http/Controllers/vendor/`
+     * es un directorio más de PSR-4, y verify lo recorre (ProjectSources).
      */
-    private const THIRD_PARTY = '#(^|/)(vendor|node_modules)/#';
+    private const THIRD_PARTY = '#^(vendor|node_modules)/#';
 
     /**
      * Lo único que ControllerShape mira: es lo que se comprueba en un
@@ -951,8 +953,10 @@ final class Guard
      * así que relativo a su proyecto ya no hay ningún `vendor/` en la ruta.
      * Tampoco sobre el `cwd` de la sesión, que sigue los `cd` del agente y
      * puede estar dentro del paquete. Un `vendor` cuenta sólo si el
-     * directorio que lo contiene es un proyecto de composer: un proyecto que
-     * viva él mismo bajo una carpeta llamada `vendor` no se excluye entero.
+     * directorio que lo contiene es un proyecto de composer, y un
+     * `node_modules`, si es uno de composer o de npm: un proyecto que viva él
+     * mismo bajo una carpeta con ese nombre no se excluye entero, y un
+     * `Http/Controllers/node_modules/` no saca a un controlador de la guardia.
      */
     public static function isThirdParty(string $file): bool
     {
@@ -968,7 +972,9 @@ final class Guard
 
             $name = basename($directory);
 
-            if ($name === 'node_modules' || ($name === 'vendor' && is_file($parent.'/composer.json'))) {
+            if (($name === 'node_modules' && (is_file($parent.'/package.json') || is_file($parent.'/composer.json')))
+                || ($name === 'vendor' && is_file($parent.'/composer.json'))
+            ) {
                 return true;
             }
 
