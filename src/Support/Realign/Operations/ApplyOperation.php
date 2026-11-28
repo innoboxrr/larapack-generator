@@ -391,7 +391,8 @@ final class ApplyOperation implements RealignOperation
                 continue;
             }
 
-            $plan = (new ConcernMove($context->root))->plan($file);
+            $move = new ConcernMove($context->root);
+            $plan = $move->plan($file);
 
             if (is_string($plan)) {
                 $result->skipped($file, $plan, $extra);
@@ -408,7 +409,9 @@ final class ApplyOperation implements RealignOperation
                 continue;
             }
 
-            $problem = $plan['changes']->commit();
+            // Escribe y comprueba en todo el proyecto que nada siga nombrando
+            // el trait viejo; si algo queda, lo devuelve todo.
+            $problem = $move->commit($plan);
 
             if ($problem !== null) {
                 $result->skipped($file, $problem, $extra);

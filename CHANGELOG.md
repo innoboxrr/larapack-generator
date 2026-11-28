@@ -442,6 +442,34 @@ Las pruebas (`RealignFormatTest`) hacen el ciclo entero —diagnose, plan,
 ([diagnose.md](docs/realign/diagnose.md#las-clases-de-archivo),
 [adopt.md](docs/realign/adopt.md#riesgos)).
 
+### `controller-concern`: el trait movido ya no queda roto aunque parsee
+
+`apply` movía el trait a `Http/Requests/Concerns` cambiando sólo su línea
+`namespace`, y el rollback sólo comprobaba que lo escrito parseara. Lo que
+parseaba pero resolvía a otra clase pasaba:
+
+- **El trait movido nombraba a sus hermanos por su nombre corto**
+  (`Helper::x()` de `Controllers\Concerns`): con el namespace nuevo resolvía
+  a `Requests\Concerns\Helper`. Ahora se importan (`use …\Controllers\Concerns\Helper;`)
+  y un nombre cualificado relativo (`Sub\Thing`, `namespace\X`) se escribe
+  completo. Si llama a una función o usa una constante de su namespace viejo
+  sin importarla, no se mueve y dice cuál.
+- **Las referencias que no se reescribían**: por el alias de un namespace
+  (`use App\Http\Controllers\Concerns as Cs;` y `use Cs\X;` en la clase), por
+  una importación parcial (`use App\Http\Controllers;` y
+  `Controllers\Concerns\X`), la segunda de una lista (`use A, B;`) y un
+  `use X;` dentro de una clase, que se trataba como absoluto y es relativo al
+  namespace del archivo (y al revés: uno escrito absoluto dentro de la clase
+  ya no se toma por el trait). Un `use` agrupado sólo se salta si de verdad
+  importa el trait.
+- **La red de seguridad**: después de escribir, se recorre **todo** el
+  proyecto otra vez —no la lista con que se planeó— buscando un nombre que
+  siga resolviendo al trait viejo, o un hermano que el trait movido ya no ve.
+  Si queda uno, se devuelve el cambio entero y el paso se salta con el
+  archivo. La lista de archivos se rehace tras cada movimiento: el segundo de
+  dos hermanos movidos en la misma corrida reescribe la importación que el
+  primero acaba de escribir.
+
 ### Al actualizar a 9.4.0
 
 - **Nada cambia si no se usa `larapack:realign`.** El esquema del contrato
