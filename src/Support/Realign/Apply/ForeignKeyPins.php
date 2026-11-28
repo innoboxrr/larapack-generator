@@ -5,7 +5,6 @@ namespace Innoboxrr\LarapackGenerator\Support\Realign\Apply;
 use Innoboxrr\LarapackGenerator\Support\Files;
 use Innoboxrr\LarapackGenerator\Support\Import\ImportDocument;
 use Innoboxrr\LarapackGenerator\Support\Import\SemanticValidator;
-use Innoboxrr\LarapackGenerator\Support\TablePrefix;
 use Innoboxrr\LarapackGenerator\Tools\Migration\Schema\ForeignKey;
 use Innoboxrr\LarapackGenerator\Tools\Migration\Schema\SchemaHistory;
 
@@ -59,7 +58,11 @@ final class ForeignKeyPins
                 continue;
             }
 
-            $table = $prefix.TablePrefix::tableOf($model['name']);
+            // La tabla declarada va tal cual, sin prefijo; sólo la deducida
+            // del nombre lo lleva. Con `table: legacy_people` se leía `people`.
+            $table = is_string($model['table'] ?? null) && $model['table'] !== ''
+                ? SemanticValidator::tableFor($model)
+                : $prefix.SemanticValidator::tableFor($model);
             $state = $history->table($table);
 
             if (! $state->exists || $state->foreignOpaque !== []) {
