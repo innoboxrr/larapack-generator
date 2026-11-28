@@ -317,6 +317,14 @@ class GuardCommand extends Command
                 continue;
             }
 
+            // Un manifiesto que no se lee —un merge a medio resolver— no deja
+            // saber qué es generado: se dice y no se sigue editando encima.
+            if ($manifest->unreadable() !== null) {
+                $messages[] = 'LaraPack: '.$manifest->unreadable();
+
+                continue;
+            }
+
             $manifest = $manifest->snapshot();
 
             if (! Guard::watches($relative, $manifest)) {

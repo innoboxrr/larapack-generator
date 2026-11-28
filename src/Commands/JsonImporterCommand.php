@@ -3,6 +3,7 @@
 namespace Innoboxrr\LarapackGenerator\Commands;
 
 use Innoboxrr\LarapackGenerator\Commands\Concerns\ReportsGeneration;
+use Innoboxrr\LarapackGenerator\Support\ContractFingerprint;
 use Innoboxrr\LarapackGenerator\Support\Declaration;
 use Innoboxrr\LarapackGenerator\Support\Generation;
 use Innoboxrr\LarapackGenerator\Support\Import\ImportDocument;
@@ -94,6 +95,10 @@ class JsonImporterCommand extends Command
             return $this->reportFailure($input, $output, 'El laraimport no es válido; no se ha generado nada.', extra: ['findings' => $findings]);
         }
 
+        // Los que el manifiesto ya conocía: sin --force no se regeneran, así
+        // que su huella del contrato tampoco se mueve (stampContracts).
+        $known = (new Manifest)->models();
+
         Tool::setFromJsonImporter(true);
         Tool::setJsonContent($document->toArray());
 
@@ -171,10 +176,49 @@ class JsonImporterCommand extends Command
 
         }
 
+        if (! Generation::isDryRun()) {
+            $this->stampContracts($jsonPath, $known);
+        }
+
         $progress->writeln('<info>JSON import completed successfully</info>');
         $this->reportGeneration($input, $output, ['findings' => $findings]);
 
         return Command::SUCCESS;
+    }
+
+    /**
+     * Anota en el manifiesto con qué contrato quedó generada cada pieza, que
+     * es con lo que `verify` sabe después si el laraimport cambió sin volver
+     * a importar (ContractFingerprint).
+     *
+     * Con --force se anotan todas: lo no editado se regeneró, y lo editado se
+     * conservó y `verify` lo lista. Sin --force, sólo las que no existían: lo
+     * que ya estaba no se ha tocado, y decir que corresponde al contrato de
+     * hoy sería mentir.
+     *
+     * @param  array<int, string>  $known  los modelos que el manifiesto tenía antes de la corrida
+     */
+    private function stampContracts(string $jsonPath, array $known): void
+    {
+        $fingerprints = ContractFingerprint::ofFile($jsonPath);
+
+        if ($fingerprints === null) {
+            return;
+        }
+
+        $manifest = new Manifest;
+
+        if (Generation::isForced()) {
+            $manifest->stampContracts($fingerprints['models'], $fingerprints['pivots']);
+
+            return;
+        }
+
+        // Los pivotes, igual: los que ya tenían huella la conservan.
+        $manifest->stampContracts(
+            array_diff_key($fingerprints['models'], array_flip($known)),
+            array_intersect_key($manifest->pivotContracts(), $fingerprints['pivots']) + $fingerprints['pivots'],
+        );
     }
 
     /**
