@@ -211,6 +211,34 @@ final class RealignApplyTest extends TestCase
         $this->assertTrue($this->realign('check', ['targets' => [$id]])['done']);
     }
 
+    /**
+     * De punta a punta: model-lists pone lo que falta donde lo pone el
+     * contrato, y el diagnóstico siguiente ya no ve el modelo editado fuera
+     * de sus huecos. Antes lo añadía al final, y en un proyecto real 9 de 11
+     * pasos guiados `edited-outside:Model` diferían sólo en el orden.
+     */
+    public function test_las_listas_completadas_no_dejan_el_modelo_editado_fuera_de_sus_huecos(): void
+    {
+        $generated = $this->project->read(self::MODEL);
+        $this->edit(self::MODEL, "protected \$fillable = [\n        'title', 'published', 'user_id'", "protected \$fillable = [\n        'title', 'user_id'");
+        $this->prepare();
+
+        $this->assertSame('edited_outside', $this->entry(self::MODEL)['class'] ?? null);
+
+        $this->realign('apply', ['targets' => ['model-lists@.']]);
+        $this->assertSame($generated, $this->project->read(self::MODEL));
+        $this->commitAll();
+
+        $this->realign('diagnose');
+        $this->realign('plan');
+
+        $this->assertNotSame('edited_outside', $this->entry(self::MODEL)['class'] ?? null, json_encode($this->entry(self::MODEL)));
+        $this->assertSame([], array_values(array_filter(
+            array_column($this->plan()['steps'], 'id'),
+            fn (string $id): bool => str_starts_with($id, 'edited-outside') && $this->step($id)['status'] !== 'done'
+        )));
+    }
+
     public function test_fija_en_el_contrato_la_cascada_de_las_migraciones(): void
     {
         $migration = $this->migration('create_posts_table');

@@ -148,14 +148,12 @@ final class RealignProfilesTest extends TestCase
         $this->commitAll();
         $this->assertTrue($this->realign('check', ['targets' => [$id]])['done']);
 
-        // model-lists completó la lista, pero el modelo sigue editado fuera de
-        // sus huecos (el orden de la lista no es el de la plantilla): un
-        // paso guiado, por familia. El agente lo devuelve a la forma generada.
-        $model = $this->nextGuided('edited-outside:Model@.');
-        $this->assertSame('edited-outside', $model['how']['playbook']);
-        file_put_contents($this->path('src/Models/Post.php'), $generatedModel);
-        $this->commitAll();
-        $this->assertTrue($this->realign('check', ['targets' => ['edited-outside:Model@.']])['done']);
+        // model-lists completó la lista en el orden del contrato: el modelo
+        // vuelve a ser el generado y no queda un paso guiado
+        // `edited-outside:Model` que sólo difiera en el orden (antes lo
+        // añadía al final y lo dejaba así).
+        $this->assertSame($generatedModel, $this->project->read('src/Models/Post.php'));
+        $this->assertNotContains('edited-outside:Model@.', $this->pending('guided'));
 
         // El controlador sigue fuera del contrato: el dueño decide dejarlo así
         // (o declararlo, con su route_name, otro día).

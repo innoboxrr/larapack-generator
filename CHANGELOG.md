@@ -416,6 +416,22 @@ tercer diagnóstico.
 archivos, sus hallazgos y sus órdenes). La caché ocupó 176 MB en
 school-management y 24 MB en expediente.
 
+### Pruebas de autonomía: las listas en su sitio, `validate` por paquete y un criterio de terminado
+
+Lo que encontraron las pruebas de autonomía —un agente realineando un
+proyecto real de principio a fin sin nadie al lado—.
+
+- **`model-lists` (y `import --force`, `larapack:fix`) pone lo que falta en
+  la posición del contrato**, no al final de la lista. El diagnóstico compara
+  el modelo con el regenerado, y una lista con lo mismo en otro orden era
+  `edited_outside`: en el proyecto de la prueba, 9 de 11 pasos guiados
+  `edited-outside:Model` diferían sólo en eso. Se eligió insertar en su sitio
+  y no tratar el orden como formato porque el orden de `$export_cols` es el
+  de las columnas de la exportación: no da igual. `ModelRegions` inserta
+  detrás de la entrada del contrato que la precede y ya está (o delante de la
+  primera que está), con la forma que tiene la lista —en una línea, una por
+  línea, con sus comentarios—; lo que sobra se queda donde estaba.
+
 ### Al actualizar a 9.4.0
 
 - **Nada cambia si no se usa `larapack:realign`.** El esquema del contrato

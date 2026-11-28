@@ -155,6 +155,12 @@ un modelo editado con lo que declara el contrato (`ModelRegions`, lo mismo que
 - **Sólo añade**: nunca quita lo que el contrato ya no declara ni cambia un
   cast distinto (son avisos `info` de verify, y decisiones del dueño). Una
   región que no se localiza con certeza se salta con su orden manual.
+- **En la posición del contrato**, no al final: detrás de la entrada del
+  contrato que la precede y ya está (o delante de la primera que está),
+  respetando la forma de la lista —en una línea, una por línea, con sus
+  comentarios—. Así el diagnóstico siguiente ve el modelo igual a lo
+  regenerado y no `edited_outside`. El orden no es sólo formato: el de
+  `$export_cols` es el de las columnas de la exportación.
 - Riesgo medio: cambia qué se asigna en masa y cómo se convierte una columna.
 
 ### pin-foreign-keys
