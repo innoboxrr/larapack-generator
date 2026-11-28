@@ -167,11 +167,15 @@ final class RealignPlannerTest extends TestCase
             // Con contrato y sin regenerar todavía (nada que decir de él).
             'packages/nuevo' => ['package' => 'acme/nuevo', 'contract' => true],
             'packages/raro' => 'no es un ámbito',
+            // Sin decir si tiene contrato, no lo tiene; con contrato y una
+            // regeneración que no dice que saliera bien, no salió.
+            'packages/calla' => ['package' => 'acme/calla'],
+            'packages/a-medias' => ['package' => 'acme/a-medias', 'contract' => true, 'regeneration' => []],
         ]]));
 
         $steps = $this->byId($plan);
 
-        $this->assertSame(['contract-invalid@packages/roto', 'no-contract@packages/sin'], array_keys($steps));
+        $this->assertSame(['contract-invalid@packages/a-medias', 'contract-invalid@packages/roto', 'no-contract@packages/calla', 'no-contract@packages/sin'], array_keys($steps));
         $this->assertSame(Category::DECISION, $steps['no-contract@packages/sin']['category']);
         $this->assertSame(['package' => 'acme/sin', 'path' => 'packages/sin'], $steps['no-contract@packages/sin']['scope']);
         $this->assertSame(['kind' => 'decision'], $steps['no-contract@packages/sin']['done_when']);
@@ -218,39 +222,135 @@ final class RealignPlannerTest extends TestCase
 
     public function test_lo_guiado_va_por_ambito_del_que_mas_cumple_al_que_menos(): void
     {
-        $guided = fn (string $scope, string $file): array => $this->finding('security', 'secret-exposed', $file, ['scope' => $scope]);
+        $guided = fn (string $scope): array => $this->finding('security', 'secret-exposed', $scope.'/src/A.php', ['scope' => $scope]);
+        $routes = fn (string $scope): array => $this->finding('declared-routes', 'route-not-declared', $scope.'/src/B.php', ['scope' => $scope]);
+        $edited = fn (string $scope, string $file): array => $this->file('edited-outside', $scope.'/src/Policies/'.$file, ['scope' => $scope, 'stub' => 'Policy/PolicyTemplate.txt']);
+        $scope = fn (array $counts): array => ['package' => null, 'contract' => true] + $counts;
 
         $plan = Planner::build($this->report([
             'scopes' => [
-                'packages/mal' => ['package' => 'acme/mal', 'contract' => true, 'total' => 10, 'conforming' => 5],
-                'packages/bien' => ['package' => 'acme/bien', 'contract' => true, 'total' => 10, 'conforming' => 9],
-                // Sin archivos que medir cumple del todo; a igualdad, el que
-                // menos guiado tiene, y después por ruta.
-                'packages/vacio' => ['package' => 'acme/vacio', 'contract' => true, 'total' => 0, 'conforming' => 0],
-                'packages/entero' => ['package' => 'acme/entero', 'contract' => true, 'total' => 4, 'conforming' => 4],
-                'packages/doble' => ['package' => 'acme/doble', 'contract' => true, 'total' => 3, 'conforming' => 3],
+                'packages/mal' => $scope(['total' => 10, 'conforming' => 5]),
+                'packages/bien' => $scope(['total' => 10, 'conforming' => 9]),
+                'packages/poco' => $scope(['total' => 20, 'conforming' => 1]),
+                // Sin archivos que medir —o sin decir cuántos— cumple del todo.
+                'packages/vacio' => $scope(['total' => 0, 'conforming' => 0]),
+                'packages/calla' => $scope([]),
+                'packages/raro' => 'no es un ámbito',
+                'packages/entero' => $scope(['total' => 4, 'conforming' => 4]),
+                // A igualdad, el que menos guiado tiene (hallazgos y archivos), y después por ruta.
+                'packages/doble' => $scope(['total' => 3, 'conforming' => 3]),
+                'packages/archivos' => $scope(['total' => 2, 'conforming' => 2]),
+                // Sin decir cuántos cumplen, ninguno: como el que dice cero.
+                'packages/z-cero' => $scope(['total' => 10, 'conforming' => 0]),
+                'packages/a-sin-cuenta' => $scope(['total' => 10]),
+            ],
+            'files' => [
+                $edited('packages/archivos', 'A.php'),
+                $edited('packages/archivos', 'B.php'),
+                $edited('packages/archivos', 'C.php'),
             ],
             'findings' => [
-                $guided('packages/mal', 'packages/mal/src/A.php'),
-                $guided('packages/bien', 'packages/bien/src/A.php'),
-                $guided('packages/vacio', 'packages/vacio/src/A.php'),
-                $guided('packages/entero', 'packages/entero/src/A.php'),
-                $guided('packages/doble', 'packages/doble/src/A.php'),
-                $this->finding('declared-routes', 'route-not-declared', 'packages/doble/src/B.php', ['scope' => 'packages/doble']),
-                // Un ámbito que el informe no lista cuenta como el que más cumple.
-                $guided('packages/ausente', 'packages/ausente/src/A.php'),
+                $guided('packages/mal'),
+                $guided('packages/bien'),
+                $guided('packages/poco'),
+                $guided('packages/vacio'),
+                $guided('packages/calla'),
+                $guided('packages/raro'),
+                $guided('packages/entero'),
+                $guided('packages/doble'),
+                $routes('packages/doble'),
+                $guided('packages/z-cero'),
+                $guided('packages/a-sin-cuenta'),
+                // Un ámbito que el informe no lista cuenta como que cumple del todo.
+                $guided('packages/ausente'),
+                $routes('packages/ausente'),
             ],
         ]));
 
         $this->assertSame([
-            'security@packages/ausente',
+            'security@packages/calla',
             'security@packages/entero',
+            'security@packages/raro',
             'security@packages/vacio',
+            'declared-routes@packages/ausente',
+            'security@packages/ausente',
             'declared-routes@packages/doble',
             'security@packages/doble',
+            'edited-outside:Policy@packages/archivos',
             'security@packages/bien',
             'security@packages/mal',
+            'security@packages/poco',
+            'security@packages/a-sin-cuenta',
+            'security@packages/z-cero',
         ], array_column($plan['steps'], 'id'));
+    }
+
+    public function test_lo_guiado_de_cualquier_ambito_va_antes_que_las_decisiones_que_no_lo_condicionan(): void
+    {
+        $plan = Planner::build($this->report([
+            'scopes' => [
+                '.' => ['package' => null, 'contract' => true, 'total' => 5, 'conforming' => 5],
+                'packages/a' => ['package' => 'acme/a', 'contract' => true, 'total' => 5, 'conforming' => 5],
+                'packages/b' => ['package' => 'acme/b', 'contract' => true, 'total' => 10, 'conforming' => 1],
+            ],
+            'files' => [$this->file('missing', 'src/Borrado.php')],
+            'findings' => [
+                $this->finding('security', 'secret-exposed', 'packages/b/src/R.php', ['scope' => 'packages/b']),
+                $this->finding('security', 'secret-exposed', 'packages/a/src/R.php', ['scope' => 'packages/a']),
+            ],
+        ]));
+
+        // El ámbito que menos cumple va el último de lo guiado, no detrás de
+        // las decisiones.
+        $this->assertSame(['security@packages/a', 'security@packages/b', 'missing@.'], array_column($plan['steps'], 'id'));
+    }
+
+    public function test_un_informe_con_piezas_sueltas_o_que_no_son_listas_no_rompe_el_plan(): void
+    {
+        $plan = Planner::build([
+            'id' => 'informe-raro',
+            'scopes' => 'no es un mapa',
+            'files' => ['suelto', ['type' => null, 'scope' => '.', 'file' => 'src/Cumple.php'], $this->file('adopt', 'src/A.php')],
+            'unmanaged' => 'nada',
+            'findings' => [null, $this->finding('controller-shape', 'controller-shape', 'src/X.php', ['scope' => ''])],
+            'contract' => 7,
+        ]);
+
+        $this->assertSame(['adopt@.', 'controller-shape@src/X.php'], array_column($plan['steps'], 'id'));
+        $this->assertSame(['package' => null, 'path' => '.'], $plan['steps'][1]['scope']);
+        $this->assertNull($plan['generator']);
+        $this->assertNull($plan['report_generated_at']);
+        $this->assertMatchesRegularExpression('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\+00:00$/', $plan['planned_at']);
+
+        // Sin nada, un plan sin pasos.
+        $this->assertSame([], Planner::build([])['steps']);
+        $this->assertNull(Planner::build([])['report_id']);
+    }
+
+    public function test_la_comprobacion_de_verify_no_repite_comprobaciones_ni_archivos(): void
+    {
+        $plan = Planner::build($this->report(['findings' => [
+            $this->finding('controller-shape', 'controller-concern', self::CONTROLLER),
+            $this->finding('controller-shape', 'controller-concern', self::CONTROLLER),
+            $this->finding('controller-shape', 'request-handle', self::CONTROLLER),
+            $this->finding('security', 'secret-exposed', 'src/A.php'),
+            $this->finding('security', 'secret-exposed', 'src/A.php'),
+            $this->finding('security', 'immutable-write', 'src/B.php'),
+            $this->finding('security', 'immutable-write', null),
+        ]]));
+        $steps = $this->byId($plan);
+
+        $this->assertSame(
+            ['kind' => 'verify', 'checks' => ['controller-concern', 'request-handle', 'controller-shape'], 'package' => null, 'files' => [self::CONTROLLER]],
+            $steps['controller-shape@'.self::CONTROLLER]['done_when']
+        );
+        $this->assertSame(
+            ['kind' => 'verify', 'checks' => ['secret-exposed', 'immutable-write'], 'package' => null, 'files' => ['src/A.php', 'src/B.php']],
+            $steps['security@.']['done_when']
+        );
+        // El hallazgo sin archivo cuenta como elemento, no como archivo.
+        $this->assertSame(['src/A.php', 'src/B.php'], $steps['security@.']['files']);
+        $this->assertSame('4 elementos: hallazgos de verify.', $steps['security@.']['description']);
     }
 
     public function test_cada_tipo_lleva_la_comprobacion_que_lo_da_por_hecho(): void
@@ -307,6 +407,57 @@ final class RealignPlannerTest extends TestCase
             ['kind' => 'foreign-keys', 'scope' => '.', 'columns' => [['model' => 'Post', 'column' => 'user_id', 'on_delete' => 'cascade', 'on_update' => 'restrict']]],
             $done['pin-foreign-keys@.']
         );
+
+        $steps = $this->byId($plan);
+
+        // Y lo que hay detrás de cada elemento, sin lo que ya dice el paso.
+        $this->assertSame([['file' => 'h.php', 'kind' => 'controller']], $steps['unmanaged-http@.']['details']['unmanaged']);
+        $this->assertSame(
+            [['file' => 'laraimport.json', 'model' => 'Post', 'column' => 'user_id', 'table' => 'posts', 'on_delete' => 'cascade', 'on_update' => 'restrict', 'migration' => 'database/migrations/x.php']],
+            $steps['pin-foreign-keys@.']['details']['contract']
+        );
+        $this->assertSame(['laraimport.json'], $steps['pin-foreign-keys@.']['files']);
+        $this->assertArrayNotHasKey('contract', $steps['unmanaged-http@.']['details']);
+        $this->assertSame([], $steps['inconsistent-entity@.']['files']);
+
+        $this->assertSame([
+            'relink@.' => '1 elemento: archivos renombrados que el manifiesto conoce con otra ruta.',
+            'prune@.' => '1 elemento: registros del manifiesto de archivos que ya no existen y el contrato no volvería a generar.',
+            'adopt@.' => '1 elemento: archivos iguales a lo que generaría el contrato que el manifiesto da por editados o no conoce.',
+            'regenerate@.' => '1 elemento: archivos sin editar que difieren de lo que genera hoy el contrato, o que el contrato pide y faltan.',
+            'pin-foreign-keys@.' => '1 elemento: llaves foráneas cuya acción hacen las migraciones y el contrato no declara.',
+            'controller-shape@'.self::CONTROLLER => '1 elemento: hallazgos de verify.',
+            'edited-outside@.' => '1 elemento: archivos generados editados fuera de sus huecos.',
+            'missing@.' => '1 elemento: archivos generados que se borraron y el contrato sigue pidiendo.',
+            'untracked-edited@.' => '1 elemento: archivos escritos a mano en la ruta de uno generado.',
+            'route-closure@.' => '2 elementos: hallazgos de verify.',
+            'inconsistent-entity@.' => '1 elemento: hallazgos de verify.',
+            'unmanaged-http@.' => '1 elemento: controladores y archivos de rutas escritos a mano.',
+            'unmanaged-models@.' => '1 elemento: modelos escritos a mano.',
+        ], array_map(fn (array $step): string => $step['description'], $steps));
+    }
+
+    public function test_lo_determinista_que_sale_de_verify_dice_que_agrupa(): void
+    {
+        $steps = $this->byId(Planner::build($this->report(['findings' => [
+            $this->finding('model-lists', 'model-lists-outdated', 'src/Models/Post.php'),
+            $this->finding('endpoint-tests', 'endpoint-tests-outdated', 'tests/Feature/PostTest.php'),
+            $this->finding('controller-concern', 'controller-concern', 'src/Http/Controllers/Concerns/A.php'),
+            $this->finding('controller-concern', 'controller-concern', 'src/Http/Controllers/Concerns/B.php'),
+        ], 'scopes' => [
+            '.' => ['package' => null, 'contract' => true],
+            'packages/sin' => ['package' => 'acme/sin', 'contract' => false],
+            'packages/roto' => ['package' => 'acme/roto', 'contract' => true, 'regeneration' => ['ok' => false]],
+        ]])));
+
+        $this->assertSame('1 elemento: modelos cuyas listas no tienen lo que declara el contrato.', $steps['model-lists@.']['description']);
+        $this->assertSame('1 elemento: tests de endpoints a los que les faltan pruebas que trae hoy la plantilla.', $steps['endpoint-tests@.']['description']);
+        $this->assertSame('2 elementos: traits de Http/Controllers/Concerns que sólo usan requests.', $steps['controller-concern@.']['description']);
+        $this->assertStringEndsWith(': el ámbito entero.', $steps['no-contract@packages/sin']['description']);
+        $this->assertStringEndsWith(': el ámbito entero.', $steps['contract-invalid@packages/roto']['description']);
+        // Determinista con playbook: la orden, y el playbook para lo que se salte.
+        $this->assertSame('larapack:realign apply model-lists@.', $steps['model-lists@.']['command']);
+        $this->assertSame('model-lists', $steps['model-lists@.']['playbook']);
     }
 
     public function test_cada_paso_lleva_lo_necesario_para_hacerlo_sin_contexto(): void
@@ -461,9 +612,13 @@ final class RealignPlannerTest extends TestCase
         $previous['steps'][] = 'basura';
         $previous['steps'][] = ['sin' => 'id'];
 
-        $steps = $this->byId(Planner::build($this->report(['files' => $report['files'], 'findings' => $report['findings']], 'informe-2'), $previous));
+        // Un paso nuevo, que va el primero, no impide conservar los demás.
+        $files = [...$report['files'], $this->file('adopt', 'c.php')];
+        $plan = Planner::build($this->report(['files' => $files, 'findings' => $report['findings']], 'informe-2'), $previous);
+        $steps = $this->byId($plan);
 
-        $this->assertCount(3, $steps);
+        $this->assertSame('adopt@.', $plan['steps'][0]['id']);
+        $this->assertCount(4, $steps);
         $this->assertSame($history, $steps['security@.']['history']);
         $this->assertSame($deferred, $steps['security@.']['deferred']);
         $this->assertSame(Planner::PENDING, $steps['security@.']['status']);
@@ -491,6 +646,7 @@ final class RealignPlannerTest extends TestCase
             $last = end($steps[$id]['history']);
             $this->assertSame('reopened', $last['event'], $id);
             $this->assertSame('El diagnóstico lo vuelve a encontrar.', $last['detail']);
+            $this->assertMatchesRegularExpression('/^\d{4}-\d{2}-\d{2}T/', $last['at']);
             $this->assertArrayNotHasKey('last_check', $steps[$id]);
         }
 
@@ -608,6 +764,7 @@ final class RealignPlannerTest extends TestCase
         $this->assertSame(Planner::DONE, $steps['adopt@.']['status']);
         $this->assertSame(['applied', 'resolved'], array_column($steps['adopt@.']['history'], 'event'));
         $this->assertSame('El diagnóstico ya no lo encuentra.', $steps['adopt@.']['history'][1]['detail']);
+        $this->assertMatchesRegularExpression('/^\d{4}-\d{2}-\d{2}T/', $steps['adopt@.']['history'][1]['at']);
         $this->assertArrayNotHasKey('last_check', $steps['adopt@.']);
         // Conserva lo que era: sus archivos, su comprobación.
         $this->assertSame(['c.php'], $steps['adopt@.']['files']);
@@ -713,6 +870,7 @@ final class RealignPlannerTest extends TestCase
         // Sin estado escrito, pendiente.
         $this->assertSame(Planner::PENDING, Planner::effectiveStatus(['category' => Category::GUIDED], []));
         $this->assertSame(Planner::BLOCKED, Planner::effectiveStatus(['category' => Category::GUIDED, 'depends_on' => ['adopt@.']], $byId(Planner::PENDING)));
+        $this->assertSame(Planner::BLOCKED, Planner::effectiveStatus(['category' => Category::GUIDED, 'depends_on' => 'adopt@.'], $byId(Planner::PENDING)));
 
         $decision = ['id' => 'd', 'type' => 'missing', 'category' => Category::DECISION, 'status' => Planner::PENDING, 'files' => ['f.php', 'g.php'], 'depends_on' => ['adopt@.']];
 
